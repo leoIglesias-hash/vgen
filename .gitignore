@@ -1,0 +1,24 @@
+# Entornos y temporales de Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.pkl
+*.npz
+*.tmp
+*.part
+
+# Videos fuente: se conserva solo el clip sintetico pequeno de prueba.
+inputs/*
+!inputs/synthetic.mp4
+
+# Resultados regenerables: se conservan solo los fixtures test* pequenos.
+outputs/*
+!outputs/test*
+
+# Temporales del sistema y editores
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*~

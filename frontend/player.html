@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCILINE .asclv player</title>
+<style>
+  :root{ color-scheme: dark; }
+  body{ margin:0; background:#0d0d10; color:#e7e7ea; font:14px/1.5 system-ui,sans-serif; }
+  header{ padding:12px 16px; border-bottom:1px solid #26262c; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  h1{ font-size:15px; margin:0 12px 0 0; font-weight:700; letter-spacing:.3px; }
+  label{ color:#a0a0a8; }
+  select,button,input[type=file]{ background:#1a1a20; color:#e7e7ea; border:1px solid #33333c; border-radius:6px; padding:6px 9px; font:inherit; }
+  button{ cursor:pointer; }
+  button:disabled{ opacity:.5; cursor:default; }
+  #stage{ display:flex; justify-content:center; padding:18px; }
+  canvas{ background:#000; max-width:100%; image-rendering:pixelated; border:1px solid #26262c; }
+  #status{ padding:8px 16px; color:#8a8a92; font-family:ui-monospace,monospace; font-size:12px; border-top:1px solid #26262c; white-space:pre-wrap; }
+  .pill{ padding:2px 8px; border-radius:999px; background:#1a1a20; border:1px solid #33333c; color:#b9b9c2; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ASCILINE &middot; player</h1>
+  <label>clip (.asclv / .ascl) <input id="fAscl" type="file" accept=".asclv,.ascl"></label>
+  <label>audio extra .mp3 <input id="fMp3" type="file" accept="audio/*"></label>
+  <label>renderer
+    <select id="rend">
+      <option value="auto">Auto (WebGL-&gt;Canvas2D)</option>
+      <option value="webgl">WebGL</option>
+      <option value="canvas2d">Canvas2D</option>
+    </select>
+  </label>
+  <label>zoom <select id="zoom"><option>2</option><option>3</option><option selected>4</option><option>6</option></select></label>
+  <button id="play" disabled>Play</button>
+  <span id="badge" class="pill">sin archivo</span>
+</header>
+
+<div id="stage"><canvas id="cv" width="320" height="180"></canvas></div>
+<div id="status">Elegi un .asclv (video + audio en un archivo) o un .ascl suelto. El audio es el reloj maestro; si el render se atrasa, se descartan frames.</div>
+
+<audio id="audio" style="display:none"></audio>
+
+<script src="inflate.js"></script>
+<script src="reader.js"></script>
+<script src="render-canvas2d.js"></script>
+<script src="render-webgl.js"></script>
+<script>
+(function(){
+  "use strict";
+  var cv=document.getElementById("cv"), audio=document.getElementById("audio");
+  var elPlay=document.getElementById("play"), elRend=document.getElementById("rend"),
+      elZoom=document.getElementById("zoom"), elBadge=document.getElementById("badge"),
+      elStatus=document.getElementById("status");
+  var reader=null, renderer=null, playing=false, hasAudio=false;
+  var startT=0, raf=0, lastShown=-1, drawn=0, dropped=0;
+
+  function log(s){ elStatus.textContent=s; }
+
+  function freshCanvas(){
+    // Un canvas que ya tuvo contexto WebGL no puede dar contexto 2D (y viceversa):
+    // son excluyentes de por vida. Reemplazamos el nodo por uno nuevo al (re)elegir renderer.
+    var old=cv, nc=document.createElement("canvas");
+    nc.id="cv";
+    old.parentNode.replaceChild(nc, old);
+    cv=nc;
+  }
+
+  function pickRenderer(){
+    freshCanvas();
+    var want=elRend.value, cellPx=parseInt(elZoom.value,10);
+    var mode=reader.header.mode;
+    var r=null, used="";
+    function tryWebGL(){ var w=new window.WebGLRenderer(cv); return w.init(reader,cellPx)?w:null; }
+    if(want==="canvas2d"){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx); used="canvas2d"; }
+    else if(want==="webgl"){ r=tryWebGL(); used=r?"webgl":"(webgl no disponible)"; if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx); used="canvas2d (fallback)"; } }
+    else {
+      if(mode===window.ASCL.MODE_PIXEL){ r=tryWebGL(); used=r?"webgl":""; }
+      if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx); used=used?"canvas2d (fallback)":"canvas2d"; }
+    }
+    renderer=r; return used;
+  }
+
+  function modeName(m){ return ["ASCII_BW","ASCII_PAL","ASCII_RGB","PIXEL"][m]; }
+
+  function loadAscl(buf){
+    buf = toAB(buf);
+    if (looksBundle(buf)) { loadBundle(buf); return; }
+    reader=window.ASCL.parse(buf);
+    var h=reader.header;
+    var used=pickRenderer();
+    reader.decodedIndex=-1; reader.seek(0); renderer.draw(reader); lastShown=0;
+    elPlay.disabled=false;
+    elBadge.textContent=modeName(h.mode)+" "+h.cols+"x"+h.rows+" @"+h.fps+"fps - "+h.nFrames+"f";
+    log("Cargado: "+modeName(h.mode)+"  grilla "+h.cols+"x"+h.rows+"  fps "+h.fps+
+        "  frames "+h.nFrames+"\nrenderer: "+used+(hasAudio?"  - audio: si":"  - audio: no (reloj interno)"));
+  }
+
+  // .asclv = bundle: magic "ASCLVID1"(8) + ascl_len(u32) + audio_len(u32) + ascl + audio
+  function isBundle(buf){
+    if(buf.byteLength<16) return false;
+    var b=new Uint8Array(buf,0,8), s="";
+    for(var i=0;i<8;i++) s+=String.fromCharCode(b[i]);
+    return s==="ASCLVID1";
+  }
+  function toAB(buf){
+    if (buf instanceof ArrayBuffer) return buf;
+    if (buf && buf.buffer instanceof ArrayBuffer) return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    return buf;
+  }
+  function looksBundle(buf){
+    var u = new Uint8Array(buf);
+    return u.length >= 8 && u[0]===65 && u[1]===83 && u[2]===67 && u[3]===76 && u[4]===86 && u[5]===73 && u[6]===68 && u[7]===49; // "ASCLVID1"
+  }
+  function loadData(buf){
+    buf = toAB(buf);
+    if (looksBundle(buf)) loadBundle(buf); else loadAscl(buf);
+  }
+  function loadBundle(buf){
+    buf = toAB(buf);
+    var dv=new DataView(buf);
+    var asclLen=dv.getUint32(8,true), audioLen=dv.getUint32(12,true);
+    var ascl=buf.slice(16,16+asclLen);
+    if(audioLen>0){
+      var ab=buf.slice(16+asclLen,16+asclLen+audioLen);
+      audio.src=URL.createObjectURL(new Blob([ab],{type:"audio/mpeg"}));
+      audio.onended=function(){ stop(); };
+      hasAudio=true;
+    }
+    loadAscl(ascl);
+  }
+
+  function frameNow(){
+    var t = hasAudio ? audio.currentTime : (performance.now()-startT)/1000;
+    return Math.floor(t * reader.header.fps);
+  }
+
+  function loop(){
+    if(!playing){ return; }
+    var target=frameNow();
+    var n=reader.header.nFrames;
+    if(target>=n){
+      if(hasAudio){ target=n-1; }
+      else { stop(); log("fin."); return; }
+    }
+    if(target!==lastShown){
+      if(target>lastShown+1) dropped += (target-lastShown-1);
+      reader.seek(target);
+      renderer.draw(reader);
+      drawn++; lastShown=target;
+    }
+    raf=requestAnimationFrame(loop);
+  }
+
+  function start(){
+    if(!reader) return;
+    playing=true; elPlay.textContent="Pause";
+    startT=performance.now() - (lastShown/reader.header.fps)*1000;
+    if(hasAudio){ audio.play(); }
+    raf=requestAnimationFrame(loop);
+  }
+  function stop(){
+    playing=false; elPlay.textContent="Play"; if(raf) cancelAnimationFrame(raf);
+    if(hasAudio){ audio.pause(); }
+  }
+
+  elPlay.onclick=function(){ playing?stop():start(); };
+  elRend.onchange=function(){ if(reader){ var u=pickRenderer(); reader.decodedIndex=-1; reader.seek(lastShown<0?0:lastShown); renderer.draw(reader); log("renderer: "+u); } };
+  elZoom.onchange=elRend.onchange;
+
+  document.getElementById("fAscl").onchange=function(e){
+    var f=e.target.files[0]; if(!f) return; stop(); hasAudio=false;
+    var fr=new FileReader();
+    fr.onload=function(){
+      try{ loadData(fr.result); }
+      catch(err){ log("Error: "+err.message); }
+    };
+    fr.readAsArrayBuffer(f);
+  };
+  document.getElementById("fMp3").onchange=function(e){
+    var f=e.target.files[0]; if(!f) return;
+    audio.src=URL.createObjectURL(f); hasAudio=true;
+    audio.onended=function(){ stop(); };
+    log("audio cargado: "+f.name+" (reloj maestro)");
+  };
+
+  // Carga automatica para testeo. Si no se pasa ?src= usa DEFAULT_SRC del mismo proyecto.
+  // OJO: leer otro archivo solo funciona servido por HTTP; desde file:// el navegador lo bloquea.
+  var DEFAULT_SRC = "../outputs/clip.asclv";
+  function qs(k){ var m=new RegExp("[?&]"+k+"=([^&]+)").exec(location.search); return m?decodeURIComponent(m[1]):null; }
+  var src=qs("src") || DEFAULT_SRC;
+  if(src && window.XMLHttpRequest){
+    var x=new XMLHttpRequest(); x.open("GET",src,true); x.responseType="arraybuffer";
+    x.onload=function(){ if(x.status<400||x.status===0){ try{ loadData(x.response); }catch(err){ log("Error: "+err.message); } } };
+    x.onerror=function(){ log("No se pudo cargar "+src+" (proba el selector de archivo)."); };
+    x.send();
+  }
+})();
+</script>
+</body>
+</html>

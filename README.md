@@ -1,0 +1,55 @@
+# ASCILINE → `.ascl` / `.asclv`
+
+Convierte imagen o video a una grilla de texto/bloques de color y la reproduce en el
+navegador (incluso webviews viejos), **pre-encodeando offline**: el servidor de playback
+no calcula nada, solo sirve archivos estáticos.
+
+## Estructura
+
+```
+ASCILINE-video/
+├── frontend/     # lo que corre en el navegador (SOLO esto para reproducir)
+│   ├── player.html
+│   ├── inflate.js          # descompresor zlib propio (ES5)
+│   ├── reader.js           # parser .ascl + decode RAW/ZLIB/DELTA + seek
+│   ├── render-webgl.js     # renderer WebGL (rompe el techo de 360p)
+│   └── render-canvas2d.js  # fallback Canvas2D (mosaico + glifos ASCII)
+├── backend/      # lo que CREA los archivos (Python, offline)
+│   ├── encoder.py          # imagen/video -> .ascl  (+ audio .mp3 aparte)
+│   ├── ascl_decode.py      # decoder/verificador de referencia + preview
+│   ├── ascl_bundle.py      # empaqueta .ascl + .mp3 -> .asclv (un archivo)
+│   ├── make_clip.py        # UN comando: video -> outputs/<nombre>.asclv
+│   └── requirements.txt
+├── inputs/       # videos/imágenes fuente a transformar
+├── outputs/      # resultados (.asclv = video+audio juntos)
+└── docs/         # spec del formato, contexto y despliegue
+```
+
+## Crear un clip (un solo comando)
+
+```bash
+cd backend
+python make_clip.py "../inputs/mi-video.mp4"
+# -> ../outputs/mi-video.asclv   (video ASCII + audio en UN archivo)
+```
+
+Opciones: `--cols 320 --fps 15 --palette global|per-frame --mode pixel|ascii-pal|ascii-rgb|ascii-bw`.
+Para imágenes: `python make_clip.py ../inputs/foto.jpg --image`.
+
+## Reproducir
+
+Abrí `frontend/player.html`, elegí el `.asclv` y Play. El renderer va WebGL→Canvas2D solo;
+el audio es el reloj maestro (si el render se atrasa, descarta frames).
+
+## Verificar / preview sin navegador
+
+```bash
+cd backend
+python ascl_bundle.py unpack ../outputs/mi-video.asclv /tmp     # -> .ascl + .mp3
+python ascl_decode.py /tmp/mi-video.ascl --mp4 /tmp/preview.mp4 # MP4 de control
+```
+
+## Despliegue: ver `docs/DESPLIEGUE.md`
+
+- **Solo reproducir** → subir `frontend/` + los `.asclv`. Sin Python, sin ffmpeg, sin instalar nada.
+- **Crear en el servidor** → además Python 3 + `requirements.txt` + `ffmpeg`.

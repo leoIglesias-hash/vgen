@@ -1,0 +1,8 @@
+# Dependencias Python para CREAR (.asclv). Para SOLO reproducir no se necesita nada de esto.
+Pillow>=9
+numpy>=1.21
+opencv-python-headless>=4.5   # 'headless' = sin GUI, ideal para servidor
+# Ademas hace falta el binario del sistema 'ffmpeg' (NO es pip):
+#   Debian/Ubuntu : sudo apt install ffmpeg
+#   macOS (brew)  : brew install ffmpeg
+#   Windows       : https://ffmpeg.org/download.html  (agregar al PATH)

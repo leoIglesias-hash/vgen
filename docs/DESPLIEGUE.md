@@ -1,0 +1,69 @@
+# Despliegue
+
+Hay dos roles bien separados. Podés hacer solo uno o los dos en la misma máquina.
+
+## A) SERVIDOR DE REPRODUCCIÓN (solo mostrar lo ya creado)
+
+**No instala nada.** Es hosting estático puro: el navegador hace todo el trabajo.
+
+Subir:
+- La carpeta `frontend/` completa: `player.html`, `inflate.js`, `reader.js`,
+  `render-webgl.js`, `render-canvas2d.js`.
+- Los archivos `.asclv` que quieras servir (de `outputs/`).
+
+Sirve con **cualquier** servidor de archivos estáticos: nginx, Apache, Caddy,
+GitHub Pages, Netlify, Vercel, Amazon S3 + CloudFront, etc. No hace falta Python
+ni ffmpeg ni base de datos. Incluso `python -m http.server` alcanza para probar.
+
+Recomendado (no obligatorio) para rendimiento y cache en webviews:
+- Servir los `.asclv` con compresión de transporte: `gzip` (universal) o `brotli`.
+- Cabeceras de cache para archivos versionados por hash:
+  `Cache-Control: public, max-age=31536000, immutable`.
+- Nombrar los clips con un hash, ej. `promo.a1b2c3.asclv`, para invalidar cache al actualizar.
+
+Ejemplo nginx mínimo:
+```
+location / {
+    root /var/www/asciline/frontend;
+    types { application/octet-stream asclv; }
+    gzip on;
+    gzip_types application/octet-stream;
+}
+```
+
+Cómo lo abre el usuario final: `https://tu-dominio/player.html` y elige el `.asclv`,
+o un link directo `https://tu-dominio/player.html?src=promo.asclv` (autocarga).
+
+## B) SERVIDOR DE CREACIÓN (encodear videos a .asclv)
+
+Esto SÍ instala cosas, porque el encode es cómputo offline en Python.
+
+Requisitos:
+1. **Python 3.8+**
+2. Paquetes pip (en `backend/requirements.txt`):
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   ```
+   (Pillow, numpy, opencv-python-headless)
+3. **ffmpeg** como binario del sistema (NO es pip), para extraer el audio y los previews:
+   - Debian/Ubuntu: `sudo apt install ffmpeg`
+   - macOS: `brew install ffmpeg`
+   - Windows: descargar de ffmpeg.org y agregar al PATH
+
+Subir: la carpeta `backend/` (`encoder.py`, `ascl_decode.py`, `ascl_bundle.py`,
+`make_clip.py`, `requirements.txt`). Después:
+```bash
+cd backend
+python make_clip.py "../inputs/mi-video.mp4"   # -> ../outputs/mi-video.asclv
+```
+y publicás el `.asclv` resultante en el servidor de reproducción (A).
+
+## Resumen
+
+| Quiero… | Subir | Instalar |
+|---|---|---|
+| Solo **reproducir** | `frontend/` + los `.asclv` | nada |
+| **Crear** clips | `backend/` | Python 3 + `requirements.txt` + ffmpeg |
+
+El flujo natural: creás en B (o en tu PC), y solo publicás los `.asclv` + `frontend/` en A.
