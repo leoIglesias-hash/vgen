@@ -1,8 +1,8 @@
 /*
  * render-canvas2d.js - Renderer fallback Canvas 2D (ES5). Red de seguridad universal.
  *
- * - PIXEL / color: dibuja el mosaico via ImageData en un canvas chico (cols x rows) y
- *   lo escala con imageSmoothingEnabled=false (NEAREST = bloques nitidos). Rapido.
+ * - PIXEL: el backing store queda en cols x rows. El zoom es solo visual (CSS), con
+ *   reconstruccion NEAREST o SOFT seleccionable sin multiplicar la RAM del canvas.
  * - ASCII (BW/PAL/RGB): dibuja glifos reales con fillText y fuente monoespaciada (D2,
  *   ruta universal). Suficiente hasta ~150 columnas.
  *
@@ -12,14 +12,37 @@
   "use strict";
   var MODE_BW = 0, MODE_PAL = 1, MODE_RGB = 2, MODE_PIXEL = 3;
 
+  function reconstructionName(value) {
+    return value === "soft" ? "soft" : "nearest";
+  }
+
+  function setSmoothing(ctx, enabled) {
+    ctx.imageSmoothingEnabled = enabled;
+    ctx.mozImageSmoothingEnabled = enabled;
+    ctx.webkitImageSmoothingEnabled = enabled;
+    ctx.msImageSmoothingEnabled = enabled;
+  }
+
+  function setCanvasImageRendering(canvas, reconstruction) {
+    var style = canvas.style;
+    if (reconstruction === "soft") {
+      style.imageRendering = "auto";
+      style.msInterpolationMode = "bicubic";
+    } else {
+      style.imageRendering = "pixelated";
+      if (!style.imageRendering) { style.imageRendering = "-moz-crisp-edges"; }
+      style.msInterpolationMode = "nearest-neighbor";
+    }
+  }
+
   function Canvas2DRenderer(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
-    this.small = null; this.sctx = null; this.imgData = null; this.rgba = null;
+    this.imgData = null; this.rgba = null;
     this.name = "canvas2d";
   }
 
-  Canvas2DRenderer.prototype.init = function (reader, cellPx) {
+  Canvas2DRenderer.prototype.init = function (reader, cellPx, reconstruction) {
     var h = reader.header;
     this.reader = reader;
     this.cellPx = cellPx || (h.mode === MODE_PIXEL ? 4 : 8);
@@ -27,12 +50,11 @@
       this.glyphs = (h.mode !== MODE_PIXEL); // color modes: por defecto glifos en ASCII
     }
     if (h.mode === MODE_PIXEL) {
-      this.canvas.width = h.cols * this.cellPx;
-      this.canvas.height = h.rows * this.cellPx;
-      this.small = document.createElement("canvas");
-      this.small.width = h.cols; this.small.height = h.rows;
-      this.sctx = this.small.getContext("2d");
-      this.imgData = this.sctx.createImageData(h.cols, h.rows);
+      this.canvas.width = h.cols;
+      this.canvas.height = h.rows;
+      this.canvas.style.width = (h.cols * this.cellPx) + "px";
+      this.canvas.style.height = "auto";
+      this.imgData = this.ctx.createImageData(h.cols, h.rows);
       this.rgba = this.imgData.data;
     } else {
       // ASCII: tamaño de celda con correccion de aspecto
@@ -43,18 +65,21 @@
       this.ctx.font = this.ch + "px monospace";
       this.ctx.textBaseline = "top";
     }
+    this.setReconstruction(reconstruction);
     return true;
+  };
+
+  Canvas2DRenderer.prototype.setReconstruction = function (reconstruction) {
+    this.reconstruction = reconstructionName(reconstruction);
+    setSmoothing(this.ctx, this.reconstruction === "soft");
+    setCanvasImageRendering(this.canvas, this.reconstruction);
   };
 
   Canvas2DRenderer.prototype.draw = function (reader) {
     var h = reader.header;
     if (h.mode === MODE_PIXEL) {
       reader.fillRGBA(this.rgba);
-      this.sctx.putImageData(this.imgData, 0, 0);
-      this.ctx.imageSmoothingEnabled = false;
-      this.ctx.mozImageSmoothingEnabled = false;
-      this.ctx.webkitImageSmoothingEnabled = false;
-      this.ctx.drawImage(this.small, 0, 0, this.canvas.width, this.canvas.height);
+      this.ctx.putImageData(this.imgData, 0, 0);
       return;
     }
     // ASCII con glifos

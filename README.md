@@ -33,8 +33,23 @@ python make_clip.py "../inputs/mi-video.mp4"
 # -> ../outputs/mi-video.asclv   (video ASCII + audio en UN archivo)
 ```
 
-Opciones: `--cols 320 --fps 15 --palette global|per-frame --mode pixel|ascii-pal|ascii-rgb|ascii-bw`.
+Opciones principales: `--profile detail|balanced|color|custom`, `--cols 320`,
+`--palette-size 128`, `--fps 15`, `--palette global|per-frame`,
+`--reconstruction nearest|soft`, `--bake-smoothing none|soft` y
+`--mode pixel|ascii-pal|ascii-rgb|ascii-bw`. Los valores manuales de columnas y colores
+siempre prevalecen sobre el perfil.
 Para imágenes: `python make_clip.py ../inputs/foto.jpg --image`.
+
+Ejemplos de calidad:
+
+```bash
+# Más detalle espacial, menos colores, presentación suave recomendada
+python make_clip.py ../inputs/video.mp4 --profile detail --reconstruction soft
+
+# Valores totalmente manuales y suavizado 2x horneado offline
+python make_clip.py ../inputs/video.mp4 --cols 960 --palette-size 96 \
+  --bake-smoothing soft --reconstruction nearest
+```
 
 ## Reproducir
 
@@ -53,3 +68,11 @@ python ascl_decode.py /tmp/mi-video.ascl --mp4 /tmp/preview.mp4 # MP4 de control
 
 - **Solo reproducir** → subir `frontend/` + los `.asclv`. Sin Python, sin ffmpeg, sin instalar nada.
 - **Crear en el servidor** → además Python 3 + `requirements.txt` + `ffmpeg`.
+
+## Pruebas
+
+```bash
+python -m unittest discover -s tests -v
+node tests/test_frontend_renderers.js
+node tests/test_reader_bundle_view.js
+```

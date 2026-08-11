@@ -80,7 +80,8 @@ Total: **32 bytes**.
 | 1 | `PAL_PER_SCENE` | La paleta se reemite solo en cambios de escena (frames con `pal_count > 0`). |
 | 2 | `PAL_GLOBAL` | Una sola paleta para todo el clip (solo el frame 0 trae `pal_count > 0`). |
 | 3 | `HAS_OFFSET_TABLE` | Hay tabla de offsets (siempre `1` en v1). |
-| 4–7 | — | reservados (`0`). |
+| 4 | `RECON_SOFT` | El encoder recomienda reconstrucción suavizada. Readers anteriores pueden ignorarlo y usar NEAREST. No modifica el payload. |
+| 5–7 | — | reservados (`0`). |
 
 Si bits 1 y 2 están en `0` → **paleta per-frame** (default de v1, decisión D3): cada frame
 trae su propia paleta (`pal_count = pal_size`).
@@ -276,8 +277,9 @@ function parseHeader(buf) {                 // buf: ArrayBuffer
 ```
 MAGIC      = "ASCL"        VERSION = 1
 MODE_ASCII_BW  = 0   MODE_ASCII_PAL = 1   MODE_ASCII_RGB = 2   MODE_PIXEL = 3
-TAG_RAW = 0   TAG_ZLIB = 1   TAG_DELTA = 2
+TAG_RAW = 0   TAG_ZLIB = 1   TAG_DELTA = 2   TAG_DELTA_MASK = 3
 FLAG_LOSSY=1  FLAG_PAL_PER_SCENE=2  FLAG_PAL_GLOBAL=4  FLAG_HAS_OFFSET_TABLE=8
+FLAG_RECON_SOFT=16
 HEADER_SIZE = 32   DEFAULT_FPS = 15   DEFAULT_CHAR_ASPECT = 0.5
 ```
 

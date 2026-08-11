@@ -36,6 +36,9 @@ MODE_ASCII_BW, MODE_ASCII_PAL, MODE_ASCII_RGB, MODE_PIXEL = 0, 1, 2, 3
 TAG_RAW, TAG_ZLIB, TAG_DELTA = 0, 1, 2
 TAG_DELTA_MASK = 3
 FLAG_LOSSY, FLAG_PAL_PER_SCENE, FLAG_PAL_GLOBAL, FLAG_HAS_OFFSET_TABLE = 1, 2, 4, 8
+# Bit aditivo dentro de v1. Los readers anteriores conservan su comportamiento porque
+# ya tratan flags como un bitfield y no rechazan bits desconocidos.
+FLAG_RECON_SOFT = 16
 
 HEADER_SIZE         = 32
 DEFAULT_FPS         = 15
@@ -53,12 +56,87 @@ BYTES_PER_CELL = {MODE_PIXEL: 1, MODE_ASCII_BW: 1, MODE_ASCII_PAL: 2, MODE_ASCII
 CELL_FMT       = {MODE_ASCII_BW: 1, MODE_ASCII_PAL: 2, MODE_ASCII_RGB: 3, MODE_PIXEL: 3}
 VIDEO_EXTS = (".mp4", ".mov", ".webm", ".avi", ".mkv", ".m4v", ".gif")
 
+# Los perfiles solo completan opciones no indicadas por el usuario. No son formatos
+# distintos ni cambian el decoder: producen el mismo ASCL v1 con otra relacion entre
+# resolucion espacial y resolucion de color.
+QUALITY_PROFILES = {
+    "detail":   {"cols": 960, "pal_size": 64},
+    "balanced": {"cols": 640, "pal_size": 128},
+    "color":    {"cols": 320, "pal_size": 256},
+}
+QUALITY_PROFILE_NAMES = ("custom", "detail", "balanced", "color")
+BAKE_SMOOTHING_MODES = ("none", "soft")
+RECONSTRUCTION_MODES = ("nearest", "soft")
+# Reconstruccion offline 2x: una base de media resolucion se expande a la grilla
+# almacenada. Los pixeles intermedios quedan dentro del archivo, no se calculan al reproducir.
+SOFT_BAKE_SCALE = 0.5
+
+
+def resolve_quality_options(profile, cols, pal_size, default_cols, default_pal_size=256):
+    """Completa cols/pal_size respetando siempre los overrides manuales."""
+    profile = profile or "custom"
+    if profile not in QUALITY_PROFILE_NAMES:
+        raise ValueError("profile debe ser custom/detail/balanced/color")
+    preset = QUALITY_PROFILES.get(profile, {})
+    if cols is None:
+        cols = preset.get("cols", default_cols)
+    if pal_size is None:
+        pal_size = preset.get("pal_size", default_pal_size)
+    return int(cols), int(pal_size)
+
+
+def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
+                            palette_mode, bake_smoothing, reconstruction):
+    """Valida limites del header v1 y opciones compartidas por todos los entrypoints."""
+    if mode_name not in MODE_NAMES:
+        raise ValueError("mode desconocido: %s" % mode_name)
+    if not (1 <= int(cols) <= 65535):
+        raise ValueError("cols debe estar entre 1 y 65535")
+    if not (0 <= int(rows) <= 65535):
+        raise ValueError("rows debe estar entre 0 (auto) y 65535")
+    if not (1 <= int(fps) <= 255):
+        raise ValueError("fps debe estar entre 1 y 255 (limite ASCL v1)")
+    if not (1 <= int(pal_size) <= 256):
+        raise ValueError("palette-size debe estar entre 1 y 256")
+    if float(char_aspect) <= 0:
+        raise ValueError("char-aspect debe ser > 0")
+    if palette_mode not in ("per-frame", "global"):
+        raise ValueError("palette debe ser per-frame o global")
+    if bake_smoothing not in BAKE_SMOOTHING_MODES:
+        raise ValueError("bake-smoothing debe ser none o soft")
+    if reconstruction not in RECONSTRUCTION_MODES:
+        raise ValueError("reconstruction debe ser nearest o soft")
+
+
+def soft_base_size(cols, rows):
+    """Tamano de la matriz base usada por la reconstruccion offline 2x."""
+    return (max(1, int(round(cols * SOFT_BAKE_SCALE))),
+            max(1, int(round(rows * SOFT_BAKE_SCALE))))
+
+
+def resize_pil_for_grid(src, cols, rows, bake_smoothing):
+    """Muestrea una imagen directamente a la grilla final o a una base 1/2 + 2x.
+
+    En `soft`, los pixeles bilineales quedan almacenados antes de cuantizar. El player
+    no ejecuta el filtro y Canvas/WebGL reciben exactamente la misma matriz horneada.
+    """
+    if bake_smoothing == "none":
+        return src.resize((cols, rows), Image.LANCZOS)
+    if bake_smoothing != "soft":
+        raise ValueError("bake-smoothing debe ser none o soft")
+    base = src.resize(soft_base_size(cols, rows), Image.LANCZOS)
+    return base.resize((cols, rows), Image.BILINEAR)
+
 
 def compute_grid(src_w, src_h, cols, rows, mode, char_aspect):
     if cols <= 0:
         raise ValueError("cols debe ser > 0")
+    if src_w <= 0 or src_h <= 0:
+        raise ValueError("dimensiones de fuente invalidas: %dx%d" % (src_w, src_h))
     factor = 1.0 if mode == MODE_PIXEL else char_aspect
     out_rows = rows if (rows and rows > 0) else max(1, int(round(cols * (src_h / src_w) * factor)))
+    if cols > 65535 or out_rows > 65535:
+        raise ValueError("la grilla excede el limite 65535x65535 de ASCL v1")
     return int(cols), int(out_rows)
 
 
@@ -202,25 +280,48 @@ def extract_audio(in_path, mp3_path):
         return False
 
 
-def iter_video_frames(in_path, cols, rows, target_fps):
+def output_source_index(output_index, src_fps, target_fps):
+    """Devuelve el frame fuente para el instante output_index/target_fps.
+
+    El sample-and-hold conserva la duracion cuando las tasas no son divisibles
+    (por ejemplo 25 -> 15) y tambien permite duplicar al convertir 15 -> 25.
+    """
+    if output_index < 0 or src_fps <= 0 or target_fps <= 0:
+        raise ValueError("indices y fps deben ser positivos")
+    return int((float(output_index) * float(src_fps)) / float(target_fps))
+
+
+def iter_video_frames(in_path, cols, rows, target_fps, bake_smoothing="none"):
     import cv2
     cap = cv2.VideoCapture(in_path)
     if not cap.isOpened():
         raise RuntimeError("no se pudo abrir el video: %s" % in_path)
     src_fps = cap.get(cv2.CAP_PROP_FPS) or target_fps
-    step = max(1, int(round(src_fps / float(target_fps))))
     i = -1
+    output_index = 0
     while True:
         ok, frame = cap.read()
         if not ok:
             break
         i += 1
-        if i % step != 0:
+        repeats = 0
+        while output_source_index(output_index, src_fps, target_fps) == i:
+            repeats += 1
+            output_index += 1
+        if repeats == 0:
             continue
-        small = cv2.resize(frame, (cols, rows), interpolation=cv2.INTER_AREA)
+        if bake_smoothing == "soft":
+            base = cv2.resize(frame, soft_base_size(cols, rows), interpolation=cv2.INTER_AREA)
+            small = cv2.resize(base, (cols, rows), interpolation=cv2.INTER_LINEAR)
+        else:
+            small = cv2.resize(frame, (cols, rows), interpolation=cv2.INTER_AREA)
         rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-        yield np.ascontiguousarray(rgb), np.ascontiguousarray(gray)
+        # Derivar luminancia despues del horneado mantiene char/color sincronizados.
+        gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+        rgb = np.ascontiguousarray(rgb)
+        gray = np.ascontiguousarray(gray)
+        for _ in range(repeats):
+            yield rgb, gray
     cap.release()
 
 
@@ -234,28 +335,45 @@ def probe_size(in_path):
 
 
 def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
-                 ramp_name, char_aspect, compress, palette_mode, dump_cells=None):
+                 ramp_name, char_aspect, compress, palette_mode, dump_cells=None,
+                 bake_smoothing="none", reconstruction="nearest",
+                 quality_profile="custom"):
+    validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
+                            palette_mode, bake_smoothing, reconstruction)
     mode = MODE_NAMES[mode_name]
     ramp = "" if mode == MODE_PIXEL else RAMPS.get(ramp_name, ramp_name)
     src = Image.open(in_path).convert("RGB")
     sw, sh = src.size
     cols, rows = compute_grid(sw, sh, cols, rows, mode, char_aspect)
-    small = src.resize((cols, rows), Image.LANCZOS)
-    rgb = np.asarray(small, np.uint8)
-    gray = np.asarray(small.convert("L"), np.uint8)
+    small = resize_pil_for_grid(src, cols, rows, bake_smoothing)
+    rgb = np.ascontiguousarray(np.asarray(small, np.uint8))
+    gray = np.asarray(Image.fromarray(rgb, "RGB").convert("L"), np.uint8)
     cells, palette, pal_count = frame_to_cells(rgb, gray, mode, len(ramp), pal_size,
                                                "per-frame", None)
     tag, payload = encode_frame(cells, None, mode, 0, True, compress, False)
     frames = [{"tag": tag, "pal_count": pal_count, "palette": palette, "payload": payload}]
     if dump_cells:
         np.savez(dump_cells, frame_0000=cells)
-    total = write_ascl(out_path, mode, cols, rows, fps, ramp, frames, None, char_aspect, 0)
+    flags_extra = FLAG_RECON_SOFT if reconstruction == "soft" else 0
+    total = write_ascl(out_path, mode, cols, rows, fps, ramp, frames, None,
+                       char_aspect, flags_extra)
     return {"kind": "image", "mode": mode_name, "cols": cols, "rows": rows,
-            "n_frames": 1, "bytes_total": total, "src": (sw, sh)}
+            "n_frames": 1, "bytes_total": total, "src": (sw, sh),
+            "pal_size": pal_size, "quality_profile": quality_profile,
+            "bake_smoothing": bake_smoothing, "reconstruction": reconstruction,
+            "flags": FLAG_HAS_OFFSET_TABLE | flags_extra}
 
 
 def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_name,
-                 char_aspect, compress, palette_mode, keyint, with_audio, threshold=0, dump_cells=None):
+                 char_aspect, compress, palette_mode, keyint, with_audio, threshold=0,
+                 dump_cells=None, bake_smoothing="none", reconstruction="nearest",
+                 quality_profile="custom"):
+    validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
+                            palette_mode, bake_smoothing, reconstruction)
+    if int(keyint) < 0:
+        raise ValueError("keyint debe ser >= 0")
+    if int(threshold) < 0:
+        raise ValueError("threshold debe ser >= 0")
     mode = MODE_NAMES[mode_name]
     ramp = "" if mode == MODE_PIXEL else RAMPS.get(ramp_name, ramp_name)
     sw, sh = probe_size(in_path)
@@ -265,7 +383,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     pal_img = None
     palette0 = None
     if use_global:
-        allf = list(iter_video_frames(in_path, cols, rows, fps))
+        allf = list(iter_video_frames(in_path, cols, rows, fps, bake_smoothing))
         if not allf:
             raise RuntimeError("video sin frames")
         stepS = max(1, len(allf) // 12)
@@ -273,9 +391,11 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         pal_img, palette0 = make_global_palette(sample, pal_size)
         frames_iter = allf
     else:
-        frames_iter = iter_video_frames(in_path, cols, rows, fps)
+        frames_iter = iter_video_frames(in_path, cols, rows, fps, bake_smoothing)
     delta_allowed = (not has_palette) or use_global
     flags_extra = FLAG_PAL_GLOBAL if use_global else 0
+    if reconstruction == "soft":
+        flags_extra |= FLAG_RECON_SOFT
     pal16 = palette0.astype(np.int16) if (use_global and palette0 is not None) else None
     frames = []
     prev_cells = None
@@ -317,7 +437,10 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     return {"kind": "video", "mode": mode_name, "cols": cols, "rows": rows,
             "n_frames": len(frames), "bytes_total": total, "src": (sw, sh),
             "fps": fps, "tags": tag_counts, "palette_mode": palette_mode,
-            "audio": (mp3_path if audio_ok else None)}
+            "audio": (mp3_path if audio_ok else None), "pal_size": pal_size,
+            "quality_profile": quality_profile, "bake_smoothing": bake_smoothing,
+            "reconstruction": reconstruction,
+            "flags": FLAG_HAS_OFFSET_TABLE | flags_extra}
 
 
 def main(argv=None):
@@ -325,10 +448,15 @@ def main(argv=None):
     p.add_argument("input")
     p.add_argument("output")
     p.add_argument("--mode", choices=list(MODE_NAMES), default="pixel")
-    p.add_argument("--cols", type=int, default=200)
+    p.add_argument("--profile", "--quality-profile", choices=QUALITY_PROFILE_NAMES,
+                   default="custom", dest="quality_profile",
+                   help="custom/detail/balanced/color; los overrides manuales prevalecen")
+    p.add_argument("--cols", type=int, default=None,
+                   help="columnas; default 200 o valor del perfil")
     p.add_argument("--rows", type=int, default=0, help="0 = auto con correccion de aspecto")
     p.add_argument("--fps", type=int, default=DEFAULT_FPS, help="fps de playback (default 15)")
-    p.add_argument("--palette-size", type=int, default=256, dest="pal_size")
+    p.add_argument("--palette-size", type=int, default=None, dest="pal_size",
+                   help="1..256; default 256 o valor del perfil")
     p.add_argument("--palette", choices=["per-frame", "global"], default="per-frame")
     p.add_argument("--ramp", default="short", help="'short', 'long' o cadena propia")
     p.add_argument("--char-aspect", type=float, default=DEFAULT_CHAR_ASPECT)
@@ -338,9 +466,19 @@ def main(argv=None):
     p.add_argument("--force-video", action="store_true")
     p.add_argument("--force-image", action="store_true")
     p.add_argument("--dump-cells", default=None)
+    p.add_argument("--bake-smoothing", choices=BAKE_SMOOTHING_MODES, default="none",
+                   help="suavizado horneado antes de cuantizar (costo solo offline)")
+    p.add_argument("--reconstruction", choices=RECONSTRUCTION_MODES, default="nearest",
+                   help="filtro de presentacion sugerido al player")
     args = p.parse_args(argv)
-    if not (1 <= args.pal_size <= 256):
-        p.error("--palette-size 1..256")
+    args.cols, args.pal_size = resolve_quality_options(
+        args.quality_profile, args.cols, args.pal_size, default_cols=200)
+    try:
+        validate_encode_options(args.mode, args.cols, args.rows, args.fps, args.pal_size,
+                                args.char_aspect, args.palette, args.bake_smoothing,
+                                args.reconstruction)
+    except ValueError as exc:
+        p.error(str(exc))
     ext = os.path.splitext(args.input)[1].lower()
     is_video = args.force_video or (ext in VIDEO_EXTS and not args.force_image)
     keyint = args.keyint if args.keyint > 0 else max(1, args.fps * 2)
@@ -348,11 +486,18 @@ def main(argv=None):
         info = encode_video(args.input, args.output, args.mode, args.cols, args.rows,
                             args.fps, args.pal_size, args.ramp, args.char_aspect,
                             args.compress, args.palette, keyint, not args.no_audio,
-                            dump_cells=args.dump_cells)
+                            dump_cells=args.dump_cells,
+                            bake_smoothing=args.bake_smoothing,
+                            reconstruction=args.reconstruction,
+                            quality_profile=args.quality_profile)
         secs = info["n_frames"] / float(info["fps"]) or 1
         print("OK %s  (video, %s, paleta %s)" % (args.output, info["mode"], info["palette_mode"]))
         print("  fuente   : %dx%d px" % info["src"])
         print("  grilla   : %dx%d celdas @ %d fps" % (info["cols"], info["rows"], info["fps"]))
+        print("  calidad  : perfil %s, hasta %d colores" %
+              (info["quality_profile"], info["pal_size"]))
+        print("  imagen   : bake %s, reconstruccion %s, flags 0x%02X" %
+              (info["bake_smoothing"], info["reconstruction"], info["flags"]))
         print("  frames   : %d   tags RAW/ZLIB/DELTA = %d/%d/%d" %
               (info["n_frames"], info["tags"][0], info["tags"][1], info["tags"][2]))
         print("  .ascl    : %d B  (%.1f KB, %.1f KB/s)" %
@@ -362,9 +507,16 @@ def main(argv=None):
     else:
         info = encode_image(args.input, args.output, args.mode, args.cols, args.rows,
                             args.fps, args.pal_size, args.ramp, args.char_aspect,
-                            args.compress, args.palette, dump_cells=args.dump_cells)
+                            args.compress, args.palette, dump_cells=args.dump_cells,
+                            bake_smoothing=args.bake_smoothing,
+                            reconstruction=args.reconstruction,
+                            quality_profile=args.quality_profile)
         print("OK %s  (imagen, %s)" % (args.output, info["mode"]))
         print("  grilla   : %dx%d celdas" % (info["cols"], info["rows"]))
+        print("  calidad  : perfil %s, hasta %d colores" %
+              (info["quality_profile"], info["pal_size"]))
+        print("  imagen   : bake %s, reconstruccion %s, flags 0x%02X" %
+              (info["bake_smoothing"], info["reconstruction"], info["flags"]))
         print("  .ascl    : %d B" % info["bytes_total"])
     return 0
 

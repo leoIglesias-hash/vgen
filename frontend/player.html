@@ -14,7 +14,7 @@
   button{ cursor:pointer; }
   button:disabled{ opacity:.5; cursor:default; }
   #stage{ display:flex; justify-content:center; padding:18px; }
-  canvas{ background:#000; max-width:100%; image-rendering:pixelated; border:1px solid #26262c; }
+  canvas{ background:#000; max-width:100%; image-rendering:-moz-crisp-edges; image-rendering:pixelated; border:1px solid #26262c; }
   #status{ padding:8px 16px; color:#8a8a92; font-family:ui-monospace,monospace; font-size:12px; border-top:1px solid #26262c; white-space:pre-wrap; }
   .pill{ padding:2px 8px; border-radius:999px; background:#1a1a20; border:1px solid #33333c; color:#b9b9c2; font-size:12px; }
 </style>
@@ -31,7 +31,13 @@
       <option value="canvas2d">Canvas2D</option>
     </select>
   </label>
-  <label>zoom <select id="zoom"><option>2</option><option>3</option><option selected>4</option><option>6</option></select></label>
+  <label>reconstruccion
+    <select id="recon">
+      <option value="nearest" selected>Nitida (NEAREST)</option>
+      <option value="soft">Suave (SOFT)</option>
+    </select>
+  </label>
+  <label>zoom <select id="zoom"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>6</option></select></label>
   <button id="play" disabled>Play</button>
   <span id="badge" class="pill">sin archivo</span>
 </header>
@@ -50,12 +56,44 @@
   "use strict";
   var cv=document.getElementById("cv"), audio=document.getElementById("audio");
   var elPlay=document.getElementById("play"), elRend=document.getElementById("rend"),
-      elZoom=document.getElementById("zoom"), elBadge=document.getElementById("badge"),
+      elRecon=document.getElementById("recon"), elZoom=document.getElementById("zoom"),
+      elBadge=document.getElementById("badge"),
       elStatus=document.getElementById("status");
+  var FLAG_RECON_SOFT=16;
   var reader=null, renderer=null, playing=false, hasAudio=false;
   var startT=0, raf=0, lastShown=-1, drawn=0, dropped=0;
+  var urlAPI=window.URL || window.webkitURL;
+  var audioObjectURL=null;
+  var perf=window.performance;
+  var now=(perf && typeof perf.now==="function")
+    ? function(){ return perf.now(); }
+    : function(){ return Date.now ? Date.now() : new Date().getTime(); };
+  var requestFrame=window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
+    window.mozRequestAnimationFrame || window.msRequestAnimationFrame ||
+    function(fn){ return window.setTimeout(function(){ fn(now()); },16); };
+  var cancelFrame=window.cancelAnimationFrame || window.webkitCancelAnimationFrame ||
+    window.mozCancelAnimationFrame || window.msCancelAnimationFrame || window.clearTimeout;
 
   function log(s){ elStatus.textContent=s; }
+
+  function makeBlob(parts,type){
+    try { return new Blob(parts,{type:type}); }
+    catch(err){
+      var Builder=window.BlobBuilder || window.WebKitBlobBuilder ||
+        window.MozBlobBuilder || window.MSBlobBuilder;
+      if(!Builder){ throw err; }
+      var bb=new Builder(), i;
+      for(i=0;i<parts.length;i++){ bb.append(parts[i]); }
+      return bb.getBlob(type);
+    }
+  }
+
+  function setAudioBlob(blob){
+    if(!urlAPI || !urlAPI.createObjectURL){ throw new Error("object URL no disponible"); }
+    if(audioObjectURL && urlAPI.revokeObjectURL){ urlAPI.revokeObjectURL(audioObjectURL); }
+    audioObjectURL=urlAPI.createObjectURL(blob);
+    audio.src=audioObjectURL;
+  }
 
   function freshCanvas(){
     // Un canvas que ya tuvo contexto WebGL no puede dar contexto 2D (y viceversa):
@@ -69,31 +107,41 @@
   function pickRenderer(){
     freshCanvas();
     var want=elRend.value, cellPx=parseInt(elZoom.value,10);
+    var reconstruction=elRecon.value;
     var mode=reader.header.mode;
     var r=null, used="";
-    function tryWebGL(){ var w=new window.WebGLRenderer(cv); return w.init(reader,cellPx)?w:null; }
-    if(want==="canvas2d"){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx); used="canvas2d"; }
-    else if(want==="webgl"){ r=tryWebGL(); used=r?"webgl":"(webgl no disponible)"; if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx); used="canvas2d (fallback)"; } }
+    function tryWebGL(){
+      try { var w=new window.WebGLRenderer(cv); return w.init(reader,cellPx,reconstruction)?w:null; }
+      catch(err){ return null; }
+    }
+    if(want==="canvas2d"){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,reconstruction); used="canvas2d"; }
+    else if(want==="webgl"){ r=tryWebGL(); used=r?"webgl":"(webgl no disponible)"; if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,reconstruction); used="canvas2d (fallback)"; } }
     else {
       if(mode===window.ASCL.MODE_PIXEL){ r=tryWebGL(); used=r?"webgl":""; }
-      if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx); used=used?"canvas2d (fallback)":"canvas2d"; }
+      if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,reconstruction); used=used?"canvas2d (fallback)":"canvas2d"; }
     }
     renderer=r; return used;
   }
 
   function modeName(m){ return ["ASCII_BW","ASCII_PAL","ASCII_RGB","PIXEL"][m]; }
 
-  function loadAscl(buf){
-    buf = toAB(buf);
-    if (looksBundle(buf)) { loadBundle(buf); return; }
-    reader=window.ASCL.parse(buf);
+  function openAscl(buf,byteOffset,byteLength){
+    reader=window.ASCL.parse(buf,byteOffset,byteLength);
     var h=reader.header;
+    elRecon.value=(h.flags & FLAG_RECON_SOFT)?"soft":"nearest";
     var used=pickRenderer();
     reader.decodedIndex=-1; reader.seek(0); renderer.draw(reader); lastShown=0;
     elPlay.disabled=false;
     elBadge.textContent=modeName(h.mode)+" "+h.cols+"x"+h.rows+" @"+h.fps+"fps - "+h.nFrames+"f";
     log("Cargado: "+modeName(h.mode)+"  grilla "+h.cols+"x"+h.rows+"  fps "+h.fps+
-        "  frames "+h.nFrames+"\nrenderer: "+used+(hasAudio?"  - audio: si":"  - audio: no (reloj interno)"));
+        "  frames "+h.nFrames+"\nrenderer: "+used+"  - reconstruccion: "+elRecon.value+
+        (hasAudio?"  - audio: si":"  - audio: no (reloj interno)"));
+  }
+
+  function loadAscl(buf){
+    buf = toAB(buf);
+    if (looksBundle(buf)) { loadBundle(buf); return; }
+    openAscl(buf,0,buf.byteLength);
   }
 
   // .asclv = bundle: magic "ASCLVID1"(8) + ascl_len(u32) + audio_len(u32) + ascl + audio
@@ -105,7 +153,12 @@
   }
   function toAB(buf){
     if (buf instanceof ArrayBuffer) return buf;
-    if (buf && buf.buffer instanceof ArrayBuffer) return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    if (buf && buf.buffer instanceof ArrayBuffer) {
+      if (buf.byteOffset===0 && buf.byteLength===buf.buffer.byteLength) return buf.buffer;
+      var copy=new Uint8Array(buf.byteLength);
+      copy.set(new Uint8Array(buf.buffer,buf.byteOffset,buf.byteLength));
+      return copy.buffer;
+    }
     return buf;
   }
   function looksBundle(buf){
@@ -120,18 +173,20 @@
     buf = toAB(buf);
     var dv=new DataView(buf);
     var asclLen=dv.getUint32(8,true), audioLen=dv.getUint32(12,true);
-    var ascl=buf.slice(16,16+asclLen);
+    if(asclLen<32 || 16+asclLen+audioLen>buf.byteLength){
+      throw new Error("bundle truncado o longitudes invalidas");
+    }
     if(audioLen>0){
-      var ab=buf.slice(16+asclLen,16+asclLen+audioLen);
-      audio.src=URL.createObjectURL(new Blob([ab],{type:"audio/mpeg"}));
+      var audioView=new Uint8Array(buf,16+asclLen,audioLen);
+      setAudioBlob(makeBlob([audioView],"audio/mpeg"));
       audio.onended=function(){ stop(); };
       hasAudio=true;
     }
-    loadAscl(ascl);
+    openAscl(buf,16,asclLen);
   }
 
   function frameNow(){
-    var t = hasAudio ? audio.currentTime : (performance.now()-startT)/1000;
+    var t = hasAudio ? audio.currentTime : (now()-startT)/1000;
     return Math.floor(t * reader.header.fps);
   }
 
@@ -149,24 +204,31 @@
       renderer.draw(reader);
       drawn++; lastShown=target;
     }
-    raf=requestAnimationFrame(loop);
+    raf=requestFrame(loop);
   }
 
   function start(){
     if(!reader) return;
     playing=true; elPlay.textContent="Pause";
-    startT=performance.now() - (lastShown/reader.header.fps)*1000;
+    startT=now() - (lastShown/reader.header.fps)*1000;
     if(hasAudio){ audio.play(); }
-    raf=requestAnimationFrame(loop);
+    raf=requestFrame(loop);
   }
   function stop(){
-    playing=false; elPlay.textContent="Play"; if(raf) cancelAnimationFrame(raf);
+    playing=false; elPlay.textContent="Play"; if(raf) cancelFrame(raf);
     if(hasAudio){ audio.pause(); }
   }
 
   elPlay.onclick=function(){ playing?stop():start(); };
   elRend.onchange=function(){ if(reader){ var u=pickRenderer(); reader.decodedIndex=-1; reader.seek(lastShown<0?0:lastShown); renderer.draw(reader); log("renderer: "+u); } };
   elZoom.onchange=elRend.onchange;
+  elRecon.onchange=function(){
+    if(reader && renderer){
+      if(renderer.setReconstruction){ renderer.setReconstruction(elRecon.value); }
+      renderer.draw(reader);
+      log("renderer: "+renderer.name+"  - reconstruccion: "+elRecon.value);
+    }
+  };
 
   document.getElementById("fAscl").onchange=function(e){
     var f=e.target.files[0]; if(!f) return; stop(); hasAudio=false;
@@ -179,7 +241,7 @@
   };
   document.getElementById("fMp3").onchange=function(e){
     var f=e.target.files[0]; if(!f) return;
-    audio.src=URL.createObjectURL(f); hasAudio=true;
+    setAudioBlob(f); hasAudio=true;
     audio.onended=function(){ stop(); };
     log("audio cargado: "+f.name+" (reloj maestro)");
   };

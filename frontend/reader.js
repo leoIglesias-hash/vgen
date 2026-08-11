@@ -71,9 +71,15 @@
     }
   }
 
-  function Reader(buffer) {
-    this.bytes = new Uint8Array(buffer);
-    this.dv = new DataView(buffer);
+  function Reader(buffer, byteOffset, byteLength) {
+    byteOffset = byteOffset || 0;
+    byteLength = byteLength === undefined ? buffer.byteLength - byteOffset : byteLength;
+    if (byteOffset < 0 || byteLength < 32 || byteOffset + byteLength > buffer.byteLength) {
+      throw new Error("rango .ascl invalido");
+    }
+    // Vista directa dentro del .asclv: evita duplicar el video completo en memoria.
+    this.bytes = new Uint8Array(buffer, byteOffset, byteLength);
+    this.dv = new DataView(buffer, byteOffset, byteLength);
     this.header = parseHeader(this.dv);
     var h = this.header;
     this.bpc = BPC[h.mode];
@@ -188,7 +194,9 @@
   };
 
   root.ASCL = {
-    parse: function (buffer) { return new Reader(buffer); },
+    parse: function (buffer, byteOffset, byteLength) {
+      return new Reader(buffer, byteOffset, byteLength);
+    },
     MODE_BW: MODE_BW, MODE_PAL: MODE_PAL, MODE_RGB: MODE_RGB, MODE_PIXEL: MODE_PIXEL
   };
   if (typeof module !== "undefined" && module.exports) module.exports = root.ASCL;

@@ -3,8 +3,8 @@
  *
  * Idea (spec 3.1): en vez de cientos de miles de fillRect, se sube el frame como
  * UNA textura RGBA (cols x rows) y se dibuja un quad fullscreen -> 1 texImage2D + 1 draw.
- * Filtro NEAREST = bloques nitidos. El costo de render es casi independiente de la
- * resolucion, asi que escala a 720p/1080p en el mismo hardware.
+ * Filtro NEAREST/SOFT seleccionable. En PIXEL el backing store conserva cols x rows
+ * y el zoom es solo visual (CSS), evitando framebuffers sobredimensionados.
  *
  * Cubre cualquier modo via reader.fillRGBA (PIXEL nitido; PAL/RGB como mosaico de
  * color sin glifos). Para glifos ASCII usar Canvas2D (o glyph-atlas, mejora Fase 6).
@@ -14,6 +14,22 @@
  */
 (function (root) {
   "use strict";
+
+  function reconstructionName(value) {
+    return value === "soft" ? "soft" : "nearest";
+  }
+
+  function setCanvasImageRendering(canvas, reconstruction) {
+    var style = canvas.style;
+    if (reconstruction === "soft") {
+      style.imageRendering = "auto";
+      style.msInterpolationMode = "bicubic";
+    } else {
+      style.imageRendering = "pixelated";
+      if (!style.imageRendering) { style.imageRendering = "-moz-crisp-edges"; }
+      style.msInterpolationMode = "nearest-neighbor";
+    }
+  }
 
   var VERT = [
     "attribute vec2 a_pos;",
@@ -43,7 +59,7 @@
     this.canvas = canvas; this.gl = null; this.name = "webgl";
   }
 
-  WebGLRenderer.prototype.init = function (reader, cellPx) {
+  WebGLRenderer.prototype.init = function (reader, cellPx, reconstruction) {
     var h = reader.header;
     var gl = null;
     try {
@@ -52,8 +68,15 @@
     if (!gl) return false;                 // <-- degradacion elegante a Canvas2D
     this.gl = gl; this.reader = reader;
     this.cellPx = cellPx || (h.mode === 3 ? 4 : 8);
-    this.canvas.width = h.cols * this.cellPx;
-    this.canvas.height = h.rows * this.cellPx;
+    if (h.mode === 3) {
+      this.canvas.width = h.cols;
+      this.canvas.height = h.rows;
+      this.canvas.style.width = (h.cols * this.cellPx) + "px";
+      this.canvas.style.height = "auto";
+    } else {
+      this.canvas.width = h.cols * this.cellPx;
+      this.canvas.height = h.rows * this.cellPx;
+    }
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
     var prog = gl.createProgram();
@@ -77,15 +100,26 @@
 
     this.tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.uniform1i(gl.getUniformLocation(prog, "u_tex"), 0);
 
     this.rgba = new Uint8Array(reader.n * 4);
     this.texW = h.cols; this.texH = h.rows;
+    this.setReconstruction(reconstruction);
     return true;
+  };
+
+  WebGLRenderer.prototype.setReconstruction = function (reconstruction) {
+    var gl = this.gl;
+    this.reconstruction = reconstructionName(reconstruction);
+    setCanvasImageRendering(this.canvas, this.reconstruction);
+    if (gl && this.tex) {
+      var filter = this.reconstruction === "soft" ? gl.LINEAR : gl.NEAREST;
+      gl.bindTexture(gl.TEXTURE_2D, this.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    }
   };
 
   WebGLRenderer.prototype.draw = function (reader) {
