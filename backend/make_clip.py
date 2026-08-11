@@ -34,8 +34,11 @@ def main(argv=None):
                    help="columnas; default 320 o valor del perfil")
     p.add_argument("--rows", type=int, default=0, help="0 = filas automaticas")
     p.add_argument("--fps", type=int, default=15)
-    p.add_argument("--palette", choices=["per-frame", "global"], default="global")
-    p.add_argument("--threshold", type=int, default=0, help="T perceptual RGB (0=lossless); solo pixel+global")
+    p.add_argument("--palette", choices=["per-frame", "global", "block"], default="global")
+    p.add_argument("--palette-block-frames", type=int, default=0,
+                   help="frames por paleta en modo block (0 = fps*2)")
+    p.add_argument("--threshold", type=int, default=0,
+                   help="T perceptual RGB (0=lossless); pixel con paleta global/block")
     p.add_argument("--ramp", default="short")
     p.add_argument("--palette-size", type=int, default=None, dest="pal_size",
                    help="1..256; default 256 o valor del perfil")
@@ -51,7 +54,8 @@ def main(argv=None):
     try:
         encoder.validate_encode_options(args.mode, args.cols, args.rows, args.fps,
                                         args.pal_size, 0.5, args.palette,
-                                        args.bake_smoothing, args.reconstruction)
+                                        args.bake_smoothing, args.reconstruction,
+                                        args.palette_block_frames)
     except ValueError as exc:
         p.error(str(exc))
 
@@ -73,7 +77,8 @@ def main(argv=None):
                                     threshold=args.threshold,
                                     bake_smoothing=args.bake_smoothing,
                                     reconstruction=args.reconstruction,
-                                    quality_profile=args.quality_profile)
+                                    quality_profile=args.quality_profile,
+                                    palette_block_frames=args.palette_block_frames)
         mp3 = os.path.splitext(tmp_ascl)[0] + ".mp3"
         mp3 = mp3 if (info.get("audio") and os.path.exists(mp3)) else None
         total, la, lau = ascl_bundle.pack(tmp_ascl, mp3, out)
@@ -85,6 +90,8 @@ def main(argv=None):
         print("  calidad: perfil %s, hasta %d colores, bake %s, reconstruccion %s, flags 0x%02X" %
               (info["quality_profile"], info["pal_size"], info["bake_smoothing"],
                info["reconstruction"], info["flags"]))
+        if info["palette_mode"] == "block":
+            print("  paleta: bloque de %d frames" % info["palette_block_frames"])
         print("  bundle: %.1f KB  (video %.1f KB + audio %.1f KB)  ~%.1f KB/s" %
               (total/1024.0, la/1024.0, lau/1024.0, total/1024.0/secs))
         if not args.keep:

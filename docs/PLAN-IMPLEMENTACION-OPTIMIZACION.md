@@ -16,6 +16,12 @@ Base recuperable: commit `1c2c0b2`
 8. No se implementa deteccion, segmentacion ni rotacion especial de objetos.
 9. La intervencion local futura usa slots explicitos sobre la matriz, nunca otra capa DOM.
 
+Estado al 2026-08-11:
+
+- Fase A implementada y validada en la rama de trabajo.
+- Fase B iniciada: paleta global, por frame y por bloque temporal ya disponibles.
+- Dithering selectivo es el siguiente cambio de codigo; tiles v2 y slots permanecen en diseño.
+
 ## 2. Controles de calidad
 
 Los controles manuales siempre tienen prioridad. Los perfiles solo completan valores no
@@ -80,7 +86,9 @@ Deteccion de gradientes propuesta:
 - Matriz logica unica de indices.
 - Tiles de 16x16 y 32x32 evaluados offline.
 - Comandos candidatos: `REPEAT`, `SKIP`, `SOLID`, `SPARSE`, `PAL4`, `PAL8`, `ZLIB`.
-- Indices empaquetados de 4, 5, 6, 7 u 8 bits segun paleta.
+- Paleta local de 4 bits (`PAL4`) o indices de 8 bits (`PAL8`) en la v2 minima.
+- Packing de 5, 6 y 7 bits se agrega solo si los benchmarks demuestran una ganancia neta
+  frente al costo de desempaquetado en dispositivos viejos.
 - Lista comun de tiles sucios para Canvas2D y WebGL1.
 - Eleccion exhaustiva offline del candidato mas pequeno que cumpla calidad.
 

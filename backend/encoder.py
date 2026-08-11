@@ -16,6 +16,8 @@ Paleta (decision D3):
                         DELTA de color NO aplica entre frames (paletas distintas);
                         cada frame es full (RAW/ZLIB). char plane si puede ir en DELTA.
   --palette global     : una paleta para todo el clip => habilita DELTA de indices.
+  --palette block      : una paleta por bloque temporal => DELTA dentro del bloque.
+                        La paleta se reemite en cada keyframe para permitir seek.
 
 Audio: se extrae a un .mp3 aparte (carril separado, reloj maestro). NUNCA dentro del .ascl.
 """
@@ -86,7 +88,8 @@ def resolve_quality_options(profile, cols, pal_size, default_cols, default_pal_s
 
 
 def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
-                            palette_mode, bake_smoothing, reconstruction):
+                            palette_mode, bake_smoothing, reconstruction,
+                            palette_block_frames=0):
     """Valida limites del header v1 y opciones compartidas por todos los entrypoints."""
     if mode_name not in MODE_NAMES:
         raise ValueError("mode desconocido: %s" % mode_name)
@@ -100,8 +103,10 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
         raise ValueError("palette-size debe estar entre 1 y 256")
     if float(char_aspect) <= 0:
         raise ValueError("char-aspect debe ser > 0")
-    if palette_mode not in ("per-frame", "global"):
-        raise ValueError("palette debe ser per-frame o global")
+    if palette_mode not in ("per-frame", "global", "block"):
+        raise ValueError("palette debe ser per-frame, global o block")
+    if int(palette_block_frames) < 0:
+        raise ValueError("palette-block-frames debe ser >= 0")
     if bake_smoothing not in BAKE_SMOOTHING_MODES:
         raise ValueError("bake-smoothing debe ser none o soft")
     if reconstruction not in RECONSTRUCTION_MODES:
@@ -152,6 +157,48 @@ def make_global_palette(sample_imgs, pal_size):
                                                      method=Image.MEDIANCUT, dither=Image.NONE)
     palette = np.array(pal_img.getpalette()[: pal_size * 3], dtype=np.uint8).reshape(-1, 3)
     return pal_img, palette
+
+
+def iter_frame_blocks(frames_iter, block_frames):
+    """Agrupa un stream en bloques acotados sin materializar el video completo."""
+    block_frames = int(block_frames)
+    if block_frames <= 0:
+        raise ValueError("block_frames debe ser > 0")
+    block = []
+    for frame in frames_iter:
+        block.append(frame)
+        if len(block) >= block_frames:
+            yield block
+            block = []
+    if block:
+        yield block
+
+
+def sample_palette_frames(frame_block, max_samples=12):
+    """Selecciona RGBs repartidos por todo un bloque, incluyendo sus extremos."""
+    max_samples = int(max_samples)
+    if max_samples <= 0:
+        raise ValueError("max_samples debe ser > 0")
+    n = len(frame_block)
+    if n <= max_samples:
+        return [frame[0] for frame in frame_block]
+    if max_samples == 1:
+        return [frame_block[n // 2][0]]
+    indices = [(i * (n - 1)) // (max_samples - 1) for i in range(max_samples)]
+    return [frame_block[i][0] for i in indices]
+
+
+def iter_block_palette_frames(frames_iter, pal_size, block_frames, max_samples=12):
+    """Anota cada frame con la paleta temporal de su bloque.
+
+    Solo conserva `block_frames` RGB/grises y el pequeno conjunto usado para crear
+    la paleta. El booleano final marca el primer frame, donde DELTA debe reiniciarse.
+    """
+    for block in iter_frame_blocks(frames_iter, block_frames):
+        samples = sample_palette_frames(block, max_samples)
+        pal_img, palette = make_global_palette(samples, pal_size)
+        for block_index, (rgb, gray) in enumerate(block):
+            yield rgb, gray, pal_img, palette, block_index == 0
 
 
 def quantize_with(pal_img, rgb):
@@ -367,9 +414,10 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
 def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_name,
                  char_aspect, compress, palette_mode, keyint, with_audio, threshold=0,
                  dump_cells=None, bake_smoothing="none", reconstruction="nearest",
-                 quality_profile="custom"):
+                 quality_profile="custom", palette_block_frames=0):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
-                            palette_mode, bake_smoothing, reconstruction)
+                            palette_mode, bake_smoothing, reconstruction,
+                            palette_block_frames)
     if int(keyint) < 0:
         raise ValueError("keyint debe ser >= 0")
     if int(threshold) < 0:
@@ -380,6 +428,9 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     cols, rows = compute_grid(sw, sh, cols, rows, mode, char_aspect)
     has_palette = mode in (MODE_PIXEL, MODE_ASCII_PAL)
     use_global = has_palette and palette_mode == "global"
+    use_block = has_palette and palette_mode == "block"
+    effective_block_frames = (int(palette_block_frames) if int(palette_block_frames) > 0
+                              else max(1, int(fps) * 2)) if use_block else 0
     pal_img = None
     palette0 = None
     if use_global:
@@ -390,10 +441,17 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         sample = [allf[k][0] for k in range(0, len(allf), stepS)]
         pal_img, palette0 = make_global_palette(sample, pal_size)
         frames_iter = allf
+    elif use_block:
+        source_iter = iter_video_frames(in_path, cols, rows, fps, bake_smoothing)
+        frames_iter = iter_block_palette_frames(source_iter, pal_size,
+                                                effective_block_frames)
     else:
         frames_iter = iter_video_frames(in_path, cols, rows, fps, bake_smoothing)
-    delta_allowed = (not has_palette) or use_global
-    flags_extra = FLAG_PAL_GLOBAL if use_global else 0
+    delta_allowed = (not has_palette) or use_global or use_block
+    flags_extra = (FLAG_PAL_GLOBAL if use_global else
+                   (FLAG_PAL_PER_SCENE if use_block else 0))
+    if mode == MODE_PIXEL and threshold > 0 and (use_global or use_block):
+        flags_extra |= FLAG_LOSSY
     if reconstruction == "soft":
         flags_extra |= FLAG_RECON_SOFT
     pal16 = palette0.astype(np.int16) if (use_global and palette0 is not None) else None
@@ -402,13 +460,30 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     idx = 0
     dump = {} if dump_cells else None
     tag_counts = {TAG_RAW: 0, TAG_ZLIB: 0, TAG_DELTA: 0, TAG_DELTA_MASK: 0}
-    for rgb, gray in frames_iter:
-        keyframe = (idx == 0) or (keyint > 0 and idx % keyint == 0)
+    for frame_data in frames_iter:
+        block_start = False
+        active_pal_img = pal_img
+        active_palette = palette0
+        if use_block:
+            rgb, gray, active_pal_img, active_palette, block_start = frame_data
+            if block_start:
+                # Los indices de dos paletas distintas nunca comparten una cadena DELTA.
+                prev_cells = None
+                pal16 = active_palette.astype(np.int16)
+        else:
+            rgb, gray = frame_data
+        keyframe = (idx == 0) or block_start or (keyint > 0 and idx % keyint == 0)
         cells, palette, pal_count = frame_to_cells(rgb, gray, mode, len(ramp), pal_size,
-                                                   palette_mode, pal_img)
+                                                   ("global" if use_block else palette_mode),
+                                                   active_pal_img)
         if use_global:
             pal_count = pal_size if idx == 0 else 0
             palette = palette0 if idx == 0 else None
+        elif use_block:
+            # Todo keyframe debe ser autocontenido: al hacer seek el reader empieza
+            # alli y necesita conocer la paleta aunque este a mitad de un bloque.
+            pal_count = active_palette.shape[0] if keyframe else 0
+            palette = active_palette if keyframe else None
         if (pal16 is not None and mode == MODE_PIXEL and threshold > 0
                 and not keyframe and prev_cells is not None):
             cur = cells[:, 0]
@@ -419,6 +494,11 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             cells = emitted
         tag, payload = encode_frame(cells, prev_cells, mode, idx, keyframe,
                                     compress, delta_allowed)
+        if use_block and tag in (TAG_RAW, TAG_ZLIB) and pal_count == 0:
+            # El codec adaptativo puede elegir un full aunque no fuera forzado. Para
+            # el reader ese tag tambien es keyframe y debe traer su paleta activa.
+            pal_count = active_palette.shape[0]
+            palette = active_palette
         tag_counts[tag] += 1
         frames.append({"tag": tag, "pal_count": pal_count, "palette": palette, "payload": payload})
         if dump is not None:
@@ -440,6 +520,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             "audio": (mp3_path if audio_ok else None), "pal_size": pal_size,
             "quality_profile": quality_profile, "bake_smoothing": bake_smoothing,
             "reconstruction": reconstruction,
+            "palette_block_frames": effective_block_frames,
             "flags": FLAG_HAS_OFFSET_TABLE | flags_extra}
 
 
@@ -457,7 +538,9 @@ def main(argv=None):
     p.add_argument("--fps", type=int, default=DEFAULT_FPS, help="fps de playback (default 15)")
     p.add_argument("--palette-size", type=int, default=None, dest="pal_size",
                    help="1..256; default 256 o valor del perfil")
-    p.add_argument("--palette", choices=["per-frame", "global"], default="per-frame")
+    p.add_argument("--palette", choices=["per-frame", "global", "block"], default="per-frame")
+    p.add_argument("--palette-block-frames", type=int, default=0,
+                   help="frames por paleta en modo block (0 = fps*2)")
     p.add_argument("--ramp", default="short", help="'short', 'long' o cadena propia")
     p.add_argument("--char-aspect", type=float, default=DEFAULT_CHAR_ASPECT)
     p.add_argument("--compress", choices=["auto", "none", "zlib"], default="auto")
@@ -476,7 +559,7 @@ def main(argv=None):
     try:
         validate_encode_options(args.mode, args.cols, args.rows, args.fps, args.pal_size,
                                 args.char_aspect, args.palette, args.bake_smoothing,
-                                args.reconstruction)
+                                args.reconstruction, args.palette_block_frames)
     except ValueError as exc:
         p.error(str(exc))
     ext = os.path.splitext(args.input)[1].lower()
@@ -489,13 +572,16 @@ def main(argv=None):
                             dump_cells=args.dump_cells,
                             bake_smoothing=args.bake_smoothing,
                             reconstruction=args.reconstruction,
-                            quality_profile=args.quality_profile)
+                            quality_profile=args.quality_profile,
+                            palette_block_frames=args.palette_block_frames)
         secs = info["n_frames"] / float(info["fps"]) or 1
         print("OK %s  (video, %s, paleta %s)" % (args.output, info["mode"], info["palette_mode"]))
         print("  fuente   : %dx%d px" % info["src"])
         print("  grilla   : %dx%d celdas @ %d fps" % (info["cols"], info["rows"], info["fps"]))
         print("  calidad  : perfil %s, hasta %d colores" %
               (info["quality_profile"], info["pal_size"]))
+        if info["palette_mode"] == "block":
+            print("  paleta   : bloque de %d frames" % info["palette_block_frames"])
         print("  imagen   : bake %s, reconstruccion %s, flags 0x%02X" %
               (info["bake_smoothing"], info["reconstruction"], info["flags"]))
         print("  frames   : %d   tags RAW/ZLIB/DELTA = %d/%d/%d" %

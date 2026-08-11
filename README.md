@@ -34,7 +34,7 @@ python make_clip.py "../inputs/mi-video.mp4"
 ```
 
 Opciones principales: `--profile detail|balanced|color|custom`, `--cols 320`,
-`--palette-size 128`, `--fps 15`, `--palette global|per-frame`,
+`--palette-size 128`, `--fps 15`, `--palette global|block|per-frame`,
 `--reconstruction nearest|soft`, `--bake-smoothing none|soft` y
 `--mode pixel|ascii-pal|ascii-rgb|ascii-bw`. Los valores manuales de columnas y colores
 siempre prevalecen sobre el perfil.
@@ -49,7 +49,14 @@ python make_clip.py ../inputs/video.mp4 --profile detail --reconstruction soft
 # Valores totalmente manuales y suavizado 2x horneado offline
 python make_clip.py ../inputs/video.mp4 --cols 960 --palette-size 96 \
   --bake-smoothing soft --reconstruction nearest
+
+# Paleta renovada cada dos segundos: mejor adaptación de color sin perder DELTA
+python make_clip.py ../inputs/video.mp4 --palette block --palette-block-frames 0
 ```
+
+En `--palette block`, el valor `0` usa `fps × 2`. El encoder mantiene en memoria solo el
+bloque activo y hace que todo keyframe incluya su paleta, por lo que el seek sigue siendo
+independiente y compatible con el reader v1.
 
 ## Reproducir
 

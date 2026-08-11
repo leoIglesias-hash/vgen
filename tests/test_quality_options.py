@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 import zlib
+from unittest import mock
 
 import numpy as np
 from PIL import Image
@@ -71,6 +72,42 @@ class QualityOptionsTest(unittest.TestCase):
             self.assertTrue(header[3] & encoder.FLAG_RECON_SOFT)
             self.assertEqual(zlib.crc32(data[encoder.HEADER_SIZE:]) & 0xFFFFFFFF,
                              header[-1])
+
+    def test_block_palette_makes_every_actual_keyframe_self_contained(self):
+        rng = np.random.default_rng(1234)
+        frames = []
+        for _ in range(6):
+            rgb = rng.integers(0, 256, size=(8, 8, 3), dtype=np.uint8)
+            gray = ((rgb[:, :, 0].astype(np.uint16) * 77 +
+                     rgb[:, :, 1].astype(np.uint16) * 150 +
+                     rgb[:, :, 2].astype(np.uint16) * 29) >> 8).astype(np.uint8)
+            frames.append((rgb, gray))
+
+        def fake_iter(_path, _cols, _rows, _fps, _bake="none"):
+            return iter(frames)
+
+        with tempfile.TemporaryDirectory() as td:
+            output = os.path.join(td, "block.ascl")
+            with mock.patch.object(encoder, "probe_size", return_value=(8, 8)), \
+                    mock.patch.object(encoder, "iter_video_frames", side_effect=fake_iter):
+                info = encoder.encode_video(
+                    "synthetic.mp4", output, "pixel", 8, 8, 3, 16, "short", 0.5,
+                    "auto", "block", 2, False, palette_block_frames=3)
+
+            self.assertEqual(info["n_frames"], 6)
+            self.assertEqual(info["palette_block_frames"], 3)
+            self.assertTrue(info["flags"] & encoder.FLAG_PAL_PER_SCENE)
+            with open(output, "rb") as fh:
+                data = fh.read()
+            header = struct.unpack_from(encoder.HEADER_FMT, data, 0)
+            n_frames = header[8]
+            data_off = header[11]
+            offsets = struct.unpack_from("<%dI" % n_frames, data, data_off)
+            for offset in offsets:
+                tag = data[offset + 4]
+                pal_count = struct.unpack_from("<H", data, offset + 5)[0]
+                if tag in (encoder.TAG_RAW, encoder.TAG_ZLIB):
+                    self.assertGreater(pal_count, 0)
 
 
 if __name__ == "__main__":

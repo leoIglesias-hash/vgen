@@ -77,7 +77,7 @@ Total: **32 bytes**.
 | Bit | Nombre | Significado |
 |---:|---|---|
 | 0 | `LOSSY` | Hubo delta temporal con pérdida (tolerancia > 0). El plano de carácter siempre es exacto. |
-| 1 | `PAL_PER_SCENE` | La paleta se reemite solo en cambios de escena (frames con `pal_count > 0`). |
+| 1 | `PAL_PER_SCENE` | Paleta temporal: se reemite en cambios de escena o bloque y en todo keyframe (frames con `pal_count > 0`). |
 | 2 | `PAL_GLOBAL` | Una sola paleta para todo el clip (solo el frame 0 trae `pal_count > 0`). |
 | 3 | `HAS_OFFSET_TABLE` | Hay tabla de offsets (siempre `1` en v1). |
 | 4 | `RECON_SOFT` | El encoder recomienda reconstrucción suavizada. Readers anteriores pueden ignorarlo y usar NEAREST. No modifica el payload. |
@@ -145,7 +145,8 @@ keyframe sin recorrer todo. Para imagen: un solo offset.
 ```
 
 - **Per-frame (default v1):** `pal_count = pal_size` en *todos* los frames.
-- **Per-escena:** `pal_count > 0` solo en frames de cambio de escena; `0` = reusar la última.
+- **Temporal (escena/bloque):** `pal_count > 0` al cambiar la paleta y en todo frame
+  RAW/ZLIB que pueda iniciar un seek; `0` = reusar la última dentro de una cadena DELTA.
 - **Global:** `pal_count > 0` solo en el frame 0.
 - En modos sin paleta (BW/RGB): `pal_count = 0` siempre.
 
@@ -315,6 +316,10 @@ reader solo decodifica la cadena mínima, **el audio nunca espera** (frames desc
 
 - `per-frame` (default): cada frame trae su paleta → cada frame es full (RAW/ZLIB),
   DELTA de color no aplica (las paletas difieren). Máxima fidelidad, más peso.
+- `block` (flag `PAL_PER_SCENE`): una paleta por bloque temporal; habilita DELTA dentro
+  del bloque y limita el buffer del encoder. `--palette-block-frames 0` usa `fps×2`.
+  El comienzo de bloque reinicia DELTA y todo keyframe RAW/ZLIB reemite la paleta activa,
+  de modo que un seek nunca depende de haber decodificado el bloque anterior.
 - `global` (flag `PAL_GLOBAL`): una paleta única, escrita en el frame 0; habilita DELTA
   de índices. En clips con poco movimiento baja el peso ~2× o más.
 
