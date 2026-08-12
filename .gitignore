@@ -17,6 +17,7 @@ inputs/*
 outputs/*
 !outputs/test*
 !outputs/TKN-2441-GANADOR-graphic-kmeans.asclv
+!outputs/TKN-2441-GANADOR-graphic-kmeans-block5.asclv
 
 # Temporales del sistema y editores
 .DS_Store

@@ -74,6 +74,11 @@ El dithering selectivo se hornea como indices ASCL v1 normales: no cambia el pla
 suma CPU/GPU al reproducir. En video se admite con paleta `global` o `block`; `per-frame`
 queda excluida para evitar inestabilidad temporal entre paletas.
 
+Las pruebas, observaciones visuales y decisiones por version se conservan en
+`docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`. Cada conclusion queda ligada a su
+configuracion; si cambia el modo, la grilla, los FPS, la paleta, el dithering o el codec,
+debe validarse nuevamente.
+
 ## Reproducir
 
 Abrí `frontend/player.html`, elegí el `.asclv` y Play. El `.asclv` ya contiene video y
