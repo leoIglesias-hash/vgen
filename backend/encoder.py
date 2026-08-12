@@ -317,9 +317,23 @@ def write_ascl(path, mode, cols, rows, fps, ramp, frames, palette0, char_aspect,
 
 
 def extract_audio(in_path, mp3_path):
+    ffmpeg = "ffmpeg"
+    try:
+        import shutil
+        ffmpeg = shutil.which("ffmpeg") or ffmpeg
+    except Exception:
+        pass
+    if ffmpeg == "ffmpeg":
+        try:
+            # Alternativa autocontenida para Windows/entornos de procesamiento donde
+            # FFmpeg no esta instalado globalmente. No afecta al player ni al formato.
+            import imageio_ffmpeg
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            pass
     try:
         r = subprocess.run(
-            ["ffmpeg", "-y", "-i", in_path, "-vn", "-acodec", "libmp3lame",
+            [ffmpeg, "-y", "-i", in_path, "-vn", "-acodec", "libmp3lame",
              "-q:a", "4", mp3_path],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return r.returncode == 0 and os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 0

@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.runtime-deps/
 *.pkl
 *.npz
 *.tmp

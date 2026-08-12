@@ -60,7 +60,9 @@ independiente y compatible con el reader v1.
 
 ## Reproducir
 
-Abrí `frontend/player.html`, elegí el `.asclv` y Play. El renderer va WebGL→Canvas2D solo;
+Abrí `frontend/player.html`, elegí el `.asclv` y Play. El `.asclv` ya contiene video y
+audio en un único archivo. El selector de MP3 externo se conserva solamente para abrir
+un `.ascl` suelto/antiguo sin perder compatibilidad. El renderer va WebGL→Canvas2D solo;
 el audio es el reloj maestro (si el render se atrasa, descarta frames).
 
 ## Verificar / preview sin navegador

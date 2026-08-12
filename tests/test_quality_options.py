@@ -2,6 +2,7 @@ import os
 import struct
 import sys
 import tempfile
+import types
 import unittest
 import zlib
 from unittest import mock
@@ -108,6 +109,20 @@ class QualityOptionsTest(unittest.TestCase):
                 pal_count = struct.unpack_from("<H", data, offset + 5)[0]
                 if tag in (encoder.TAG_RAW, encoder.TAG_ZLIB):
                     self.assertGreater(pal_count, 0)
+
+    def test_audio_extraction_uses_portable_ffmpeg_fallback(self):
+        portable = types.SimpleNamespace(
+            get_ffmpeg_exe=lambda: "portable-ffmpeg.exe")
+        completed = types.SimpleNamespace(returncode=0)
+        with tempfile.TemporaryDirectory() as td:
+            output = os.path.join(td, "audio.mp3")
+            with open(output, "wb") as fh:
+                fh.write(b"mp3")
+            with mock.patch("shutil.which", return_value=None), \
+                    mock.patch.dict(sys.modules, {"imageio_ffmpeg": portable}), \
+                    mock.patch.object(encoder.subprocess, "run", return_value=completed) as run:
+                self.assertTrue(encoder.extract_audio("source.mp4", output))
+            self.assertEqual(run.call_args[0][0][0], "portable-ffmpeg.exe")
 
 
 if __name__ == "__main__":
