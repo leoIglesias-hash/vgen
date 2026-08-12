@@ -29,12 +29,15 @@ def main(argv=None):
     p.add_argument("--mode", choices=list(encoder.MODE_NAMES), default="pixel")
     p.add_argument("--profile", "--quality-profile", choices=encoder.QUALITY_PROFILE_NAMES,
                    default="custom", dest="quality_profile",
-                   help="custom/detail/balanced/color; los overrides manuales prevalecen")
+                   help="custom/detail/balanced/graphic/color; overrides prevalecen")
     p.add_argument("--cols", type=int, default=None,
                    help="columnas; default 320 o valor del perfil")
     p.add_argument("--rows", type=int, default=0, help="0 = filas automaticas")
     p.add_argument("--fps", type=int, default=15)
     p.add_argument("--palette", choices=["per-frame", "global", "block"], default="global")
+    p.add_argument("--palette-algorithm", choices=encoder.PALETTE_ALGORITHMS,
+                   default="kmeans-rgb",
+                   help="constructor offline (default kmeans-rgb, mejor fidelidad)")
     p.add_argument("--palette-block-frames", type=int, default=0,
                    help="frames por paleta en modo block (0 = fps*2)")
     p.add_argument("--threshold", type=int, default=0,
@@ -46,6 +49,11 @@ def main(argv=None):
                    help="suavizado offline antes de cuantizar")
     p.add_argument("--reconstruction", choices=encoder.RECONSTRUCTION_MODES, default="nearest",
                    help="filtro de presentacion recomendado al player")
+    p.add_argument("--dither", choices=encoder.DITHER_MODES, default="off",
+                   help="tramado selectivo offline para mode pixel")
+    p.add_argument("--dither-matrix", choices=encoder.DITHER_MATRIX_SIZES,
+                   type=int, default=4,
+                   help="Bayer 2 compacto o Bayer 4 equilibrado")
     p.add_argument("--image", action="store_true", help="forzar modo imagen (sin audio)")
     p.add_argument("--keep", action="store_true", help="conservar los .ascl/.mp3 intermedios")
     args = p.parse_args(argv)
@@ -55,7 +63,9 @@ def main(argv=None):
         encoder.validate_encode_options(args.mode, args.cols, args.rows, args.fps,
                                         args.pal_size, 0.5, args.palette,
                                         args.bake_smoothing, args.reconstruction,
-                                        args.palette_block_frames)
+                                        args.palette_block_frames, args.dither,
+                                        args.dither_matrix,
+                                        args.palette_algorithm)
     except ValueError as exc:
         p.error(str(exc))
 
@@ -78,7 +88,10 @@ def main(argv=None):
                                     bake_smoothing=args.bake_smoothing,
                                     reconstruction=args.reconstruction,
                                     quality_profile=args.quality_profile,
-                                    palette_block_frames=args.palette_block_frames)
+                                    palette_block_frames=args.palette_block_frames,
+                                    dither_mode=args.dither,
+                                    dither_matrix=args.dither_matrix,
+                                    palette_algorithm=args.palette_algorithm)
         mp3 = os.path.splitext(tmp_ascl)[0] + ".mp3"
         mp3 = mp3 if (info.get("audio") and os.path.exists(mp3)) else None
         total, la, lau = ascl_bundle.pack(tmp_ascl, mp3, out)
@@ -90,6 +103,10 @@ def main(argv=None):
         print("  calidad: perfil %s, hasta %d colores, bake %s, reconstruccion %s, flags 0x%02X" %
               (info["quality_profile"], info["pal_size"], info["bake_smoothing"],
                info["reconstruction"], info["flags"]))
+        print("  algoritmo de paleta: %s" % info["palette_algorithm"])
+        print("  dither: %s%s" %
+              (info["dither"], (" Bayer %d" % info["dither_matrix"])
+               if info["dither"] != "off" else ""))
         if info["palette_mode"] == "block":
             print("  paleta: bloque de %d frames" % info["palette_block_frames"])
         print("  bundle: %.1f KB  (video %.1f KB + audio %.1f KB)  ~%.1f KB/s" %
@@ -103,13 +120,20 @@ def main(argv=None):
                                     args.fps, args.pal_size, args.ramp, 0.5, "auto", "per-frame",
                                     bake_smoothing=args.bake_smoothing,
                                     reconstruction=args.reconstruction,
-                                    quality_profile=args.quality_profile)
+                                    quality_profile=args.quality_profile,
+                                    dither_mode=args.dither,
+                                    dither_matrix=args.dither_matrix,
+                                    palette_algorithm=args.palette_algorithm)
         total, la, lau = ascl_bundle.pack(tmp_ascl, None, out)
         print("OK %s  (imagen, %s %dx%d, %.1f KB)" %
               (out, info["mode"], info["cols"], info["rows"], total/1024.0))
         print("  calidad: perfil %s, hasta %d colores, bake %s, reconstruccion %s, flags 0x%02X" %
               (info["quality_profile"], info["pal_size"], info["bake_smoothing"],
                info["reconstruction"], info["flags"]))
+        print("  algoritmo de paleta: %s" % info["palette_algorithm"])
+        print("  dither: %s%s" %
+              (info["dither"], (" Bayer %d" % info["dither_matrix"])
+               if info["dither"] != "off" else ""))
         if not args.keep and os.path.exists(tmp_ascl):
             os.remove(tmp_ascl)
     return 0

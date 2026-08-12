@@ -33,9 +33,11 @@ python make_clip.py "../inputs/mi-video.mp4"
 # -> ../outputs/mi-video.asclv   (video ASCII + audio en UN archivo)
 ```
 
-Opciones principales: `--profile detail|balanced|color|custom`, `--cols 320`,
+Opciones principales: `--profile detail|balanced|graphic|color|custom`, `--cols 320`,
 `--palette-size 128`, `--fps 15`, `--palette global|block|per-frame`,
-`--reconstruction nearest|soft`, `--bake-smoothing none|soft` y
+`--palette-algorithm median-cut|fast-octree|kmeans-rgb`,
+`--reconstruction nearest|soft`, `--bake-smoothing none|soft`,
+`--dither off|selective`, `--dither-matrix 2|4` y
 `--mode pixel|ascii-pal|ascii-rgb|ascii-bw`. Los valores manuales de columnas y colores
 siempre prevalecen sobre el perfil.
 Para imágenes: `python make_clip.py ../inputs/foto.jpg --image`.
@@ -51,12 +53,26 @@ python make_clip.py ../inputs/video.mp4 --cols 960 --palette-size 96 \
   --bake-smoothing soft --reconstruction nearest
 
 # Paleta renovada cada dos segundos: mejor adaptación de color sin perder DELTA
-python make_clip.py ../inputs/video.mp4 --palette block --palette-block-frames 0
+python make_clip.py ../inputs/video.mp4 --profile graphic \
+  --palette block --palette-block-frames 0 --palette-algorithm kmeans-rgb
+
+# Reducir bandas de color sin costo nuevo en el navegador (solo mode pixel).
+python make_clip.py ../inputs/video.mp4 --palette block --palette-size 128 \
+  --dither selective --dither-matrix 4
 ```
 
 En `--palette block`, el valor `0` usa `fps × 2`. El encoder mantiene en memoria solo el
 bloque activo y hace que todo keyframe incluya su paleta, por lo que el seek sigue siendo
 independiente y compatible con el reader v1.
+
+`make_clip.py` usa `kmeans-rgb` por defecto: tarda más al crear el archivo, pero no agrega
+ningún trabajo al navegador y en el video TKN redujo de forma clara el error de color y de
+bajas frecuencias frente a MEDIANCUT. `fast-octree` es la alternativa rápida del procesador;
+`median-cut` conserva el comportamiento histórico y sigue siendo el default de `encoder.py`.
+
+El dithering selectivo se hornea como indices ASCL v1 normales: no cambia el player ni
+suma CPU/GPU al reproducir. En video se admite con paleta `global` o `block`; `per-frame`
+queda excluida para evitar inestabilidad temporal entre paletas.
 
 ## Reproducir
 

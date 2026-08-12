@@ -19,8 +19,10 @@ Base recuperable: commit `1c2c0b2`
 Estado al 2026-08-11:
 
 - Fase A implementada y validada en la rama de trabajo.
-- Fase B iniciada: paleta global, por frame y por bloque temporal ya disponibles.
-- Dithering selectivo es el siguiente cambio de codigo; tiles v2 y slots permanecen en diseño.
+- Fase B implementada: paleta global/por frame/por bloque, K-means RGB y dithering
+  selectivo disponibles. En el TKN real, K-means es el default recomendado y el
+  dithering permanece experimental/apagado.
+- Tiles v2 y slots permanecen en diseño.
 
 ## 2. Controles de calidad
 
@@ -34,8 +36,10 @@ indicados por el usuario.
 | `--fps N` | FPS objetivo exactos del clip. |
 | `--profile detail` | Prioriza mas celdas y una paleta menor. |
 | `--profile balanced` | Equilibrio entre resolucion y color. |
+| `--profile graphic` | 640 columnas y 256 colores para animacion, logos y gradientes. |
 | `--profile color` | Menos celdas y mas colores. |
 | `--profile custom` | Usa solamente valores manuales. |
+| `--palette-algorithm median-cut|fast-octree|kmeans-rgb` | Trabajo offline dedicado a elegir mejor los colores. |
 | `--reconstruction nearest|soft` | Presentacion sugerida al player; no cambia los frames. |
 | `--bake-smoothing none|soft` | Suavizado calculado offline antes de cuantizar. |
 
