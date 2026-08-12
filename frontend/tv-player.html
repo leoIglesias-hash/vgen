@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ASCILINE TV</title>
+<style>
+  html,body{ width:100%; height:100%; margin:0; overflow:hidden; background:#000; }
+  body{ color:#fff; font-family:Arial,Helvetica,sans-serif; }
+  #stage{ position:absolute; left:0; top:0; right:0; bottom:0; overflow:hidden;
+    background:#000; cursor:pointer; outline:none; }
+  #cv{ position:absolute; left:50%; top:50%; display:block; margin:0; border:0;
+    background:#000; image-rendering:auto; -ms-interpolation-mode:bicubic; }
+  #message{ position:absolute; z-index:2; left:0; right:0; bottom:7%; text-align:center;
+    pointer-events:none; }
+  #panel{ display:inline-block; max-width:82%; padding:14px 22px; color:#fff;
+    background:#000; background:rgba(0,0,0,.72); border:1px solid #555;
+    font-size:22px; line-height:1.35; }
+  #detail{ display:block; padding-top:5px; color:#bbb; font-size:14px; }
+  #download{ position:absolute; z-index:4; right:10px; top:10px; padding:7px 11px;
+    border:1px solid #666; color:#ddd; background:#111; background:rgba(12,12,12,.82);
+    font:13px Arial,Helvetica,sans-serif; cursor:pointer; }
+  #download:focus{ border-color:#fff; color:#fff; outline:2px solid #777; }
+  .playing #message{ display:none; }
+  .error #panel{ border-color:#b33; color:#ffd8d8; }
+</style>
+</head>
+<body>
+<div id="stage" tabindex="0" role="button" aria-label="Iniciar video en pantalla completa">
+  <canvas id="cv" width="640" height="360"></canvas>
+  <button id="download" type="button">Iniciar descarga</button>
+  <div id="message"><div id="panel">
+    <span id="headline">Cargando video&hellip;</span>
+    <span id="detail">ASCILINE TV</span>
+  </div></div>
+</div>
+<audio id="audio" preload="auto" style="display:none"></audio>
+
+<script src="inflate.js"></script>
+<script src="reader.js"></script>
+<script src="render-canvas2d.js"></script>
+<script src="render-webgl.js"></script>
+<script src="tv-controller.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* Ruta relativa del servidor PHP. El archivo local conserva su nombre original. */
+  var DEFAULT_SRC="./output/clip.asclv";
+  var FLAG_RECON_SOFT=16;
+  var stage=document.getElementById("stage");
+  var cv=document.getElementById("cv");
+  var audio=document.getElementById("audio");
+  var downloadButton=document.getElementById("download");
+  var headline=document.getElementById("headline");
+  var detail=document.getElementById("detail");
+  var reader=null, renderer=null, ready=false, playing=false, hasAudio=false;
+  var lastShown=-1, startT=0, raf=0, rendererName="";
+  var audioObjectURL=null;
+  var activeXHR=null;
+  var lastDownloadTouch=-1;
+  var urlAPI=window.URL || window.webkitURL;
+  var perf=window.performance;
+  var now=(perf && typeof perf.now==="function") ?
+    function(){ return perf.now(); } :
+    function(){ return Date.now ? Date.now() : new Date().getTime(); };
+  var requestFrame=window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
+    window.mozRequestAnimationFrame || window.msRequestAnimationFrame ||
+    function(fn){ return window.setTimeout(function(){ fn(now()); },16); };
+  var cancelFrame=window.cancelAnimationFrame || window.webkitCancelAnimationFrame ||
+    window.mozCancelAnimationFrame || window.msCancelAnimationFrame || window.clearTimeout;
+
+  function qs(name){
+    var match=new RegExp("[?&]"+name+"=([^&]+)").exec(window.location.search);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  var source=DEFAULT_SRC;
+  var requestedRenderer=qs("renderer") || "auto";
+  var loopEnabled=qs("loop") !== "0";
+
+  function setMessage(title, text, isError){
+    headline.innerHTML=title;
+    detail.innerHTML=text || "";
+    stage.className=isError ? "error" : "";
+  }
+
+  function makeBlob(parts,type){
+    try { return new Blob(parts,{type:type}); }
+    catch(error){
+      var Builder=window.BlobBuilder || window.WebKitBlobBuilder ||
+        window.MozBlobBuilder || window.MSBlobBuilder;
+      var builder, i;
+      if(!Builder){ throw error; }
+      builder=new Builder();
+      for(i=0;i<parts.length;i++){ builder.append(parts[i]); }
+      return builder.getBlob(type);
+    }
+  }
+
+  function setAudio(bytes){
+    if(!urlAPI || !urlAPI.createObjectURL){
+      throw new Error("El navegador no ofrece object URL para el audio");
+    }
+    if(audioObjectURL && urlAPI.revokeObjectURL){
+      urlAPI.revokeObjectURL(audioObjectURL);
+    }
+    audioObjectURL=urlAPI.createObjectURL(makeBlob([bytes],"audio/mpeg"));
+    audio.src=audioObjectURL;
+    audio.loop=loopEnabled;
+    hasAudio=true;
+  }
+
+  function freshCanvas(){
+    var old=cv, replacement=document.createElement("canvas");
+    replacement.id="cv";
+    old.parentNode.replaceChild(replacement,old);
+    cv=replacement;
+  }
+
+  function chooseRenderer(reconstruction){
+    var instance=null;
+    freshCanvas();
+    function tryWebGL(){
+      try {
+        var webgl=new window.WebGLRenderer(cv);
+        return webgl.init(reader,1,reconstruction) ? webgl : null;
+      } catch(error){ return null; }
+    }
+    if(requestedRenderer==="canvas2d"){
+      instance=new window.Canvas2DRenderer(cv);
+      instance.init(reader,1,reconstruction);
+      rendererName="canvas2d";
+    } else {
+      instance=tryWebGL();
+      if(instance){ rendererName="webgl"; }
+      else {
+        /* Un canvas que llego a crear un contexto WebGL no puede reutilizarse
+           como 2D. Esto tambien cubre GPUs viejas que fallan al compilar shaders. */
+        freshCanvas();
+        instance=new window.Canvas2DRenderer(cv);
+        instance.init(reader,1,reconstruction);
+        rendererName="canvas2d";
+      }
+    }
+    renderer=instance;
+  }
+
+  function viewportSize(){
+    var root=document.documentElement;
+    return {
+      width:window.innerWidth || root.clientWidth || stage.clientWidth || 640,
+      height:window.innerHeight || root.clientHeight || stage.clientHeight || 360
+    };
+  }
+
+  function fitCanvas(){
+    if(!reader || !cv){ return; }
+    var size=viewportSize();
+    var ratio=reader.header.cols/reader.header.rows;
+    var width=size.width, height=Math.round(width/ratio);
+    if(height>size.height){ height=size.height; width=Math.round(height*ratio); }
+    cv.style.width=width+"px";
+    cv.style.height=height+"px";
+    cv.style.marginLeft=(-Math.round(width/2))+"px";
+    cv.style.marginTop=(-Math.round(height/2))+"px";
+  }
+
+  function openAscl(buffer,offset,length){
+    reader=window.ASCL.parse(buffer,offset,length);
+    var reconstruction=(reader.header.flags & FLAG_RECON_SOFT) ? "soft" : "nearest";
+    chooseRenderer(reconstruction);
+    reader.decodedIndex=-1;
+    reader.seek(0);
+    renderer.draw(reader);
+    lastShown=0;
+    ready=true;
+    downloadButton.style.display="none";
+    fitCanvas();
+    setMessage("Presion&aacute; una tecla del 1 al 8 o hac&eacute; click",
+      reader.header.cols+"x"+reader.header.rows+" &middot; "+reader.header.fps+
+      " FPS &middot; "+rendererName+" &middot; audio "+(hasAudio?"incluido":"no disponible"),false);
+    try { stage.focus(); } catch(ignored) {}
+  }
+
+  function loadBundle(buffer){
+    var view=new DataView(buffer);
+    var videoLength=view.getUint32(8,true);
+    var audioLength=view.getUint32(12,true);
+    if(videoLength<32 || 16+videoLength+audioLength>buffer.byteLength){
+      throw new Error("ASCLV truncado o invalido");
+    }
+    if(audioLength>0){
+      setAudio(new Uint8Array(buffer,16+videoLength,audioLength));
+    }
+    openAscl(buffer,16,videoLength);
+  }
+
+  function loadData(buffer,contentType){
+    var bytes=new Uint8Array(buffer);
+    var bundled=bytes.length>=8 && bytes[0]===65 && bytes[1]===83 &&
+      bytes[2]===67 && bytes[3]===76 && bytes[4]===86 && bytes[5]===73 &&
+      bytes[6]===68 && bytes[7]===49;
+    if(!bundled){
+      throw new Error("La ruta "+source+" devolvio otro contenido"+
+        (contentType ? " ("+contentType+")" : ""));
+    }
+    loadBundle(buffer);
+  }
+
+  function frameNow(){
+    var seconds=hasAudio ? audio.currentTime : (now()-startT)/1000;
+    return Math.floor(seconds*reader.header.fps);
+  }
+
+  function stop(showPrompt){
+    playing=false;
+    stage.className="";
+    if(raf){ cancelFrame(raf); raf=0; }
+    if(hasAudio){ try { audio.pause(); } catch(ignored) {} }
+    if(showPrompt){
+      setMessage("Finalizado &middot; presion&aacute; 1 a 8 o hac&eacute; click para repetir",
+        rendererName+" &middot; pantalla completa",false);
+    }
+  }
+
+  function restart(){
+    if(hasAudio){
+      try { audio.currentTime=0; } catch(ignored) {}
+    }
+    reader.decodedIndex=-1;
+    reader.seek(0);
+    renderer.draw(reader);
+    lastShown=0;
+  }
+
+  function loop(){
+    var target, count;
+    if(!playing){ return; }
+    target=frameNow();
+    count=reader.header.nFrames;
+    if(target>=count){
+      if(loopEnabled && !hasAudio){
+        restart(); startT=now(); target=0;
+      } else if(!hasAudio){
+        reader.seek(count-1);
+        renderer.draw(reader);
+        lastShown=count-1;
+        stop(true);
+        return;
+      } else { target=count-1; }
+    }
+    if(target!==lastShown){
+      reader.seek(target);
+      renderer.draw(reader);
+      lastShown=target;
+    }
+    raf=requestFrame(loop);
+  }
+
+  function start(){
+    var result;
+    if(!ready){
+      if(!activeXHR){
+        beginDownload(true);
+      } else {
+        setMessage("El video todav&iacute;a se est&aacute; cargando",
+          "Esper&aacute; unos segundos y volv&eacute; a presionar",false);
+      }
+      return null;
+    }
+    if(playing){ return null; }
+    if(lastShown>=reader.header.nFrames-1 || (hasAudio && audio.ended)){ restart(); }
+    playing=true;
+    stage.className="playing";
+    startT=now()-(lastShown/reader.header.fps)*1000;
+    if(hasAudio){
+      try {
+        result=audio.play();
+        if(result && typeof result["catch"]==="function"){
+          result["catch"](function(){
+            stop(false);
+            setMessage("El TV bloque&oacute; el audio",
+              "Presion&aacute; otra vez una tecla del 1 al 8 o hac&eacute; click",true);
+          });
+        }
+      } catch(error){
+        stop(false);
+        setMessage("No se pudo iniciar el audio","Volv&eacute; a presionar para reintentar",true);
+        return null;
+      }
+    }
+    raf=requestFrame(loop);
+    /* El rechazo de audio ya se informa arriba. No devolverlo evita que el
+       controlador lo confunda con un rechazo de la solicitud fullscreen. */
+    return null;
+  }
+
+  audio.onended=function(){ if(!loopEnabled){ stop(true); } };
+  window.onresize=fitCanvas;
+  document.addEventListener && document.addEventListener("fullscreenchange",fitCanvas,false);
+  document.addEventListener && document.addEventListener("webkitfullscreenchange",fitCanvas,false);
+  document.addEventListener && document.addEventListener("mozfullscreenchange",fitCanvas,false);
+  document.addEventListener && document.addEventListener("MSFullscreenChange",fitCanvas,false);
+
+  window.ASCILINETV.init({
+    document:document,
+    surface:stage,
+    fullscreenElement:document.documentElement || stage,
+    play:start,
+    onError:function(){
+      if(ready && !playing){
+        setMessage("No se pudo activar pantalla completa",
+          "El video igualmente puede reproducirse dentro del navegador",true);
+      }
+    }
+  });
+
+  function stopButtonEvent(event){
+    event=event || window.event;
+    if(event.stopPropagation){ event.stopPropagation(); }
+    event.cancelBubble=true;
+    if(event.preventDefault){ event.preventDefault(); }
+    else { event.returnValue=false; }
+  }
+
+  function beginDownload(manual){
+    var xhr, previous;
+    if(!window.XMLHttpRequest){
+      setMessage("Este navegador no ofrece carga binaria XHR","No puede abrir ASCLV",true);
+      return;
+    }
+    if(activeXHR){
+      previous=activeXHR;
+      activeXHR=null;
+      try { previous.abort(); } catch(ignored) {}
+    }
+    xhr=new XMLHttpRequest();
+    activeXHR=xhr;
+    if(manual){
+      setMessage("Iniciando descarga&hellip;","Solicitada desde el control remoto",false);
+    }
+    try {
+      xhr.open("GET",source,true);
+      xhr.responseType="arraybuffer";
+    } catch(error){
+      if(activeXHR===xhr){ activeXHR=null; }
+      setMessage("El navegador no puede descargar ASCLV binario",
+        error.message || "XHR ArrayBuffer no disponible",true);
+      return;
+    }
+    xhr.onprogress=function(event){
+      if(activeXHR!==xhr){ return; }
+      if(event && event.lengthComputable && event.total>0){
+        setMessage("Cargando video&hellip; "+Math.round(event.loaded*100/event.total)+"%",
+          "Quedar&aacute; cacheado por el navegador",false);
+      }
+    };
+    xhr.onload=function(){
+      if(activeXHR!==xhr){ return; }
+      activeXHR=null;
+      if((xhr.status>=200 && xhr.status<300) || xhr.status===0){
+        try {
+          if(!xhr.response || typeof xhr.response.byteLength!=="number"){
+            throw new Error("El navegador no entrego un ArrayBuffer");
+          }
+          loadData(xhr.response,xhr.getResponseHeader ?
+            xhr.getResponseHeader("Content-Type") : "");
+        }
+        catch(error){ setMessage("No se pudo abrir el ASCLV",error.message,true); }
+      } else {
+        setMessage("No se pudo cargar el video","HTTP "+xhr.status+" &middot; "+source,true);
+      }
+    };
+    xhr.onerror=function(){
+      if(activeXHR!==xhr){ return; }
+      activeXHR=null;
+      setMessage("No se pudo cargar el video",
+        "Us&aacute; Iniciar descarga y verific&aacute; que exista "+source,true);
+    };
+    xhr.onabort=function(){ if(activeXHR===xhr){ activeXHR=null; } };
+    try { xhr.send(); }
+    catch(error){
+      if(activeXHR===xhr){ activeXHR=null; }
+      setMessage("No se pudo iniciar la descarga",error.message || source,true);
+    }
+  }
+
+  downloadButton.onclick=function(event){
+    var time=now();
+    stopButtonEvent(event);
+    if(lastDownloadTouch>=0 && time>=lastDownloadTouch && time-lastDownloadTouch<800){
+      return false;
+    }
+    beginDownload(true);
+    return false;
+  };
+  downloadButton.ontouchend=function(event){
+    stopButtonEvent(event);
+    lastDownloadTouch=now();
+    beginDownload(true);
+    return false;
+  };
+
+  beginDownload(false);
+}());
+</script>
+</body>
+</html>

@@ -81,6 +81,27 @@ audio en un único archivo. El selector de MP3 externo se conserva solamente par
 un `.ascl` suelto/antiguo sin perder compatibilidad. El renderer va WebGL→Canvas2D solo;
 el audio es el reloj maestro (si el render se atrasa, descarta frames).
 
+### Prueba directa en Smart TV
+
+`frontend/tv-player.html` es el frontend sin controles de laboratorio. Precarga
+`./output/clip.asclv`, lo ajusta a la pantalla sin deformarlo y entra
+en fullscreen/reproduce al presionar una tecla del `1` al `8` o al hacer click/toque.
+Incluye un boton pequeno **Iniciar descarga** para repetir manualmente la precarga desde
+un gesto del control remoto. Si la red falla, tanto ese boton como un nuevo click en la
+pantalla vuelven a intentar la descarga sin recargar la pagina.
+
+El servidor PHP existente debe publicar el clip en esa ruta relativa. El archivo
+versionado conserva su nombre original; `clip.asclv` es solamente su nombre al subirlo.
+La pagina tambien acepta:
+
+```text
+frontend/tv-player.html?renderer=canvas2d
+frontend/tv-player.html?loop=0
+```
+
+El demo usa loop por defecto. WebGL1 se intenta primero y Canvas2D conserva la misma
+funcionalidad como fallback.
+
 ## Verificar / preview sin navegador
 
 ```bash
@@ -100,4 +121,6 @@ python ascl_decode.py /tmp/mi-video.ascl --mp4 /tmp/preview.mp4 # MP4 de control
 python -m unittest discover -s tests -v
 node tests/test_frontend_renderers.js
 node tests/test_reader_bundle_view.js
+node tests/test_tv_controller.js
+node tests/test_tv_player_page.js
 ```

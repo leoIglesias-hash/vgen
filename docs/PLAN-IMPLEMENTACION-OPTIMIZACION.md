@@ -16,12 +16,15 @@ Base recuperable: commit `1c2c0b2`
 8. No se implementa deteccion, segmentacion ni rotacion especial de objetos.
 9. La intervencion local futura usa slots explicitos sobre la matriz, nunca otra capa DOM.
 
-Estado al 2026-08-11:
+Estado al 2026-08-12:
 
 - Fase A implementada y validada en la rama de trabajo.
 - Fase B implementada: paleta global/por frame/por bloque, K-means RGB y dithering
   selectivo disponibles. En el TKN real, K-means es el default recomendado y el
   dithering permanece experimental/apagado.
+- Frontend TV de validacion implementado: precarga del demo versionado, fullscreen y
+  play con teclas 1-8/click/toque, descarga manual, loop y fallback Canvas2D.
+- Fase E iniciada con pruebas automatizadas; falta medir en los Smart TV/WebViews reales.
 - Tiles v2 y slots permanecen en diseño.
 
 ## 2. Controles de calidad
@@ -84,6 +87,10 @@ Deteccion de gradientes propuesta:
 4. comparar el peso comprimido con y sin dithering;
 5. conservarlo solo si la mejora visual supera el costo configurado.
 
+Pendiente de esta fase: seleccion automatica por clip de cantidad de colores, duracion
+de bloque y algoritmo; presupuesto exacto de sobrepeso; e histeresis temporal del
+dithering. Hoy estos controles existen, pero la eleccion final sigue siendo del usuario.
+
 ### Fase C - Formato v2 por tiles adaptativos
 
 - Reader dual v1/v2.
@@ -109,6 +116,10 @@ candidato ya elegido.
 - Sin deteccion de objetos, rotacion, ramas de rueda ni overlays DOM.
 
 ### Fase E - Validacion y seleccion de defaults
+
+El frontend `tv-player.html` y el demo K-means permiten comenzar esta fase sin controles
+de laboratorio en pantalla. Las mediciones fisicas todavia deben ejecutarse en cada
+familia de Smart TV/WebView objetivo.
 
 Variantes iniciales a producir sobre los clips de prueba:
 

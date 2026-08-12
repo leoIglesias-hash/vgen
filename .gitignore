@@ -16,6 +16,7 @@ inputs/*
 # Resultados regenerables: se conservan solo los fixtures test* pequenos.
 outputs/*
 !outputs/test*
+!outputs/TKN-2441-GANADOR-graphic-kmeans.asclv
 
 # Temporales del sistema y editores
 .DS_Store
