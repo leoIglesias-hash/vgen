@@ -35,6 +35,25 @@ def block_means(reconstructed, block=4):
 
 
 class QualityOptionsTest(unittest.TestCase):
+    def test_writer_rejects_ramp_beyond_v1_uint8_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "rampa excede 255"):
+                encoder.write_ascl(
+                    os.path.join(directory, "too-long-ramp.ascl"),
+                    encoder.MODE_ASCII_BW, 1, 1, 15, "x" * 256, [], None,
+                    encoder.DEFAULT_CHAR_ASPECT, 0)
+
+    def test_kmeans_rgb_falls_back_when_cv2_namespace_is_incomplete(self):
+        rng = np.random.default_rng(91)
+        source = rng.integers(0, 256, size=(24, 32, 3), dtype=np.uint8)
+        incomplete = types.ModuleType("cv2")
+        with mock.patch.dict(sys.modules, {"cv2": incomplete}):
+            first = encoder._kmeans_rgb_palette([source], 8, max_samples=500)
+            second = encoder._kmeans_rgb_palette([source], 8, max_samples=500)
+        self.assertEqual(first.tobytes(), second.tobytes())
+        self.assertEqual(first.shape, (8, 3))
+        self.assertEqual(first.dtype, np.uint8)
+
     def test_selective_dither_reduces_gradient_banding(self):
         height, width = 32, 128
         gray = np.tile(np.linspace(0, 255, width, dtype=np.uint8), (height, 1))
@@ -128,6 +147,10 @@ class QualityOptionsTest(unittest.TestCase):
         self.assertEqual(
             encoder.resolve_quality_options("graphic", None, None, 320), (640, 256))
         self.assertEqual(
+            encoder.resolve_quality_options("graphic-hq", None, None, 320), (768, 256))
+        self.assertEqual(
+            encoder.resolve_quality_options("graphic-ultra", None, None, 320), (960, 256))
+        self.assertEqual(
             encoder.resolve_quality_options("custom", None, None, 320), (320, 256))
 
     def test_palette_algorithm_validation(self):
@@ -138,10 +161,6 @@ class QualityOptionsTest(unittest.TestCase):
             encoder.validate_encode_options(*base, palette_algorithm="unknown")
 
     def test_kmeans_palette_is_deterministic_and_indices_are_bounded(self):
-        try:
-            import cv2  # noqa: F401
-        except ImportError:
-            self.skipTest("OpenCV solo es dependencia del procesador")
         rng = np.random.default_rng(2026)
         samples = [rng.integers(0, 256, size=(32, 48, 3), dtype=np.uint8)
                    for _ in range(3)]
@@ -155,10 +174,6 @@ class QualityOptionsTest(unittest.TestCase):
         self.assertEqual(first_img.getpalette(), second_img.getpalette())
 
     def test_kmeans_improves_synthetic_multimodal_color_error(self):
-        try:
-            import cv2  # noqa: F401
-        except ImportError:
-            self.skipTest("OpenCV solo es dependencia del procesador")
         # Muchos tonos azules continuos y tres acentos poco frecuentes. Es el caso
         # donde una particion por poblacion desperdicia colores en gradientes densos.
         width, height = 256, 96

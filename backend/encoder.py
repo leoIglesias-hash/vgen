@@ -18,6 +18,8 @@ Paleta (decision D3):
   --palette global     : una paleta para todo el clip => habilita DELTA de indices.
   --palette block      : una paleta por bloque temporal => DELTA dentro del bloque.
                         La paleta se reemite en cada keyframe para permitir seek.
+  --palette adaptive   : bloques variables por cambio numerico Oklab, sin IA.
+                        Conserva el mismo layout v1 de paleta por escena.
 
 Audio: se extrae a un .mp3 aparte (carril separado, reloj maestro). NUNCA dentro del .ascl.
 """
@@ -33,6 +35,8 @@ import numpy as np
 from PIL import Image
 
 import dither as selective_dither
+import adaptive_palette
+import perceptual_palette
 
 MAGIC          = b"ASCL"
 VERSION        = 1
@@ -45,6 +49,7 @@ FLAG_LOSSY, FLAG_PAL_PER_SCENE, FLAG_PAL_GLOBAL, FLAG_HAS_OFFSET_TABLE = 1, 2, 4
 FLAG_RECON_SOFT = 16
 
 HEADER_SIZE         = 32
+UINT32_MAX          = (1 << 32) - 1
 DEFAULT_FPS         = 15
 DEFAULT_CHAR_ASPECT = 0.5
 HEADER_FMT          = "<4sBBBBHHHIBBIHHI"
@@ -67,12 +72,16 @@ QUALITY_PROFILES = {
     "detail":   {"cols": 960, "pal_size": 64},
     "balanced": {"cols": 640, "pal_size": 128},
     "graphic":  {"cols": 640, "pal_size": 256},
+    "graphic-hq": {"cols": 768, "pal_size": 256},
+    "graphic-ultra": {"cols": 960, "pal_size": 256},
     "color":    {"cols": 320, "pal_size": 256},
 }
-QUALITY_PROFILE_NAMES = ("custom", "detail", "balanced", "graphic", "color")
+QUALITY_PROFILE_NAMES = ("custom", "detail", "balanced", "graphic",
+                         "graphic-hq", "graphic-ultra", "color")
 BAKE_SMOOTHING_MODES = ("none", "soft")
 RECONSTRUCTION_MODES = ("nearest", "soft")
-PALETTE_ALGORITHMS = ("median-cut", "fast-octree", "kmeans-rgb")
+PALETTE_MODES = ("per-frame", "global", "block", "adaptive")
+PALETTE_ALGORITHMS = ("median-cut", "fast-octree", "kmeans-rgb", "kmeans-oklab")
 DITHER_MODES = selective_dither.DITHER_MODES
 DITHER_MATRIX_SIZES = selective_dither.DITHER_MATRIX_SIZES
 # Reconstruccion offline 2x: una base de media resolucion se expande a la grilla
@@ -84,7 +93,7 @@ def resolve_quality_options(profile, cols, pal_size, default_cols, default_pal_s
     """Completa cols/pal_size respetando siempre los overrides manuales."""
     profile = profile or "custom"
     if profile not in QUALITY_PROFILE_NAMES:
-        raise ValueError("profile debe ser custom/detail/balanced/color")
+        raise ValueError("profile desconocido: %s" % profile)
     preset = QUALITY_PROFILES.get(profile, {})
     if cols is None:
         cols = preset.get("cols", default_cols)
@@ -96,7 +105,15 @@ def resolve_quality_options(profile, cols, pal_size, default_cols, default_pal_s
 def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             palette_block_frames=0, dither_mode="off",
-                            dither_matrix=4, palette_algorithm="median-cut"):
+                            dither_matrix=4, palette_algorithm="median-cut",
+                            adaptive_min_frames=5, adaptive_max_frames=10,
+                            adaptive_change_threshold=0.20,
+                            adaptive_hard_cut_threshold=0.58,
+                            adaptive_stability_max=0.25,
+                            perceptual_lut_bits=0,
+                            dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
+                            dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
+                            dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW):
     """Valida limites del header v1 y opciones compartidas por todos los entrypoints."""
     if mode_name not in MODE_NAMES:
         raise ValueError("mode desconocido: %s" % mode_name)
@@ -110,8 +127,8 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
         raise ValueError("palette-size debe estar entre 1 y 256")
     if float(char_aspect) <= 0:
         raise ValueError("char-aspect debe ser > 0")
-    if palette_mode not in ("per-frame", "global", "block"):
-        raise ValueError("palette debe ser per-frame, global o block")
+    if palette_mode not in PALETTE_MODES:
+        raise ValueError("palette debe ser per-frame, global, block o adaptive")
     if int(palette_block_frames) < 0:
         raise ValueError("palette-block-frames debe ser >= 0")
     if bake_smoothing not in BAKE_SMOOTHING_MODES:
@@ -119,13 +136,28 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
     if reconstruction not in RECONSTRUCTION_MODES:
         raise ValueError("reconstruction debe ser nearest o soft")
     if dither_mode not in DITHER_MODES:
-        raise ValueError("dither debe ser off o selective")
+        raise ValueError("dither debe ser off, selective o auto")
     if int(dither_matrix) not in DITHER_MATRIX_SIZES:
         raise ValueError("dither-matrix debe ser 2 o 4")
     if dither_mode != "off" and mode_name != "pixel":
-        raise ValueError("dither selective solo esta disponible en mode pixel")
+        raise ValueError("dither solo esta disponible en mode pixel")
     if palette_algorithm not in PALETTE_ALGORITHMS:
-        raise ValueError("palette-algorithm debe ser median-cut, fast-octree o kmeans-rgb")
+        raise ValueError("palette-algorithm desconocido: %s" % palette_algorithm)
+    bits = int(perceptual_lut_bits)
+    if bits != 0 and not (3 <= bits <= 7):
+        raise ValueError("perceptual-lut-bits debe ser 0 (exacto) o 3..7")
+    if not (0.0 <= float(dither_budget) <= 1.0):
+        raise ValueError("dither-budget debe estar entre 0 y 1")
+    if float(dither_min_improvement) < 0.0:
+        raise ValueError("dither-min-improvement debe ser >= 0")
+    if int(dither_window) <= 0:
+        raise ValueError("dither-window debe ser > 0")
+    # Construir la configuracion tambien valida min/max, umbrales y estabilidad.
+    adaptive_palette.AdaptivePaletteConfig(
+        min_frames=adaptive_min_frames, max_frames=adaptive_max_frames,
+        change_threshold=adaptive_change_threshold,
+        hard_cut_threshold=adaptive_hard_cut_threshold,
+        max_stability=adaptive_stability_max)
 
 
 def soft_base_size(cols, rows):
@@ -178,12 +210,51 @@ def _palette_image(palette):
     return pal_img
 
 
+def _kmeans_rgb_numpy(samples, pal_size, max_iter=30, tolerance=0.25):
+    """Fallback K-means RGB determinista y acotado cuando OpenCV no esta completo."""
+    values = np.asarray(samples, dtype=np.float64).reshape(-1, 3)
+    count = int(pal_size)
+    weights = np.ones(len(values), dtype=np.float64)
+    centers = perceptual_palette._initial_centers(values, weights, count, 4096)
+    for _iteration in range(int(max_iter)):
+        labels, minimum = perceptual_palette._nearest_indices(
+            values, centers, chunk_size=4096, return_distance=True)
+        counts = np.bincount(labels, minlength=count)
+        updated = centers.copy()
+        occupied = counts > 0
+        for channel in range(3):
+            sums = np.bincount(labels, weights=values[:, channel],
+                               minlength=count)
+            updated[occupied, channel] = sums[occupied] / counts[occupied]
+        empty = np.flatnonzero(~occupied)
+        if len(empty):
+            candidates = np.argsort(-minimum, kind="mergesort")
+            used = set()
+            cursor = 0
+            for center_index in empty:
+                while cursor < len(candidates) and int(candidates[cursor]) in used:
+                    cursor += 1
+                sample_index = int(candidates[min(cursor, len(candidates) - 1)])
+                used.add(sample_index)
+                updated[center_index] = values[sample_index]
+                cursor += 1
+        shift = float(np.max(np.sqrt(np.sum((updated - centers) ** 2, axis=1))))
+        centers = updated
+        if shift <= float(tolerance):
+            break
+    # Orden explicito: el color reconstruido no cambia y los bytes si quedan
+    # estables aun si otra implementacion enumera clusters en otro orden.
+    centers = centers[np.lexsort((centers[:, 2], centers[:, 1], centers[:, 0]))]
+    return np.clip(np.rint(centers), 0, 255).astype(np.uint8)
+
+
 def _kmeans_rgb_palette(sample_imgs, pal_size, max_samples=65536, seed=20260811):
-    """Paleta RGB k-means determinista; todo el costo queda en el encoder offline."""
+    """Paleta RGB K-means: OpenCV completo o fallback NumPy determinista."""
+    cv2 = None
     try:
         import cv2
-    except ImportError as exc:
-        raise RuntimeError("kmeans-rgb requiere opencv-python-headless en el backend") from exc
+    except (ImportError, OSError):
+        pass
     pixels = np.concatenate([np.asarray(im, dtype=np.uint8).reshape(-1, 3)
                              for im in sample_imgs], axis=0)
     if not len(pixels):
@@ -196,16 +267,38 @@ def _kmeans_rgb_palette(sample_imgs, pal_size, max_samples=65536, seed=20260811)
     if len(samples) < int(pal_size):
         samples = np.ascontiguousarray(np.resize(samples, (int(pal_size), 3)),
                                        dtype=np.float32)
-    cv2.setRNGSeed(int(seed))
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.25)
-    _compactness, _labels, centers = cv2.kmeans(
-        samples, int(pal_size), None, criteria, 1, cv2.KMEANS_PP_CENTERS)
-    return np.clip(np.rint(centers), 0, 255).astype(np.uint8)
+    complete_cv2 = (cv2 is not None and
+                    all(hasattr(cv2, name) for name in (
+                        "setRNGSeed", "kmeans", "TERM_CRITERIA_EPS",
+                        "TERM_CRITERIA_MAX_ITER", "KMEANS_PP_CENTERS")))
+    if complete_cv2:
+        cv2.setRNGSeed(int(seed))
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,
+                    30, 0.25)
+        _compactness, _labels, centers = cv2.kmeans(
+            samples, int(pal_size), None, criteria, 1,
+            cv2.KMEANS_PP_CENTERS)
+        return np.clip(np.rint(centers), 0, 255).astype(np.uint8)
+    return _kmeans_rgb_numpy(samples, pal_size, max_iter=30, tolerance=0.25)
 
 
-def make_global_palette(sample_imgs, pal_size, palette_algorithm="median-cut"):
+def make_global_palette(sample_imgs, pal_size, palette_algorithm="median-cut",
+                        previous_palette=None, temporal_strength=0.0):
+    """Construye una paleta ASCL y su imagen Pillow compatible.
+
+    Los parametros temporales solo afectan ``kmeans-oklab``. Se agregan al final
+    para preservar las llamadas historicas de tres argumentos.
+    """
     if not sample_imgs:
         raise ValueError("sample_imgs no puede estar vacio")
+    if palette_algorithm == "kmeans-oklab":
+        palette = perceptual_palette.build_perceptual_palette(
+            sample_imgs, pal_size, previous_palette=previous_palette,
+            temporal_strength=temporal_strength)
+        return _palette_image(palette), palette
+    if palette_algorithm == "kmeans-rgb":
+        palette = _kmeans_rgb_palette(sample_imgs, pal_size)
+        return _palette_image(palette), palette
     h = sum(im.shape[0] for im in sample_imgs)
     w = sample_imgs[0].shape[1]
     stack = np.zeros((h, w, 3), np.uint8)
@@ -213,10 +306,6 @@ def make_global_palette(sample_imgs, pal_size, palette_algorithm="median-cut"):
     for im in sample_imgs:
         stack[y:y + im.shape[0]] = im
         y += im.shape[0]
-    if palette_algorithm == "kmeans-rgb":
-        palette = _kmeans_rgb_palette(sample_imgs, pal_size)
-        pal_img = _palette_image(palette)
-        return pal_img, palette
     methods = {
         "median-cut": Image.MEDIANCUT,
         "fast-octree": Image.FASTOCTREE,
@@ -273,16 +362,124 @@ def iter_block_palette_frames(frames_iter, pal_size, block_frames, max_samples=1
             yield rgb, gray, pal_img, palette, block_index == 0
 
 
+def iter_scene_palette_frames(frames_iter, pal_size, palette_mode, block_frames,
+                              adaptive_config, max_samples=12,
+                              palette_algorithm="median-cut",
+                              perceptual_lut_bits=0):
+    """Anota frames de bloques fijos o adaptativos con recursos de cuantizacion.
+
+    La salida extiende internamente la tupla historica con cuantizador Oklab y un
+    diagnostico por bloque. El API publico anterior ``iter_block_palette_frames``
+    permanece sin cambios para callers externos.
+    """
+    previous_palette = None
+    previous_last_descriptor = None
+    absolute_start = 0
+    if palette_mode == "adaptive":
+        block_source = adaptive_palette.iter_adaptive_palette_blocks(
+            frames_iter, adaptive_config)
+    else:
+        block_source = iter_frame_blocks(frames_iter, block_frames)
+
+    for block_number, source_block in enumerate(block_source):
+        if palette_mode == "adaptive":
+            block = list(source_block.frames)
+            entry_reason = source_block.entry_reason
+            entry_score = float(source_block.entry_change_score)
+            stability = float(source_block.stability_strength)
+            boundary_reason = source_block.boundary_reason
+            boundary_score = float(source_block.boundary_score)
+            absolute_start = source_block.start_index
+        else:
+            block = source_block
+            first_descriptor = adaptive_palette.describe_frame_color(
+                block[0], adaptive_config)
+            if previous_last_descriptor is None:
+                entry_reason = "start-of-stream"
+                entry_score = 1.0
+                stability = 0.0
+            else:
+                transition = adaptive_palette.color_change_metrics(
+                    previous_last_descriptor, first_descriptor, adaptive_config)
+                entry_score = float(transition["score"])
+                is_hard_cut = entry_score >= adaptive_config.hard_cut_threshold
+                entry_reason = "hard-cut" if is_hard_cut else "fixed-boundary"
+                stability = adaptive_palette.temporal_stability_strength(
+                    entry_score, hard_cut=is_hard_cut, config=adaptive_config)
+            final_descriptor = adaptive_palette.describe_frame_color(
+                block[-1], adaptive_config)
+            within = adaptive_palette.color_change_metrics(
+                first_descriptor, final_descriptor, adaptive_config)
+            boundary_reason = "fixed-size"
+            boundary_score = float(within["score"])
+
+        samples = sample_palette_frames(block, max_samples)
+        pal_img, palette = make_global_palette(
+            samples, pal_size, palette_algorithm,
+            previous_palette=previous_palette,
+            temporal_strength=stability)
+        quantizer = make_perceptual_quantizer(
+            palette, palette_algorithm, perceptual_lut_bits)
+        diagnostic = {
+            "index": int(block_number),
+            "start": int(absolute_start),
+            "end": int(absolute_start + len(block)),
+            "size": int(len(block)),
+            "reason": str(boundary_reason),
+            "score": float(boundary_score),
+            "entry_reason": str(entry_reason),
+            "entry_score": float(entry_score),
+            "stability": float(stability),
+        }
+        hard_cut_start = entry_reason == "hard-cut"
+        for block_index, (rgb, gray) in enumerate(block):
+            yield (rgb, gray, pal_img, palette, quantizer,
+                   block_index == 0, diagnostic if block_index == 0 else None,
+                   hard_cut_start and block_index == 0)
+        previous_palette = palette
+        previous_last_descriptor = adaptive_palette.describe_frame_color(
+            block[-1], adaptive_config)
+        absolute_start += len(block)
+
+
 def quantize_with(pal_img, rgb):
     im = Image.fromarray(rgb, "RGB").quantize(palette=pal_img, dither=Image.NONE)
     return np.asarray(im, dtype=np.uint8)
 
 
-def quantize_per_frame(rgb, pal_size, palette_algorithm="median-cut"):
+def make_perceptual_quantizer(palette, palette_algorithm, perceptual_lut_bits=0):
+    """Devuelve cuantizador Oklab o ``None`` para los algoritmos Pillow/RGB."""
+    if palette_algorithm != "kmeans-oklab":
+        return None
+    bits = int(perceptual_lut_bits)
+    return perceptual_palette.PerceptualQuantizer(
+        palette, lut_bits=(None if bits == 0 else bits))
+
+
+def make_dither_pair_lut(palette, quantizer=None):
+    """Usa la misma regla base de cuantizacion que produjo los indices."""
+    return selective_dither.PairLUT(
+        palette, base_quantizer=(quantizer if quantizer is not None else None))
+
+
+def quantize_palette_rgb(pal_img, rgb, quantizer=None):
+    if quantizer is not None:
+        return np.asarray(quantizer.quantize(rgb), dtype=np.uint8)
+    return quantize_with(pal_img, rgb)
+
+
+def quantize_per_frame(rgb, pal_size, palette_algorithm="median-cut",
+                       perceptual_lut_bits=0, previous_palette=None,
+                       temporal_strength=0.0):
     h, w, _ = rgb.shape
     if palette_algorithm != "median-cut":
-        pal_img, palette = make_global_palette([rgb], pal_size, palette_algorithm)
-        idx = quantize_with(pal_img, rgb).reshape(h, w)
+        pal_img, palette = make_global_palette(
+            [rgb], pal_size, palette_algorithm,
+            previous_palette=previous_palette,
+            temporal_strength=temporal_strength)
+        quantizer = make_perceptual_quantizer(
+            palette, palette_algorithm, perceptual_lut_bits)
+        idx = quantize_palette_rgb(pal_img, rgb, quantizer).reshape(h, w)
         return idx, palette
     im = Image.fromarray(rgb, "RGB").quantize(colors=pal_size, method=Image.MEDIANCUT,
                                               dither=Image.NONE)
@@ -298,27 +495,61 @@ def gray_to_char_idx(gray, ramp_len):
 
 
 def frame_to_cells(rgb, gray, mode, ramp_len, pal_size, palette_mode, pal_img,
-                   palette_algorithm="median-cut"):
+                   palette_algorithm="median-cut", quantizer=None,
+                   perceptual_lut_bits=0, previous_palette=None,
+                   temporal_strength=0.0):
     h, w = gray.shape
     N = h * w
     if mode == MODE_PIXEL:
         if palette_mode == "global":
-            idx = quantize_with(pal_img, rgb)
+            idx = quantize_palette_rgb(pal_img, rgb, quantizer)
             return idx.reshape(N, 1), None, 0
-        idx, pal = quantize_per_frame(rgb, pal_size, palette_algorithm)
+        idx, pal = quantize_per_frame(
+            rgb, pal_size, palette_algorithm, perceptual_lut_bits,
+            previous_palette, temporal_strength)
         return idx.reshape(N, 1), pal, pal.shape[0]
     char_idx = gray_to_char_idx(gray, ramp_len).reshape(N, 1)
     if mode == MODE_ASCII_BW:
         return char_idx, None, 0
     if mode == MODE_ASCII_PAL:
         if palette_mode == "global":
-            color = quantize_with(pal_img, rgb).reshape(N, 1)
+            color = quantize_palette_rgb(pal_img, rgb, quantizer).reshape(N, 1)
             return np.concatenate([char_idx, color], axis=1), None, 0
-        color, pal = quantize_per_frame(rgb, pal_size, palette_algorithm)
+        color, pal = quantize_per_frame(
+            rgb, pal_size, palette_algorithm, perceptual_lut_bits,
+            previous_palette, temporal_strength)
         return np.concatenate([char_idx, color.reshape(N, 1)], axis=1), pal, pal.shape[0]
     if mode == MODE_ASCII_RGB:
         return np.concatenate([char_idx, rgb.reshape(N, 3)], axis=1), None, 0
     raise ValueError("modo desconocido")
+
+
+def apply_dither_mode(rgb, cells, palette, dither_mode="off", dither_matrix=4,
+                      pair_lut=None, temporal_state=None,
+                      dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
+                      dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
+                      dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW):
+    """Hornea el modo de dithering elegido y conserva el shape de ``cells``."""
+    if dither_mode == "off":
+        return cells, None
+    baseline = cells[:, 0].reshape(rgb.shape[:2])
+    if dither_mode == "selective":
+        result = selective_dither.apply_selective_dither(
+            rgb, baseline, palette, matrix_size=dither_matrix,
+            pair_lut=pair_lut)
+        return result.reshape(-1, 1), None
+    if dither_mode == "auto":
+        result, details = selective_dither.apply_calibrated_dither(
+            rgb, baseline, palette, matrix_size=dither_matrix,
+            pair_lut=pair_lut, max_changed_fraction=dither_budget,
+            min_proxy_improvement=dither_min_improvement,
+            temporal_state=temporal_state, temporal_window=dither_window,
+            # La paleta puede renovarse sin que cambie la escena. La evidencia se
+            # conserva entre bloques y el encoder resetea el estado solo en hard cut.
+            temporal_context="ascl-video", reset_on_palette_change=False,
+            return_details=True)
+        return result.reshape(-1, 1), details
+    raise ValueError("dither desconocido: %s" % dither_mode)
 
 
 def cells_to_planes_bytes(cells, mode):
@@ -360,12 +591,16 @@ def encode_frame(cells, prev_cells, mode, frame_index, keyframe, compress, delta
 def write_ascl(path, mode, cols, rows, fps, ramp, frames, palette0, char_aspect, flags_extra):
     ramp_bytes = ramp.encode("ascii") if ramp else b""
     ramp_len   = len(ramp_bytes)
+    if ramp_len > 255:
+        raise ValueError("la rampa excede 255 bytes (limite ASCL v1)")
     pal_size   = palette0.shape[0] if palette0 is not None else 0
     if pal_size == 0:
         for fr in frames:
             if fr["pal_count"]:
                 pal_size = max(pal_size, fr["pal_count"])
     n_frames = len(frames)
+    if n_frames > UINT32_MAX:
+        raise ValueError("n_frames excede uint32 (limite ASCL v1)")
     flags    = FLAG_HAS_OFFSET_TABLE | flags_extra
     blocks = []
     for fr in frames:
@@ -373,13 +608,21 @@ def write_ascl(path, mode, cols, rows, fps, ramp, frames, palette0, char_aspect,
         if fr["pal_count"] > 0:
             body += fr["palette"].astype(np.uint8).tobytes()
         body += fr["payload"]
+        if len(body) > UINT32_MAX:
+            raise ValueError("un frame excede uint32 bytes (limite ASCL v1)")
         blocks.append(struct.pack("<I", len(body)) + body)
     data_off = HEADER_SIZE + ramp_len
     off = data_off + n_frames * 4
+    if off > UINT32_MAX:
+        raise ValueError("la tabla de offsets excede uint32 (limite ASCL v1)")
     offs = []
     for b in blocks:
+        if off > UINT32_MAX:
+            raise ValueError("un offset excede uint32 (limite ASCL v1)")
         offs.append(off)
         off += len(b)
+        if off > UINT32_MAX + 1:
+            raise ValueError("el archivo excede 4 GiB (limite de offsets ASCL v1)")
     offset_table = struct.pack("<%dI" % n_frames, *offs)
     body = ramp_bytes + offset_table + b"".join(blocks)
     crc  = zlib.crc32(body) & 0xFFFFFFFF
@@ -476,11 +719,18 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
                  ramp_name, char_aspect, compress, palette_mode, dump_cells=None,
                  bake_smoothing="none", reconstruction="nearest",
                  quality_profile="custom", dither_mode="off", dither_matrix=4,
-                 palette_algorithm="median-cut"):
+                 palette_algorithm="median-cut", perceptual_lut_bits=0,
+                 dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
+                 dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
+                 dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             dither_mode=dither_mode, dither_matrix=dither_matrix,
-                            palette_algorithm=palette_algorithm)
+                            palette_algorithm=palette_algorithm,
+                            perceptual_lut_bits=perceptual_lut_bits,
+                            dither_budget=dither_budget,
+                            dither_min_improvement=dither_min_improvement,
+                            dither_window=dither_window)
     mode = MODE_NAMES[mode_name]
     ramp = "" if mode == MODE_PIXEL else RAMPS.get(ramp_name, ramp_name)
     src = Image.open(in_path).convert("RGB")
@@ -490,12 +740,18 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
     rgb = np.ascontiguousarray(np.asarray(small, np.uint8))
     gray = np.asarray(Image.fromarray(rgb, "RGB").convert("L"), np.uint8)
     cells, palette, pal_count = frame_to_cells(rgb, gray, mode, len(ramp), pal_size,
-                                               "per-frame", None, palette_algorithm)
-    if dither_mode == "selective":
-        baseline = cells[:, 0].reshape(rows, cols)
-        dithered = selective_dither.apply_selective_dither(
-            rgb, baseline, palette, matrix_size=dither_matrix)
-        cells = dithered.reshape(-1, 1)
+                                               "per-frame", None, palette_algorithm,
+                                               perceptual_lut_bits=perceptual_lut_bits)
+    dither_details = None
+    if dither_mode != "off":
+        image_quantizer = make_perceptual_quantizer(
+            palette, palette_algorithm, perceptual_lut_bits)
+        pair_lut = make_dither_pair_lut(palette, image_quantizer)
+        cells, dither_details = apply_dither_mode(
+            rgb, cells, palette, dither_mode, dither_matrix,
+            pair_lut=pair_lut, dither_budget=dither_budget,
+            dither_min_improvement=dither_min_improvement,
+            dither_window=dither_window)
     tag, payload = encode_frame(cells, None, mode, 0, True, compress, False)
     frames = [{"tag": tag, "pal_count": pal_count, "palette": palette, "payload": payload}]
     if dump_cells:
@@ -508,7 +764,13 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
             "pal_size": pal_size, "quality_profile": quality_profile,
             "bake_smoothing": bake_smoothing, "reconstruction": reconstruction,
             "palette_algorithm": palette_algorithm,
+            "perceptual_lut_bits": int(perceptual_lut_bits),
             "dither": dither_mode, "dither_matrix": int(dither_matrix),
+            "dither_budget": float(dither_budget),
+            "dither_min_improvement": float(dither_min_improvement),
+            "dither_window": int(dither_window),
+            "dither_changed_cells": (int(dither_details["changed_cells"])
+                                     if dither_details is not None else 0),
             "flags": FLAG_HAS_OFFSET_TABLE | flags_extra}
 
 
@@ -517,17 +779,37 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                  dump_cells=None, bake_smoothing="none", reconstruction="nearest",
                  quality_profile="custom", palette_block_frames=0,
                  dither_mode="off", dither_matrix=4,
-                 palette_algorithm="median-cut"):
+                 palette_algorithm="median-cut",
+                 adaptive_min_frames=5, adaptive_max_frames=10,
+                 adaptive_change_threshold=0.20,
+                 adaptive_hard_cut_threshold=0.58,
+                 adaptive_stability_max=0.25,
+                 perceptual_lut_bits=0,
+                 dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
+                 dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
+                 dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             palette_block_frames, dither_mode, dither_matrix,
-                            palette_algorithm)
+                            palette_algorithm, adaptive_min_frames,
+                            adaptive_max_frames, adaptive_change_threshold,
+                            adaptive_hard_cut_threshold,
+                            adaptive_stability_max, perceptual_lut_bits,
+                            dither_budget, dither_min_improvement,
+                            dither_window)
     if int(keyint) < 0:
         raise ValueError("keyint debe ser >= 0")
     if int(threshold) < 0:
         raise ValueError("threshold debe ser >= 0")
-    if dither_mode == "selective" and palette_mode == "per-frame":
-        raise ValueError("dither selective en video requiere palette global o block")
+    if dither_mode in ("selective", "auto") and palette_mode == "per-frame":
+        raise ValueError("dither %s en video requiere palette global o block; "
+                         "tambien admite adaptive" %
+                         dither_mode)
+    adaptive_config = adaptive_palette.AdaptivePaletteConfig(
+        min_frames=adaptive_min_frames, max_frames=adaptive_max_frames,
+        change_threshold=adaptive_change_threshold,
+        hard_cut_threshold=adaptive_hard_cut_threshold,
+        max_stability=adaptive_stability_max)
     mode = MODE_NAMES[mode_name]
     ramp = "" if mode == MODE_PIXEL else RAMPS.get(ramp_name, ramp_name)
     sw, sh = probe_size(in_path)
@@ -535,10 +817,13 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     has_palette = mode in (MODE_PIXEL, MODE_ASCII_PAL)
     use_global = has_palette and palette_mode == "global"
     use_block = has_palette and palette_mode == "block"
+    use_adaptive = has_palette and palette_mode == "adaptive"
+    use_scene_palette = use_block or use_adaptive
     effective_block_frames = (int(palette_block_frames) if int(palette_block_frames) > 0
                               else max(1, int(fps) * 2)) if use_block else 0
     pal_img = None
     palette0 = None
+    global_quantizer = None
     if use_global:
         allf = list(iter_video_frames(in_path, cols, rows, fps, bake_smoothing))
         if not allf:
@@ -546,57 +831,108 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         stepS = max(1, len(allf) // 12)
         sample = [allf[k][0] for k in range(0, len(allf), stepS)]
         pal_img, palette0 = make_global_palette(sample, pal_size, palette_algorithm)
+        global_quantizer = make_perceptual_quantizer(
+            palette0, palette_algorithm, perceptual_lut_bits)
         frames_iter = allf
-    elif use_block:
+    elif use_scene_palette:
         source_iter = iter_video_frames(in_path, cols, rows, fps, bake_smoothing)
-        frames_iter = iter_block_palette_frames(source_iter, pal_size,
-                                                effective_block_frames,
-                                                palette_algorithm=palette_algorithm)
+        frames_iter = iter_scene_palette_frames(
+            source_iter, pal_size, palette_mode, effective_block_frames,
+            adaptive_config, palette_algorithm=palette_algorithm,
+            perceptual_lut_bits=perceptual_lut_bits)
     else:
         frames_iter = iter_video_frames(in_path, cols, rows, fps, bake_smoothing)
-    delta_allowed = (not has_palette) or use_global or use_block
+    delta_allowed = (not has_palette) or use_global or use_scene_palette
     flags_extra = (FLAG_PAL_GLOBAL if use_global else
-                   (FLAG_PAL_PER_SCENE if use_block else 0))
-    if mode == MODE_PIXEL and threshold > 0 and (use_global or use_block):
+                   (FLAG_PAL_PER_SCENE if use_scene_palette else 0))
+    if mode == MODE_PIXEL and threshold > 0 and (use_global or use_scene_palette):
         flags_extra |= FLAG_LOSSY
     if reconstruction == "soft":
         flags_extra |= FLAG_RECON_SOFT
     pal16 = palette0.astype(np.int16) if (use_global and palette0 is not None) else None
-    dither_lut = (selective_dither.PairLUT(palette0)
-                  if dither_mode == "selective" and use_global else None)
+    dither_lut = (make_dither_pair_lut(palette0, global_quantizer)
+                  if dither_mode != "off" and use_global else None)
+    dither_state = (selective_dither.TemporalDitherState(window=dither_window)
+                    if dither_mode == "auto" else None)
     frames = []
     prev_cells = None
+    previous_frame_palette = None
+    previous_color_descriptor = None
     idx = 0
     dump = {} if dump_cells else None
     tag_counts = {TAG_RAW: 0, TAG_ZLIB: 0, TAG_DELTA: 0, TAG_DELTA_MASK: 0}
+    block_diagnostics = []
+    dither_changed_cells = 0
+    dither_proxy_before = 0
+    dither_proxy_after = 0
+    dither_temporal_resets = 0
     for frame_data in frames_iter:
         block_start = False
         active_pal_img = pal_img
         active_palette = palette0
-        if use_block:
-            rgb, gray, active_pal_img, active_palette, block_start = frame_data
+        active_quantizer = global_quantizer
+        if use_scene_palette:
+            (rgb, gray, active_pal_img, active_palette, active_quantizer,
+             block_start, block_diagnostic, _hard_cut_start) = frame_data
             if block_start:
                 # Los indices de dos paletas distintas nunca comparten una cadena DELTA.
                 prev_cells = None
                 pal16 = active_palette.astype(np.int16)
-                if dither_mode == "selective":
-                    dither_lut = selective_dither.PairLUT(active_palette)
+                if dither_mode != "off":
+                    dither_lut = make_dither_pair_lut(
+                        active_palette, active_quantizer)
+                if block_diagnostic is not None:
+                    block_diagnostics.append(block_diagnostic)
         else:
             rgb, gray = frame_data
+
+        # La memoria del dithering atraviesa cambios normales de paleta. Solo un
+        # corte cromatico fuerte entre frames consecutivos la reinicia.
+        need_color_descriptor = (dither_state is not None or
+                                 (palette_algorithm == "kmeans-oklab" and
+                                  has_palette and palette_mode == "per-frame"))
+        current_descriptor = (adaptive_palette.describe_frame_color(
+            (rgb, gray), adaptive_config) if need_color_descriptor else None)
+        transition_score = 1.0 if previous_color_descriptor is None else 0.0
+        hard_cut = False
+        if current_descriptor is not None and previous_color_descriptor is not None:
+            transition = adaptive_palette.color_change_metrics(
+                previous_color_descriptor, current_descriptor, adaptive_config)
+            transition_score = float(transition["score"])
+            hard_cut = transition_score >= adaptive_config.hard_cut_threshold
+            if hard_cut and dither_state is not None:
+                dither_state.reset()
+                dither_temporal_resets += 1
+
         keyframe = (idx == 0) or block_start or (keyint > 0 and idx % keyint == 0)
+        per_frame_stability = 0.0
+        if (palette_algorithm == "kmeans-oklab" and has_palette and
+                palette_mode == "per-frame" and previous_frame_palette is not None):
+            per_frame_stability = adaptive_palette.temporal_stability_strength(
+                transition_score, hard_cut=hard_cut, config=adaptive_config)
         cells, palette, pal_count = frame_to_cells(rgb, gray, mode, len(ramp), pal_size,
-                                                   ("global" if use_block else palette_mode),
-                                                   active_pal_img, palette_algorithm)
-        if dither_mode == "selective":
-            baseline = cells[:, 0].reshape(rows, cols)
-            dithered = selective_dither.apply_selective_dither(
-                rgb, baseline, active_palette, matrix_size=dither_matrix,
-                pair_lut=dither_lut)
-            cells = dithered.reshape(-1, 1)
+                                                   ("global" if use_scene_palette
+                                                    else palette_mode),
+                                                   active_pal_img, palette_algorithm,
+                                                   quantizer=active_quantizer,
+                                                   perceptual_lut_bits=perceptual_lut_bits,
+                                                   previous_palette=previous_frame_palette,
+                                                   temporal_strength=per_frame_stability)
+        if dither_mode != "off":
+            cells, dither_details = apply_dither_mode(
+                rgb, cells, active_palette, dither_mode, dither_matrix,
+                pair_lut=dither_lut, temporal_state=dither_state,
+                dither_budget=dither_budget,
+                dither_min_improvement=dither_min_improvement,
+                dither_window=dither_window)
+            if dither_details is not None:
+                dither_changed_cells += int(dither_details["changed_cells"])
+                dither_proxy_before += int(dither_details["baseline_proxy_error"])
+                dither_proxy_after += int(dither_details["result_proxy_error"])
         if use_global:
-            pal_count = pal_size if idx == 0 else 0
+            pal_count = palette0.shape[0] if idx == 0 else 0
             palette = palette0 if idx == 0 else None
-        elif use_block:
+        elif use_scene_palette:
             # Todo keyframe debe ser autocontenido: al hacer seek el reader empieza
             # alli y necesita conocer la paleta aunque este a mitad de un bloque.
             pal_count = active_palette.shape[0] if keyframe else 0
@@ -611,7 +947,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             cells = emitted
         tag, payload = encode_frame(cells, prev_cells, mode, idx, keyframe,
                                     compress, delta_allowed)
-        if use_block and tag in (TAG_RAW, TAG_ZLIB) and pal_count == 0:
+        if use_scene_palette and tag in (TAG_RAW, TAG_ZLIB) and pal_count == 0:
             # El codec adaptativo puede elegir un full aunque no fuera forzado. Para
             # el reader ese tag tambien es keyframe y debe traer su paleta activa.
             pal_count = active_palette.shape[0]
@@ -621,7 +957,13 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         if dump is not None:
             dump["frame_%04d" % idx] = cells
         prev_cells = cells
+        if palette_mode == "per-frame" and palette is not None:
+            previous_frame_palette = palette
+        if current_descriptor is not None:
+            previous_color_descriptor = current_descriptor
         idx += 1
+    if idx == 0:
+        raise RuntimeError("video sin frames")
     if dump is not None:
         np.savez(dump_cells, **dump)
     total = write_ascl(out_path, mode, cols, rows, fps, ramp, frames, palette0,
@@ -638,8 +980,26 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             "quality_profile": quality_profile, "bake_smoothing": bake_smoothing,
             "reconstruction": reconstruction,
             "palette_algorithm": palette_algorithm,
+            "perceptual_lut_bits": int(perceptual_lut_bits),
             "dither": dither_mode, "dither_matrix": int(dither_matrix),
+            "dither_budget": float(dither_budget),
+            "dither_min_improvement": float(dither_min_improvement),
+            "dither_window": int(dither_window),
+            "dither_changed_cells": int(dither_changed_cells),
+            "dither_temporal_resets": int(dither_temporal_resets),
+            "dither_proxy_improvement": (
+                (float(dither_proxy_before - dither_proxy_after) /
+                 float(dither_proxy_before)) if dither_proxy_before else 0.0),
             "palette_block_frames": effective_block_frames,
+            "palette_blocks": block_diagnostics,
+            "palette_block_sizes": [item["size"] for item in block_diagnostics],
+            "palette_block_reasons": [item["reason"] for item in block_diagnostics],
+            "palette_block_scores": [item["score"] for item in block_diagnostics],
+            "adaptive_min_frames": int(adaptive_min_frames),
+            "adaptive_max_frames": int(adaptive_max_frames),
+            "adaptive_change_threshold": float(adaptive_change_threshold),
+            "adaptive_hard_cut_threshold": float(adaptive_hard_cut_threshold),
+            "adaptive_stability_max": float(adaptive_stability_max),
             "flags": FLAG_HAS_OFFSET_TABLE | flags_extra}
 
 
@@ -650,19 +1010,32 @@ def main(argv=None):
     p.add_argument("--mode", choices=list(MODE_NAMES), default="pixel")
     p.add_argument("--profile", "--quality-profile", choices=QUALITY_PROFILE_NAMES,
                    default="custom", dest="quality_profile",
-                   help="custom/detail/balanced/graphic/color; overrides prevalecen")
+                   help="perfil de grilla/color; overrides manuales prevalecen")
     p.add_argument("--cols", type=int, default=None,
                    help="columnas; default 200 o valor del perfil")
     p.add_argument("--rows", type=int, default=0, help="0 = auto con correccion de aspecto")
     p.add_argument("--fps", type=int, default=DEFAULT_FPS, help="fps de playback (default 15)")
     p.add_argument("--palette-size", type=int, default=None, dest="pal_size",
                    help="1..256; default 256 o valor del perfil")
-    p.add_argument("--palette", choices=["per-frame", "global", "block"], default="per-frame")
+    p.add_argument("--palette", choices=PALETTE_MODES, default="per-frame")
     p.add_argument("--palette-algorithm", choices=PALETTE_ALGORITHMS,
                    default="median-cut",
                    help="constructor offline; no cambia formato ni costo de playback")
     p.add_argument("--palette-block-frames", type=int, default=0,
                    help="frames por paleta en modo block (0 = fps*2)")
+    p.add_argument("--adaptive-min-frames", type=int, default=5,
+                   help="minimo antes de cortar por deriva de color")
+    p.add_argument("--adaptive-max-frames", type=int, default=10,
+                   help="maximo absoluto de frames por paleta adaptativa")
+    p.add_argument("--adaptive-change-threshold", type=float, default=0.20,
+                   help="umbral numerico Oklab para deriva gradual")
+    p.add_argument("--adaptive-hard-cut-threshold", type=float, default=0.58,
+                   help="umbral entre frames para corte cromatico exacto")
+    p.add_argument("--adaptive-stability-max", "--temporal-stability-max",
+                   type=float, default=0.25, dest="adaptive_stability_max",
+                   help="retencion maxima de paleta previa (0..1)")
+    p.add_argument("--perceptual-lut-bits", type=int, default=0,
+                   help="0=cuantizacion Oklab exacta; 3..7=LUT offline")
     p.add_argument("--ramp", default="short", help="'short', 'long' o cadena propia")
     p.add_argument("--char-aspect", type=float, default=DEFAULT_CHAR_ASPECT)
     p.add_argument("--compress", choices=["auto", "none", "zlib"], default="auto")
@@ -679,6 +1052,16 @@ def main(argv=None):
                    help="tramado selectivo offline para mode pixel")
     p.add_argument("--dither-matrix", choices=DITHER_MATRIX_SIZES, type=int, default=4,
                    help="Bayer 2 compacto o Bayer 4 equilibrado")
+    p.add_argument("--dither-budget", "--dither-max-changed-fraction", type=float,
+                   default=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
+                   dest="dither_budget",
+                   help="fraccion maxima de celdas modificadas por frame")
+    p.add_argument("--dither-min-improvement", type=float,
+                   default=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
+                   help="mejora minima del proxy para aceptar un tile")
+    p.add_argument("--dither-window", "--dither-temporal-window", type=int,
+                   default=selective_dither.DEFAULT_TEMPORAL_WINDOW,
+                   dest="dither_window", help="ventana temporal de histeresis")
     args = p.parse_args(argv)
     args.cols, args.pal_size = resolve_quality_options(
         args.quality_profile, args.cols, args.pal_size, default_cols=200)
@@ -687,7 +1070,16 @@ def main(argv=None):
                                 args.char_aspect, args.palette, args.bake_smoothing,
                                 args.reconstruction, args.palette_block_frames,
                                 args.dither, args.dither_matrix,
-                                args.palette_algorithm)
+                                args.palette_algorithm,
+                                adaptive_min_frames=args.adaptive_min_frames,
+                                adaptive_max_frames=args.adaptive_max_frames,
+                                adaptive_change_threshold=args.adaptive_change_threshold,
+                                adaptive_hard_cut_threshold=args.adaptive_hard_cut_threshold,
+                                adaptive_stability_max=args.adaptive_stability_max,
+                                perceptual_lut_bits=args.perceptual_lut_bits,
+                                dither_budget=args.dither_budget,
+                                dither_min_improvement=args.dither_min_improvement,
+                                dither_window=args.dither_window)
     except ValueError as exc:
         p.error(str(exc))
     ext = os.path.splitext(args.input)[1].lower()
@@ -704,7 +1096,16 @@ def main(argv=None):
                             palette_block_frames=args.palette_block_frames,
                             dither_mode=args.dither,
                             dither_matrix=args.dither_matrix,
-                            palette_algorithm=args.palette_algorithm)
+                            palette_algorithm=args.palette_algorithm,
+                            adaptive_min_frames=args.adaptive_min_frames,
+                            adaptive_max_frames=args.adaptive_max_frames,
+                            adaptive_change_threshold=args.adaptive_change_threshold,
+                            adaptive_hard_cut_threshold=args.adaptive_hard_cut_threshold,
+                            adaptive_stability_max=args.adaptive_stability_max,
+                            perceptual_lut_bits=args.perceptual_lut_bits,
+                            dither_budget=args.dither_budget,
+                            dither_min_improvement=args.dither_min_improvement,
+                            dither_window=args.dither_window)
         secs = info["n_frames"] / float(info["fps"]) or 1
         print("OK %s  (video, %s, paleta %s)" % (args.output, info["mode"], info["palette_mode"]))
         print("  fuente   : %dx%d px" % info["src"])
@@ -714,11 +1115,24 @@ def main(argv=None):
         print("  algoritmo: %s" % info["palette_algorithm"])
         if info["palette_mode"] == "block":
             print("  paleta   : bloque de %d frames" % info["palette_block_frames"])
+        elif info["palette_mode"] == "adaptive":
+            print("  paleta   : %d bloques adaptativos; tamanos %s" %
+                  (len(info["palette_blocks"]), info["palette_block_sizes"]))
+            for block in info["palette_blocks"]:
+                print("    #%d [%d,%d) n=%d fin=%s score=%.3f entrada=%s estable=%.3f" %
+                      (block["index"], block["start"], block["end"], block["size"],
+                       block["reason"], block["score"], block["entry_reason"],
+                       block["stability"]))
         print("  imagen   : bake %s, reconstruccion %s, flags 0x%02X" %
               (info["bake_smoothing"], info["reconstruction"], info["flags"]))
         print("  dither   : %s%s" %
               (info["dither"], (" Bayer %d" % info["dither_matrix"])
                if info["dither"] != "off" else ""))
+        if info["dither"] == "auto":
+            print("             presupuesto %.3f, mejora min %.3f, ventana %d; "
+                  "%d celdas cambiadas" %
+                  (info["dither_budget"], info["dither_min_improvement"],
+                   info["dither_window"], info["dither_changed_cells"]))
         print("  frames   : %d   tags RAW/ZLIB/DELTA = %d/%d/%d" %
               (info["n_frames"], info["tags"][0], info["tags"][1], info["tags"][2]))
         print("  .ascl    : %d B  (%.1f KB, %.1f KB/s)" %
@@ -734,7 +1148,11 @@ def main(argv=None):
                             quality_profile=args.quality_profile,
                             dither_mode=args.dither,
                             dither_matrix=args.dither_matrix,
-                            palette_algorithm=args.palette_algorithm)
+                            palette_algorithm=args.palette_algorithm,
+                            perceptual_lut_bits=args.perceptual_lut_bits,
+                            dither_budget=args.dither_budget,
+                            dither_min_improvement=args.dither_min_improvement,
+                            dither_window=args.dither_window)
         print("OK %s  (imagen, %s)" % (args.output, info["mode"]))
         print("  grilla   : %dx%d celdas" % (info["cols"], info["rows"]))
         print("  calidad  : perfil %s, hasta %d colores" %

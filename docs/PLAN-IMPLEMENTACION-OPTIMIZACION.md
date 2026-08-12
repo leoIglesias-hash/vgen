@@ -19,9 +19,9 @@ Base recuperable: commit `1c2c0b2`
 Estado al 2026-08-12:
 
 - Fase A implementada y validada en la rama de trabajo.
-- Fase B implementada: paleta global/por frame/por bloque, K-means RGB y dithering
-  selectivo disponibles. En el TKN real, K-means es el default recomendado y el
-  dithering permanece experimental/apagado.
+- Fase B implementada y calibrada: paleta global/por frame/por bloque/adaptativa,
+  K-means RGB/Oklab, estabilidad temporal y dithering auto con presupuesto. Todo el
+  analisis ocurre offline y la salida sigue siendo ASCL v1.
 - Frontend TV de validacion implementado: precarga del demo versionado, fullscreen y
   play con teclas 1-8/click/toque, descarga manual, loop y fallback Canvas2D.
 - Fase E iniciada con pruebas automatizadas; falta medir en los Smart TV/WebViews reales.
@@ -40,9 +40,16 @@ indicados por el usuario.
 | `--profile detail` | Prioriza mas celdas y una paleta menor. |
 | `--profile balanced` | Equilibrio entre resolucion y color. |
 | `--profile graphic` | 640 columnas y 256 colores para animacion, logos y gradientes. |
+| `--profile graphic-hq` | 768 columnas y 256 colores; candidato de alta calidad. |
+| `--profile graphic-ultra` | 960 columnas y 256 colores; techo de calidad medido. |
 | `--profile color` | Menos celdas y mas colores. |
 | `--profile custom` | Usa solamente valores manuales. |
-| `--palette-algorithm median-cut|fast-octree|kmeans-rgb` | Trabajo offline dedicado a elegir mejor los colores. |
+| `--palette-algorithm median-cut|fast-octree|kmeans-rgb|kmeans-oklab` | Trabajo offline dedicado a elegir mejor los colores. |
+| `--palette adaptive` | Renueva por distribucion Oklab, sin IA ni deteccion de objetos. |
+| `--adaptive-min-frames/--adaptive-max-frames` | Limites variables; 5/10 por defecto de calidad. |
+| `--adaptive-stability-max` | Amortigua cambios de paleta; 0,25 por defecto. |
+| `--perceptual-lut-bits 0|3..7` | Oklab exacto o LUT offline de mayor velocidad. |
+| `--dither auto` | Acepta tramado solo con mejora numerica, presupuesto e histeresis. |
 | `--reconstruction nearest|soft` | Presentacion sugerida al player; no cambia los frames. |
 | `--bake-smoothing none|soft` | Suavizado calculado offline antes de cuantizar. |
 
@@ -87,9 +94,9 @@ Deteccion de gradientes propuesta:
 4. comparar el peso comprimido con y sin dithering;
 5. conservarlo solo si la mejora visual supera el costo configurado.
 
-Pendiente de esta fase: seleccion automatica por clip de cantidad de colores, duracion
-de bloque y algoritmo; presupuesto exacto de sobrepeso; e histeresis temporal del
-dithering. Hoy estos controles existen, pero la eleccion final sigue siendo del usuario.
+Pendiente de esta fase: seleccion automatica por clip de cantidad de colores y resolucion,
+y un presupuesto directo de bytes ademas del presupuesto de celdas. La duracion de paleta
+ya es adaptativa y el dithering ya tiene presupuesto exacto de celdas e histeresis.
 
 ### Fase C - Formato v2 por tiles adaptativos
 

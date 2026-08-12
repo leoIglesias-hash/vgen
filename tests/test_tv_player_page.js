@@ -12,7 +12,8 @@ var demoPath = path.join(__dirname, "..", "outputs",
 var demo = fs.readFileSync(demoPath);
 
 assert(inline, "la pagina TV debe contener su controlador inline");
-assert(page.indexOf("./output/clip.asclv") >= 0);
+assert(/\.\/outputs?\/clip\.asclv/.test(page),
+  "la pagina debe usar una ruta relativa de despliegue para clip.asclv");
 assert(page.indexOf("../outputs/TKN-2441-GANADOR-graphic-kmeans.asclv") < 0);
 assert(page.indexOf("Iniciar descarga") >= 0);
 assert(page.indexOf("tv-controller.js") >= 0);

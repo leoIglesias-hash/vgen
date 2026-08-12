@@ -29,17 +29,30 @@ def main(argv=None):
     p.add_argument("--mode", choices=list(encoder.MODE_NAMES), default="pixel")
     p.add_argument("--profile", "--quality-profile", choices=encoder.QUALITY_PROFILE_NAMES,
                    default="custom", dest="quality_profile",
-                   help="custom/detail/balanced/graphic/color; overrides prevalecen")
+                   help="perfil de grilla/color; overrides manuales prevalecen")
     p.add_argument("--cols", type=int, default=None,
                    help="columnas; default 320 o valor del perfil")
     p.add_argument("--rows", type=int, default=0, help="0 = filas automaticas")
     p.add_argument("--fps", type=int, default=15)
-    p.add_argument("--palette", choices=["per-frame", "global", "block"], default="global")
+    p.add_argument("--palette", choices=encoder.PALETTE_MODES, default="global")
     p.add_argument("--palette-algorithm", choices=encoder.PALETTE_ALGORITHMS,
                    default="kmeans-rgb",
                    help="constructor offline (default kmeans-rgb, mejor fidelidad)")
     p.add_argument("--palette-block-frames", type=int, default=0,
                    help="frames por paleta en modo block (0 = fps*2)")
+    p.add_argument("--adaptive-min-frames", type=int, default=5,
+                   help="minimo antes de cortar por deriva de color")
+    p.add_argument("--adaptive-max-frames", type=int, default=10,
+                   help="maximo de frames por paleta adaptativa")
+    p.add_argument("--adaptive-change-threshold", type=float, default=0.20,
+                   help="umbral Oklab de deriva gradual")
+    p.add_argument("--adaptive-hard-cut-threshold", type=float, default=0.58,
+                   help="umbral entre frames para hard cut")
+    p.add_argument("--adaptive-stability-max", "--temporal-stability-max",
+                   type=float, default=0.25, dest="adaptive_stability_max",
+                   help="retencion maxima de la paleta anterior")
+    p.add_argument("--perceptual-lut-bits", type=int, default=0,
+                   help="0=Oklab exacto; 3..7=LUT de cuantizacion offline")
     p.add_argument("--threshold", type=int, default=0,
                    help="T perceptual RGB (0=lossless); pixel con paleta global/block")
     p.add_argument("--ramp", default="short")
@@ -54,6 +67,16 @@ def main(argv=None):
     p.add_argument("--dither-matrix", choices=encoder.DITHER_MATRIX_SIZES,
                    type=int, default=4,
                    help="Bayer 2 compacto o Bayer 4 equilibrado")
+    p.add_argument("--dither-budget", "--dither-max-changed-fraction", type=float,
+                   default=encoder.selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
+                   dest="dither_budget",
+                   help="fraccion maxima de celdas modificadas por frame")
+    p.add_argument("--dither-min-improvement", type=float,
+                   default=encoder.selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
+                   help="mejora minima del proxy para aceptar un tile")
+    p.add_argument("--dither-window", "--dither-temporal-window", type=int,
+                   default=encoder.selective_dither.DEFAULT_TEMPORAL_WINDOW,
+                   dest="dither_window", help="ventana temporal de histeresis")
     p.add_argument("--image", action="store_true", help="forzar modo imagen (sin audio)")
     p.add_argument("--keep", action="store_true", help="conservar los .ascl/.mp3 intermedios")
     args = p.parse_args(argv)
@@ -65,7 +88,16 @@ def main(argv=None):
                                         args.bake_smoothing, args.reconstruction,
                                         args.palette_block_frames, args.dither,
                                         args.dither_matrix,
-                                        args.palette_algorithm)
+                                        args.palette_algorithm,
+                                        adaptive_min_frames=args.adaptive_min_frames,
+                                        adaptive_max_frames=args.adaptive_max_frames,
+                                        adaptive_change_threshold=args.adaptive_change_threshold,
+                                        adaptive_hard_cut_threshold=args.adaptive_hard_cut_threshold,
+                                        adaptive_stability_max=args.adaptive_stability_max,
+                                        perceptual_lut_bits=args.perceptual_lut_bits,
+                                        dither_budget=args.dither_budget,
+                                        dither_min_improvement=args.dither_min_improvement,
+                                        dither_window=args.dither_window)
     except ValueError as exc:
         p.error(str(exc))
 
@@ -91,7 +123,16 @@ def main(argv=None):
                                     palette_block_frames=args.palette_block_frames,
                                     dither_mode=args.dither,
                                     dither_matrix=args.dither_matrix,
-                                    palette_algorithm=args.palette_algorithm)
+                                    palette_algorithm=args.palette_algorithm,
+                                    adaptive_min_frames=args.adaptive_min_frames,
+                                    adaptive_max_frames=args.adaptive_max_frames,
+                                    adaptive_change_threshold=args.adaptive_change_threshold,
+                                    adaptive_hard_cut_threshold=args.adaptive_hard_cut_threshold,
+                                    adaptive_stability_max=args.adaptive_stability_max,
+                                    perceptual_lut_bits=args.perceptual_lut_bits,
+                                    dither_budget=args.dither_budget,
+                                    dither_min_improvement=args.dither_min_improvement,
+                                    dither_window=args.dither_window)
         mp3 = os.path.splitext(tmp_ascl)[0] + ".mp3"
         mp3 = mp3 if (info.get("audio") and os.path.exists(mp3)) else None
         total, la, lau = ascl_bundle.pack(tmp_ascl, mp3, out)
@@ -109,6 +150,19 @@ def main(argv=None):
                if info["dither"] != "off" else ""))
         if info["palette_mode"] == "block":
             print("  paleta: bloque de %d frames" % info["palette_block_frames"])
+        elif info["palette_mode"] == "adaptive":
+            print("  paleta: %d bloques adaptativos; tamanos %s" %
+                  (len(info["palette_blocks"]), info["palette_block_sizes"]))
+            for block in info["palette_blocks"]:
+                print("    #%d [%d,%d) n=%d fin=%s score=%.3f entrada=%s estable=%.3f" %
+                      (block["index"], block["start"], block["end"], block["size"],
+                       block["reason"], block["score"], block["entry_reason"],
+                       block["stability"]))
+        if info["dither"] == "auto":
+            print("  dither auto: presupuesto %.3f, mejora min %.3f, ventana %d; "
+                  "%d celdas cambiadas" %
+                  (info["dither_budget"], info["dither_min_improvement"],
+                   info["dither_window"], info["dither_changed_cells"]))
         print("  bundle: %.1f KB  (video %.1f KB + audio %.1f KB)  ~%.1f KB/s" %
               (total/1024.0, la/1024.0, lau/1024.0, total/1024.0/secs))
         if not args.keep:
@@ -123,7 +177,11 @@ def main(argv=None):
                                     quality_profile=args.quality_profile,
                                     dither_mode=args.dither,
                                     dither_matrix=args.dither_matrix,
-                                    palette_algorithm=args.palette_algorithm)
+                                    palette_algorithm=args.palette_algorithm,
+                                    perceptual_lut_bits=args.perceptual_lut_bits,
+                                    dither_budget=args.dither_budget,
+                                    dither_min_improvement=args.dither_min_improvement,
+                                    dither_window=args.dither_window)
         total, la, lau = ascl_bundle.pack(tmp_ascl, None, out)
         print("OK %s  (imagen, %s %dx%d, %.1f KB)" %
               (out, info["mode"], info["cols"], info["rows"], total/1024.0))

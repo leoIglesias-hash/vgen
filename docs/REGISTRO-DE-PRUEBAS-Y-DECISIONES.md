@@ -21,7 +21,7 @@ Se debe repetir una conclusion si cambia alguno de estos factores: fuente, modo 
 ASCII, columnas/filas, FPS, cantidad de colores, algoritmo o duracion de paleta,
 dithering, threshold con perdida, reconstruccion, formato/codec o reader/player.
 
-## Fuente TKN usada en las instancias 001 y 002
+## Fuente TKN usada en las instancias 001, 002 y 003
 
 - Archivo: `TKN-2441-GANADOR- 15seg-.mp4`.
 - Tamaño: 39.032.116 bytes.
@@ -164,3 +164,72 @@ python backend/make_clip.py "TKN-2441-GANADOR- 15seg-.mp4" \
 ### Resultado en dispositivos reales
 
 Pendiente.
+
+## Instancia 003 - Oklab, bloques adaptativos, estabilidad, auto y resolucion
+
+Fecha: 2026-08-12.
+
+### Motivo y alcance
+
+Se aplicaron las mejoras 1 a 5 manteniendo ASCL v1: K-means Oklab, renovacion de paleta
+por cambio numerico de color, estabilidad temporal, dithering calibrado y perfiles
+seleccionables 640x360, 768x432 y 960x540. No se uso IA ni deteccion de objetos. Todo el
+trabajo nuevo ocurre en el encoder de PC; el player recibe la misma matriz de indices.
+
+La fuente, FPS, 256 colores, threshold 0, reconstruccion `soft`, audio y 231 frames son
+los mismos de la instancia 002. La metodologia y las tablas completas se conservan en
+`docs/BENCHMARK-V1-ADAPTATIVO-OKLAB.md`.
+
+### Por que el adaptativo no quedo en 5..30
+
+El primer candidato produjo 11 bloques de hasta 30 frames y peso 12.554.539 B. Mejoro
+el error perceptual puntual, pero compartia una paleta durante 1,5 a 2 segundos y perdia
+calidad de baja frecuencia. Al limitar el maximo a 10, sin convertirlo en intervalo fijo,
+el mismo detector produjo 27 bloques de 1..10 frames, promedio 8,56, y mantuvo un hard
+cut exacto. Bajar el umbral 0,20 a 0,15 casi no cambio la segmentacion.
+
+Esta es una conclusion de esta instancia: el maximo de 10 queda como default conservador
+de calidad, pero el valor sigue editable. Los cortes siguen dependiendo del color real y
+pueden ocurrir antes; no se renueva obligatoriamente cada 10 frames.
+
+### Evidencia resumida
+
+| Variante | ASCLV | DeltaE OK | Mesetas | PSNR fuente 1080p bilinear | Decode ref. | RAM Canvas min. |
+|---|---:|---:|---:|---:|---:|---:|
+| block5 RGB 640 | 14.075.645 B | 0,989 | 61,26% | 28,026 dB | 1,209 ms/f | 15,64 MiB |
+| adaptativo Oklab 640 | 13.196.334 B | 0,812 | 59,71% | 27,765 dB | 1,208 ms/f | 14,78 MiB |
+| adaptativo Oklab auto 768 final | 17.935.310 B | 0,824 | 59,50% | 28,585 dB | 1,684 ms/f | 20,27 MiB |
+| adaptativo Oklab auto 960 exploratorio | 26.069.769 B | 0,816 | 58,48% | 30,146 dB | 2,562 ms/f | 29,81 MiB |
+
+La auditoria Oklab de baja frecuencia del 640 adaptativo 5..10 bajo de 0,1432 a 0,0810
+frente al block5 RGB, y el RMS de contorno suave bajo de 0,1278 a 0,1108. Esto motivo
+conservar Oklab aunque el PSNR RGB de grilla no aumentara: miden objetivos diferentes.
+
+El dither auto se mantuvo conservador. En HQ cambio 0,57% de las celdas y en ultra 0,69%,
+con presupuesto maximo de 5%; sus indices quedan horneados y no agregan CPU/GPU al player.
+
+### Decisiones
+
+- Conservar 640 adaptativo Oklab sin dither como perfil eficiente.
+- Seleccionar 768 adaptativo Oklab con dither auto como candidato HQ recomendado.
+- Mantener 960 como perfil ultra opcional hasta medirlo en dispositivos fisicos.
+- Mantener estabilidad maxima 0,25 en esta version para que la paleta conserve continuidad;
+  contrastar 0,10 en clips fotograficos antes de universalizar el valor.
+- No cambiar el formato: los tres archivos son ASCL v1, flags `0x1A`, CRC valido y audio
+  incluido. Canvas2D y WebGL1 siguen consumiendo la misma matriz.
+
+### Versiones conservadas
+
+- Eficiente: `outputs/TKN-2441-GANADOR-v1-adaptive-oklab-efficient-640.asclv`,
+  13.196.334 B, SHA-256
+  `D53611B89991CF01FBFB7E08AAE31BCEDD0AE2DD6C06AB0D5D5E9033D0BC6875`.
+- HQ recomendado: `outputs/TKN-2441-GANADOR-v1-adaptive-oklab-hq-768.asclv`,
+  17.935.310 B, SHA-256
+  `346B4BE704E15B1855DB15C989774116247600C5911A98E908BB7FAD2E15BB70`.
+- Ultra: medicion exploratoria local; debe regenerarse con el guard final de textura
+  antes de entregarlo o versionarlo.
+
+### Resultado en dispositivos reales
+
+Pendiente. No convertir los tiempos del decoder Python en una garantia de Smart TV;
+medir cuadros perdidos, CPU y RAM en Canvas2D y WebGL1 por familia de equipo.
