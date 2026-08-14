@@ -8,8 +8,7 @@ var page = fs.readFileSync(
   path.join(__dirname, "..", "frontend", "tv-player.html"), "utf8");
 var inline = page.match(/<script>\s*([\s\S]*?)\s*<\/script>\s*<\/body>/);
 var refreshFunction = page.match(/function refreshCurrentVideo\(\)\{([\s\S]*?)\n  \}\n\n  downloadButton\.onclick/);
-var demoPath = path.join(__dirname, "..", "outputs",
-  "TKN-2441-GANADOR-graphic-kmeans.asclv");
+var demoPath = path.join(__dirname, "..", "outputs", "clip.asclv");
 var demo = fs.readFileSync(demoPath);
 
 assert(inline, "la pagina TV debe contener su controlador inline");
@@ -20,6 +19,13 @@ assert(page.indexOf("../outputs/TKN-2441-GANADOR-graphic-kmeans.asclv") < 0);
 assert(page.indexOf("Iniciar descarga") >= 0);
 assert(page.indexOf("Limpiar cach&eacute; / descargar de nuevo") >= 0,
   "el menu tecnico debe explicar claramente la actualizacion del archivo");
+assert(page.indexOf('title="Menu tecnico">MENU</button>') >= 0,
+  "el acceso al menu debe ser reconocible incluso sin tecla numerica");
+assert(page.indexOf("background:rgba(20,20,20,.42)") >= 0 &&
+  page.indexOf("opacity:.52") >= 0,
+  "el hotspot debe quedar visible de forma translucida sobre el video");
+assert(page.indexOf("opacity:.06") < 0,
+  "el acceso anterior era demasiado invisible en una TV");
 assert(page.indexOf("No borra la cach&eacute; global") >= 0,
   "el control no debe presentarse como borrado de cache global");
 assert(page.indexOf("tv-controller.js") >= 0);
@@ -84,7 +90,7 @@ assert(page.indexOf("16+videoLength+audioLength!==buffer.byteLength") >= 0,
   "el bundle no debe aceptar truncado ni bytes anexados");
 assert(page.indexOf("mozfullscreenchange") >= 0);
 assert(page.indexOf("MSFullscreenChange") >= 0);
-assert.strictEqual(demo.slice(0, 8).toString("ascii"), "ASCLVID1");
+assert.strictEqual(demo.slice(0, 8).toString("ascii"), "ASCLVID2");
 assert(demo.readUInt32LE(8) > 32, "el demo debe contener video");
 assert(demo.readUInt32LE(12) > 0, "el demo debe conservar el audio incluido");
 assert.strictEqual(/\b(?:let|const|class)\b/.test(inline[1]), false);

@@ -318,7 +318,7 @@ vacío canónico evita conversión, upload y draw en un frame sin cambios.
 ### Renovación de caché con URL base estable
 
 `tv-player.html` conserva `./outputs/clip.asclv`. El menú técnico oculto se abre con la
-tecla 9 moderna/numpad o con un hotspot transparente inferior izquierdo. La acción:
+tecla 9 moderna/numpad o con la pestaña translúcida `MENU` inferior izquierda. La acción:
 
 1. detiene playback y aborta una XHR anterior;
 2. libera audio, reader, Canvas y recursos WebGL;

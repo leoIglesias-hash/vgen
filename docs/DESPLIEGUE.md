@@ -58,7 +58,8 @@ Recomendado (no obligatorio) para rendimiento y cache en webviews:
 - Si el player usa una URL estable que se reemplaza, como `outputs/clip.asclv`, no usar
   `immutable`: enviar `ETag` o `Last-Modified` con `Cache-Control: public, no-cache`. El
   navegador conserva el cuerpo, pero revalida y puede recibir `304`.
-- El menú técnico del TV rota un query token y solicita `no-cache` para renovar esa URL.
+- La pestaña translúcida `MENU` de la esquina inferior izquierda —o la tecla 9— abre el
+  menú técnico. La acción rota un query token y solicita `no-cache` para renovar esa URL.
   No elimina entradas anteriores de la caché global; su expulsión depende del WebView y
   del servidor.
 - Enviar `Content-Type: application/octet-stream` y `Content-Length`. XHR no garantiza

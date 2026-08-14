@@ -313,7 +313,7 @@ function expectError(fn, pattern) {
 }());
 
 (function testCrcDetectsCachedBodyCorruption() {
-  var source = fs.readFileSync(path.join(__dirname, "..", "outputs", "test_pixel.ascl"));
+  var source = fs.readFileSync(path.join(__dirname, "fixtures", "test_pixel.ascl"));
   var corrupt = Buffer.from(source);
   corrupt[corrupt.length - 1] ^= 1;
   expectError(function () { parseBuffer(corrupt); }, /CRC32/);

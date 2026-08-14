@@ -187,7 +187,7 @@ un gesto del control remoto. Si la red falla, tanto ese boton como un nuevo clic
 pantalla vuelven a intentar la descarga sin recargar la pagina.
 
 El menú técnico queda oculto. Se abre con la tecla `9` —también numpad y códigos modernos
-de control remoto— o con el hotspot transparente de la esquina inferior izquierda.
+de control remoto— o con la pestaña translúcida **MENU** de la esquina inferior izquierda.
 **Limpiar caché / descargar de nuevo** libera primero reader, audio, Canvas y recursos GPU;
 después rota un token de consulta y solicita revalidación HTTP. Esto renueva solamente ese
 ASCLV: JavaScript no puede borrar la caché global ni sus entradas anteriores. En browsers

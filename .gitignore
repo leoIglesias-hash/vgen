@@ -13,13 +13,9 @@ venv/
 inputs/*
 !inputs/synthetic.mp4
 
-# Resultados regenerables: se conservan solo los fixtures test* pequenos.
+# Resultados regenerables y artefactos de despliegue. Los fixtures versionados
+# viven en tests/fixtures, no en la carpeta publica de salida.
 outputs/*
-!outputs/test*
-!outputs/TKN-2441-GANADOR-graphic-kmeans.asclv
-!outputs/TKN-2441-GANADOR-graphic-kmeans-block5.asclv
-!outputs/TKN-2441-GANADOR-v1-adaptive-oklab-efficient-640.asclv
-!outputs/TKN-2441-GANADOR-v1-adaptive-oklab-hq-768.asclv
 
 # Temporales del sistema y editores
 .DS_Store

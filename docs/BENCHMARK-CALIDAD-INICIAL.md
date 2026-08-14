@@ -2,7 +2,8 @@
 
 Fecha: 2026-08-11
 
-Prueba exploratoria sobre un frame real 1920x1080 (`outputs/src_frame.png`). Cada variante
+Prueba exploratoria sobre un frame real 1920x1080 usado en aquella corrida. El archivo
+temporal `outputs/src_frame.png` era regenerable y ya no se conserva. Cada variante
 se codifico como ASCL v1 PIXEL, se decodifico y se reconstruyo a 1920x1080 para calcular
 PSNR contra la fuente. `soft` usa bilinear solo para esta reconstruccion de control;
 `baked` almacena la reconstruccion 2x offline y se presenta con NEAREST.
@@ -30,4 +31,3 @@ PSNR contra la fuente. `soft` usa bilinear solo para esta reconstruccion de cont
 
 Esta prueba no mide DELTA, movimiento, FPS ni parpadeo temporal. Antes de elegir defaults
 se repetira sobre varios videos completos y en Canvas2D/WebGL1 de los dispositivos reales.
-

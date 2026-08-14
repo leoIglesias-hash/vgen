@@ -5,7 +5,7 @@ var fs = require("fs");
 var path = require("path");
 var ASCL = require("../frontend/reader.js");
 
-var source = fs.readFileSync(path.join(__dirname, "..", "outputs", "test_pixel.ascl"));
+var source = fs.readFileSync(path.join(__dirname, "fixtures", "test_pixel.ascl"));
 var bundle = new ArrayBuffer(16 + source.length);
 var bytes = new Uint8Array(bundle);
 var magic = "ASCLVID1";

@@ -21,10 +21,13 @@
     border:1px solid #666; color:#ddd; background:#111; background:rgba(12,12,12,.82);
     font:13px Arial,Helvetica,sans-serif; cursor:pointer; }
   #download:focus{ border-color:#fff; color:#fff; outline:2px solid #777; }
-  #techHotspot{ position:absolute; z-index:7; left:0; bottom:0; width:42px; height:42px;
-    padding:0; border:0; color:#fff; background:transparent; opacity:.06;
-    font:22px Arial,Helvetica,sans-serif; cursor:pointer; }
-  #techHotspot:focus,#techHotspot.active{ opacity:.55; outline:1px solid #777; }
+  #techHotspot{ position:absolute; z-index:7; left:8px; bottom:8px; width:58px; height:30px;
+    padding:0; border:1px solid #666; border-color:rgba(255,255,255,.28); color:#ddd;
+    background:#222; background:rgba(20,20,20,.42); opacity:.52; filter:alpha(opacity=52);
+    font:bold 10px Arial,Helvetica,sans-serif; letter-spacing:1px; cursor:pointer; }
+  #techHotspot:hover,#techHotspot:focus,#techHotspot.active{ color:#fff; opacity:.95;
+    filter:alpha(opacity=95); background:#222; background:rgba(20,20,20,.82);
+    outline:1px solid #aaa; }
   #techMenu{ display:none; position:absolute; z-index:8; left:10px; bottom:10px;
     width:310px; max-width:82%; padding:13px; color:#ddd;
     background:#111; background:rgba(12,12,12,.88); border:1px solid #666;
@@ -49,7 +52,7 @@
     <span id="detail">ASCILINE TV</span>
   </div></div>
 </div>
-<button id="techHotspot" type="button" aria-label="Abrir menu tecnico" title="Menu tecnico">&#8942;</button>
+<button id="techHotspot" type="button" aria-label="Abrir menu tecnico" title="Menu tecnico">MENU</button>
 <div id="techMenu" role="dialog" aria-label="Actualizacion del video" aria-hidden="true">
   <div id="techTitle">Actualizaci&oacute;n del video</div>
   <button id="refreshVideo" type="button">Limpiar cach&eacute; / descargar de nuevo</button>
