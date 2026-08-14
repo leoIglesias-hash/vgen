@@ -330,7 +330,7 @@
     var o = this._offset(index), blockLen = this.dv.getUint32(o, true), blockEnd = o + 4 + blockLen;
     var p = o + 4, tag = this.bytes[p++], palCount = this.dv.getUint16(p, true), palBytes = palCount * 3;
     var payload, raw, actual, mode = this.header.mode, n = this.n, bpc = this.bpc;
-    var k, rdv, valueOffset, j, m, off, previous, base, vb, maskLen, changed, vp, byte, validBits;
+    var k, rdv, valueOffset, j, m, off, base, vb, maskLen, changed, vp, byte, validBits;
     var dirtyByte, dirtyMask, newBits;
     var lo = -1, hi = -1, full = false, cells = this.cells;
     var nextPalette = this.palette, nextPaletteEntries = this.paletteEntries;
@@ -366,17 +366,15 @@
       if (k > n) fail("DELTA excede cantidad de celdas");
       rdv = new DataView(raw.buffer, raw.byteOffset, actual);
       valueOffset = k * 4;
-      previous = -1;
       for (j = 0; j < k; j++) {
         off = rdv.getUint32(j * 4, true);
-        if (off >= n || off <= previous) fail("offset DELTA invalido o desordenado");
-        previous = off;
+        if (off >= n) fail("offset DELTA fuera de rango");
       }
       this._validateChangedValues(raw, valueOffset, k);
       for (j = 0; j < k; j++) {
         off = rdv.getUint32(j * 4, true);
-        if (lo < 0) lo = off;
-        hi = off;
+        if (lo < 0 || off < lo) lo = off;
+        if (off > hi) hi = off;
         if (!this._dFull) {
           dirtyByte = off >>> 3;
           dirtyMask = 1 << (off & 7);

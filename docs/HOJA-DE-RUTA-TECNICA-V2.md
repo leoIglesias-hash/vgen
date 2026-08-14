@@ -242,6 +242,8 @@ posibles sobre v1.
 Implementado sobre v1, pendiente de VAL-001 físico:
 
 - offsets por `DataView`, keyframes en bitset y reader/CRC defensivo;
+- DELTA v1 mantiene offsets históricos en cualquier orden y repetidos con última escritura
+  válida, sin renunciar a validar el payload completo antes de mutar `cells`;
 - inflate tipado reutilizable y adaptativo: HQ usa 331.776 B de scratch frente a un
   límite defensivo de 1.658.880 B;
 - bitset de una celda por bit y conversión RGBA exacta para DELTA/MASK;

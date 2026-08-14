@@ -338,6 +338,8 @@ legacy, `keyCode=9` continúa siendo Tab para no romper navegación; el hotspot 
 - 300 streams zlib stored/fixed/dynamic;
 - 67 tests Python y 7 suites JavaScript verdes;
 - corrupción de header, CRC, offsets, bloques, paletas, tags, DELTA, MASK y zlib rechazada;
+- DELTA v1 desordenado/repetido conservado por compatibilidad (`última escritura gana`),
+  con dirty set único y validación completa antes de mutar la matriz;
 - tests runtime con DOM/XHR/GPU falsos verifican fallback y limpieza sin recargar página.
 
 ### Decisión y límites

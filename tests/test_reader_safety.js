@@ -241,7 +241,7 @@ function expectError(fn, pattern) {
 (function testPayloadRejectionsBeforeMutation() {
   var palette = Buffer.from([0,0,0, 1,1,1, 2,2,2, 3,3,3]);
   var raw = Buffer.from([0,1,2,3,0,1,2,3,0,1]);
-  var reader, encoded;
+  var reader, encoded, before;
 
   encoded = makeAscl([block(TAG_RAW, palette, Buffer.from([0,1]))]);
   expectError(function () { parseBuffer(encoded); }, /RAW con longitud/);
@@ -263,17 +263,13 @@ function expectError(fn, pattern) {
 
   encoded = makeAscl([
     block(TAG_RAW, palette, raw),
-    block(TAG_DELTA, null, deltaPayload([10], [1]))
+    block(TAG_DELTA, null, deltaPayload([2, 10], [3, 1]))
   ]);
   reader = parseBuffer(encoded); reader.seek(0);
+  before = Buffer.from(reader.cells);
   expectError(function () { reader.seek(1); }, /offset DELTA/);
-
-  encoded = makeAscl([
-    block(TAG_RAW, palette, raw),
-    block(TAG_DELTA, null, deltaPayload([2, 2], [1, 2]))
-  ]);
-  reader = parseBuffer(encoded); reader.seek(0);
-  expectError(function () { reader.seek(1); }, /offset DELTA/);
+  assert.deepStrictEqual(Buffer.from(reader.cells), before,
+    "todos los offsets deben validarse antes de la primera escritura");
 
   encoded = makeAscl([
     block(TAG_RAW, palette, raw),
@@ -294,6 +290,26 @@ function expectError(fn, pattern) {
     block(TAG_DELTA, palette, deltaPayload([1], [2]))
   ]);
   expectError(function () { parseBuffer(encoded); }, /DELTA no puede cambiar paleta/);
+}());
+
+(function testUnorderedAndRepeatedDeltaOffsetsRemainV1Compatible() {
+  var palette = Buffer.from([0,0,0, 1,1,1, 2,2,2, 3,3,3]);
+  var raw = Buffer.from([0,1,2,3,0,1,2,3,0,1]);
+  var expected = Buffer.from(raw);
+  var encoded = makeAscl([
+    block(TAG_RAW, palette, raw),
+    block(TAG_DELTA, null, deltaPayload([7, 2, 7], [1, 3, 2]))
+  ]);
+  var reader = parseBuffer(encoded);
+  expected[2] = 3;
+  expected[7] = 2; /* un offset repetido conserva la ultima escritura */
+  reader.seek(0);
+  reader.seek(1);
+  assert.deepStrictEqual(Buffer.from(reader.cells), expected);
+  assert.strictEqual(reader.dirtyCellCount, 2, "los repetidos cuentan una sola celda dirty");
+  assert.strictEqual(reader.dirtyCellBits[0], 132, "se marcan offsets 2 y 7");
+  assert.strictEqual(reader.dirtyY0, 0);
+  assert.strictEqual(reader.dirtyY1, 1);
 }());
 
 (function testCrcDetectsCachedBodyCorruption() {

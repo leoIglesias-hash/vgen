@@ -146,7 +146,8 @@ keyframe sin recorrer todo. Para imagen: un solo offset.
 
 - **Per-frame (default v1):** `pal_count = pal_size` en *todos* los frames.
 - **Temporal (escena/bloque):** `pal_count > 0` al cambiar la paleta y en todo frame
-  RAW/ZLIB que pueda iniciar un seek; `0` = reusar la última dentro de una cadena DELTA.
+  RAW/ZLIB que pueda iniciar un seek; `0` = reusar la última dentro de una cadena
+  DELTA/DELTA_MASK.
 - **Global:** `pal_count > 0` solo en el frame 0.
 - En modos sin paleta (BW/RGB): `pal_count = 0` siempre.
 
@@ -168,10 +169,12 @@ Los planos se **concatenan** en el orden de §3 y forman el "payload crudo". Lue
 | 2 | `DELTA` | `zlib( índices_celdas_cambiadas[uint32 LE] ++ valores )` respecto al frame mostrado anterior | **video** (Fase 3); estático/poco movimiento. Plano de carácter siempre exacto |
 | 3 | `DELTA_MASK` | `zlib( máscara_bits[1 bit/celda, LSB-first, ceil(N/8) bytes] ++ valores_celdas_cambiadas )` respecto al frame anterior | **video**; gana mientras cambie <~87,5% de la imagen (mucho más barato que tag 2 en alto movimiento). El encoder elige el menor entre RAW/ZLIB/DELTA/DELTA_MASK |
 
-En `DELTA` (tag 2), los índices son canónicos: deben estar estrictamente ordenados de
-menor a mayor y no pueden repetirse. Esto permite validar completamente el payload antes
-de mutar la matriz y hace determinista su representación. El encoder oficial siempre los
-emite en ese orden; un reader puede rechazar un DELTA que incumpla esta regla.
+En `DELTA` (tag 2), cada índice debe estar dentro de la matriz, pero v1 admite cualquier
+orden para conservar compatibilidad con productores anteriores. Si un índice se repite,
+la última tupla del payload gana. El encoder oficial emite índices únicos y ascendentes
+porque esa representación canónica suele comprimir mejor. El reader valida todos los
+índices y valores antes de aplicar la primera escritura. El total `k` no puede superar
+`N` celdas, incluso cuando existan repeticiones toleradas.
 
 El encoder, por frame, prueba los candidatos aplicables y **emite el más chico**; nunca
 supera el tamaño RAW (DEFLATE puede inflar datos incompresibles, en ese caso cae a RAW).
@@ -320,13 +323,16 @@ valores : k × bpc bytes    la tupla completa de la celda, en orden de planos (�
 
 `bpc` (bytes por celda) = PIXEL 1 · ASCII_BW 1 · ASCII_PAL 2 (char,colorIdx) ·
 ASCII_RGB 4 (char,R,G,B). El decoder deduce `k = len(raw) / (4 + bpc)`. Reconstrucción:
-copia el frame previo y sobreescribe las `k` celdas. **DELTA siempre va comprimido (zlib).**
+copia el frame previo y sobreescribe las `k` celdas en orden de payload; un offset repetido
+queda con su último valor. **DELTA siempre va comprimido (zlib).**
 
 ### 12.2 Keyframes y seek
 
-Un frame es **keyframe** si su tag ≠ DELTA (RAW/ZLIB, decodificable sin estado previo).
+Un frame es **keyframe** únicamente si su tag es RAW o ZLIB, decodificable sin estado
+previo. DELTA y DELTA_MASK dependen de la matriz mostrada anterior.
 El encoder fuerza uno cada `--keyint` frames (default `fps×2`). El reader, para ir al
-frame T, arranca en el último keyframe ≤ T y decodifica hacia adelante la cadena DELTA.
+frame T, arranca en el último keyframe ≤ T y decodifica hacia adelante la cadena
+DELTA/DELTA_MASK.
 Reproducción con audio: `frame = floor(audio.currentTime × fps)`; al saltar frames el
 reader solo decodifica la cadena mínima, **el audio nunca espera** (frames descartados).
 
