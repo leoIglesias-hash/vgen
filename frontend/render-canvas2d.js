@@ -39,6 +39,8 @@
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.imgData = null; this.rgba = null;
+    this._imageInit = false;
+    this._dirtyPutSupported = null;
     this.name = "canvas2d";
   }
 
@@ -56,6 +58,8 @@
       this.canvas.style.height = "auto";
       this.imgData = this.ctx.createImageData(h.cols, h.rows);
       this.rgba = this.imgData.data;
+      this._imageInit = false;
+      this._dirtyPutSupported = null;
     } else {
       // ASCII: tamaño de celda con correccion de aspecto
       this.cw = this.cellPx;
@@ -78,8 +82,50 @@
   Canvas2DRenderer.prototype.draw = function (reader) {
     var h = reader.header;
     if (h.mode === MODE_PIXEL) {
-      reader.fillRGBA(this.rgba);
-      this.ctx.putImageData(this.imgData, 0, 0);
+      var y0 = reader.dirtyY0, y1 = reader.dirtyY1;
+      var dirtyKnown = typeof y0 === "number" && isFinite(y0) && Math.floor(y0) === y0 &&
+                       typeof y1 === "number" && isFinite(y1) && Math.floor(y1) === y1;
+      var empty = dirtyKnown && y0 === h.rows && y1 === -1;
+      var dirtyValid = empty || (dirtyKnown && y0 >= 0 && y0 < h.rows &&
+        y1 >= y0 && y1 < h.rows);
+      var full = !this._imageInit || reader.dirtyFull || !dirtyKnown ||
+                 !dirtyValid;
+
+      // Solo rows/-1 es el sentinel acordado para un cuadro exactamente repetido.
+      // Cualquier otro rango invertido o fuera del frame se trata como no confiable.
+      if (!full && empty) return;
+      if (!full && typeof reader.fillRGBAChanged !== "function" &&
+          typeof reader.fillRGBARows !== "function") full = true;
+
+      // El primer cuadro, un keyframe/cambio de paleta o metadata dirty no confiable
+      // reconstruyen todo. fillRGBA conserva compatibilidad con lectores anteriores.
+      if (full) {
+        reader.fillRGBA(this.rgba);
+        this.ctx.putImageData(this.imgData, 0, 0);
+        this._imageInit = true;
+      } else if (y1 >= y0) {
+        // ImageData y su backing RGBA se crean una sola vez. El reader nuevo
+        // convierte celdas exactas; el fallback convierte la banda inclusiva.
+        if (typeof reader.fillRGBAChanged === "function") {
+          reader.fillRGBAChanged(this.rgba);
+        } else {
+          reader.fillRGBARows(this.rgba, y0, y1);
+        }
+        if (this._dirtyPutSupported === false) {
+          this.ctx.putImageData(this.imgData, 0, 0);
+        } else {
+          try {
+            this.ctx.putImageData(this.imgData, 0, 0, 0, y0, h.cols, y1 - y0 + 1);
+            this._dirtyPutSupported = true;
+          } catch (e) {
+            // Algunos Canvas 2D antiguos exponen putImageData pero no sus 7 argumentos.
+            // El buffer persistente ya contiene el frame correcto, por lo que el full
+            // put es un fallback exacto y la excepcion no se repite en frames siguientes.
+            this._dirtyPutSupported = false;
+            this.ctx.putImageData(this.imgData, 0, 0);
+          }
+        }
+      } // y1 < y0: cuadro repetido, no hay conversion ni escritura al canvas.
       return;
     }
     // ASCII con glifos
@@ -101,6 +147,15 @@
         ctx.fillText(glyph, c * cw, r * ch);
       }
     }
+  };
+
+  Canvas2DRenderer.prototype.dispose = function () {
+    this.imgData = null;
+    this.rgba = null;
+    this.reader = null;
+    this.ctx = null;
+    this.canvas = null;
+    this._imageInit = false;
   };
 
   root.Canvas2DRenderer = Canvas2DRenderer;

@@ -4,6 +4,10 @@ Estado: propuesta técnica para prototipo. Esta versión no reemplaza ASCL v1: e
 reader nuevo debe leer ambas versiones y el procesador conserva salida v1 durante la
 transición.
 
+Los opcodes y el envelope de este documento todavía no están congelados. V2-00 debe
+comparar primero las alternativas exactas y near-lossless descritas en
+`DISENO-PLANIFICADOR-REGIONAL-V2.md`; V2-01 actualizará este archivo con el resultado.
+
 ## 1. Objetivos y alcance
 
 1. Reducir bytes, RAM y CPU en reproducción, aceptando mayor costo offline.
@@ -20,7 +24,8 @@ Alcance mínimo:
 - tile fijo de 16x16 o 32x32 por clip;
 - comandos `REPEAT`, `SKIP`, `SOLID`, `SPARSE`, `PAL4`, `PAL8` y `ZLIB`;
 - offsets de 32 bits y archivos menores de 4 GiB;
-- `.asclv` conserva el envelope `ASCLVID1`; la versión está en el `.ascl` interior.
+- el envelope se decide en V2-01: `ASCLVID1` permanece intacto para v1 y el candidato v2
+  puede usar un directorio `ASCLVID2` con GOPs autocontenidos.
 
 Los modos ASCII continúan emitiéndose como v1. Mezclar tamaños de tile dentro de un
 clip, motion vectors, detección de objetos y packing de 5/6/7 bits quedan fuera del

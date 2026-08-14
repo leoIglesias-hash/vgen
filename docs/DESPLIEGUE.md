@@ -8,12 +8,36 @@ Hay dos roles bien separados. Podés hacer solo uno o los dos en la misma máqui
 
 Subir:
 - La carpeta `frontend/` completa: `player.html`, `inflate.js`, `reader.js`,
-  `render-webgl.js`, `render-canvas2d.js`.
+  `render-webgl.js`, `render-canvas2d.js`, `tv-player.html`, `tv-controller.js` y
+  `cache-refresh.js`.
 - Los archivos `.asclv` que quieras servir (de `outputs/`).
+
+Para `tv-player.html`, que conserva `DEFAULT_SRC="./outputs/clip.asclv"`, el layout URL
+debe ser explícito. La forma recomendada es publicar el contenido de `frontend/` en el
+directorio público y crear `outputs/` debajo de ese mismo directorio:
+
+```text
+public/
+|-- tv-player.html
+|-- tv-controller.js
+|-- cache-refresh.js
+|-- inflate.js
+|-- reader.js
+|-- render-canvas2d.js
+|-- render-webgl.js
+`-- outputs/
+    `-- clip.asclv
+```
+
+Si en cambio la URL es `/frontend/tv-player.html`, la ruta relativa apunta a
+`/frontend/outputs/clip.asclv`; hay que publicar el archivo allí o configurar ese mapeo
+en PHP/Apache. No es necesario renombrar el artefacto local: `clip.asclv` es solo el
+nombre estable con el que se publica.
 
 Sirve con **cualquier** servidor de archivos estáticos: nginx, Apache, Caddy,
 GitHub Pages, Netlify, Vercel, Amazon S3 + CloudFront, etc. No hace falta Python
-ni ffmpeg ni base de datos. Incluso `python -m http.server` alcanza para probar.
+ni ffmpeg ni base de datos. El servidor PHP/Apache existente es suficiente: no se
+incluye ni se exige un servidor auxiliar del proyecto.
 
 Recomendado (no obligatorio) para rendimiento y cache en webviews:
 - Servir los `.asclv` con compresión de transporte: `gzip` (universal) o `brotli`.
@@ -23,13 +47,16 @@ Recomendado (no obligatorio) para rendimiento y cache en webviews:
 - Si el player usa una URL estable que se reemplaza, como `outputs/clip.asclv`, no usar
   `immutable`: enviar `ETag` o `Last-Modified` con `Cache-Control: public, no-cache`. El
   navegador conserva el cuerpo, pero revalida y puede recibir `304`.
+- El menú técnico del TV rota un query token y solicita `no-cache` para renovar esa URL.
+  No elimina entradas anteriores de la caché global; su expulsión depende del WebView y
+  del servidor.
 - Enviar `Content-Type: application/octet-stream` y `Content-Length`. XHR no garantiza
   persistencia por sí solo: la política real la determinan estas cabeceras y el WebView.
 
 Ejemplo nginx mínimo:
 ```
 location / {
-    root /var/www/asciline/frontend;
+    root /var/www/asciline/public;
     types { application/octet-stream asclv; }
     gzip on;
     gzip_types application/octet-stream;

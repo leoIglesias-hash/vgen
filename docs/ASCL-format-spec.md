@@ -168,6 +168,11 @@ Los planos se **concatenan** en el orden de §3 y forman el "payload crudo". Lue
 | 2 | `DELTA` | `zlib( índices_celdas_cambiadas[uint32 LE] ++ valores )` respecto al frame mostrado anterior | **video** (Fase 3); estático/poco movimiento. Plano de carácter siempre exacto |
 | 3 | `DELTA_MASK` | `zlib( máscara_bits[1 bit/celda, LSB-first, ceil(N/8) bytes] ++ valores_celdas_cambiadas )` respecto al frame anterior | **video**; gana mientras cambie <~87,5% de la imagen (mucho más barato que tag 2 en alto movimiento). El encoder elige el menor entre RAW/ZLIB/DELTA/DELTA_MASK |
 
+En `DELTA` (tag 2), los índices son canónicos: deben estar estrictamente ordenados de
+menor a mayor y no pueden repetirse. Esto permite validar completamente el payload antes
+de mutar la matriz y hace determinista su representación. El encoder oficial siempre los
+emite en ese orden; un reader puede rechazar un DELTA que incumpla esta regla.
+
 El encoder, por frame, prueba los candidatos aplicables y **emite el más chico**; nunca
 supera el tamaño RAW (DEFLATE puede inflar datos incompresibles, en ese caso cae a RAW).
 Esto es la misma estrategia del codec original de ASCILINE, reusada (D9).
@@ -343,8 +348,8 @@ global+DELTA ≈ 126 KB (57/60 frames en DELTA). ASCII_PAL global 160×45 ≈ 71
 
 | Archivo | Rol |
 |---|---|
-| `inflate.js` | inflate DEFLATE/zlib propio (para tag ZLIB/DELTA en webviews viejos) |
-| `reader.js` | parser .ascl + decode RAW/ZLIB/DELTA + seek por keyframes + `fillRGBA` |
+| `inflate.js` | inflate DEFLATE/zlib propio (para ZLIB/DELTA/DELTA_MASK en webviews viejos) |
+| `reader.js` | parser .ascl + decode RAW/ZLIB/DELTA/DELTA_MASK + seek por keyframes + `fillRGBA` |
 | `render-webgl.js` | WebGL 1.0: textura RGBA + quad (NEAREST). Fallback a Canvas2D si `getContext` es null |
 | `render-canvas2d.js` | Canvas2D: mosaico (ImageData+nearest) y glifos ASCII (`fillText`) |
 | `player.html` | player: file pickers, selector de renderer, audio como reloj maestro |

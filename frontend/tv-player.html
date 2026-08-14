@@ -21,6 +21,21 @@
     border:1px solid #666; color:#ddd; background:#111; background:rgba(12,12,12,.82);
     font:13px Arial,Helvetica,sans-serif; cursor:pointer; }
   #download:focus{ border-color:#fff; color:#fff; outline:2px solid #777; }
+  #techHotspot{ position:absolute; z-index:7; left:0; bottom:0; width:42px; height:42px;
+    padding:0; border:0; color:#fff; background:transparent; opacity:.06;
+    font:22px Arial,Helvetica,sans-serif; cursor:pointer; }
+  #techHotspot:focus,#techHotspot.active{ opacity:.55; outline:1px solid #777; }
+  #techMenu{ display:none; position:absolute; z-index:8; left:10px; bottom:10px;
+    width:310px; max-width:82%; padding:13px; color:#ddd;
+    background:#111; background:rgba(12,12,12,.88); border:1px solid #666;
+    font:13px/1.35 Arial,Helvetica,sans-serif; }
+  #techMenu.open{ display:block; }
+  #techTitle{ margin-bottom:9px; color:#fff; font-size:15px; }
+  #refreshVideo,#closeTechMenu{ display:block; box-sizing:border-box; width:100%;
+    margin:0 0 8px; padding:9px; border:1px solid #777; color:#fff;
+    background:#222; font:13px Arial,Helvetica,sans-serif; cursor:pointer; }
+  #refreshVideo:focus,#closeTechMenu:focus{ outline:2px solid #aaa; }
+  #techNote{ color:#aaa; }
   .playing #message{ display:none; }
   .error #panel{ border-color:#b33; color:#ffd8d8; }
 </style>
@@ -34,6 +49,13 @@
     <span id="detail">ASCILINE TV</span>
   </div></div>
 </div>
+<button id="techHotspot" type="button" aria-label="Abrir menu tecnico" title="Menu tecnico">&#8942;</button>
+<div id="techMenu" role="dialog" aria-label="Actualizacion del video" aria-hidden="true">
+  <div id="techTitle">Actualizaci&oacute;n del video</div>
+  <button id="refreshVideo" type="button">Limpiar cach&eacute; / descargar de nuevo</button>
+  <button id="closeTechMenu" type="button">Ocultar men&uacute;</button>
+  <div id="techNote">Renueva solamente este archivo ASCLV. No borra la cach&eacute; global del TV.</div>
+</div>
 <audio id="audio" preload="auto" style="display:none"></audio>
 
 <script src="inflate.js"></script>
@@ -41,24 +63,34 @@
 <script src="render-canvas2d.js"></script>
 <script src="render-webgl.js"></script>
 <script src="tv-controller.js"></script>
+<script src="cache-refresh.js"></script>
 <script>
 (function(){
   "use strict";
 
   /* Ruta relativa del servidor PHP. El archivo local conserva su nombre original. */
-  var DEFAULT_SRC="./output/clip.asclv";
+  var DEFAULT_SRC="./outputs/clip.asclv";
   var FLAG_RECON_SOFT=16;
   var stage=document.getElementById("stage");
   var cv=document.getElementById("cv");
   var audio=document.getElementById("audio");
   var downloadButton=document.getElementById("download");
+  var techHotspot=document.getElementById("techHotspot");
+  var techMenu=document.getElementById("techMenu");
+  var refreshVideoButton=document.getElementById("refreshVideo");
+  var closeTechMenuButton=document.getElementById("closeTechMenu");
   var headline=document.getElementById("headline");
   var detail=document.getElementById("detail");
   var reader=null, renderer=null, ready=false, playing=false, hasAudio=false;
   var lastShown=-1, startT=0, raf=0, rendererName="";
+  var activeReconstruction="nearest";
+  var rendererEventCanvas=null, rendererContextLostHandler=null;
+  var rendererEventLegacy=false;
   var audioObjectURL=null;
   var activeXHR=null;
   var lastDownloadTouch=-1;
+  var techMenuVisible=false;
+  var cacheStorage=null;
   var urlAPI=window.URL || window.webkitURL;
   var perf=window.performance;
   var now=(perf && typeof perf.now==="function") ?
@@ -78,11 +110,32 @@
   var source=DEFAULT_SRC;
   var requestedRenderer=qs("renderer") || "auto";
   var loopEnabled=qs("loop") !== "0";
+  try { cacheStorage=window.localStorage || null; } catch(ignoredStorage) { cacheStorage=null; }
+  var cacheTokens=window.ASCILINECacheRefresh.createTokenStore({
+    source:source,
+    storage:cacheStorage,
+    storageKey:"ASCILINE_ASCLV_REFRESH_V1"
+  });
+  var hotspotGesture=new window.ASCILINECacheRefresh.GestureGuard(800);
+  var refreshGesture=new window.ASCILINECacheRefresh.GestureGuard(800);
+  var closeGesture=new window.ASCILINECacheRefresh.GestureGuard(800);
 
   function setMessage(title, text, isError){
     headline.innerHTML=title;
     detail.innerHTML=text || "";
     stage.className=isError ? "error" : "";
+  }
+
+  function showTechMenu(show){
+    techMenuVisible=!!show;
+    techMenu.className=techMenuVisible ? "open" : "";
+    techMenu.setAttribute("aria-hidden",techMenuVisible ? "false" : "true");
+    techHotspot.className=techMenuVisible ? "active" : "";
+    if(techMenuVisible){
+      try { refreshVideoButton.focus(); } catch(ignored) {}
+    } else {
+      try { stage.focus(); } catch(ignoredFocus) {}
+    }
   }
 
   function makeBlob(parts,type){
@@ -111,21 +164,136 @@
     hasAudio=true;
   }
 
+  function releaseAudio(){
+    try { audio.pause(); } catch(ignoredPause) {}
+    try { audio.removeAttribute("src"); } catch(ignoredAttribute) { audio.src=""; }
+    try { if(audio.load){ audio.load(); } } catch(ignoredLoad) {}
+    if(audioObjectURL && urlAPI && urlAPI.revokeObjectURL){
+      try { urlAPI.revokeObjectURL(audioObjectURL); } catch(ignoredURL) {}
+    }
+    audioObjectURL=null;
+    hasAudio=false;
+  }
+
+  function detachRendererEvents(){
+    var watched=rendererEventCanvas, handler=rendererContextLostHandler;
+    if(watched && handler){
+      try {
+        if(rendererEventLegacy && watched.detachEvent){
+          watched.detachEvent("onwebglcontextlost",handler);
+        } else if(watched.removeEventListener){
+          watched.removeEventListener("webglcontextlost",handler,false);
+        }
+      } catch(ignoredDetach) {}
+    }
+    rendererEventCanvas=null;
+    rendererContextLostHandler=null;
+    rendererEventLegacy=false;
+  }
+
+  function disposeRenderer(releaseContext){
+    var previous=renderer;
+    detachRendererEvents();
+    renderer=null;
+    if(previous && typeof previous.dispose==="function"){
+      try { previous.dispose(releaseContext===true); } catch(ignoredDispose) {}
+    }
+  }
+
   function freshCanvas(){
     var old=cv, replacement=document.createElement("canvas");
     replacement.id="cv";
+    /* Reducir el backing store antes de retirar el nodo ayuda a liberar RAM/GPU
+       incluso en WebViews que demoran la recoleccion del objeto canvas. */
+    try { old.width=1; old.height=1; } catch(ignoredBackingStore) {}
+    replacement.width=1;
+    replacement.height=1;
     old.parentNode.replaceChild(replacement,old);
     cv=replacement;
   }
 
+  function discardLoadedVideo(){
+    /* El canvas viejo puede conservar el contexto y el renderer puede conservar
+       buffers RGBA. Al cortar todas las referencias antes de la nueva XHR no
+       coexistiran intencionalmente dos videos completos en memoria. */
+    disposeRenderer(true);
+    reader=null;
+    lastShown=-1;
+    rendererName="";
+    freshCanvas();
+  }
+
+  function fallbackToCanvas(contextAlreadyLost){
+    var instance=null;
+    if(!reader){ throw new Error("No hay un frame decodificado para Canvas"); }
+    disposeRenderer(contextAlreadyLost!==true);
+    freshCanvas();
+    try {
+      instance=new window.Canvas2DRenderer(cv);
+      instance.init(reader,1,activeReconstruction);
+      renderer=instance;
+      rendererName="canvas2d";
+      /* Un Canvas nuevo siempre reconstruye completo desde las celdas actuales,
+         aunque el reader conserve metadata dirty parcial del ultimo frame. */
+      instance.draw(reader);
+      fitCanvas();
+    } catch(error){
+      if(instance && typeof instance.dispose==="function"){
+        try { instance.dispose(); } catch(ignoredCanvasDispose) {}
+      }
+      renderer=null;
+      rendererName="";
+      throw error;
+    }
+    return true;
+  }
+
+  function attachRendererEvents(){
+    var watched;
+    detachRendererEvents();
+    if(rendererName!=="webgl" || !cv){ return; }
+    watched=cv;
+    rendererContextLostHandler=function(event){
+      event=event || window.event;
+      if(watched!==cv || rendererName!=="webgl"){ return; }
+      if(event && event.preventDefault){ event.preventDefault(); }
+      else if(event){ event.returnValue=false; }
+      try { fallbackToCanvas(true); }
+      catch(error){ renderFailure(error); }
+    };
+    try {
+      if(watched.addEventListener){
+        watched.addEventListener("webglcontextlost",rendererContextLostHandler,false);
+      } else if(watched.attachEvent){
+        rendererEventLegacy=true;
+        watched.attachEvent("onwebglcontextlost",rendererContextLostHandler);
+      } else {
+        rendererContextLostHandler=null;
+        return;
+      }
+    } catch(ignoredContextEvent){
+      rendererContextLostHandler=null;
+      rendererEventLegacy=false;
+      return;
+    }
+    rendererEventCanvas=watched;
+  }
+
   function chooseRenderer(reconstruction){
     var instance=null;
+    activeReconstruction=reconstruction;
+    disposeRenderer(true);
     freshCanvas();
     function tryWebGL(){
+      var webgl=null;
       try {
-        var webgl=new window.WebGLRenderer(cv);
-        return webgl.init(reader,1,reconstruction) ? webgl : null;
-      } catch(error){ return null; }
+        webgl=new window.WebGLRenderer(cv);
+        if(webgl.init(reader,1,reconstruction)){ return webgl; }
+      } catch(error) {}
+      if(webgl && typeof webgl.dispose==="function"){
+        try { webgl.dispose(true); } catch(ignoredWebGLDispose) {}
+      }
+      return null;
     }
     if(requestedRenderer==="canvas2d"){
       instance=new window.Canvas2DRenderer(cv);
@@ -144,6 +312,7 @@
       }
     }
     renderer=instance;
+    attachRendererEvents();
   }
 
   function viewportSize(){
@@ -166,13 +335,49 @@
     cv.style.marginTop=(-Math.round(height/2))+"px";
   }
 
+  function drawCurrent(){
+    var attempted=renderer, attemptedName=rendererName;
+    try {
+      attempted.draw(reader);
+      return true;
+    } catch(error){
+      /* La decodificacion es unica. Si falla la salida GPU, Canvas recibe las
+         mismas celdas del mismo frame sin reiniciar audio ni reloj. */
+      if(attemptedName==="webgl"){
+        /* Algunos motores entregan contextlost dentro de la llamada GL. Si su
+           handler ya completo el fallback, la excepcion pertenece al contexto
+           viejo y no debe detener el Canvas nuevo. */
+        if(renderer!==attempted && rendererName==="canvas2d"){ return true; }
+        fallbackToCanvas(false);
+        return true;
+      }
+      throw error;
+    }
+  }
+
+  function renderFailure(error){
+    stop(false);
+    setMessage("No se pudo dibujar el video",
+      error && error.message ? error.message : "Canvas no disponible",true);
+    return false;
+  }
+
+  function seekAndDraw(index){
+    try {
+      reader.seek(index);
+      drawCurrent();
+      lastShown=index;
+      return true;
+    } catch(error){ return renderFailure(error); }
+  }
+
   function openAscl(buffer,offset,length){
     reader=window.ASCL.parse(buffer,offset,length);
     var reconstruction=(reader.header.flags & FLAG_RECON_SOFT) ? "soft" : "nearest";
     chooseRenderer(reconstruction);
     reader.decodedIndex=-1;
     reader.seek(0);
-    renderer.draw(reader);
+    drawCurrent();
     lastShown=0;
     ready=true;
     downloadButton.style.display="none";
@@ -229,9 +434,7 @@
       try { audio.currentTime=0; } catch(ignored) {}
     }
     reader.decodedIndex=-1;
-    reader.seek(0);
-    renderer.draw(reader);
-    lastShown=0;
+    return seekAndDraw(0);
   }
 
   function loop(){
@@ -241,19 +444,16 @@
     count=reader.header.nFrames;
     if(target>=count){
       if(loopEnabled && !hasAudio){
-        restart(); startT=now(); target=0;
+        if(!restart()){ return; }
+        startT=now(); target=0;
       } else if(!hasAudio){
-        reader.seek(count-1);
-        renderer.draw(reader);
-        lastShown=count-1;
+        if(!seekAndDraw(count-1)){ return; }
         stop(true);
         return;
       } else { target=count-1; }
     }
     if(target!==lastShown){
-      reader.seek(target);
-      renderer.draw(reader);
-      lastShown=target;
+      if(!seekAndDraw(target)){ return; }
     }
     raf=requestFrame(loop);
   }
@@ -270,7 +470,9 @@
       return null;
     }
     if(playing){ return null; }
-    if(lastShown>=reader.header.nFrames-1 || (hasAudio && audio.ended)){ restart(); }
+    if(lastShown>=reader.header.nFrames-1 || (hasAudio && audio.ended)){
+      if(!restart()){ return null; }
+    }
     playing=true;
     stage.className="playing";
     startT=now()-(lastShown/reader.header.fps)*1000;
@@ -324,8 +526,16 @@
     else { event.returnValue=false; }
   }
 
-  function beginDownload(manual){
-    var xhr, previous;
+  function releaseXHRHandlers(xhr){
+    if(!xhr){ return; }
+    try { xhr.onprogress=null; } catch(ignoredProgressHandler) {}
+    try { xhr.onload=null; } catch(ignoredLoadHandler) {}
+    try { xhr.onerror=null; } catch(ignoredErrorHandler) {}
+    try { xhr.onabort=null; } catch(ignoredAbortHandler) {}
+  }
+
+  function beginDownload(manual,forceRefresh){
+    var xhr, previous, requestSource;
     if(!window.XMLHttpRequest){
       setMessage("Este navegador no ofrece carga binaria XHR","No puede abrir ASCLV",true);
       return;
@@ -334,56 +544,94 @@
       previous=activeXHR;
       activeXHR=null;
       try { previous.abort(); } catch(ignored) {}
+      releaseXHRHandlers(previous);
     }
+    requestSource=cacheTokens.url(forceRefresh===true);
     xhr=new XMLHttpRequest();
     activeXHR=xhr;
     if(manual){
-      setMessage("Iniciando descarga&hellip;","Solicitada desde el control remoto",false);
+      setMessage(forceRefresh ? "Actualizando video&hellip;" : "Iniciando descarga&hellip;",
+        forceRefresh ? "Renovando solamente este archivo ASCLV" :
+          "Solicitada desde el control remoto",false);
     }
     try {
-      xhr.open("GET",source,true);
+      xhr.open("GET",requestSource,true);
       xhr.responseType="arraybuffer";
+      if(forceRefresh && xhr.setRequestHeader){
+        try { xhr.setRequestHeader("Cache-Control","no-cache"); } catch(ignoredCacheHeader) {}
+        try { xhr.setRequestHeader("Pragma","no-cache"); } catch(ignoredPragmaHeader) {}
+      }
     } catch(error){
       if(activeXHR===xhr){ activeXHR=null; }
+      releaseXHRHandlers(xhr);
       setMessage("El navegador no puede descargar ASCLV binario",
         error.message || "XHR ArrayBuffer no disponible",true);
       return;
     }
     xhr.onprogress=function(event){
-      if(activeXHR!==xhr){ return; }
+      if(activeXHR!==xhr){ releaseXHRHandlers(xhr); return; }
       if(event && event.lengthComputable && event.total>0){
         setMessage("Cargando video&hellip; "+Math.round(event.loaded*100/event.total)+"%",
           "Quedar&aacute; cacheado por el navegador",false);
       }
     };
     xhr.onload=function(){
-      if(activeXHR!==xhr){ return; }
+      var status, response, contentType="";
+      if(activeXHR!==xhr){ releaseXHRHandlers(xhr); return; }
+      status=xhr.status;
+      response=xhr.response;
+      if(xhr.getResponseHeader){
+        try { contentType=xhr.getResponseHeader("Content-Type") || ""; }
+        catch(ignoredResponseHeader) {}
+      }
       activeXHR=null;
-      if((xhr.status>=200 && xhr.status<300) || xhr.status===0){
+      releaseXHRHandlers(xhr);
+      if((status>=200 && status<300) || status===0){
         try {
-          if(!xhr.response || typeof xhr.response.byteLength!=="number"){
+          if(!response || typeof response.byteLength!=="number"){
             throw new Error("El navegador no entrego un ArrayBuffer");
           }
-          loadData(xhr.response,xhr.getResponseHeader ?
-            xhr.getResponseHeader("Content-Type") : "");
+          loadData(response,contentType);
         }
-        catch(error){ setMessage("No se pudo abrir el ASCLV",error.message,true); }
+        catch(error){
+          stop(false);
+          ready=false;
+          releaseAudio();
+          discardLoadedVideo();
+          downloadButton.style.display="block";
+          setMessage("No se pudo abrir el ASCLV",error.message,true);
+        }
       } else {
-        setMessage("No se pudo cargar el video","HTTP "+xhr.status+" &middot; "+source,true);
+        setMessage("No se pudo cargar el video","HTTP "+status+" &middot; "+source,true);
       }
     };
     xhr.onerror=function(){
-      if(activeXHR!==xhr){ return; }
+      if(activeXHR!==xhr){ releaseXHRHandlers(xhr); return; }
       activeXHR=null;
+      releaseXHRHandlers(xhr);
       setMessage("No se pudo cargar el video",
         "Us&aacute; Iniciar descarga y verific&aacute; que exista "+source,true);
     };
-    xhr.onabort=function(){ if(activeXHR===xhr){ activeXHR=null; } };
+    xhr.onabort=function(){
+      if(activeXHR===xhr){ activeXHR=null; }
+      releaseXHRHandlers(xhr);
+    };
     try { xhr.send(); }
     catch(error){
       if(activeXHR===xhr){ activeXHR=null; }
+      releaseXHRHandlers(xhr);
       setMessage("No se pudo iniciar la descarga",error.message || source,true);
     }
+  }
+
+  function refreshCurrentVideo(){
+    stop(false);
+    ready=false;
+    releaseAudio();
+    discardLoadedVideo();
+    downloadButton.style.display="block";
+    showTechMenu(false);
+    beginDownload(true,true);
   }
 
   downloadButton.onclick=function(event){
@@ -401,6 +649,48 @@
     beginDownload(true);
     return false;
   };
+
+  function handleHotspot(event){
+    event=event || window.event;
+    stopButtonEvent(event);
+    if(!hotspotGesture.accept(event.type,now())){ return false; }
+    showTechMenu(!techMenuVisible);
+    return false;
+  }
+
+  function handleRefresh(event){
+    event=event || window.event;
+    stopButtonEvent(event);
+    if(!refreshGesture.accept(event.type,now())){ return false; }
+    refreshCurrentVideo();
+    return false;
+  }
+
+  function handleCloseTechMenu(event){
+    event=event || window.event;
+    stopButtonEvent(event);
+    if(!closeGesture.accept(event.type,now())){ return false; }
+    showTechMenu(false);
+    return false;
+  }
+
+  function handleTechKey(event){
+    event=event || window.event;
+    if(!window.ASCILINECacheRefresh.isMenuKey(event)){ return; }
+    stopButtonEvent(event);
+    showTechMenu(!techMenuVisible);
+  }
+
+  techHotspot.onclick=handleHotspot;
+  techHotspot.ontouchend=handleHotspot;
+  refreshVideoButton.onclick=handleRefresh;
+  refreshVideoButton.ontouchend=handleRefresh;
+  closeTechMenuButton.onclick=handleCloseTechMenu;
+  closeTechMenuButton.ontouchend=handleCloseTechMenu;
+  techMenu.onclick=stopButtonEvent;
+  techMenu.ontouchend=stopButtonEvent;
+  if(document.addEventListener){ document.addEventListener("keydown",handleTechKey,false); }
+  else if(document.attachEvent){ document.attachEvent("onkeydown",handleTechKey); }
 
   beginDownload(false);
 }());

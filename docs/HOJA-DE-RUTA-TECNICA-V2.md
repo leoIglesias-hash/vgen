@@ -230,29 +230,89 @@ posibles sobre v1.
 ### Gate
 
 - CRC de `cells` y salida RGBA idénticos a la implementación vigente;
-- cero buffers o arrays proporcionales al frame en estado estable, memoria acotada y sin
-  crecimiento entre loops;
+- cero asignaciones o buffers transitorios proporcionales por frame; inventario
+  persistente fijo/acotado y sin crecimiento entre loops;
 - p95 sin regresión mayor a 5%;
 - reducción >=20% del pico transitorio de inflate en el equipo más lento;
 - cambios de paleta y keyframes fuerzan actualización completa;
 - fallback WebGL→Canvas conserva frame y reloj de audio.
 
-## 9. V2-00/01/02 — oracle, formato congelado y referencia Python
+### Estado local 2026-08-14
+
+Implementado sobre v1, pendiente de VAL-001 físico:
+
+- offsets por `DataView`, keyframes en bitset y reader/CRC defensivo;
+- inflate tipado reutilizable y adaptativo: HQ usa 331.776 B de scratch frente a un
+  límite defensivo de 1.658.880 B;
+- bitset de una celda por bit y conversión RGBA exacta para DELTA/MASK;
+- mismo dirty state en Canvas2D/WebGL1, sentinel vacío sin draw y fallback legacy;
+- contexto WebGL liviano, `MAX_TEXTURE_SIZE`, probes iniciales y fallback en playback;
+- liberación explícita de reader, audio, Canvas y GPU antes de renovar la descarga.
+
+En HQ 768 las bandas por sí solas solo evitaban 0,44% de filas por dispersión espacial.
+El bitset exacto evitó 46,14% de conversiones y redujo aproximadamente 19% la etapa de
+conversión y 4,7% decode+conversión en Node. No se extrapola a GPU ni TV. Dirty tiles v2
+siguen siendo necesarios para reducir uploads cuando el contenido sea regional.
+
+## 9. V2-00/01/02 — planificador regional, formato congelado y referencia Python
 
 Objetivo: demostrar tiles usando la matriz final aprobada, sin volver a cuantizar,
-suavizar ni aplicar dither. La especificación está en `DISENO-ASCL-V2-TILES.md`.
+suavizar ni aplicar dither. La representación base está en `DISENO-ASCL-V2-TILES.md` y
+la selección exacta/near-lossless en `DISENO-PLANIFICADOR-REGIONAL-V2.md`.
 
-### V2-00 — oracle experimental, sin formato público
+### V2-00 — planificador regional experimental, sin formato público
 
-Primero se implementa un comparador en memoria. No emite todavía archivos que se declaren
-v2 estables y puede probar tiles 8/16/32 para descartar opciones. Candidatos mínimos:
+Primero se implementa un planificador determinista en memoria. No emite todavía archivos
+que se declaren v2 estables y puede probar tiles 8/16/32 para descartar opciones. Separa
+dos decisiones que no deben mezclarse:
 
-- `REPEAT`, `SKIP`, `SOLID`, `SPARSE`, `PAL4` y `PAL8`;
+1. un planificador perceptual temporal produce la matriz que realmente se mostrará; en
+   modo lossless es idéntica al objetivo y en modo con pérdida aplica límites explícitos;
+2. un empaquetador regional lossless representa la transición elegida con el menor costo
+   real de bytes, escrituras e inflate.
+
+Los candidatos exactos mínimos son:
+
+- `REPEAT`, `SKIP`, `SOLID`, `SPARSE`, `MASK`, `PACK1`, `PACK2`, `PAL4` y `PAL8`;
 - DELTA_MASK v1 como baseline;
 - candidato `MASK_ZLIB` (`mask_bits || changed_values`) para movimiento amplio;
 - keyframe ZLIB completo después de disponer de inflate directo.
 
-El oracle registra:
+El encoder compara bytes reales. En un tile 16x16, `SPARSE` es apropiado para pocos
+cambios, `MASK` para densidad intermedia, `PACK1/2/4` cuando hay 2/4/16 índices locales y
+`PAL8` cuando casi todo el tile cambia. Tiles adyacentes con una misma decisión pueden
+fusionarse offline en corridas o rectángulos; el decoder no recibe árboles ni ejecuta
+búsqueda visual.
+
+El modo temporal con pérdida queda apagado por defecto. No usa un porcentaje RGB global.
+Compara cada celda objetivo contra el último color realmente emitido en Oklab y mantiene,
+por tile, media, p95, máximo, edad y deuda temporal. Se fuerza una actualización por error
+máximo, deuda, `max_hold_frames`, corte fuerte, bordes nuevos o riesgo de mesetas en un
+degradado. El control propuesto como 2% se expone como perfil configurable, pero se traduce
+a límites perceptuales separados y se calibra con VAL-002 antes de fijar un default.
+
+Experimentos adicionales, sin reservar todavía opcodes:
+
+- `HOLD_TICKS`: una sola muestra con duración entera para matrices idénticas consecutivas.
+  Reduce tabla, decode y llamadas de render sin alterar la imagen ni el audio;
+- `TILE_DICT`: diccionario acotado de patrones de tile que reaparecen en cuadros no
+  consecutivos. El encoder usa hashes exactos, no detección de objetos;
+- `PAL_PATCH`: conservar IDs estables y transmitir solo entradas de paleta modificadas.
+  Incluye las corridas sucias para que Canvas regenere solo las regiones afectadas y solo
+  avanza si el ahorro compensa ese trabajo;
+- `REMAP_RECT`: aplicar pocas parejas `índice anterior -> índice nuevo` dentro de un
+  rectángulo. Se descarta si escanear el área cuesta más que escribirla directamente;
+- FPS por segmentos como modo con pérdida explícito: un máximo editable y duraciones en
+  ticks permiten ahorrar cuadros en escenas lentas sin reducir el máximo de escenas que
+  sí necesitan movimiento. Se evalúa después del camino lossless `HOLD_TICKS`.
+
+Conceptos de WebP que se estudian sin incorporar un decoder WebP: selección local por
+bloques, paletas de 1/2/4 bits, predictores espaciales simples y preprocesamiento
+`near-lossless` exclusivamente offline. No se trasladan VP8/DCT, YUV420, motion vectors,
+loop filter, un entropy coder nuevo ni ZLIB independiente por tile: aumentarían CPU, RAM
+y superficie de errores en los navegadores que gobiernan la compatibilidad.
+
+El planificador registra:
 
 ```text
 stored_bytes
@@ -261,15 +321,21 @@ inflated_bytes
 unpack_operations
 dirty_tiles
 keyframe_penalty
+delta_ok_mean_p95_max
+temporal_debt
+max_hold_age
+refresh_jump
 ```
 
-Gate: reducción mediana de payload >=10% sin casos >3% mayores, o reducción >=20% de
-escrituras para un perfil especializado. Si no se alcanza, se revisan candidatos antes
-de congelar ningún byte del formato.
+Gate lossless: CRC de matriz idéntico por frame y reducción mediana de payload >=10% sin
+casos >3% mayores, o reducción >=20% de escrituras para un perfil especializado. Gate
+lossy: además, ninguna región excede media/p95/máximo, deuda, edad o salto configurados;
+los cortes fuertes son inmediatos y el proxy de banding no retrocede. Si no se alcanza,
+se revisan candidatos antes de congelar ningún byte del formato.
 
 ### V2-01 — decisiones binarias y fixtures dorados
 
-Con la evidencia del oracle se cierran:
+Con la evidencia del planificador se cierran:
 
 1. header, keymap, límites, tile sizes y opcodes;
 2. si `MASK_ZLIB` es opcode normativo —por ejemplo `0x07`, único comando del delta— o
@@ -278,7 +344,10 @@ Con la evidencia del oracle se cierran:
    `VIDO/AUDI/SLOT/META`; `ASCLVID1` permanece intacto para bundles v1;
 4. CRC de metadata (header/offsets/keymap) y CRC por frame o GOP, verificables antes de
    mutar `cells` tras una lectura Range;
-5. offsets uint32 y límite v2 explícito menor a 4 GiB.
+5. GOPs autocontenidos, iniciados por keyframe y con directorio al comienzo. La descarga
+   normal puede acumular todos los GOP sin perder datos; Range futuro puede pedirlos por
+   separado usando la misma estructura;
+6. offsets uint32 y límite v2 explícito menor a 4 GiB.
 
 Recién entonces se generan fixtures binarios dorados y se actualiza
 `DISENO-ASCL-V2-TILES.md` como especificación congelada.
@@ -287,7 +356,7 @@ Recién entonces se generan fixtures binarios dorados y se actualiza
 
 Se implementa la especificación cerrada, con encoder canónico, decoder independiente,
 validación completa, keymap, seek y dirty union. Packing 5/6/7 bits queda fuera salvo
-que el oracle haya demostrado ganancia neta suficiente para justificarlo.
+que el planificador haya demostrado ganancia neta suficiente para justificarlo.
 
 ### Corpus de codec
 
@@ -326,8 +395,8 @@ no tenga semántica equivalente en Canvas2D.
 
 ### Gate JavaScript
 
-- cero buffers o arrays proporcionales al frame en estado estable y sin crecimiento entre
-  loops;
+- cero asignaciones o buffers transitorios proporcionales por frame; inventario
+  persistente fijo/acotado y sin crecimiento entre loops;
 - CRC idéntico a Python por frame/seek;
 - igualdad funcional Canvas2D/WebGL1;
 - regresión v1 completa;
@@ -422,6 +491,12 @@ afirmar que el límite de memoria quedó resuelto.
   mutable no debe servirse como `immutable`;
 - verificar `Content-Length`, `Accept-Ranges`, caché fría/caliente e invalidación.
 
+Estado local: `tv-player.html` ya permite renovar `./outputs/clip.asclv` desde un menú
+oculto. Libera la instancia anterior, rota un query token persistente y solicita
+`no-cache`, sin Service Worker ni `fetch`. No puede borrar la caché HTTP global y cada
+token anterior puede seguir almacenado; ETag/política PHP y la prueba fría/caliente siguen
+pendientes de CACHE-001.
+
 ### Límite de 4 GiB
 
 V2 acepta y valida tempranamente el límite `<4 GiB` porque usa offsets uint32. HTTP Range
@@ -459,9 +534,9 @@ IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso un
 | V1-01 | reader v1 endurecido | fixtures actuales | §6 |
 | V1-OPT-01 | selector offline | VAL-002 | §7 |
 | V1-OPT-02 | presupuesto dither en bytes | benchmark encoder | §7 |
-| V1-RUNTIME-01 | buffers y dirty regions v1 | V1-01,VAL-001 | §8 |
+| V1-RUNTIME-01 | buffers y dirty regions v1 | V1-01; cierre físico: VAL-001 | §8 |
 | V1-REL-01 | regenerar/promover 960 | VAL-001 | mismos gates físicos |
-| V2-00 | oracle experimental | V1-RUNTIME-01 | §9 |
+| V2-00 | planificador regional experimental | V1-RUNTIME-01 | §9 |
 | V2-01 | spec/envelope/CRC/fixtures dorados | V2-00 + requisitos de slots | §9 |
 | V2-02 | encoder/decoder Python | V2-01 | §9 |
 | V2-03 | ReaderV2 ES5 | V2-02 | §10 |
@@ -477,12 +552,16 @@ IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso un
 
 ## 16. Próxima sesión recomendada
 
-1. Ejecutar VAL-001 con los artefactos versionados; no cambiar el player productivo.
+1. Desplegar el frontend v1 endurecido y ejecutar VAL-001 con 640/768; 960 sigue techo.
 2. Construir VAL-002 y cerrar si estabilidad 0,25 es general o específica del TKN.
-3. Implementar V1-01 y congelar fixtures corruptos.
-4. Ejecutar V1-RUNTIME-01 para fijar el verdadero baseline de RAM/CPU.
-5. Ejecutar V2-00 sin prometer todavía un layout binario.
-6. Congelar V2-01 según el oracle y actualizar `DISENO-ASCL-V2-TILES.md`.
+3. Cerrar V1-01/V1-RUNTIME-01 con p50/p95, RAM y cuadros perdidos físicos; el código y
+   los fixtures defensivos ya están implementados localmente.
+4. Implementar V2-00-A: planificador regional lossless contra matrices v1 aprobadas,
+   sin emitir todavía un formato público.
+5. Implementar V2-00-B: near-lossless temporal, `PAL_PATCH` y `REMAP_RECT` detrás de los
+   límites y corpus de `DISENO-PLANIFICADOR-REGIONAL-V2.md`.
+6. Congelar V2-01 solo después de los gates físicos y del planificador, y actualizar
+   `DISENO-ASCL-V2-TILES.md`.
 7. Construir V2-02 en Python antes de autorizar ReaderV2.
 
 INT-001 puede diseñarse junto con el header v2, pero el runtime comienza cuando dirty tiles

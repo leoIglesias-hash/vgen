@@ -10,8 +10,11 @@ no calcula nada, solo sirve archivos estáticos.
 ASCILINE-video/
 ├── frontend/     # lo que corre en el navegador (SOLO esto para reproducir)
 │   ├── player.html
+│   ├── tv-player.html       # fullscreen y precarga con URL estable
+│   ├── tv-controller.js     # teclas/click y fullscreen con prefijos legacy
+│   ├── cache-refresh.js     # renovación compatible del ASCLV con el mismo nombre
 │   ├── inflate.js          # descompresor zlib propio (ES5)
-│   ├── reader.js           # parser .ascl + decode RAW/ZLIB/DELTA + seek
+│   ├── reader.js           # parser .ascl + RAW/ZLIB/DELTA/DELTA_MASK + seek
 │   ├── render-webgl.js     # renderer WebGL (rompe el techo de 360p)
 │   └── render-canvas2d.js  # fallback Canvas2D (mosaico + glifos ASCII)
 ├── backend/      # lo que CREA los archivos (Python, offline)
@@ -120,6 +123,8 @@ debe validarse nuevamente.
 - `docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md`: principios e invariantes.
 - `docs/ASCL-format-spec.md`: formato v1.
 - `docs/DISENO-ASCL-V2-TILES.md`: propuesta binaria v2.
+- `docs/DISENO-PLANIFICADOR-REGIONAL-V2.md`: selección píxel/máscara/bloque y
+  near-lossless temporal propuesto para v2.
 - `docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`: decisiones append-only.
 - `docs/BENCHMARK-V1-ADAPTATIVO-OKLAB.md`: evidencia de la versión actual.
 - `docs/DESPLIEGUE.md`: hosting y caché.
@@ -134,18 +139,38 @@ audio en un único archivo. El selector de MP3 externo se conserva solamente par
 un `.ascl` suelto/antiguo sin perder compatibilidad. El renderer va WebGL→Canvas2D solo;
 el audio es el reloj maestro (si el render se atrasa, descarta frames).
 
+El reader v1 evita arrays JavaScript por frame, valida la estructura y, cuando está
+presente/no nulo, el CRC antes de decodificar. Descomprime en un scratch tipado
+reutilizable. Los deltas conservan un
+bitset de celdas modificadas: Canvas2D y WebGL1 convierten únicamente esos índices al
+RGBA persistente y presentan la misma banda lógica. El formato y el `.asclv` no cambian.
+Una pérdida de contexto o un fallo WebGL durante playback degrada al mismo frame en
+Canvas2D sin reiniciar el reloj.
+
 ### Prueba directa en Smart TV
 
 `frontend/tv-player.html` es el frontend sin controles de laboratorio. Precarga
-la ruta relativa configurada en `DEFAULT_SRC`, ajusta el video a la pantalla sin
+`./outputs/clip.asclv`, ajusta el video a la pantalla sin
 deformarlo y entra
 en fullscreen/reproduce al presionar una tecla del `1` al `8` o al hacer click/toque.
 Incluye un boton pequeno **Iniciar descarga** para repetir manualmente la precarga desde
 un gesto del control remoto. Si la red falla, tanto ese boton como un nuevo click en la
 pantalla vuelven a intentar la descarga sin recargar la pagina.
 
+El menú técnico queda oculto. Se abre con la tecla `9` —también numpad y códigos modernos
+de control remoto— o con el hotspot transparente de la esquina inferior izquierda.
+**Limpiar caché / descargar de nuevo** libera primero reader, audio, Canvas y recursos GPU;
+después rota un token de consulta y solicita revalidación HTTP. Esto renueva solamente ese
+ASCLV: JavaScript no puede borrar la caché global ni sus entradas anteriores. En browsers
+legacy, `keyCode=9` se conserva como Tab y no abre el menú; el hotspot sigue disponible.
+Hay que desplegar `cache-refresh.js` junto con los demás archivos de frontend.
+
 El servidor PHP existente debe publicar el clip en esa ruta relativa. El archivo
 versionado conserva su nombre original; `clip.asclv` es solamente su nombre al subirlo.
+Como `./outputs/clip.asclv` se resuelve desde la URL del HTML, el despliegue recomendado
+pone los archivos de `frontend/` en el mismo directorio público que la carpeta
+`outputs/`. Si el HTML se publica como `/frontend/tv-player.html`, el clip debe existir
+en `/frontend/outputs/clip.asclv` o el servidor debe mapear esa ruta.
 La pagina tambien acepta:
 
 ```text
@@ -175,6 +200,9 @@ python ascl_decode.py /tmp/mi-video.ascl --mp4 /tmp/preview.mp4 # MP4 de control
 python -m unittest discover -s tests -v
 node tests/test_frontend_renderers.js
 node tests/test_reader_bundle_view.js
+node tests/test_reader_safety.js
+node tests/test_cache_refresh.js
 node tests/test_tv_controller.js
 node tests/test_tv_player_page.js
+node tests/test_tv_player_runtime.js
 ```

@@ -233,3 +233,119 @@ con presupuesto maximo de 5%; sus indices quedan horneados y no agregan CPU/GPU 
 
 Pendiente. No convertir los tiempos del decoder Python en una garantia de Smart TV;
 medir cuadros perdidos, CPU y RAM en Canvas2D y WebGL1 por familia de equipo.
+
+## Instancia 004 - Runtime v1 acotado, cambios exactos y renovación de caché
+
+Fecha: 2026-08-14.
+
+### Motivo y alcance
+
+Se optimizó el frontend para el candidato HQ 768 sin volver a codificarlo y sin cambiar
+ASCL v1. El objetivo fue reducir asignaciones, trabajo de conversión y retención de
+recursos, manteniendo Canvas2D, WebGL1 y sintaxis ES5/ECMAScript 2015.
+
+Esta instancia no mide todavía un Smart TV físico. Las cifras temporales provienen de
+Node en la PC y describen únicamente el trabajo JavaScript aislado.
+
+### Artefacto control
+
+- Archivo: `outputs/TKN-2441-GANADOR-v1-adaptive-oklab-hq-768.asclv`.
+- Tamaño: 17.935.310 B.
+- SHA-256 antes y después:
+  `346B4BE704E15B1855DB15C989774116247600C5911A98E908BB7FAD2E15BB70`.
+- Matriz: 768x432, 231 frames, 15 FPS, 256 colores.
+- Tags: 89 ZLIB, 1 DELTA y 141 DELTA_MASK.
+
+El binario quedó idéntico. Las mejoras pertenecen solo al reader, inflate, renderers y
+player TV.
+
+### Reader e inflate
+
+- offsets consultados directamente con `DataView`, sin `Array` por frame;
+- keyframes en bitset: 29 B para 231 frames;
+- estructura completa y CRC32 cuando está presente/no nulo validados al abrir;
+- inflater zlib ES5 con CMF/FLG, Adler32, bounds, truncado, árboles y backreferences
+  validados;
+- inflate directo a un `Uint8Array` reutilizable, sin `dest=[]` ni copia final;
+- scratch adaptativo: límite defensivo de 1.658.880 B para cualquier DELTA del HQ,
+  pero uso real estable de 331.776 B con este archivo;
+- bitset exacto de celdas modificadas: 41.472 B.
+
+El reader anterior creaba durante cada inflate un Array JavaScript de una entrada por
+byte y luego un segundo `Uint8Array`. Para un full HQ eran al menos 331.776 slots JS más
+331.776 B tipados; el tamaño real de los slots depende del motor. La versión nueva retiene
+un scratch tipado de 331.776 B y lo reutiliza. Esto reduce presión de GC aunque agrega el
+bitset persistente de 41.472 B.
+
+### Conversión y presentación
+
+La primera implementación por una única banda vertical se midió antes de aceptarla. En
+este clip los cambios están dispersos y solo evitaba 0,44% de filas. El reader pasó a
+unir un bit por celda durante cada `seek`, incluidos frames omitidos.
+
+Sobre los 231 frames:
+
+- conversiones índice a RGBA evitadas: 46,14%;
+- cinco pasadas alternadas en Node: 322,68 ms por clip con conversión completa frente a
+  260,69 ms usando celdas exactas, una reducción de 19,21% en esa etapa;
+- en decode más conversión, la mejora medida fue aproximadamente 4,7%; el costo de unir
+  el bitset quedó dentro del ruido después de usar copias tipadas nativas;
+- el upload/`putImageData` sigue usando una banda cuando los cambios están dispersos;
+  esta medición no afirma una reducción equivalente de GPU ni del tiempo total del TV.
+
+Los tiempos son una medición puntual y no portable de esta PC con Node v24.19.0: cinco
+pasadas alternadas sobre el mismo clip ya cargado, sin red, audio, DOM ni GPU reales. No
+constituyen un benchmark de Smart TV ni quedaron asociados a un artefacto de medición
+versionado; los gates físicos de VAL-001 reemplazarán estas cifras para aceptar el cambio.
+
+Canvas2D y WebGL1 llaman la misma API `fillRGBAChanged`. Primer frame, paleta, RAW, ZLIB,
+metadata dirty inválida o un reader anterior fuerzan el camino completo. El sentinel
+vacío canónico evita conversión, upload y draw en un frame sin cambios.
+
+### Robustez de presentación
+
+- WebGL solicita un contexto sin alpha, antialias, depth ni stencil y reintenta con la
+  llamada legacy si el WebView no acepta atributos;
+- valida `MAX_TEXTURE_SIZE` antes del RGBA;
+- prueba una sola vez `texImage2D` y `texSubImage2D`; si un driver falla, usa upload full
+  exacto o degrada a Canvas;
+- una excepción o `webglcontextlost` conserva reader, frame, audio, reloj y RAF al caer
+  a Canvas2D;
+- `dispose()` libera explícitamente textura, shaders, programa, buffer, RGBA, ImageData y
+  contexto cuando se actualiza el video;
+- un bundle inválido libera también Blob URL y audio.
+
+### Renovación de caché con URL base estable
+
+`tv-player.html` conserva `./outputs/clip.asclv`. El menú técnico oculto se abre con la
+tecla 9 moderna/numpad o con un hotspot transparente inferior izquierdo. La acción:
+
+1. detiene playback y aborta una XHR anterior;
+2. libera audio, reader, Canvas y recursos WebGL;
+3. rota un token de query persistido bajo `try/catch`;
+4. envía `Cache-Control: no-cache` y `Pragma: no-cache` cuando el XHR los permite;
+5. descarga el mismo recurso base otra vez.
+
+Esto no borra la caché HTTP global: una página no tiene autoridad para hacerlo y las URLs
+tokenizadas anteriores quedan a cargo de la política del navegador/servidor. En un browser
+legacy, `keyCode=9` continúa siendo Tab para no romper navegación; el hotspot es el fallback.
+
+### Validación
+
+- 26 artefactos ASCL/ASCLV locales decodificados;
+- HQ completo, 231 frames y seeks inversos;
+- RGBA incremental idéntico al full en los 231 frames;
+- 300 streams zlib stored/fixed/dynamic;
+- 67 tests Python y 7 suites JavaScript verdes;
+- corrupción de header, CRC, offsets, bloques, paletas, tags, DELTA, MASK y zlib rechazada;
+- tests runtime con DOM/XHR/GPU falsos verifican fallback y limpieza sin recargar página.
+
+### Decisión y límites
+
+- Adoptar los cambios para la prueba física HQ 768: no aumentan el ASCLV ni cambian su
+  matriz, calidad, FPS o compatibilidad binaria.
+- Desplegar `cache-refresh.js` junto con `tv-player.html` y los demás scripts.
+- No atribuir el 19,21% al tiempo total del TV: solo mide la etapa de conversión en PC.
+- Falta medir p50/p95, cuadros perdidos, RAM, CPU y temperatura en los equipos objetivo.
+- El `outputs/clip.asclv` local puede no ser el HQ; en el servidor se debe publicar el
+  artefacto HQ bajo ese nombre si se quiere que el player estable lo abra.
