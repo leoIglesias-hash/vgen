@@ -6,7 +6,7 @@ ascl_bundle.py - Empaqueta video (.ascl) + audio (.mp3) en UN archivo .asclv.
 Asi cada clip es un solo archivo y no hay que andar emparejando .ascl con .mp3.
 
 Formato .asclv (16 bytes de header + 2 cargas):
-    magic     8 bytes  = b"ASCLVID1"
+    magic     8 bytes  = b"ASCLVID1" o b"ASCLVID2"
     ascl_len  uint32 LE
     audio_len uint32 LE  (0 = sin audio)
     [ascl bytes][audio bytes]
@@ -20,9 +20,34 @@ import os
 import struct
 import sys
 
-MAGIC = b"ASCLVID1"
+MAGIC_V1 = b"ASCLVID1"
+MAGIC_V2 = b"ASCLVID2"
+MAGIC = MAGIC_V1              # alias histórico para callers v1
+MAGICS = {MAGIC_V1: 1, MAGIC_V2: 2}
 HEADER_FMT = "<8sII"          # magic, ascl_len, audio_len
 HEADER_SIZE = struct.calcsize(HEADER_FMT)   # 16
+
+
+def _inner_version(ascl):
+    if len(ascl) < 5 or ascl[:4] != b"ASCL":
+        raise ValueError("video interno invalido (magic ASCL ausente)")
+    version = ascl[4]
+    if version not in (1, 2):
+        raise ValueError("version ASCL interna no soportada: %d" % version)
+    return version
+
+
+def pack_bytes(ascl, audio, out_path):
+    """Empaqueta cargas ya leídas y selecciona ASCLVID1/2 por la versión interna."""
+    ascl = bytes(ascl)
+    audio = bytes(audio or b"")
+    version = _inner_version(ascl)
+    magic = MAGIC_V1 if version == 1 else MAGIC_V2
+    with open(out_path, "wb") as f:
+        f.write(struct.pack(HEADER_FMT, magic, len(ascl), len(audio)))
+        f.write(ascl)
+        f.write(audio)
+    return os.path.getsize(out_path), len(ascl), len(audio)
 
 
 def pack(ascl_path, audio_path, out_path):
@@ -32,23 +57,33 @@ def pack(ascl_path, audio_path, out_path):
     if audio_path and os.path.exists(audio_path):
         with open(audio_path, "rb") as f:
             audio = f.read()
-    with open(out_path, "wb") as f:
-        f.write(struct.pack(HEADER_FMT, MAGIC, len(ascl), len(audio)))
-        f.write(ascl)
-        f.write(audio)
-    return os.path.getsize(out_path), len(ascl), len(audio)
+    return pack_bytes(ascl, audio, out_path)
+
+
+def read_parts_info(asclv_path):
+    """Devuelve (ascl_bytes, audio_bytes, bundle_version) con validación exacta."""
+    with open(asclv_path, "rb") as f:
+        buf = f.read()
+    if len(buf) < HEADER_SIZE:
+        raise ValueError(".asclv truncado (falta header)")
+    magic, ascl_len, audio_len = struct.unpack_from(HEADER_FMT, buf, 0)
+    if magic not in MAGICS:
+        raise ValueError("no es un .asclv (magic invalido)")
+    expected = HEADER_SIZE + ascl_len + audio_len
+    if expected != len(buf):
+        raise ValueError(".asclv truncado o con bytes extra")
+    o = HEADER_SIZE
+    ascl = buf[o:o + ascl_len]
+    audio = buf[o + ascl_len:o + ascl_len + audio_len]
+    version = _inner_version(ascl)
+    if version != MAGICS[magic]:
+        raise ValueError("version del bundle no coincide con el ASCL interno")
+    return ascl, audio, version
 
 
 def read_parts(asclv_path):
     """Devuelve (ascl_bytes, audio_bytes). audio_bytes = b'' si no hay."""
-    with open(asclv_path, "rb") as f:
-        buf = f.read()
-    magic, ascl_len, audio_len = struct.unpack_from(HEADER_FMT, buf, 0)
-    if magic != MAGIC:
-        raise ValueError("no es un .asclv (magic invalido)")
-    o = HEADER_SIZE
-    ascl = buf[o:o + ascl_len]
-    audio = buf[o + ascl_len:o + ascl_len + audio_len]
+    ascl, audio, _version = read_parts_info(asclv_path)
     return ascl, audio
 
 
@@ -81,8 +116,9 @@ def main(argv=None):
         ascl_p, audio_p = unpack(a[1], out_dir)
         print("OK -> %s%s" % (ascl_p, ("  +  " + audio_p) if audio_p else "  (sin audio)"))
     elif cmd == "info":
-        ascl, audio = read_parts(a[1])
-        print("ascl: %d B   audio: %d B%s" % (len(ascl), len(audio), "" if audio else " (sin audio)"))
+        ascl, audio, version = read_parts_info(a[1])
+        print("ASCLV%d  ascl: %d B   audio: %d B%s" %
+              (version, len(ascl), len(audio), "" if audio else " (sin audio)"))
     else:
         print(__doc__); return 2
     return 0

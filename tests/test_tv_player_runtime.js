@@ -32,13 +32,16 @@ function emitter(base) {
   return target;
 }
 
-function bundle(audioLength) {
+function bundle(audioLength, version) {
+  version = version || 1;
   var videoLength = 32;
   var buffer = new ArrayBuffer(16 + videoLength + audioLength);
-  var bytes = new Uint8Array(buffer), view = new DataView(buffer), magic = "ASCLVID1", i;
+  var bytes = new Uint8Array(buffer), view = new DataView(buffer), magic = "ASCLVID"+version, i;
   for (i = 0; i < magic.length; i++) bytes[i] = magic.charCodeAt(i);
   view.setUint32(8, videoLength, true);
   view.setUint32(12, audioLength, true);
+  bytes[16] = 65; bytes[17] = 83; bytes[18] = 67; bytes[19] = 76; /* ASCL */
+  bytes[20] = version;
   return buffer;
 }
 
@@ -144,6 +147,13 @@ function createRuntime(options) {
     createObjectURL: function () { return "blob:test-video"; },
     revokeObjectURL: function (url) { stats.revoked.push(url); }
   };
+  var readerAPI = {
+    parse: function () {
+      if (options.parseError) throw new Error("video corrupto");
+      stats.reader = reader();
+      return stats.reader;
+    }
+  };
   var window = {
     document: document,
     location: { search: "" },
@@ -160,13 +170,8 @@ function createRuntime(options) {
     ASCILINECacheRefresh: Cache,
     WebGLRenderer: MockWebGLRenderer,
     Canvas2DRenderer: MockCanvas2DRenderer,
-    ASCL: {
-      parse: function () {
-        if (options.parseError) throw new Error("video corrupto");
-        stats.reader = reader();
-        return stats.reader;
-      }
-    },
+    ASCL: readerAPI,
+    ASCILINEReader: readerAPI,
     ASCILINETV: {
       init: function (received) { controllerOptions = received; return {}; }
     }
@@ -221,6 +226,14 @@ function completeInitialDownload(runtime, buffer) {
     "Canvas debe reutilizar exactamente el reader ya decodificado");
   assert.strictEqual(runtime.stats.lastCanvasFrame, 0);
   assert(runtime.elements.detail.innerHTML.indexOf("canvas2d") >= 0);
+}());
+
+(function testAsclvid2UsesTheSameSingleRendererPath() {
+  var runtime = createRuntime();
+  completeInitialDownload(runtime, bundle(0, 2));
+  assert.strictEqual(runtime.stats.webglDraws, 1);
+  assert.strictEqual(runtime.stats.canvasDraws, 0);
+  assert.strictEqual(runtime.stats.reader.decodedIndex, 0);
 }());
 
 (function testReentrantContextLossDoesNotStopTheNewCanvas() {

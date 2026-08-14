@@ -1,11 +1,13 @@
-# Especificación del formato `.ascl` — v1
+# Especificación del formato `.ascl` / `.asclv` — v1 y primera revisión v2
 
 > Contenedor binario compacto para reproducir ASCILINE como **VOD pre-encodeado**.
 > El encoder (offline) hace todo el cómputo una vez; el reader (cliente, ES2015-safe)
 > solo parsea bytes y dibuja. El servidor sirve un **archivo estático** → ≈0 cómputo en playtime.
 >
-> Estado: formato v1 implementado para imagen y video. Incluye RAW, ZLIB, DELTA,
-> DELTA_MASK, paletas globales/temporales y envelope `.asclv` con audio.
+> Estado: v1 permanece estable e implementado. La primera revisión v2 está
+> implementada para `mode=PIXEL`: conserva los cuatro tags v1 como fallback y agrega
+> representación regional por tiles y predictores reversibles. V2 no vuelve a cuantizar
+> ni cambia la imagen RGB aprobada.
 
 ---
 
@@ -55,7 +57,7 @@ Imagen fija = exactamente lo mismo con `n_frames = 1`: header + (ramp si ASCII) 
 | Offset | Tamaño | Tipo | Campo | Descripción |
 |---:|---:|---|---|---|
 | 0  | 4 | char[4] | `magic`   | `"ASCL"` = `0x41 0x53 0x43 0x4C`. Si no coincide → no es `.ascl`. |
-| 4  | 1 | uint8   | `version` | `1`. |
+| 4  | 1 | uint8   | `version` | `1` o `2`. V2 inicial solo admite `mode=PIXEL`. |
 | 5  | 1 | uint8   | `mode`    | `0`=ASCII_BW, `1`=ASCII_PAL, `2`=ASCII_RGB, `3`=PIXEL. Ver §3. |
 | 6  | 1 | uint8   | `flags`   | bitfield. Ver §2.1. |
 | 7  | 1 | uint8   | `fps`     | Cuadros/seg para playback (default 15). `frame = floor(audio.currentTime × fps)`. Para imagen es informativo. |
@@ -67,8 +69,8 @@ Imagen fija = exactamente lo mismo con `n_frames = 1`: header + (ramp si ASCII) 
 | 19 | 1 | uint8   | `cell_fmt`| Informativo: nº de planos por celda. `1`=char, `2`=char+colorIdx, `3`=índice pixel/RGB. Ver §3. |
 | 20 | 4 | uint32  | `data_off`| Offset absoluto donde empieza la **OFFSET TABLE** (= `32 + ramp_len`). El reader salta acá sin recalcular. |
 | 24 | 2 | uint16  | `char_aspect_x1000` | Factor de aspecto usado al encodear × 1000 (p.ej. `500` = 0.5). Informativo para el reader; el mapeo ya está hecho. |
-| 26 | 2 | uint16  | `reserved`| `0`. |
-| 28 | 4 | uint32  | `crc32`   | CRC32 (IEEE) de **todo el archivo desde el byte 32 hasta el final**. `0` = sin verificar. Detecta corrupción de cache. |
+| 26 | 2 | uint16  | `reserved` / codec v2 | V1: `0`. V2: byte 26 `tile_size=16`; byte 27 `codec_flags=0x01` (regional habilitado), equivalente LE a `0x0110`. |
+| 28 | 4 | uint32  | `crc32`   | V1: CRC32 IEEE de bytes `32..EOF`; `0` permite omitirlo. V2: obligatorio, sobre bytes `0..27` seguidos de `32..EOF`, excluyendo el propio campo. |
 
 Total: **32 bytes**.
 
@@ -79,7 +81,7 @@ Total: **32 bytes**.
 | 0 | `LOSSY` | Hubo delta temporal con pérdida (tolerancia > 0). El plano de carácter siempre es exacto. |
 | 1 | `PAL_PER_SCENE` | Paleta temporal: se reemite en cambios de escena o bloque y en todo keyframe (frames con `pal_count > 0`). |
 | 2 | `PAL_GLOBAL` | Una sola paleta para todo el clip (solo el frame 0 trae `pal_count > 0`). |
-| 3 | `HAS_OFFSET_TABLE` | Hay tabla de offsets (siempre `1` en v1). |
+| 3 | `HAS_OFFSET_TABLE` | Hay tabla de offsets (siempre `1` en v1 y en la revisión v2 actual). |
 | 4 | `RECON_SOFT` | El encoder recomienda reconstrucción suavizada. Readers anteriores pueden ignorarlo y usar NEAREST. No modifica el payload. |
 | 5–7 | — | reservados (`0`). |
 
@@ -211,12 +213,16 @@ El audio no forma parte del `.ascl` interior. El artefacto normal de distribuci�
 único `.asclv` cacheable:
 
 ```text
-magic      8 bytes = "ASCLVID1"
+magic      8 bytes = "ASCLVID1" o "ASCLVID2"
 ascl_len   uint32 LE
 audio_len  uint32 LE, 0 si no hay audio
 ascl       ascl_len bytes
 audio      audio_len bytes, MP3 en la versión actual
 ```
+
+El envelope ocupa siempre **16 bytes** antes de los dos cuerpos. `ASCLVID1` exige un
+interior ASCL v1 y `ASCLVID2` exige un interior ASCL v2. El lector rechaza truncado,
+bytes posteriores a la longitud declarada y desacuerdo entre ambas versiones.
 
 El reader crea vistas dentro del mismo `ArrayBuffer`, sin copiar el `.ascl` completo, y
 expone el audio mediante `Blob`/object URL. Un `.ascl` suelto con MP3 externo se conserva
@@ -294,7 +300,7 @@ function parseHeader(buf) {                 // buf: ArrayBuffer
 
 ---
 
-## 11. Constantes de referencia
+## 11. Constantes de referencia v1
 
 ```
 MAGIC      = "ASCL"        VERSION = 1
@@ -362,3 +368,124 @@ global+DELTA ≈ 126 KB (57/60 frames en DELTA). ASCII_PAL global 160×45 ≈ 71
 
 Glyph-atlas / instancing WebGL para ASCII (la 3ª ruta de D2) queda como mejora opcional
 de Fase 6; hoy ASCII usa Canvas2D (glifos) y WebGL cubre pixel/color como mosaico.
+
+---
+
+## 13. Primera revisión ASCL v2 — implementada
+
+### 13.1 Alcance e invariante de tamaño
+
+V2 parte de un ASCL v1 `PIXEL` ya cuantizado y aceptado. La conversión conserva sin
+cambios `cols`, `rows`, `fps`, flags de paleta, emisiones RGB, keyframes y audio. Por
+frame se conserva el payload v1 original como candidato; un payload regional o predictor
+solo lo reemplaza si reconstruye la misma matriz de índices y ocupa **estrictamente menos
+bytes**. Un empate conserva la representación previa. Header, tabla, paleta por frame y
+envelope tienen el mismo tamaño, por lo que:
+
+```text
+bytes(ASCL v2) <= bytes(ASCL v1 de entrada)
+bytes(ASCLVID2) <= bytes(ASCLVID1 de entrada)  # audio copiado byte a byte
+```
+
+No hay evaluación visual, IA ni exploración de calidades en esta selección: se comparan
+bytes de representaciones reversibles de una misma matriz.
+
+### 13.2 Tags de frame
+
+El frame block conserva exactamente el layout de §5.2.
+
+| Tag | Nombre | Clase | Payload |
+|---:|---|---|---|
+| 0 | `RAW` | key | Semántica v1 sin cambios. |
+| 1 | `ZLIB` | key | Semántica v1 sin cambios. |
+| 2 | `DELTA` | delta | Semántica v1 sin cambios. |
+| 3 | `DELTA_MASK` | delta | Semántica v1 sin cambios. |
+| 4 | `REGIONAL_KEY_RAW` | key | Stream regional crudo. |
+| 5 | `REGIONAL_KEY_ZLIB` | key | `zlib(stream regional)` completo. |
+| 6 | `REGIONAL_DELTA_RAW` | delta | Stream regional crudo contra la matriz anterior. |
+| 7 | `REGIONAL_DELTA_ZLIB` | delta | `zlib(stream regional)` completo. |
+| 8 | `PREDICT_KEY_ZLIB` | key | `predictor_id u8 ++ zlib(residual[N])`. |
+| 9 | `PREDICT_DELTA_ZLIB` | delta | `predictor_id u8 ++ zlib(residual[N])`. |
+
+Los tags 0..3 son fallback normativo dentro de un archivo v2; no significan que el
+archivo interior haya vuelto a v1. Los tags delta no pueden emitir paleta. Los tags key
+de una paleta no global deben ser autónomos y reemitirla.
+
+### 13.3 Grilla de tiles y stream regional
+
+La revisión implementada fija tiles de `16×16`; los tiles del borde derivan su ancho y
+alto de `cols`/`rows`. El cursor de tile es implícito, row-major, y el stream debe cubrir
+exactamente toda la grilla sin bytes posteriores. `SKIP_RUN`, `SPARSE` y `MASK` solo son
+válidos en deltas. Un key regional contiene un comando denso por tile.
+
+Todos los enteros variables son **LEB128 uint32 canónico**. Máscaras y códigos packed son
+**LSB-first**; sus bits de padding deben ser cero. Los mapas locales contienen índices de
+la paleta RGB activa, estrictamente crecientes y sin repetidos.
+
+| Opcode | Nombre y layout | Efecto |
+|---:|---|---|
+| `0x00` | `SKIP_RUN ++ run:uvarint` | Reutiliza `run>=1` tiles consecutivos. Es el único comando con corrida; un frame repetido es `SKIP_RUN(tile_count)`, no existe opcode `REPEAT`. |
+| `0x01` | `SOLID ++ color_idx:u8` | Llena **un** tile. No es `SOLID_RUN` y no lleva longitud. |
+| `0x02` | `SPARSE ++ k:uvarint ++ (offset:uvarint,value:u8)[k]` | Escribe cambios puntuales. Offsets locales absolutos, crecientes, dentro del tile; no admite escrituras idénticas. |
+| `0x03` | `MASK ++ bits[ceil(npix/8)] ++ values[popcount]` | Un valor por bit activo, en orden row-major; la máscara no puede estar vacía. |
+| `0x04` | `PACK1 ++ map[2] ++ codes[ceil(npix/8)]` | Dos índices locales, 1 bit/celda. |
+| `0x05` | `PACK2 ++ count:u8 ++ map[count] ++ codes[ceil(npix/4)]` | `count=3..4`, 2 bits/celda. |
+| `0x06` | `PAL4 ++ count:u8 ++ map[count] ++ codes[ceil(npix/2)]` | `count=5..16`, 4 bits/celda. **`PACK4` y `PAL4` nombran la misma idea; el nombre normativo implementado es `PAL4`.** |
+| `0x07` | `PAL8 ++ values[npix]` | Un índice de paleta global por celda, row-major, sin mapa local. |
+
+El encoder materializa los candidatos válidos por tile y elige la menor longitud real;
+el desempate canónico es `SOLID`, `SPARSE`, `MASK`, `PACK1`, `PACK2`, `PAL4`, `PAL8`.
+Después compara el stream completo crudo contra su zlib y usa zlib solo si es menor. No
+hay zlib independiente por tile ni prefijo de longitud descomprimida en los tags 4..7.
+
+### 13.4 Predictores reversibles
+
+Toda aritmética es modular `uint8`; el residual descomprimido mide exactamente
+`N=cols×rows` bytes. Para keyframes se comparan:
+
+- `0 LEFT`: `residual = actual - izquierda`, usando `0` en el borde izquierdo;
+- `1 TOP`: `residual = actual - superior`, usando `0` en el borde superior;
+- `2 GRADIENT`: predictor `izquierda + superior - superior_izquierda`.
+
+Para deltas se comparan:
+
+- `3 PREVIOUS_SUB`: `residual = actual - anterior`;
+- `4 PREVIOUS_XOR`: `residual = actual XOR anterior`.
+
+Cada opción reconstruye exactamente el índice original. Gana el payload zlib menor y,
+en empate, el ID más bajo. El predictor completo aún debe superar estrictamente al
+candidato v1/regional que ya ganaba para reemplazarlo.
+
+### 13.5 Reader y límites de la primera revisión
+
+`reader-factory.js` despacha `version=1` a `ReaderV1` y `version=2` a `ReaderV2`; cualquier
+otra versión falla. `ReaderV2` está escrito con sintaxis ES5, conserva una sola matriz
+lógica `Uint8Array`, valida CRC/header/offsets/bloques/paletas, limita inflate y valida un
+stream regional completo antes de la primera escritura.
+
+El dirty set es híbrido y disjunto: `SPARSE`, `MASK` y deltas v1 marcan celdas exactas;
+comandos regionales densos marcan tiles; keyframe o cambio de paleta fuerza full. Los
+renderers Canvas2D y WebGL1 consumen la misma API y la unión se conserva durante seek.
+
+La garantía de memoria no es “cero buffers proporcionales”: `cells`, RGBA, bitsets y el
+scratch reutilizable dependen necesariamente de la grilla. El gate correcto es **no crear
+un nuevo buffer de frame completo en cada cuadro**. El scratch crece bajo bounds hasta la
+capacidad necesaria y luego se reutiliza; la revisión limita a 64 MiB cada bound operativo
+de matriz/inflate que valida y la lista de tiles a 65.535 IDs `uint16`. No se interpreta
+ese valor como límite de RAM total del player.
+
+### 13.6 Envelope, descarga y caché
+
+`ASCLVID2` usa el envelope fijo de 16 bytes de §7; no introduce directorio, GOPs externos
+ni chunks. La implementación actual descarga el archivo completo por XHR, lo conserva como
+un recurso único cacheable y reproduce después de obtenerlo completo. Streaming, HTTP Range
+y carga parcial permanecen fuera de esta revisión.
+
+### 13.7 Pendientes que no forman parte del contrato
+
+- validación física del artefacto HQ en Smart TV; el benchmark exacto local está cerrado;
+- remap exacto de IDs de paleta: está bajo evaluación offline y, si se adopta, debe
+  permutar conjuntamente paleta e índices para que cada RGB mostrado permanezca idéntico;
+  la Instancia 005 registra un ahorro estimado menor a 1% y por eso no es default;
+- intervención matricial, near-lossless, FPS por segmentos, diccionarios y Range;
+- otros tamaños de tile o nuevos opcodes, que requerirían otra revisión de codec.

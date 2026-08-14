@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Benchmark reproducible de calidad/costo para artefactos ASCL v1 y ASCLV.
+"""Benchmark reproducible de calidad/costo para artefactos ASCL/ASCLV v1 y v2.
 
 La herramienta NO codifica. Compara archivos ya generados con el decoder de
 referencia y, cuando se indica el video fuente, mide una muestra determinista.
@@ -44,6 +44,7 @@ import numpy as np
 
 import ascl_bundle
 import ascl_decode
+import ascl_v2
 import perceptual_palette
 
 
@@ -52,8 +53,28 @@ TAG_NAMES = {
     ascl_decode.TAG_ZLIB: "ZLIB",
     ascl_decode.TAG_DELTA: "DELTA",
     ascl_decode.TAG_DELTA_MASK: "DELTA_MASK",
+    ascl_decode.TAG_REGIONAL_KEY_RAW: "REGIONAL_KEY_RAW",
+    ascl_decode.TAG_REGIONAL_KEY_ZLIB: "REGIONAL_KEY_ZLIB",
+    ascl_decode.TAG_REGIONAL_DELTA_RAW: "REGIONAL_DELTA_RAW",
+    ascl_decode.TAG_REGIONAL_DELTA_ZLIB: "REGIONAL_DELTA_ZLIB",
+    ascl_decode.TAG_PREDICT_KEY_ZLIB: "PREDICT_KEY_ZLIB",
+    ascl_decode.TAG_PREDICT_DELTA_ZLIB: "PREDICT_DELTA_ZLIB",
 }
-KEYFRAME_TAGS = (ascl_decode.TAG_RAW, ascl_decode.TAG_ZLIB)
+KEYFRAME_TAGS = (
+    ascl_decode.TAG_RAW,
+    ascl_decode.TAG_ZLIB,
+    ascl_decode.TAG_REGIONAL_KEY_RAW,
+    ascl_decode.TAG_REGIONAL_KEY_ZLIB,
+    ascl_decode.TAG_PREDICT_KEY_ZLIB,
+)
+REGIONAL_RAW_TAGS = (
+    ascl_decode.TAG_REGIONAL_KEY_RAW,
+    ascl_decode.TAG_REGIONAL_DELTA_RAW,
+)
+PREDICTOR_ZLIB_TAGS = (
+    ascl_decode.TAG_PREDICT_KEY_ZLIB,
+    ascl_decode.TAG_PREDICT_DELTA_ZLIB,
+)
 FLAG_NAMES = {
     0: "LOSSY",
     1: "PAL_PER_SCENE",
@@ -144,7 +165,8 @@ def load_artifact(path):
     path = os.path.abspath(path)
     with open(path, "rb") as handle:
         artifact = handle.read()
-    if artifact.startswith(ascl_bundle.MAGIC):
+    bundle_magic = artifact[:8]
+    if bundle_magic in ascl_bundle.MAGICS:
         if len(artifact) < ascl_bundle.HEADER_SIZE:
             raise ValueError("ASCLV truncado: %s" % path)
         _magic, declared_ascl, declared_audio = struct.unpack_from(
@@ -152,17 +174,20 @@ def load_artifact(path):
         if (ascl_bundle.HEADER_SIZE + declared_ascl + declared_audio !=
                 len(artifact)):
             raise ValueError("longitudes declaradas invalidas en ASCLV: %s" % path)
-        ascl_bytes, audio_bytes = ascl_bundle.read_parts(path)
+        ascl_bytes, audio_bytes, bundle_version = ascl_bundle.read_parts_info(path)
         kind = "asclv"
     elif artifact.startswith(b"ASCL"):
-        ascl_bytes, audio_bytes, kind = artifact, b"", "ascl"
+        ascl_bytes, audio_bytes, kind, bundle_version = artifact, b"", "ascl", None
     else:
         raise ValueError("no es ASCL ni ASCLV: %s" % path)
     if len(ascl_bytes) < ascl_decode.HEADER_SIZE:
         raise ValueError("ASCL truncado: %s" % path)
+    ascl_version = int(ascl_decode.parse_header(ascl_bytes)["version"])
     return {
         "path": path,
         "kind": kind,
+        "ascl_version": ascl_version,
+        "bundle_version": bundle_version,
         "artifact_bytes_data": artifact,
         "ascl_bytes_data": ascl_bytes,
         "audio_bytes_data": audio_bytes,
@@ -184,7 +209,9 @@ def _frame_records(ascl_bytes, header):
         if block_end > len(ascl_bytes):
             raise ValueError("frame %d truncado" % index)
         tag = ascl_bytes[offset + 4]
-        if tag not in TAG_NAMES:
+        maximum_tag = (ascl_decode.TAG_DELTA_MASK if header["version"] == 1
+                       else ascl_decode.TAG_PREDICT_DELTA_ZLIB)
+        if tag not in TAG_NAMES or tag > maximum_tag:
             raise ValueError("tag desconocido %d en frame %d" % (tag, index))
         pal_count = struct.unpack_from("<H", ascl_bytes, offset + 5)[0]
         palette_start = offset + 7
@@ -236,12 +263,26 @@ def infer_palette_blocks(records, n_frames):
 def inspect_ascl(ascl_bytes):
     """Inspeccion estructural, tags, CRC, paletas y costo de inflado."""
     header = ascl_decode.parse_header(ascl_bytes)
+    if header["version"] not in (1, 2):
+        raise ValueError("version ASCL no soportada: %s" % header["version"])
     if header["mode"] not in ascl_decode.BYTES_PER_CELL:
         raise ValueError("modo ASCL desconocido: %s" % header["mode"])
-    body_crc = zlib.crc32(ascl_bytes[ascl_decode.HEADER_SIZE:]) & 0xFFFFFFFF
+    computed_crc = ascl_decode.compute_crc(ascl_bytes, header)
     records = _frame_records(ascl_bytes, header)
     n = int(header["cols"]) * int(header["rows"])
     bpc = ascl_decode.BYTES_PER_CELL[header["mode"]]
+    changed_v2 = None
+    if header["version"] == 2:
+        # Valida el stream completo y mide diferencias exactas conservando solo
+        # la matriz anterior; el benchmark estructural no acumula todos los frames.
+        changed_v2 = []
+        previous_cells = None
+        for frame in ascl_v2.iter_decoded_v2(ascl_bytes):
+            current_cells = frame["cells"]
+            changed_v2.append(
+                n if frame["keyframe"] else
+                int(np.count_nonzero(current_cells != previous_cells)))
+            previous_cells = current_cells
     tags = dict((name, 0) for name in TAG_NAMES.values())
     stored_by_tag = dict((name, 0) for name in TAG_NAMES.values())
     changed_total = 0
@@ -252,24 +293,44 @@ def inspect_ascl(ascl_bytes):
         name = TAG_NAMES[record["tag"]]
         tags[name] += 1
         stored_by_tag[name] += len(record["payload"])
-        if record["tag"] == ascl_decode.TAG_RAW:
+        tag = record["tag"]
+        if tag == ascl_decode.TAG_RAW:
             raw_len = len(record["payload"])
             changed = n
+            uses_inflate = False
+        elif tag in REGIONAL_RAW_TAGS:
+            raw_len = len(record["payload"])
+            uses_inflate = False
+            if tag in KEYFRAME_TAGS:
+                changed = n
+            else:
+                changed = changed_v2[record["index"]]
         else:
+            compressed = record["payload"]
+            if tag in PREDICTOR_ZLIB_TAGS:
+                if len(compressed) < 2:
+                    raise ValueError("PREDICT truncado en frame %d" %
+                                     record["index"])
+                # El primer byte identifica el predictor y no forma parte del
+                # stream zlib de residuales.
+                compressed = compressed[1:]
             try:
-                raw = zlib.decompress(record["payload"])
+                raw = zlib.decompress(compressed)
             except zlib.error as exc:
                 raise ValueError("zlib invalido en frame %d: %s" %
                                  (record["index"], exc))
             raw_len = len(raw)
-            if record["tag"] == ascl_decode.TAG_ZLIB:
+            uses_inflate = True
+            if tag in (ascl_decode.TAG_ZLIB,
+                       ascl_decode.TAG_REGIONAL_KEY_ZLIB,
+                       ascl_decode.TAG_PREDICT_KEY_ZLIB):
                 changed = n
-            elif record["tag"] == ascl_decode.TAG_DELTA:
+            elif tag == ascl_decode.TAG_DELTA:
                 divisor = 4 + bpc
                 if raw_len % divisor:
                     raise ValueError("DELTA invalido en frame %d" % record["index"])
                 changed = raw_len // divisor
-            else:
+            elif tag == ascl_decode.TAG_DELTA_MASK:
                 mask_len = (n + 7) // 8
                 if raw_len < mask_len:
                     raise ValueError("DELTA_MASK invalido en frame %d" % record["index"])
@@ -277,31 +338,36 @@ def inspect_ascl(ascl_bytes):
                 changed = int(np.unpackbits(mask, bitorder="little", count=n).sum())
                 if raw_len != mask_len + changed * bpc:
                     raise ValueError("DELTA_MASK inconsistente en frame %d" % record["index"])
-        if raw_len > max_inflate and record["tag"] != ascl_decode.TAG_RAW:
+            else:
+                changed = changed_v2[record["index"]]
+        if uses_inflate and raw_len > max_inflate:
             max_inflate = raw_len
         changed_total += int(changed)
-        if record["tag"] in KEYFRAME_TAGS:
+        if tag in KEYFRAME_TAGS:
             delta_chain = 0
         else:
             delta_chain += 1
             max_delta_chain = max(max_delta_chain, delta_chain)
     palette = infer_palette_blocks(records, header["n_frames"])
     crc_present = int(header["crc32"]) != 0
+    keyframe_count = sum(tags[TAG_NAMES[tag]] for tag in KEYFRAME_TAGS)
     return {
         "header": dict(header, flags_hex="0x%02X" % header["flags"],
                        flag_names=_flag_labels(header["flags"]),
                        mode_name=ascl_decode.MODE_LABEL.get(header["mode"], "UNKNOWN")),
         "crc": {
             "header": "%08X" % int(header["crc32"]),
-            "computed": "%08X" % int(body_crc),
+            "computed": "%08X" % int(computed_crc),
+            "scope": ("body" if header["version"] == 1
+                      else "header_without_crc+body"),
             "present": crc_present,
-            "ok": ((int(header["crc32"]) == int(body_crc))
+            "ok": ((int(header["crc32"]) == int(computed_crc))
                    if crc_present else None),
         },
         "tags": tags,
         "stored_payload_bytes_by_tag": stored_by_tag,
-        "keyframes": int(tags["RAW"] + tags["ZLIB"]),
-        "full_frame_fraction": ((tags["RAW"] + tags["ZLIB"]) /
+        "keyframes": int(keyframe_count),
+        "full_frame_fraction": (keyframe_count /
                                 float(max(1, header["n_frames"]))),
         "max_delta_chain": int(max_delta_chain),
         "mean_changed_cells": changed_total / float(max(1, header["n_frames"])),
@@ -656,6 +722,8 @@ def benchmark_artifact(label, path, source_path=None, source_info=None,
         "label": label,
         "path": loaded["path"],
         "container": loaded["kind"],
+        "ascl_version": loaded["ascl_version"],
+        "bundle_version": loaded["bundle_version"],
         "sizes": {
             "artifact_bytes": len(loaded["artifact_bytes_data"]),
             "ascl_bytes": len(loaded["ascl_bytes_data"]),
@@ -670,6 +738,9 @@ def benchmark_artifact(label, path, source_path=None, source_info=None,
             "ascl_crc32": crc32_hex(loaded["ascl_bytes_data"]),
             "audio_crc32": (crc32_hex(loaded["audio_bytes_data"])
                             if loaded["audio_bytes_data"] else None),
+            "ascl_integrity_crc": inspection["crc"],
+            # Alias historico del schema v1; en ASCL v2 el alcance tambien
+            # incluye el header salvo el propio campo CRC.
             "ascl_body_crc": inspection["crc"],
         },
         "structure": inspection,
@@ -688,7 +759,7 @@ def _mib(value):
 
 def markdown_report(report):
     lines = []
-    lines.append("# Benchmark ASCL v1")
+    lines.append("# Benchmark ASCL v1/v2")
     lines.append("")
     if report.get("source"):
         source = report["source"]
@@ -696,8 +767,8 @@ def markdown_report(report):
                      (source["path"], source["width"], source["height"],
                       source["fps"], source["crc32"]))
         lines.append("")
-    lines.append("| Variante | Grilla | Frames/FPS | MiB | CRC cuerpo | Tags R/Z/D/M | Paletas/bloques | PSNR grilla | DeltaE OK | PSNR baja frec. | Mesetas | PSNR fuente bilinear | Decode ms/frame | RAM Canvas min. |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+    lines.append("| Variante | Grilla | Frames/FPS | MiB | CRC ASCL | Tags R/Z/D/M | Tags regional Kraw/Kz/Draw/Dz | Tags predictor Kz/Dz | Paletas/bloques | PSNR grilla | DeltaE OK | PSNR baja frec. | Mesetas | PSNR fuente bilinear | Decode ms/frame | RAM Canvas min. |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for item in report["artifacts"]:
         header = item["structure"]["header"]
         tags = item["structure"]["tags"]
@@ -708,17 +779,21 @@ def markdown_report(report):
             "palette_blocks_count", len(palette["inferred_blocks"]))
         quality = item.get("quality") or {}
         timing = item.get("reference_decode_timing") or {}
-        crc_status = item["checksums"]["ascl_body_crc"]["ok"]
+        crc_status = item["checksums"].get(
+            "ascl_integrity_crc", item["checksums"]["ascl_body_crc"])["ok"]
         crc_text = ("OK" if crc_status is True else
                     ("ERROR" if crc_status is False else "ausente"))
         plateau_text = (format_float(quality["banding_plateau_fraction"] * 100.0, 2) + "%"
                         if quality else "-")
         lines.append(
-            "| %s | %dx%d | %d/%d | %.2f | %s | %d/%d/%d/%d | %d/%d | %s | %s | %s | %s | %s | %s | %.2f MiB |" %
+            "| %s | %dx%d | %d/%d | %.2f | %s | %d/%d/%d/%d | %d/%d/%d/%d | %d/%d | %d/%d | %s | %s | %s | %s | %s | %s | %.2f MiB |" %
             (item["label"], header["cols"], header["rows"], header["n_frames"],
              header["fps"], _mib(item["sizes"]["artifact_bytes"]),
              crc_text,
              tags["RAW"], tags["ZLIB"], tags["DELTA"], tags["DELTA_MASK"],
+             tags["REGIONAL_KEY_RAW"], tags["REGIONAL_KEY_ZLIB"],
+             tags["REGIONAL_DELTA_RAW"], tags["REGIONAL_DELTA_ZLIB"],
+             tags["PREDICT_KEY_ZLIB"], tags["PREDICT_DELTA_ZLIB"],
              palette["palette_emissions"], block_count,
              format_float(quality.get("grid_rgb_psnr_db")),
              format_float(quality.get("delta_e_ok_mean")),
@@ -763,7 +838,7 @@ def json_compatible(value):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Compara calidad, peso, decode y RAM teorica de ASCL/ASCLV v1.")
+        description="Compara calidad, peso, decode y RAM teorica de ASCL/ASCLV v1/v2.")
     parser.add_argument("artifacts", nargs="+", metavar="[ETIQUETA=]ARTEFACTO")
     parser.add_argument("--source", default=None,
                         help="video fuente; si se omite solo mide estructura/costo")

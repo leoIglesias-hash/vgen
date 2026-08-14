@@ -14,13 +14,17 @@ ASCILINE-video/
 │   ├── tv-controller.js     # teclas/click y fullscreen con prefijos legacy
 │   ├── cache-refresh.js     # renovación compatible del ASCLV con el mismo nombre
 │   ├── inflate.js          # descompresor zlib propio (ES5)
-│   ├── reader.js           # parser .ascl + RAW/ZLIB/DELTA/DELTA_MASK + seek
+│   ├── reader.js           # ReaderV1: RAW/ZLIB/DELTA/DELTA_MASK + seek
+│   ├── reader-v2.js        # ReaderV2 ES5: tiles/predictores + fallback v1
+│   ├── reader-factory.js   # despacho por version interior 1/2
 │   ├── render-webgl.js     # renderer WebGL (rompe el techo de 360p)
 │   └── render-canvas2d.js  # fallback Canvas2D (mosaico + glifos ASCII)
 ├── backend/      # lo que CREA los archivos (Python, offline)
 │   ├── encoder.py          # imagen/video -> .ascl  (+ audio .mp3 aparte)
 │   ├── ascl_decode.py      # decoder/verificador de referencia + preview
 │   ├── ascl_bundle.py      # empaqueta .ascl + .mp3 -> .asclv (un archivo)
+│   ├── regional_codec_v2.py # codec regional lossless de referencia
+│   ├── ascl_v2.py          # transcode exacto v1 -> v2 + decoder Python
 │   ├── make_clip.py        # UN comando: video -> outputs/<nombre>.asclv
 │   └── requirements.txt
 ├── inputs/       # videos/imágenes fuente a transformar
@@ -36,7 +40,24 @@ python make_clip.py "../inputs/mi-video.mp4"
 # -> ../outputs/mi-video.asclv   (video ASCII + audio en UN archivo)
 ```
 
-Opciones principales: `--profile detail|balanced|graphic|graphic-hq|graphic-ultra|color|custom`,
+El formato predeterminado sigue siendo **v1**. La primera revisión v2 se solicita de
+forma explícita:
+
+```bash
+python make_clip.py "../inputs/mi-video.mp4" --format v2 \
+  --out ../outputs/mi-video-v2.asclv
+
+# Convertir un ASCLV v1 existente sin volver a cuantizar y copiando su audio exacto:
+python ascl_v2.py ../outputs/mi-video.asclv ../outputs/mi-video-v2.asclv
+```
+
+`--format v2` crea primero la matriz v1 aprobada y después elige, frame por frame, una
+representación regional/predictiva solo si es lossless y estrictamente menor. Los tags
+v1 permanecen como fallback, por lo que el bundle v2 no crece frente a esa entrada v1.
+No hay inspección visual ni IA en esta decisión. V2 inicial solo admite `mode pixel`.
+
+Opciones principales: `--format v1|v2` (default `v1`),
+`--profile detail|balanced|graphic|graphic-hq|graphic-ultra|color|custom`,
 `--cols 320`,
 `--palette-size 128`, `--fps 15`, `--palette global|block|adaptive|per-frame`,
 `--palette-algorithm median-cut|fast-octree|kmeans-rgb|kmeans-oklab`,
@@ -121,8 +142,9 @@ debe validarse nuevamente.
 
 - `docs/HOJA-DE-RUTA-TECNICA-V2.md`: backlog vigente, dependencias y gates.
 - `docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md`: principios e invariantes.
-- `docs/ASCL-format-spec.md`: formato v1.
-- `docs/DISENO-ASCL-V2-TILES.md`: propuesta binaria v2.
+- `docs/ASCL-format-spec.md`: formato v1 y primera revisión v2.
+- `docs/DISENO-ASCL-V2-TILES.md`: contrato v2 implementado, límites y pendientes.
+- `docs/BENCHMARK-V2-HQ-768.md`: evidencia exacta reproducible del primer HQ v2.
 - `docs/DISENO-PLANIFICADOR-REGIONAL-V2.md`: selección píxel/máscara/bloque y
   near-lossless temporal propuesto para v2.
 - `docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`: decisiones append-only.
@@ -139,11 +161,18 @@ audio en un único archivo. El selector de MP3 externo se conserva solamente par
 un `.ascl` suelto/antiguo sin perder compatibilidad. El renderer va WebGL→Canvas2D solo;
 el audio es el reloj maestro (si el render se atrasa, descarta frames).
 
+La factory abre v1 con `reader.js` y v2 con `reader-v2.js`; ambos usan los mismos
+renderers. ReaderV2 conserva tags v1 como fallback, agrega tiles de 16, predictores
+reversibles y CRC de header+cuerpo. Su dirty set híbrido combina celdas exactas y tiles
+sin duplicar la capa de video. Todo el frontend usa sintaxis ES5 compatible con el piso
+ECMAScript 2015.
+
 El reader v1 evita arrays JavaScript por frame, valida la estructura y, cuando está
 presente/no nulo, el CRC antes de decodificar. Descomprime en un scratch tipado
 reutilizable. Los deltas conservan un
 bitset de celdas modificadas: Canvas2D y WebGL1 convierten únicamente esos índices al
-RGBA persistente y presentan la misma banda lógica. El formato y el `.asclv` no cambian.
+RGBA persistente y presentan la misma banda lógica. Estas optimizaciones del camino v1 no
+reescriben el `.asclv`.
 Una pérdida de contexto o un fallo WebGL durante playback degrada al mismo frame en
 Canvas2D sin reiniciar el reloj.
 
@@ -179,7 +208,9 @@ frontend/tv-player.html?loop=0
 ```
 
 El demo usa loop por defecto. WebGL1 se intenta primero y Canvas2D conserva la misma
-funcionalidad como fallback.
+funcionalidad como fallback. Tanto v1 como v2 se descargan completos por XHR antes de
+reproducir y se cachean como un único recurso; esta revisión no implementa streaming ni
+carga HTTP parcial.
 
 ## Verificar / preview sin navegador
 
@@ -205,4 +236,6 @@ node tests/test_cache_refresh.js
 node tests/test_tv_controller.js
 node tests/test_tv_player_page.js
 node tests/test_tv_player_runtime.js
+node tests/test_reader_v2.js
+node tests/test_reader_factory.js
 ```

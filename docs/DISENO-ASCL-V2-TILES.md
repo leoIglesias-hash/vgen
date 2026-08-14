@@ -1,441 +1,352 @@
-# Diseño mínimo ASCL v2: codec por tiles adaptativos
+# ASCL v2 por tiles — primera revisión implementada
 
-Estado: propuesta técnica para prototipo. Esta versión no reemplaza ASCL v1: el
-reader nuevo debe leer ambas versiones y el procesador conserva salida v1 durante la
-transición.
+Fecha de revisión: 2026-08-14.
 
-Los opcodes y el envelope de este documento todavía no están congelados. V2-00 debe
-comparar primero las alternativas exactas y near-lossless descritas en
-`DISENO-PLANIFICADOR-REGIONAL-V2.md`; V2-01 actualizará este archivo con el resultado.
+Estado: codec, transcodificador de referencia, ReaderV2 y despacho v1/v2 implementados.
+Esta es una primera revisión utilizable y verificable; no es todavía una recomendación
+de reemplazar v1 en todos los Smart TV. La promoción depende del benchmark HQ final y de
+pruebas físicas.
 
-## 1. Objetivos y alcance
+La especificación normativa resumida también vive en `ASCL-format-spec.md`, §13. Este
+documento explica las decisiones de implementación, los límites y lo que queda fuera.
 
-1. Reducir bytes, RAM y CPU en reproducción, aceptando mayor costo offline.
-2. Mantener una única matriz lógica indexada compartida por Canvas2D y WebGL1.
-3. Usar únicamente operaciones simples, Typed Arrays y DataView compatibles con un
-   runtime escrito en ES5.1.
-4. Permitir seek por keyframes sin reconstruir el video desde el inicio.
-5. Producir la misma matriz final independientemente del presentador.
+## 1. Objetivo e invariantes
 
-Alcance mínimo:
+V2 mejora la representación binaria de una matriz ASCL ya aprobada. No vuelve a analizar
+el video fuente, no usa IA, no estima calidad visual y no modifica colores para ganar
+bytes. La primera revisión exige:
 
-- solo `mode=PIXEL` (`mode=3`);
-- paleta activa de 1 a 256 colores RGB;
-- tile fijo de 16x16 o 32x32 por clip;
-- comandos `REPEAT`, `SKIP`, `SOLID`, `SPARSE`, `PAL4`, `PAL8` y `ZLIB`;
-- offsets de 32 bits y archivos menores de 4 GiB;
-- el envelope se decide en V2-01: `ASCLVID1` permanece intacto para v1 y el candidato v2
-  puede usar un directorio `ASCLVID2` con GOPs autocontenidos.
+- `mode=PIXEL`, una entrada de paleta por celda;
+- misma matriz de índices decodificada que v1 en cada frame;
+- mismas emisiones de paleta RGB, FPS, dimensiones, keyframes y audio;
+- Canvas2D y WebGL1 alimentados por el mismo ReaderV2;
+- frontend con sintaxis ES5, apta para el piso ECMAScript 2015 requerido;
+- un solo `.asclv`, descargado completo y cacheable;
+- v1 como fallback binario por frame y como formato CLI predeterminado.
 
-Los modos ASCII continúan emitiéndose como v1. Mezclar tamaños de tile dentro de un
-clip, motion vectors, detección de objetos y packing de 5/6/7 bits quedan fuera del
-primer prototipo.
+No existe un selector perceptual en este paso. El encoder elige entre formas lossless
+materializadas comparando su longitud real.
 
-"Adaptativo" significa que el encoder elige el comando y la calidad de cada tile. La
-geometría no cambia durante el playback.
+## 2. Envelope ASCLVID2
 
-## 2. Estado de reproducción
-
-El decoder mantiene una sola matriz persistente:
+El envelope no se rediseñó: conserva exactamente 16 bytes de cabecera y los dos cuerpos
+contiguos.
 
 ```text
-cells = Uint8Array(cols * rows)
+offset  size  campo
+0       8     magic ASCII = "ASCLVID2"
+8       4     ascl_len uint32 LE
+12      4     audio_len uint32 LE
+16      ...   ASCL v2 interior
+...     ...   audio exacto (MP3 actual), opcional
 ```
 
-Cada elemento es un índice en la paleta activa. Los comandos modifican `cells` in
-place. Canvas2D y WebGL1 no interpretan el codec: ambos reciben esta matriz, la paleta
-y la misma lista de tiles sucios.
+El tamaño total debe ser `16 + ascl_len + audio_len`, sin truncado ni trailing bytes.
+`ASCLVID2` debe contener inner `version=2`; `ASCLVID1`, inner `version=1`. El audio se
+copia byte a byte al transcodificar.
 
-Buffers auxiliares permitidos:
+No hay directorio `VIDO/AUDI`, GOP separado, chunks ni metadatos de streaming en esta
+revisión. Eso evita ampliar el parser y mantiene la misma forma de caché que v1.
 
-- vista de la paleta, hasta 768 bytes;
-- lista y bitset de tiles sucios;
-- una banda reutilizable de presentación;
-- tablas pequeñas del inflater.
+## 3. Header interior v2
 
-No se crea otro framebuffer lógico del tamaño del video.
+Se conserva el header ASCL fijo de 32 bytes y la tabla de offsets `uint32 LE`.
 
-## 3. Header v2
+```text
+byte 0..3   "ASCL"
+byte 4      version = 2
+byte 5      mode = 3 (PIXEL)
+byte 26     tile_size = 16
+byte 27     codec_flags = 0x01 (regional habilitado)
+byte 28..31 crc32 v2 uint32 LE
+```
 
-Los primeros 32 bytes conservan las posiciones principales de v1. El byte `version`
-determina cómo se interpreta el resto.
+Los restantes campos mantienen el layout v1. Interpretado como el antiguo `reserved`
+uint16 LE, bytes 26/27 forman `0x0110`.
 
-| Offset | Tamaño | Campo | Valor v2 |
-|---:|---:|---|---|
-| 0 | 4 | `magic` | `ASCL` |
-| 4 | 1 | `version` | `2` |
-| 5 | 1 | `mode` | `3` (`PIXEL`) |
-| 6 | 1 | `flags` | flags comunes más `TILED` |
-| 7 | 1 | `fps_legacy` | entero aproximado, informativo |
-| 8 | 2 | `cols` | columnas, uint16 LE |
-| 10 | 2 | `rows` | filas, uint16 LE |
-| 12 | 2 | `pal_size_max` | 1..256 |
-| 14 | 4 | `n_frames` | uint32 LE |
-| 18 | 1 | `ramp_len` | `0` |
-| 19 | 1 | `cell_fmt` | `1` |
-| 20 | 4 | `data_off` | inicio de tabla de offsets |
-| 24 | 2 | `char_aspect_x1000` | `1000` |
-| 26 | 2 | `reserved` | `0` |
-| 28 | 4 | `crc32` | CRC desde byte 32 hasta EOF |
-| 32 | 2 | `header_size` | `48` inicialmente |
-| 34 | 2 | `fps_num` | numerador exacto |
-| 36 | 2 | `fps_den` | denominador exacto, mayor que 0 |
-| 38 | 1 | `tile_size` | `16` o `32` |
-| 39 | 1 | `codec_flags` | reservado, `0` |
-| 40 | 4 | `keymap_off` | offset absoluto al keymap |
-| 44 | 4 | `frames_off` | offset absoluto al primer frame |
+### CRC v2
 
-El reloj usa `fps_num / fps_den`; `fps_legacy` no interviene en el cálculo v2.
+El CRC IEEE es obligatorio y cubre:
 
-Bits de `flags`:
+```text
+header[0..27] ++ body[32..EOF]
+```
 
-| Bit | Nombre | Uso v2 |
+Los cuatro bytes del propio CRC quedan excluidos. A diferencia de v1, la verificación
+protege versión, modo, flags, FPS, dimensiones, paleta declarada, tabla y bloques.
+
+## 4. Frame block y tags
+
+El bloque conserva la estructura v1, por lo que no agrega overhead por frame:
+
+```text
+uint32 LE  block_len
+uint8      tag
+uint16 LE  pal_count
+uint8      palette[pal_count * 3]
+uint8      payload[block_len - 3 - pal_count*3]
+```
+
+Tags implementados:
+
+| Tag | Nombre | Tipo |
 |---:|---|---|
-| 0 | `LOSSY` | el encoder aceptó pérdida temporal/perceptual |
-| 1 | `PAL_PER_SCENE` | pista informativa de estrategia de paleta |
-| 2 | `PAL_GLOBAL` | misma paleta lógica durante todo el clip |
-| 3 | `HAS_OFFSET_TABLE` | siempre `1` |
-| 4 | `RECON_SOFT` | recomendación de reconstrucción |
-| 5 | `TILED` | siempre `1` en esta v2 |
-| 6 | `HAS_KEYMAP` | siempre `1` |
-| 7 | reservado | `0` |
+| 0 | `RAW` | key v1 conservado |
+| 1 | `ZLIB` | key v1 conservado |
+| 2 | `DELTA` | delta v1 conservado |
+| 3 | `DELTA_MASK` | delta v1 conservado |
+| 4 | `REGIONAL_KEY_RAW` | key regional crudo |
+| 5 | `REGIONAL_KEY_ZLIB` | key regional zlib |
+| 6 | `REGIONAL_DELTA_RAW` | delta regional crudo |
+| 7 | `REGIONAL_DELTA_ZLIB` | delta regional zlib |
+| 8 | `PREDICT_KEY_ZLIB` | key predictor reversible |
+| 9 | `PREDICT_DELTA_ZLIB` | delta predictor reversible |
 
-`PAL_GLOBAL` no impide reemitir la misma paleta en cada keyframe: describe su
-identidad lógica, no cuántas veces aparecen sus bytes.
+Los tags key son `{0,1,4,5,8}` y los delta `{2,3,6,7,9}`. Un delta no puede emitir
+paleta. Un key de paleta temporal/per-frame debe ser autónomo. Mantener 0..3 dentro de v2
+es una decisión central: si una idea v2 no gana, el frame usa sus bytes v1 originales.
 
-Layout posterior:
+## 5. Geometría de tiles
 
-```text
-HEADER             header_size bytes
-OFFSET TABLE       n_frames * uint32 LE
-KEYFRAME MAP       ceil(n_frames / 8) bytes, LSB-first
-PADDING             ceros hasta múltiplo de 4
-FRAME BLOCKS
-```
-
-Los offsets son absolutos desde el byte cero del `.ascl`, no desde el `.asclv`. El
-reader consulta la tabla directamente con `DataView`; no crea un `Array` JS por frame.
-
-El límite de 32 bits se conserva deliberadamente: un webview antiguo no puede cargar
-de forma fiable un ArrayBuffer cercano a 4 GiB. Superarlo requerirá segmentación en una
-versión posterior, no enteros de 64 bits en el runtime legacy.
-
-## 4. Tiles
+La primera revisión fija `tile_size=16`. La grilla se calcula sin padding materializado:
 
 ```text
-tile_cols  = ceil(cols / tile_size)
-tile_rows  = ceil(rows / tile_size)
+tile_cols  = ceil(cols / 16)
+tile_rows  = ceil(rows / 16)
 tile_count = tile_cols * tile_rows
 ```
 
-Se exige `tile_count <= 65535`. Los tiles se numeran row-major. Un tile de borde usa
-solo su ancho y alto reales; no almacena celdas fuera de la imagen.
+Los tiles del borde tienen ancho/alto menor derivado de la imagen. El cursor avanza
+row-major y es implícito: excepto `SKIP_RUN`, cada opcode consume exactamente un tile.
+El stream debe cubrir `tile_count` y terminar en ese punto exacto.
 
-El encoder prueba 16 y 32 offline y selecciona uno para todo el clip:
+## 6. Stream regional implementado
 
-- 16: mejor granularidad para cambios pequeños y menor costo de `SPARSE`;
-- 32: menos comandos y menos llamadas de presentación en movimiento amplio.
+Todos los `uvarint` son LEB128 uint32 canónicos, de uno a cinco bytes. Las máscaras y
+códigos packed se escriben LSB-first y exigen padding cero. Los mapas locales son índices
+de la paleta RGB activa, estrictamente crecientes y sin duplicados.
 
-## 5. Frame block
-
-```text
-uint32 LE  block_len       bytes posteriores a este campo
-uint8      frame_flags     bit 0 = KEYFRAME
-uint16 LE  pal_count
-uint8      palette[pal_count * 3]
-uint8      commands[...]   hasta el final de block_len
-```
-
-El bit `KEYFRAME` debe coincidir con el keymap.
-
-Reglas de paleta y seek:
-
-- frame 0 siempre es keyframe;
-- cada keyframe incluye la paleta activa completa;
-- cambiar la paleta obliga a emitir un keyframe;
-- un delta tiene `pal_count=0`;
-- una paleta global puede reemitirse en cada keyframe para mantener seek autónomo;
-- `REPEAT` nunca es keyframe;
-- `ZLIB` siempre es keyframe.
-
-Una paleta por frame es válida, pero convierte cada frame en keyframe y normalmente
-aumenta bytes y trabajo de presentación. El default recomendado es una paleta por
-bloque o escena con duración mínima e histéresis.
-
-## 6. Stream de comandos
-
-El cursor de tile comienza en cero. No hay comando `END`: el límite del frame termina
-el stream.
-
-| Opcode | Nombre | Payload | Acción |
-|---:|---|---|---|
-| `0x00` | `REPEAT` | ninguno | Reusa matriz y paleta; debe ser el único comando. |
-| `0x01` | `SKIP` | `uint16 run` | Avanza `run` tiles sin modificarlos. |
-| `0x02` | `SOLID` | `uint16 run`, `uint8 color` | Rellena tiles consecutivos con un índice. |
-| `0x03` | `SPARSE` | `uint16 count`, entradas | Cambia pocas celdas del tile actual. |
-| `0x04` | `PAL4` | mapa local y nibbles | Sobrescribe un tile completo. |
-| `0x05` | `PAL8` | índices de 8 bits | Sobrescribe un tile completo. |
-| `0x06` | `ZLIB` | zlib hasta fin del bloque | Sobrescribe el frame completo. |
-
-Todos los enteros multi-byte son little-endian. `run` debe ser mayor que cero y no
-puede avanzar más allá de `tile_count`.
-
-### 6.1 REPEAT y SKIP
-
-`REPEAT` representa un frame completo sin cambios y deja el dirty set vacío. Un frame
-delta puede omitir un `SKIP` final: los tiles desde el cursor hasta el final permanecen
-sin cambios.
-
-### 6.2 SOLID
-
-`SOLID` escribe el mismo índice global en todas las celdas reales de uno o más tiles
-consecutivos. El índice debe ser menor que `pal_count` de la paleta activa.
-
-### 6.3 SPARSE
-
-`SPARSE` solo es válido en frames delta. Cada entrada contiene posición local y color:
+### 6.1 `0x00 SKIP_RUN`
 
 ```text
-tile 16: uint8  position, uint8 color
-tile 32: uint16 position, uint8 color
-
-position = local_y * tile_size + local_x
+opcode:u8 ++ run:uvarint
 ```
 
-Las posiciones son estrictamente crecientes y deben pertenecer al área real del tile
-de borde. Después de aplicar las entradas, el cursor avanza un tile.
+Solo delta. Reutiliza `run>=1` tiles consecutivos de la matriz anterior. Es el único
+comando con corrida. No existe opcode `REPEAT`: una matriz completa repetida se representa
+con `SKIP_RUN(tile_count)`. Tampoco existe un `SKIP` unitario separado.
 
-### 6.4 PAL4
+### 6.2 `0x01 SOLID`
 
 ```text
-uint8 map_count
-uint8 map[map_count]
-uint8 packed[ceil(pixel_count / 2)]
+opcode:u8 ++ color_idx:u8
 ```
 
-- `map_count=1..16`: cada nibble indexa `map`; `map` contiene índices globales.
-- `map_count=0`: los nibbles son índices globales directos 0..15.
-- el nibble bajo representa la primera celda;
-- si `pixel_count` es impar, el nibble alto final es cero.
+Llena un solo tile. El nombre normativo es `SOLID`, no `SOLID_RUN`; no lleva contador.
 
-Las celdas se recorren row-major dentro del ancho y alto reales del tile. El cursor
-avanza un tile.
-
-### 6.5 PAL8
-
-Contiene `pixel_count` índices globales, un byte por celda real, en row-major. El
-cursor avanza un tile.
-
-### 6.6 ZLIB
-
-`ZLIB` debe ser el único comando de un keyframe. Los bytes restantes del frame son un
-stream zlib cuyo resultado exacto es `cols * rows` índices row-major.
-
-No se usa ZLIB por tile: inicializar cientos de inflaters por frame sería perjudicial
-en Smart TVs. El inflater v2 debe escribir directamente en `cells` y validar la
-longitud esperada, sin crear otro framebuffer.
-
-### 6.7 Cobertura de frame
-
-Un keyframe por tiles:
-
-- solo usa `SOLID`, `PAL4` y `PAL8`;
-- no usa `SKIP` ni `SPARSE`;
-- termina con `cursor == tile_count`.
-
-Un delta puede combinar todos los comandos salvo `ZLIB`, y los tiles no cubiertos se
-conservan. Un stream vacío es inválido; el encoder canónico usa `REPEAT`.
-
-## 7. Selección offline de comandos
-
-Orden inicial por tile/frame:
-
-1. frame idéntico: `REPEAT`;
-2. tiles idénticos: `SKIP`;
-3. tiles uniformes: `SOLID`;
-4. pocos cambios: `SPARSE`;
-5. hasta 16 colores locales: `PAL4`;
-6. resto: `PAL8`;
-7. comparar el stream completo contra un keyframe `ZLIB`.
-
-El objetivo no puede ser solo el menor archivo. El encoder debe considerar trabajo de
-reproducción:
+### 6.3 `0x02 SPARSE`
 
 ```text
-REPEAT / SKIP      casi cero
-SPARSE             count escrituras
-SOLID / PAL8       pixel_count escrituras
-PAL4               pixel_count escrituras + desempaquetado
-ZLIB               cols*rows escrituras + inflate
+opcode:u8 ++ k:uvarint ++ (offset:uvarint ++ value:u8)[k]
 ```
 
-En el perfil legacy, `ZLIB` solo compite si reduce al menos 15-20% frente al stream por
-tiles y cumple el presupuesto p95 medido. Un perfil opcional `smallest` puede ponderar
-más los bytes.
+Solo delta. `k` está entre 1 y `npix`. Cada offset es absoluto dentro del tile row-major,
+estrictamente creciente y menor que `npix`. Cada valor debe diferir de la matriz previa;
+escrituras nulas se rechazan.
 
-La calidad adaptativa no necesita nuevos comandos. El encoder puede probar, por tile:
-
-- resolución completa;
-- reducción y reexpansión horneada;
-- menor paleta local;
-- dithering estable o sin dithering;
-- retención temporal bajo un umbral perceptual.
-
-Cada candidato termina en la misma matriz final. Se elige por distorsión, bytes reales
-y costo estimado de decode. El dithering debe estar anclado a coordenadas absolutas y
-solo conservarse si su mejora visual justifica los cambios temporales adicionales.
-
-## 8. Dirty tiles comunes
-
-El reader reserva una sola vez:
+### 6.4 `0x03 MASK`
 
 ```text
-dirty_ids   Uint16Array(tile_count)
-dirty_bits  Uint8Array(ceil(tile_count / 8))
-dirty_count
-dirty_full
+opcode:u8 ++ mask[ceil(npix/8)] ++ values[popcount(mask)]
 ```
 
-Semántica:
+Solo delta. Bit `i` selecciona celda local `i`; los valores siguen el orden de los bits.
+La máscara no puede estar vacía y tampoco admite escrituras idénticas al estado previo.
 
-- `REPEAT` y `SKIP`: no ensucian;
-- `SOLID`, `SPARSE`, `PAL4` y `PAL8`: ensucian los tiles afectados;
-- keyframe y `ZLIB`: `dirty_full=true`;
-- si el audio obliga a saltar varios frames, se guarda la unión de todos los tiles
-  modificados, no solo los del último frame.
-
-Al finalizar `seek`, el bitset se recorre para producir IDs ordenados y sin duplicados.
-Los IDs se agrupan en corridas horizontales; Canvas2D y WebGL1 consumen exactamente las
-mismas corridas.
-
-Para v1, el adapter puede usar tiles lógicos de 16x16: RAW/ZLIB producen `dirty_full` y
-DELTA/DELTA_MASK marcan los tiles tocados.
-
-## 9. Presentación Canvas2D y WebGL1
-
-Canvas2D:
-
-- conserva solo el backing store nativo del canvas;
-- usa un `ImageData` reutilizable de `cols * tile_size` píxeles;
-- convierte índices a RGBA únicamente en corridas sucias;
-- actualiza por corrida o banda mediante `putImageData`.
-
-WebGL1:
-
-- mantiene una textura de índices de un byte y una textura de paleta;
-- actualiza las mismas corridas con `texSubImage2D`;
-- usa una banda staging reutilizable cuando el subrectángulo no es contiguo;
-- no interpreta comandos ni mantiene otro estado de video.
-
-Ejemplo 1920x1080 con tiles de 16:
-
-| Estado JS | Tamaño aproximado |
-|---|---:|
-| matriz de índices | 2,0 MiB |
-| dirty IDs | 16 KiB |
-| dirty bitset | 1 KiB |
-| banda Canvas RGBA | 120 KiB |
-| banda WebGL | 30 KiB |
-
-El backing store Canvas y la textura WebGL son recursos de presentación inevitables,
-no segundos framebuffers lógicos.
-
-No debe aplicarse `LINEAR` directamente a una textura de índices: interpolaría números
-de paleta en vez de colores. El camino normalizado inicial usa suavizado horneado
-offline y presentación `NEAREST`. Un modo soft en runtime requeriría interpolar colores
-después del lookup y demostrar equivalencia suficiente con Canvas.
-
-## 10. Reader dual y límites ES5
-
-Despacho obligatorio:
+### 6.5 `0x04 PACK1`
 
 ```text
-magic inválido  -> error
-version 1       -> ReaderV1
-version 2       -> ReaderV2
-otra versión    -> error explícito
+opcode:u8 ++ map[2] ++ codes[ceil(npix/8)]
 ```
 
-Interfaz común:
+Exactamente dos índices locales, un bit por celda.
+
+### 6.6 `0x05 PACK2`
 
 ```text
-header
-cells
-palette
-seek(frame_index)
-dirty_full
-dirty_count
-dirty_tiles
-tile_size
+opcode:u8 ++ count:u8 ++ map[count] ++ codes[ceil(npix/4)]
 ```
 
-El runtime distribuido usa sintaxis ES5.1 y no depende de:
+`count=3..4`, dos bits por celda.
 
-- `Promise`, `fetch`, módulos o `async/await`;
-- Worker, WASM, WebGL2, OffscreenCanvas o Streams;
-- `Map`, `Set`, `BigInt` o `TypedArray.slice`.
+### 6.7 `0x06 PAL4`
 
-Sí requiere `ArrayBuffer`, Typed Arrays, `DataView`, XHR binario y Canvas2D. WebGL1 es
-opcional. El reader usa `subarray` y vistas directas para no copiar el `.ascl` interior
-del bundle.
+```text
+opcode:u8 ++ count:u8 ++ map[count] ++ codes[ceil(npix/2)]
+```
 
-Al buscar un frame objetivo:
+`count=5..16`, cuatro bits por celda. Documentos previos usaban `PACK4` y `PAL4` para
+la misma idea. El opcode implementado y nombre normativo es **`PAL4`**; no son dos
+candidatos distintos.
 
-1. localizar el keyframe anterior con el keymap;
-2. si el estado actual válido está más cerca, avanzar desde él;
-3. si hay un keyframe posterior al estado actual y anterior al objetivo, saltar directo
-   a ese keyframe;
-4. acumular dirty tiles de toda la cadena aplicada.
+### 6.8 `0x07 PAL8`
 
-## 11. Riesgos
+```text
+opcode:u8 ++ values[npix]
+```
 
-- Una paleta por frame elimina casi todas las ventajas temporales y fuerza redraw
-  completo.
-- Tiles de 16 reducen overdraw pero agregan comandos; tiles de 32 hacen lo contrario.
-- Dithering temporalmente inestable puede destruir `SKIP` y `SPARSE`.
-- ZLIB por tile aumenta mucho la CPU; queda prohibido en la v2 mínima.
-- La escritura directa en `cells` puede dejar estado parcial ante un archivo corrupto;
-  se mitiga con CRC, validación de límites y recuperación en el siguiente keyframe.
-- El dirty set debe unir todos los frames omitidos por sincronización de audio.
-- El player v1 existente no entiende v2. El frontend actualizado sí debe seguir leyendo
-  todos los fixtures v1 y el procesador conserva `--format v1|v2` durante la transición.
-- Los offsets y longitudes del envelope siguen limitados a 32 bits.
+Un índice de la paleta global activa por celda, row-major. No incluye mapa local.
 
-## 12. Pruebas de aceptación
+### 6.9 RAW frente a ZLIB
 
-Fixtures mínimos:
+Primero se construye el stream completo. Los tags 4/6 guardan ese stream crudo; 5/7
+guardan `zlib(stream)`. ZLIB se elige solo si es estrictamente menor. No existe zlib por
+tile ni longitud RAW prefijada; el reader usa dimensiones y un bound defensivo.
 
-- dimensiones exactas y bordes: 16x16, 17x17, 31x33 y 1920x1080;
-- un fixture por comando y combinaciones de comandos;
-- `PAL4` directo, con mapa, cantidad impar y tile recortado;
-- keyframes por tiles y por ZLIB;
-- cambio de paleta en keyframe;
-- secuencias largas de `REPEAT` y `SKIP`;
-- seek hacia adelante, atrás y con frames descartados;
-- payloads truncados, índices inválidos, cursor excedido y keymap inconsistente.
+## 7. Selección offline determinista
 
-Validaciones:
+En cada tile cambiado se materializan todos los candidatos exactos aplicables. Gana el
+menor por bytes; los empates siguen este orden:
 
-- CRC de `cells` idéntico al decoder Python en cada frame;
-- matriz idéntica antes de presentar por Canvas2D y WebGL1;
-- unión correcta de dirty tiles al saltar frames;
-- apertura de todos los fixtures v1 existentes;
-- cero asignaciones por frame durante reproducción estable;
-- RAM pico, bytes, decode p50/p95, render p50/p95 y frames descartados medidos por
-  resolución y tipo de movimiento.
+```text
+SOLID, SPARSE, MASK, PACK1, PACK2, PAL4, PAL8
+```
 
-## 13. Orden de prototipo
+En un key solo participan formas densas. En un delta, un tile idéntico se acumula en
+`SKIP_RUN`; uno cambiado también puede usar `SPARSE`/`MASK`.
 
-1. Congelar layout, opcodes y fixtures binarios dorados.
-2. Agregar gate de versiones y conservar regresión completa de ReaderV1.
-3. Implementar v2 PIXEL, tile 16, keyframes `SOLID`/`PAL8`.
-4. Agregar `REPEAT`, `SKIP`, `SPARSE`, keymap, seek y dirty union.
-5. Presentar corridas comunes en Canvas2D y WebGL1.
-6. Agregar `PAL4`.
-7. Agregar tile 32 y elección offline 16 vs 32.
-8. Agregar paletas por bloque/escena y adaptación de calidad offline.
-9. Rehacer inflate con salida tipada directa a `cells`; recién entonces activar ZLIB.
-10. Evaluar con benchmarks si packing de 5/6/7 bits merece ampliar el formato.
+Por frame, el transcodificador compara:
 
-Cada etapa avanza solo si conserva compatibilidad v1, seek correcto, igualdad de la
-matriz común y el presupuesto de memoria/CPU del perfil legacy.
+1. tag/payload v1 original;
+2. mejor stream regional RAW/ZLIB;
+3. mejor predictor reversible.
+
+Un candidato nuevo solo reemplaza al vigente con una longitud estrictamente menor. Los
+demás bytes del bloque se conservan, de modo que el ASCL v2 nunca crece frente al ASCL v1
+de entrada. Esta es una garantía estructural, no un promedio de corpus.
+
+## 8. Predictores exactos
+
+Los tags 8/9 guardan:
+
+```text
+predictor_id:u8 ++ zlib(residual de N bytes)
+```
+
+IDs key:
+
+- `0 LEFT`: diferencia modular contra la izquierda, cero en borde;
+- `1 TOP`: diferencia modular contra arriba, cero en borde;
+- `2 GRADIENT`: predictor `left + top - top_left` módulo 256.
+
+IDs delta:
+
+- `3 PREVIOUS_SUB`: `actual - previous` módulo 256;
+- `4 PREVIOUS_XOR`: `actual XOR previous`.
+
+Se prueba cada predictor permitido, gana el menor payload y el ID menor desempata. Son
+transformadas de bytes reversibles; no alteran paleta, índices ni RGB.
+
+## 9. ReaderV2 y dirty híbrido
+
+`reader-factory.js` despacha por el byte de versión:
+
+```text
+1 -> ReaderV1
+2 -> ReaderV2
+otro -> error
+```
+
+`ReaderV2` usa sintaxis ES5 y mantiene el contrato de los renderers. Su estado dirty es
+la unión disjunta de:
+
+- bits de celdas exactas para `SPARSE`, `MASK`, DELTA y DELTA_MASK;
+- bits/lista de tiles para comandos densos regionales;
+- `dirtyFull` para keyframes y cambios de paleta.
+
+Si un tile denso solapa celdas exactas, el tile las reemplaza en la unión. `seek()` acumula
+los cambios de todos los frames decodificados hasta el objetivo. Canvas2D y WebGL1 llaman
+la misma `fillRGBAChanged`; no hay una semántica de imagen distinta por renderer.
+
+## 10. Validación, scratch y seguridad
+
+El reader verifica CRC, campos de header, offsets contiguos, longitudes exactas, paletas,
+tags, bounds de inflate, LEB128 canónico, cobertura, padding e índices. El regional se
+recorre una vez sin aplicar y otra vez para escribir; un payload inválido no deja un tile
+parcialmente mutado. Los predictores también validan todos los valores antes de consolidar
+el frame.
+
+Inventario proporcional persistente/reutilizable:
+
+- vista del archivo completo descargado;
+- `cells` de `N` bytes;
+- scratch tipado que crece bajo bound y luego se reutiliza;
+- dirty bits por celda/tile y lista `uint16` de tiles;
+- RGBA persistente del renderer.
+
+Por ello el gate correcto no es “cero memoria proporcional”. Es **cero asignaciones nuevas
+de un frame completo en el loop estable**, después de dimensionar el scratch necesario.
+La revisión impone 64 MiB a cada bound operativo validado de matriz/inflate y hasta 65.535
+tiles para IDs `uint16`; 64 MiB no es un límite de RAM total del player.
+
+## 11. CLI e integración
+
+`make_clip.py` expone:
+
+```text
+--format v1|v2
+```
+
+El default es `v1`. Con `v2`, el procesador crea primero la matriz v1 aprobada en un
+temporal distinto, la transcodifica lossless y empaqueta `ASCLVID2`. Nunca sobrescribe la
+fuente v1. También puede usarse `backend/ascl_v2.py input.asclv output.asclv` para convertir
+un bundle v1 existente y copiar su audio exacto.
+
+Los players cargan `inflate.js`, `reader.js`, `reader-v2.js` y `reader-factory.js`; aceptan
+ambos magic de bundle. La descarga sigue siendo completa por XHR. No requiere Worker,
+WASM, WebGL2, Service Worker, Streams ni MediaSource.
+
+## 12. Pruebas de aceptación de esta revisión
+
+Pruebas automáticas requeridas:
+
+- roundtrip Python exacto de todos los opcodes y predictores;
+- dimensiones no divisibles por 16;
+- igualdad de matrices/paletas/keyframes v1-v2;
+- garantía `bytes(v2) <= bytes(v1)` también en entrada incompresible;
+- rechazo transaccional de truncado, trailing, overflow, padding, índices y zlib inválidos;
+- igualdad Python/ReaderV2 y seek hacia adelante/atrás;
+- factory y players duales sin regresión v1;
+- envelope `ASCLVID1/2`, longitud exacta y versión interior concordante.
+
+La aceptación de producto agrega Smart TV físico: p50/p95, cuadros perdidos, RAM, CPU,
+Canvas2D y WebGL1. Un resultado de PC/Node no sustituye ese gate.
+
+## 13. Pendientes, sin confundirlos con lo implementado
+
+1. **Artefacto HQ final:** **COMPLETADO localmente**. El ASCLVID2 final pesa
+   17.935.305 B, ahorra 5 B, conserva RGBA en 231/231 frames y audio byte-exacto; SHA-256
+   `6FF3E71E3B090B4546C265AA60D22C65CF9382E0B207D6DCCB29AEFFF713573A`.
+2. **Remap exacto de paleta:** el laboratorio permutó conjuntamente IDs y entradas RGB:
+   conservó RGB byte-exacto en 231/231 frames y estimó 17.935.310 -> 17.763.683 B
+   (-171.627 B; -0,9569%), pero introdujo 94 tags predictores y tardó 414,4 s offline.
+   No está implementado ni es default; queda bajo evaluación física por posible costo CPU.
+3. **Validación física TV:** decidir si v2 se promueve o queda como perfil especializado.
+4. **Intervención matricial:** slots rectangulares dentro de la misma matriz/canvas.
+5. **Near-lossless:** opcional y explícito, separado de este transcode exacto.
+6. **Range/streaming/chunks:** solo con evidencia de RAM/arranque; hoy se conserva descarga
+   completa y caché de un recurso.
+7. **Otros tiles/opcodes:** 8/32, diccionario, hold o patch de paleta necesitan otra
+   revisión y sus propios gates de compatibilidad/costo.
+
+## 14. Criterio de promoción
+
+V2 puede promoverse cuando:
+
+- la igualdad exacta v1/v2 esté demostrada sobre el artefacto final (**cumplido local**);
+- el tamaño no crezca y la ganancia justifique el decoder adicional;
+- Canvas2D y WebGL1 mantengan calidad, reloj y estabilidad;
+- RAM pico y cuadros perdidos no empeoren en los dispositivos objetivo;
+- v1 siga siendo una salida seleccionable y reproducible.
+
+Hasta entonces, `--format v1` continúa siendo el default conservador.

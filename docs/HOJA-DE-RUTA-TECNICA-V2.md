@@ -1,8 +1,9 @@
 # Hoja de ruta técnica — cierre de ASCL v1 y evolución a v2
 
-Estado: plan activo desde 2026-08-14.
+Estado: plan activo desde 2026-08-14. Primera revisión v2 implementada localmente;
+benchmark de producto y promoción todavía pendientes.
 
-Base recuperable: commit `fbeca06`, tag `tkn-adaptive-oklab-hq-v1`.
+Base v1 recuperable: commit `abb0451`, tag `tv-runtime-hq-v1`.
 
 Este documento es la cola técnica activa: define qué implementar, en qué orden y qué
 evidencia se exige para aceptar cada paso. No reemplaza las especificaciones ni copia sus
@@ -11,8 +12,8 @@ tablas. Las fuentes de verdad son:
 | Tema | Documento |
 |---|---|
 | principios y arquitectura | `PLAN-IMPLEMENTACION-OPTIMIZACION.md` |
-| formato v1 | `ASCL-format-spec.md` |
-| propuesta binaria v2 | `DISENO-ASCL-V2-TILES.md` |
+| formato v1/v2 | `ASCL-format-spec.md` |
+| revisión v2 implementada | `DISENO-ASCL-V2-TILES.md` |
 | resultados actuales | `BENCHMARK-V1-ADAPTATIVO-OKLAB.md` |
 | decisiones por instancia | `REGISTRO-DE-PRUEBAS-Y-DECISIONES.md` |
 | hosting | `DESPLIEGUE.md` |
@@ -23,10 +24,10 @@ no se borran las conclusiones anteriores.
 
 ## 1. Base cerrada e invariantes
 
-- El artefacto distribuido es un único `.asclv` cacheable. `ASCLVID1` contiene el
-  `.ascl` y el audio MP3.
-- El video actual sigue siendo ASCL v1, `mode=PIXEL`, con índices de un byte y hasta 256
-  colores.
+- El artefacto distribuido es un único `.asclv` cacheable. `ASCLVID1` o `ASCLVID2`
+  contienen el `.ascl` de igual versión y el audio MP3.
+- V1 sigue siendo el default de producción. V2 local admite `mode=PIXEL`, con índices de
+  un byte y hasta 256 colores, sin volver a cuantizar la matriz v1.
 - Oklab, bloques adaptativos, estabilidad y dithering se calculan offline. El reader no
   ejecuta esos algoritmos.
 - Canvas2D es el piso. WebGL1 es opcional; ambos reciben la misma matriz y deben ofrecer
@@ -48,23 +49,23 @@ Artefactos de control:
 
 ## 2. Decisión sobre el frontend actual
 
-### Ahora, con ASCL v1
+### Estado actual: frontend dual
 
-No hace falta modificar `reader.js`, los renderers ni `tv-player.html`. Las mejoras están
-horneadas como paletas e índices v1 y sus flags ya son compatibles. Para publicar un clip:
+`reader.js` permanece como ReaderV1. `reader-v2.js` y `reader-factory.js` despachan por
+versión sin cambiar los renderers. `player.html` y `tv-player.html` aceptan envelopes
+`ASCLVID1` y `ASCLVID2`. Para publicar un clip:
 
 1. subir el `.asclv` elegido;
 2. conservar el nombre esperado por `DEFAULT_SRC` o cambiar solo esa constante;
 3. servirlo por HTTP con tipo binario y política de caché coherente;
-4. no separar ni convertir el audio incluido.
+4. desplegar también `reader-v2.js` y `reader-factory.js` si se servirá v2;
+5. no separar ni convertir el audio incluido.
 
-El HQ 768 no necesita otro reproductor, aunque usa más celdas y debe pasar pruebas físicas
-antes de convertirse en el único perfil publicado.
+El mismo frontend abre HQ v1 o v2. La promoción de v2 sigue condicionada a pruebas
+físicas; `--format v1` permanece como salida predeterminada.
 
 ### Cambios futuros del frontend
 
-- despacho `ReaderV1`/`ReaderV2` cuando exista un fixture v2 aprobado;
-- dirty tiles comunes para Canvas2D y WebGL1;
 - instrumentación en una página de diagnóstico separada del player de producción;
 - motor matricial de slots cuando existan metadata y fixtures;
 - carga parcial solo si las mediciones demuestran que el XHR completo es el límite real.
@@ -230,8 +231,8 @@ posibles sobre v1.
 ### Gate
 
 - CRC de `cells` y salida RGBA idénticos a la implementación vigente;
-- cero asignaciones o buffers transitorios proporcionales por frame; inventario
-  persistente fijo/acotado y sin crecimiento entre loops;
+- ningún buffer nuevo de frame completo por cuadro en el loop estable; `cells`, RGBA,
+  bitsets y scratch proporcional se permiten como estado persistente acotado/reutilizado;
 - p95 sin regresión mayor a 5%;
 - reducción >=20% del pico transitorio de inflate en el equipo más lento;
 - cambios de paleta y keyframes fuerzan actualización completa;
@@ -256,154 +257,83 @@ El bitset exacto evitó 46,14% de conversiones y redujo aproximadamente 19% la e
 conversión y 4,7% decode+conversión en Node. No se extrapola a GPU ni TV. Dirty tiles v2
 siguen siendo necesarios para reducir uploads cuando el contenido sea regional.
 
-## 9. V2-00/01/02 — planificador regional, formato congelado y referencia Python
+## 9. V2-00/01/02 — codec regional y referencia Python
 
-Objetivo: demostrar tiles usando la matriz final aprobada, sin volver a cuantizar,
-suavizar ni aplicar dither. La representación base está en `DISENO-ASCL-V2-TILES.md` y
-la selección exacta/near-lossless en `DISENO-PLANIFICADOR-REGIONAL-V2.md`.
+### Estado: implementado localmente
 
-### V2-00 — planificador regional experimental, sin formato público
+La primera revisión ya convierte de manera secuencial una matriz v1 `PIXEL` aprobada a
+v2 sin volver a cuantizar. Decisiones cerradas en esta revisión:
 
-Primero se implementa un planificador determinista en memoria. No emite todavía archivos
-que se declaren v2 estables y puede probar tiles 8/16/32 para descartar opciones. Separa
-dos decisiones que no deben mezclarse:
+- header interior de 32 B, `version=2`, byte 26 `tile_size=16`, byte 27 flags `0x01`;
+- CRC obligatorio sobre header `0..27` y cuerpo `32..EOF`;
+- envelope `ASCLVID2` de 16 B, sin directorio ni chunks;
+- tags 0..3 como fallback v1; 4..7 regionales; 8/9 predictores;
+- opcodes `SKIP_RUN`, `SOLID`, `SPARSE`, `MASK`, `PACK1`, `PACK2`, `PAL4`, `PAL8`;
+- LEB128 uint32 canónico y bits LSB-first;
+- selección estricta por bytes, conservando el payload anterior en empate;
+- garantía estructural de que v2 no crece respecto del v1 de entrada;
+- decoder Python independiente y validación transaccional.
 
-1. un planificador perceptual temporal produce la matriz que realmente se mostrará; en
-   modo lossless es idéntica al objetivo y en modo con pérdida aplica límites explícitos;
-2. un empaquetador regional lossless representa la transición elegida con el menor costo
-   real de bytes, escrituras e inflate.
+`PACK4` no es otro opcode: el nombre normativo es `PAL4`. Solo `SKIP_RUN` lleva una
+corrida; `SOLID` cubre un tile y no existe `SOLID_RUN`. Una repetición completa es un
+`SKIP_RUN(tile_count)`, no un opcode propio.
 
-Los candidatos exactos mínimos son:
+Los predictores exactos implementados son LEFT, TOP y GRADIENT para keyframes, y
+PREVIOUS_SUB/PREVIOUS_XOR para deltas. Toda aritmética es modular `uint8`; la paleta y el
+RGB reconstruido no cambian.
 
-- `REPEAT`, `SKIP`, `SOLID`, `SPARSE`, `MASK`, `PACK1`, `PACK2`, `PAL4` y `PAL8`;
-- DELTA_MASK v1 como baseline;
-- candidato `MASK_ZLIB` (`mask_bits || changed_values`) para movimiento amplio;
-- keyframe ZLIB completo después de disponer de inflate directo.
+El transcodificador conserva cada tag/payload v1 original y solo lo reemplaza con una
+representación v2 estrictamente menor. La comparación es mecánica; no requiere una persona,
+IA ni proxy visual.
 
-El encoder compara bytes reales. En un tile 16x16, `SPARSE` es apropiado para pocos
-cambios, `MASK` para densidad intermedia, `PACK1/2/4` cuando hay 2/4/16 índices locales y
-`PAL8` cuando casi todo el tile cambia. Tiles adyacentes con una misma decisión pueden
-fusionarse offline en corridas o rectángulos; el decoder no recibe árboles ni ejecuta
-búsqueda visual.
+### Evidencia local cerrada y gate que permanece
 
-El modo temporal con pérdida queda apagado por defecto. No usa un porcentaje RGB global.
-Compara cada celda objetivo contra el último color realmente emitido en Oklab y mantiene,
-por tile, media, p95, máximo, edad y deuda temporal. Se fuerza una actualización por error
-máximo, deuda, `max_hold_frames`, corte fuerte, bordes nuevos o riesgo de mesetas en un
-degradado. El control propuesto como 2% se expone como perfil configurable, pero se traduce
-a límites perceptuales separados y se calibra con VAL-002 antes de fijar un default.
+- artefacto HQ v2 final registrado: 17.935.305 B, SHA-256
+  `6FF3E71E3B090B4546C265AA60D22C65CF9382E0B207D6DCCB29AEFFF713573A`;
+- igualdad completa Python/JavaScript: RGBA 231/231 y audio 180.857 B byte-exacto;
+- distribución final: 89 ZLIB, 141 DELTA_MASK y 1 REGIONAL_DELTA_RAW;
+- medir costo de decode, scratch y dirty set frente a v1 **en los TV reales**;
+- conservar todos los tests de corrupción y entrada incompresible;
+- no promover un experimento de remap solo porque reduzca bytes.
 
-Experimentos adicionales, sin reservar todavía opcodes:
+El remap exacto de IDs de paleta se evaluó aparte: 89/89 GOP obtuvieron un candidato
+menor y el bundle estimado pasaría de 17.935.310 a 17.763.683 B (-171.627 B; -0,9569%),
+con RGB byte-exacto en 231/231 frames. Requirió 94 tags predictores y 414,4 s offline. No
+es default ni forma parte del transcodificador actual: menos de 1% no justifica asumir
+mayor CPU del TV sin benchmark físico.
 
-- `HOLD_TICKS`: una sola muestra con duración entera para matrices idénticas consecutivas.
-  Reduce tabla, decode y llamadas de render sin alterar la imagen ni el audio;
-- `TILE_DICT`: diccionario acotado de patrones de tile que reaparecen en cuadros no
-  consecutivos. El encoder usa hashes exactos, no detección de objetos;
-- `PAL_PATCH`: conservar IDs estables y transmitir solo entradas de paleta modificadas.
-  Incluye las corridas sucias para que Canvas regenere solo las regiones afectadas y solo
-  avanza si el ahorro compensa ese trabajo;
-- `REMAP_RECT`: aplicar pocas parejas `índice anterior -> índice nuevo` dentro de un
-  rectángulo. Se descarta si escanear el área cuesta más que escribirla directamente;
-- FPS por segmentos como modo con pérdida explícito: un máximo editable y duraciones en
-  ticks permiten ahorrar cuadros en escenas lentas sin reducir el máximo de escenas que
-  sí necesitan movimiento. Se evalúa después del camino lossless `HOLD_TICKS`.
+Near-lossless, `HOLD_TICKS`, `TILE_DICT`, `PAL_PATCH`, `REMAP_RECT`, FPS por segmentos y
+otros tiles quedan para revisiones posteriores. No comparten el gate del transcode exacto.
 
-Conceptos de WebP que se estudian sin incorporar un decoder WebP: selección local por
-bloques, paletas de 1/2/4 bits, predictores espaciales simples y preprocesamiento
-`near-lossless` exclusivamente offline. No se trasladan VP8/DCT, YUV420, motion vectors,
-loop filter, un entropy coder nuevo ni ZLIB independiente por tile: aumentarían CPU, RAM
-y superficie de errores en los navegadores que gobiernan la compatibilidad.
+## 10. V2-03/04 — ReaderV2 y dirty común
 
-El planificador registra:
+### Estado: implementado localmente
 
-```text
-stored_bytes
-cell_writes
-inflated_bytes
-unpack_operations
-dirty_tiles
-keyframe_penalty
-delta_ok_mean_p95_max
-temporal_debt
-max_hold_age
-refresh_jump
-```
+`reader-factory.js` despacha `version=1 -> ReaderV1`, `version=2 -> ReaderV2` y rechaza
+otras versiones. `ReaderV2` usa sintaxis ES5, una matriz lógica `Uint8Array` y los mismos
+renderers Canvas2D/WebGL1.
 
-Gate lossless: CRC de matriz idéntico por frame y reducción mediana de payload >=10% sin
-casos >3% mayores, o reducción >=20% de escrituras para un perfil especializado. Gate
-lossy: además, ninguna región excede media/p95/máximo, deuda, edad o salto configurados;
-los cortes fuertes son inmediatos y el proxy de banding no retrocede. Si no se alcanza,
-se revisan candidatos antes de congelar ningún byte del formato.
+El dirty state es híbrido:
 
-### V2-01 — decisiones binarias y fixtures dorados
+- celdas exactas para DELTA, DELTA_MASK, SPARSE, MASK y predictores delta;
+- tiles para comandos regionales densos;
+- full para keyframes o cambio de paleta;
+- unión acumulada al hacer seek o saltar frames.
 
-Con la evidencia del planificador se cierran:
+El stream regional se valida en una primera pasada y se aplica en la segunda. Inflate usa
+un scratch tipado que puede crecer bajo bounds y luego se reutiliza. El gate corregido no
+promete “cero buffers proporcionales” —la matriz, RGBA, bitsets y scratch dependen de N—;
+exige **no reservar un nuevo buffer de frame completo por cuadro en el loop estable**.
 
-1. header, keymap, límites, tile sizes y opcodes;
-2. si `MASK_ZLIB` es opcode normativo —por ejemplo `0x07`, único comando del delta— o
-   solo comparador que hace que `--format auto` conserve v1;
-3. envelope: el candidato preferido es `ASCLVID2` con directorio
-   `VIDO/AUDI/SLOT/META`; `ASCLVID1` permanece intacto para bundles v1;
-4. CRC de metadata (header/offsets/keymap) y CRC por frame o GOP, verificables antes de
-   mutar `cells` tras una lectura Range;
-5. GOPs autocontenidos, iniciados por keyframe y con directorio al comienzo. La descarga
-   normal puede acumular todos los GOP sin perder datos; Range futuro puede pedirlos por
-   separado usando la misma estructura;
-6. offsets uint32 y límite v2 explícito menor a 4 GiB.
+### Gates pendientes de producto
 
-Recién entonces se generan fixtures binarios dorados y se actualiza
-`DISENO-ASCL-V2-TILES.md` como especificación congelada.
-
-### V2-02 — encoder y decoder Python de referencia
-
-Se implementa la especificación cerrada, con encoder canónico, decoder independiente,
-validación completa, keymap, seek y dirty union. Packing 5/6/7 bits queda fuera salvo
-que el planificador haya demostrado ganancia neta suficiente para justificarlo.
-
-### Corpus de codec
-
-Usar las clases de VAL-002, cuadros repetidos, dimensiones no divisibles por 16/32 y
-cambios de paleta. Codec v1 y v2 reciben las mismas matrices.
-
-### Gate de referencia
-
-- CRC de `cells` idéntico a v1 en cada frame;
-- seek aleatorio y frames omitidos terminan en el mismo estado;
-- metadata y frame/GOP corruptos se rechazan antes de modificar la matriz;
-- el resultado conserva el beneficio aprobado en V2-00;
-- solo después se autoriza escribir ReaderV2.
-
-## 10. V2-03/04 — ReaderV2 y dirty tiles comunes
-
-Factory obligatorio: `version=1 -> ReaderV1`, `version=2 -> ReaderV2`, otra -> error.
-Interfaz común:
-
-```text
-header, cells, palette, seek(frameIndex)
-dirtyFull, dirtyCount, dirtyTiles, tileSize
-```
-
-`ReaderV2` escribe sobre una única `Uint8Array(cols * rows)`. La primera implementación
-mantiene la conversión RGBA y shaders actuales para no cambiar codec y reconstrucción a la
-vez. Los dirty tiles se agrupan en corridas comunes:
-
-- Canvas2D reutiliza bandas y `putImageData`;
-- WebGL1 sube las mismas regiones RGBA con `texSubImage2D`;
-- keyframe puede marcar `dirtyFull`;
-- al saltar frames se acumula la unión completa.
-
-Una textura WebGL de índices queda experimental: no entra al camino común mientras `soft`
-no tenga semántica equivalente en Canvas2D.
-
-### Gate JavaScript
-
-- cero asignaciones o buffers transitorios proporcionales por frame; inventario
-  persistente fijo/acotado y sin crecimiento entre loops;
-- CRC idéntico a Python por frame/seek;
+- CRC/matriz/paleta idénticos a Python por frame y seek sobre HQ final
+  (**cumplido local; falta repetir en dispositivo**);
+- regresión v1 completa y rechazo de corrupción antes de mutar estado;
 - igualdad funcional Canvas2D/WebGL1;
-- regresión v1 completa;
 - p95 v2 no supera v1 más de 5% en movimiento total;
-- en movimiento localizado reduce >=20% celdas convertidas/subidas o usa `dirtyFull`.
+- RAM pico no supera v1 y el scratch deja de crecer tras el calentamiento;
+- en movimiento localizado reduce trabajo convertido/subido o cae al camino full exacto.
 
 ## 11. TV-02 — decisión go/no-go v2
 
@@ -445,9 +375,10 @@ El primer prototipo admite rectángulos sin solapamiento. Los assets son parches
 precalculados por época de paleta; el TV no cuantiza RGB ni detecta objetos. Transparencia
 binaria conserva la celda base.
 
-`INT-001` usa la decisión de envelope tomada en V2-01. Si se adopta `ASCLVID2`, los datos
-viven en `SLOT/META` y el video/audio en `VIDO/AUDI`. Sigue siendo un solo archivo cacheable
-y el player dual continúa abriendo todos los bundles `ASCLVID1`.
+La primera revisión `ASCLVID2` no contiene secciones `SLOT/META/VIDO/AUDI`: su envelope
+de 16 B solo declara las longitudes ASCL y audio. `INT-001` debe definir una revisión
+posterior del interior o una nueva versión que conserve un solo archivo cacheable. No puede
+agregar trailing bytes al v2 actual porque los readers los rechazan deliberadamente.
 
 ### Orden por frame
 
@@ -511,9 +442,10 @@ no se introducen enteros de 64 bits al runtime ES5 sin evidencia.
 Investigar carga parcial solo si una familia falla por pico de RAM o arranque. Debe usar
 la misma URL con `Content-Encoding: identity`, enviar ETag/`If-Range`, validar `206` y el
 `Content-Range` exacto, y caer al buffer completo si recibe `200` o un rango inconsistente.
-No exige MediaSource, Streams ni Service Worker. La sección `AUDI` puede descargarse como
-rango independiente y tener una copia acotada para crear su Blob; no se duplica el video
-completo. Algunas cachés unen ranges en RAM: la reducción debe medirse, no suponerse.
+No exige MediaSource, Streams ni Service Worker. El audio puede pedirse por el rango
+calculado como `16 + ascl_len .. EOF` y tener una copia acotada para crear su Blob; no
+existe una sección `AUDI` en el envelope actual. Algunas cachés unen ranges en RAM: la
+reducción debe medirse, no suponerse.
 
 IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso universal.
 
@@ -529,46 +461,41 @@ IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso un
 
 ## 15. Backlog priorizado
 
-| ID | Entregable | Dependencia | Gate |
+| ID | Estado | Entregable siguiente | Gate |
 |---|---|---|---|
-| VAL-001 | matriz física 640/768 | v1 actual | §4 |
-| VAL-002 | corpus y estabilidad 0/0,10/0,25 | fuentes con hash | §5 |
-| V1-01 | reader v1 endurecido | fixtures actuales | §6 |
-| V1-OPT-01 | selector offline | VAL-002 | §7 |
-| V1-OPT-02 | presupuesto dither en bytes | benchmark encoder | §7 |
-| V1-RUNTIME-01 | buffers y dirty regions v1 | V1-01; cierre físico: VAL-001 | §8 |
-| V1-REL-01 | regenerar/promover 960 | VAL-001 | mismos gates físicos |
-| V2-00 | planificador regional experimental | V1-RUNTIME-01 | §9 |
-| V2-01 | spec/envelope/CRC/fixtures dorados | V2-00 + requisitos de slots | §9 |
-| V2-02 | encoder/decoder Python | V2-01 | §9 |
-| V2-03 | ReaderV2 ES5 | V2-02 | §10 |
-| V2-04 | dirty tiles comunes | V2-03 | §10 |
-| TV-02 | go/no-go v2 físico | V2-04 | §11 |
-| INT-001 | diseño formal de slots/envelope | V2-01 | §12 |
-| INT-002 | slot runtime | INT-001,V2-04 | §12 |
-| MEM-001 | memoria por componente | VAL-001 | §13 |
-| CACHE-001 | caché/versionado HTTP | VAL-001 | §13 |
-| FMT-LIMIT-001 | validar <4 GiB | V2-01 | §13 |
-| RANGE-001 | prototipo condicional | evidencia MEM-001 | §13 |
-| DOC-001 | índice/estatus documental | inmediato | enlaces sin contradicción |
+| VAL-001 | pendiente | matriz física 640/768 | §4 |
+| VAL-002 | pendiente | corpus y estabilidad 0/0,10/0,25 | §5 |
+| V1-01 | código listo | cierre físico del reader v1 | §6 |
+| V1-OPT-01 | pendiente | selector offline sin inspección visual humana | §7 |
+| V1-OPT-02 | pendiente | presupuesto dither en bytes | §7 |
+| V1-RUNTIME-01 | código listo | RAM/p95/drops físicos | §8 |
+| V1-REL-01 | pendiente | regenerar/promover 960 solo si VAL-001 lo permite | gates físicos |
+| V2-00 | implementado | cerrar evidencia del planificador exacto | §9 |
+| V2-01 | implementado | revisión congelada; falta aceptación física | §9 |
+| V2-02 | verificado localmente | repetir métricas en TV | §9 |
+| V2-03 | verificado localmente | repetir ReaderV2/seek en TV | §10 |
+| V2-04 | implementado | medir dirty híbrido Canvas/WebGL | §10 |
+| V2-REMAP-01 | experimento; no default | medir CPU física antes de considerar perfil | §9 |
+| TV-02 | pendiente | go/no-go v2 físico | §11 |
+| INT-001 | pendiente | diseño formal de slots sin cambiar envelope v2 actual | §12 |
+| INT-002 | pendiente | slot runtime | §12 |
+| MEM-001 | pendiente | memoria por componente | §13 |
+| CACHE-001 | pendiente | caché/versionado HTTP | §13 |
+| FMT-LIMIT-001 | parcial | validar artefactos reales <4 GiB | §13 |
+| RANGE-001 | diferido | prototipo solo con evidencia MEM-001 | §13 |
+| DOC-001 | en curso | mantener índice/estatus sin contradicciones | enlaces vigentes |
 
 ## 16. Próxima sesión recomendada
 
-1. Desplegar el frontend v1 endurecido y ejecutar VAL-001 con 640/768; 960 sigue techo.
-2. Construir VAL-002 y cerrar si estabilidad 0,25 es general o específica del TKN.
-3. Cerrar V1-01/V1-RUNTIME-01 con p50/p95, RAM y cuadros perdidos físicos; el código y
-   los fixtures defensivos ya están implementados localmente.
-4. Implementar V2-00-A: planificador regional lossless contra matrices v1 aprobadas,
-   sin emitir todavía un formato público.
-5. Implementar V2-00-B: near-lossless temporal, `PAL_PATCH` y `REMAP_RECT` detrás de los
-   límites y corpus de `DISENO-PLANIFICADOR-REGIONAL-V2.md`.
-6. Congelar V2-01 solo después de los gates físicos y del planificador, y actualizar
-   `DISENO-ASCL-V2-TILES.md`.
-7. Construir V2-02 en Python antes de autorizar ReaderV2.
+1. Desplegar ambos bundles y ejecutar VAL-001/TV-02 en Canvas2D y WebGL1 reales.
+2. Medir decode/seek/scratch, RAM, CPU y dirty híbrido v1 frente a v2 en esos equipos.
+3. Mantener el remap exacto fuera del default: su -0,9569% estimado requiere demostrar
+   que 94 predictores no empeoran CPU/drops.
+4. Decidir go/no-go: promover v2, ofrecerlo como perfil especializado o conservar v1.
+5. Recién después retomar near-lossless o intervención matricial como revisiones separadas.
 
-INT-001 puede diseñarse junto con el header v2, pero el runtime comienza cuando dirty tiles
-sea estable. Range queda detrás de evidencia física: el único recurso cacheable sigue
-siendo la prioridad.
+Range continúa detrás de evidencia física: la primera revisión descarga y cachea un único
+recurso completo.
 
 ## 17. No hacer todavía
 

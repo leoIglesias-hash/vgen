@@ -24,6 +24,12 @@ assert(page.indexOf("No borra la cach&eacute; global") >= 0,
   "el control no debe presentarse como borrado de cache global");
 assert(page.indexOf("tv-controller.js") >= 0);
 assert(page.indexOf("cache-refresh.js") >= 0);
+assert(page.indexOf("reader-v2.js") >= 0,
+  "el TV debe cargar el reader regional v2 sin retirar v1");
+assert(page.indexOf("reader-factory.js") >= 0,
+  "el despacho debe depender de la version interna ASCL");
+assert(page.indexOf("window.ASCILINEReader || window.ASCL") >= 0,
+  "v1 debe conservar fallback si falta el factory nuevo");
 assert(page.indexOf("render-canvas2d.js") >= 0);
 assert(page.indexOf("render-webgl.js") >= 0);
 assert(page.indexOf("beginDownload(false)") >= 0, "debe intentar precarga automatica");
@@ -72,6 +78,10 @@ assert(page.indexOf("activeXHR!==xhr") >= 0,
   "una respuesta XHR vieja no debe pisar un reintento nuevo");
 assert(page.indexOf("lastDownloadTouch") >= 0,
   "touch + click sintetico no deben iniciar dos descargas");
+assert(page.indexOf("bytes[7]===49 || bytes[7]===50") >= 0,
+  "la descarga debe reconocer ASCLVID1 y ASCLVID2");
+assert(page.indexOf("16+videoLength+audioLength!==buffer.byteLength") >= 0,
+  "el bundle no debe aceptar truncado ni bytes anexados");
 assert(page.indexOf("mozfullscreenchange") >= 0);
 assert(page.indexOf("MSFullscreenChange") >= 0);
 assert.strictEqual(demo.slice(0, 8).toString("ascii"), "ASCLVID1");

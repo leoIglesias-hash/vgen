@@ -20,12 +20,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import encoder
 import ascl_bundle
+import ascl_v2
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="video -> .asclv (un solo archivo)")
     p.add_argument("input")
     p.add_argument("--out", default=None, help="ruta .asclv (default ../outputs/<nombre>.asclv)")
+    p.add_argument("--format", choices=("v1", "v2"), default="v1",
+                   help="v1 compatible historico; v2 lossless exacto (default v1)")
     p.add_argument("--mode", choices=list(encoder.MODE_NAMES), default="pixel")
     p.add_argument("--profile", "--quality-profile", choices=encoder.QUALITY_PROFILE_NAMES,
                    default="custom", dest="quality_profile",
@@ -106,7 +109,11 @@ def main(argv=None):
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.splitext(os.path.basename(args.input))[0]
     out = args.out or os.path.join(out_dir, stem + ".asclv")
-    tmp_ascl = os.path.splitext(out)[0] + ".ascl"
+    out_stem = os.path.splitext(out)[0]
+    # v2 nace de la matriz v1 aprobada. Se usan nombres distintos para no
+    # sobrescribir nunca la fuente durante la conversión.
+    tmp_ascl = out_stem + (".source-v1.ascl" if args.format == "v2" else ".ascl")
+    final_ascl = out_stem + ".ascl"
     keyint = max(1, args.fps * 2)
 
     ext = os.path.splitext(args.input)[1].lower()
@@ -135,7 +142,12 @@ def main(argv=None):
                                     dither_window=args.dither_window)
         mp3 = os.path.splitext(tmp_ascl)[0] + ".mp3"
         mp3 = mp3 if (info.get("audio") and os.path.exists(mp3)) else None
-        total, la, lau = ascl_bundle.pack(tmp_ascl, mp3, out)
+        v2_stats = None
+        bundle_ascl = tmp_ascl
+        if args.format == "v2":
+            v2_stats = ascl_v2.transcode_path(tmp_ascl, final_ascl)
+            bundle_ascl = final_ascl
+        total, la, lau = ascl_bundle.pack(bundle_ascl, mp3, out)
         secs = info["n_frames"] / float(info["fps"]) or 1
         print("OK %s" % out)
         print("  %s %dx%d @ %dfps - %d frames - paleta %s" %
@@ -145,6 +157,15 @@ def main(argv=None):
               (info["quality_profile"], info["pal_size"], info["bake_smoothing"],
                info["reconstruction"], info["flags"]))
         print("  algoritmo de paleta: %s" % info["palette_algorithm"])
+        if v2_stats is not None:
+            print("  formato: ASCLVID2 lossless; %d regionales + %d predictores "
+                  "de %d frames, "
+                  "%d B menos que la matriz v1 (%.2f%%)" %
+                  (v2_stats["regional_frames"], v2_stats.get("predictor_frames", 0),
+                   v2_stats["n_frames"],
+                   v2_stats["saved_bytes"], v2_stats["saved_percent"]))
+        else:
+            print("  formato: ASCLVID1")
         print("  dither: %s%s" %
               (info["dither"], (" Bayer %d" % info["dither_matrix"])
                if info["dither"] != "off" else ""))
@@ -166,7 +187,10 @@ def main(argv=None):
         print("  bundle: %.1f KB  (video %.1f KB + audio %.1f KB)  ~%.1f KB/s" %
               (total/1024.0, la/1024.0, lau/1024.0, total/1024.0/secs))
         if not args.keep:
-            for x in (tmp_ascl, mp3):
+            cleanup = [tmp_ascl, mp3]
+            if args.format == "v2":
+                cleanup.append(final_ascl)
+            for x in cleanup:
                 if x and os.path.exists(x):
                     os.remove(x)
     else:
@@ -182,18 +206,32 @@ def main(argv=None):
                                     dither_budget=args.dither_budget,
                                     dither_min_improvement=args.dither_min_improvement,
                                     dither_window=args.dither_window)
-        total, la, lau = ascl_bundle.pack(tmp_ascl, None, out)
+        v2_stats = None
+        bundle_ascl = tmp_ascl
+        if args.format == "v2":
+            v2_stats = ascl_v2.transcode_path(tmp_ascl, final_ascl)
+            bundle_ascl = final_ascl
+        total, la, lau = ascl_bundle.pack(bundle_ascl, None, out)
         print("OK %s  (imagen, %s %dx%d, %.1f KB)" %
               (out, info["mode"], info["cols"], info["rows"], total/1024.0))
         print("  calidad: perfil %s, hasta %d colores, bake %s, reconstruccion %s, flags 0x%02X" %
               (info["quality_profile"], info["pal_size"], info["bake_smoothing"],
                info["reconstruction"], info["flags"]))
         print("  algoritmo de paleta: %s" % info["palette_algorithm"])
+        if v2_stats is not None:
+            print("  formato: ASCLVID2 lossless; %d regionales + %d predictores; "
+                  "%d B menos (%.2f%%)" %
+                  (v2_stats["regional_frames"], v2_stats.get("predictor_frames", 0),
+                   v2_stats["saved_bytes"], v2_stats["saved_percent"]))
+        else:
+            print("  formato: ASCLVID1")
         print("  dither: %s%s" %
               (info["dither"], (" Bayer %d" % info["dither_matrix"])
                if info["dither"] != "off" else ""))
-        if not args.keep and os.path.exists(tmp_ascl):
-            os.remove(tmp_ascl)
+        if not args.keep:
+            for x in (tmp_ascl, final_ascl if args.format == "v2" else None):
+                if x and os.path.exists(x):
+                    os.remove(x)
     return 0
 
 

@@ -5,7 +5,7 @@ ascl_decode.py - Decoder / verificador de referencia para .ascl (imagen y video)
 
 Roles:
   1. Parsear header + rampa + tabla de offsets (espejo del reader, spec 10).
-  2. Decodificar todos los frames (RAW / ZLIB / DELTA) manteniendo estado previo.
+  2. Decodificar todos los frames ASCL v1/v2 manteniendo estado previo.
   3. Reconstruir un preview: PNG (imagen) o MP4 (video) del mosaico de color, y
      un PNG con glifos del primer frame en modos ASCII.
   4. VERIFICAR fidelidad pixel-perfect contra el volcado --dump-cells del encoder.
@@ -30,20 +30,58 @@ HEADER_SIZE = 32
 MODE_ASCII_BW, MODE_ASCII_PAL, MODE_ASCII_RGB, MODE_PIXEL = 0, 1, 2, 3
 TAG_RAW, TAG_ZLIB, TAG_DELTA = 0, 1, 2
 TAG_DELTA_MASK = 3
+TAG_REGIONAL_KEY_RAW = 4
+TAG_REGIONAL_KEY_ZLIB = 5
+TAG_REGIONAL_DELTA_RAW = 6
+TAG_REGIONAL_DELTA_ZLIB = 7
+TAG_PREDICT_KEY_ZLIB = 8
+TAG_PREDICT_DELTA_ZLIB = 9
 BYTES_PER_CELL = {MODE_PIXEL: 1, MODE_ASCII_BW: 1, MODE_ASCII_PAL: 2, MODE_ASCII_RGB: 4}
 MODE_LABEL = {0: "ASCII_BW", 1: "ASCII_PAL", 2: "ASCII_RGB", 3: "PIXEL"}
-TAG_LABEL  = {0: "RAW", 1: "ZLIB", 2: "DELTA"}
+TAG_LABEL = {
+    TAG_RAW: "RAW",
+    TAG_ZLIB: "ZLIB",
+    TAG_DELTA: "DELTA",
+    TAG_DELTA_MASK: "DELTA_MASK",
+    TAG_REGIONAL_KEY_RAW: "REGIONAL_KEY_RAW",
+    TAG_REGIONAL_KEY_ZLIB: "REGIONAL_KEY_ZLIB",
+    TAG_REGIONAL_DELTA_RAW: "REGIONAL_DELTA_RAW",
+    TAG_REGIONAL_DELTA_ZLIB: "REGIONAL_DELTA_ZLIB",
+    TAG_PREDICT_KEY_ZLIB: "PREDICT_KEY_ZLIB",
+    TAG_PREDICT_DELTA_ZLIB: "PREDICT_DELTA_ZLIB",
+}
 
 
 def parse_header(buf):
+    if len(buf) < HEADER_SIZE:
+        raise ValueError("ASCL truncado")
     f = struct.unpack_from(HEADER_FMT, buf, 0)
     magic, version, mode, flags, fps, cols, rows, pal_size, n_frames = f[:9]
-    ramp_len, cell_fmt, data_off, ca, _r, crc32 = f[9:]
+    ramp_len, cell_fmt, data_off, ca, reserved, crc32 = f[9:]
     if magic != b"ASCL":
         raise ValueError("no es .ascl (magic invalido)")
     return dict(version=version, mode=mode, flags=flags, fps=fps, cols=cols, rows=rows,
                 pal_size=pal_size, n_frames=n_frames, ramp_len=ramp_len, cell_fmt=cell_fmt,
-                data_off=data_off, char_aspect=ca / 1000.0, crc32=crc32)
+                data_off=data_off, char_aspect=ca / 1000.0, reserved=reserved,
+                tile_size=(reserved & 255 if version == 2 else 0),
+                codec_flags=(reserved >> 8 if version == 2 else 0), crc32=crc32)
+
+
+def compute_crc(buf, header=None):
+    """Calcula el CRC con el alcance definido por la version del ASCL.
+
+    v1 protege el cuerpo desde el byte 32. v2 protege tambien los metadatos del
+    header (bytes 0..27) y salta solamente el campo que contiene el propio CRC.
+    """
+    if header is None:
+        header = parse_header(buf)
+    version = int(header["version"])
+    if version == 1:
+        return zlib.crc32(buf[HEADER_SIZE:]) & 0xFFFFFFFF
+    if version == 2:
+        value = zlib.crc32(buf[:28])
+        return zlib.crc32(buf[HEADER_SIZE:], value) & 0xFFFFFFFF
+    raise ValueError("version ASCL no soportada: %d" % version)
 
 
 def planes_to_cells(planes, mode, n):
@@ -60,11 +98,7 @@ def planes_to_cells(planes, mode, n):
     return cells
 
 
-def decode_all(path):
-    with open(path, "rb") as fh:
-        buf = fh.read()
-    hdr = parse_header(buf)
-    hdr["crc_ok"] = (zlib.crc32(buf[HEADER_SIZE:]) & 0xFFFFFFFF) == hdr["crc32"]
+def _decode_all_v1(buf, hdr):
     ramp = buf[HEADER_SIZE: HEADER_SIZE + hdr["ramp_len"]].decode("ascii", "replace")
     offs = list(struct.unpack_from("<%dI" % hdr["n_frames"], buf, hdr["data_off"]))
     mode, cols, rows = hdr["mode"], hdr["cols"], hdr["rows"]
@@ -107,6 +141,36 @@ def decode_all(path):
         pal_list.append(cur_pal)
         prev = cells
     return hdr, ramp, cells_list, pal_list
+
+
+def _decode_all_v2(buf, hdr):
+    # Import diferido: mantiene al decoder v1 utilizable de forma aislada y evita
+    # duplicar el parser/validador transaccional del codec regional.
+    import ascl_v2
+
+    frames = list(ascl_v2.iter_decoded_v2(buf))
+    cells_list = [frame["cells"].reshape(-1, 1).copy() for frame in frames]
+    pal_list = [np.frombuffer(frame["palette"], np.uint8).reshape(-1, 3).copy()
+                for frame in frames]
+    return hdr, "", cells_list, pal_list
+
+
+def decode_all(path):
+    """Decodifica un archivo ASCL v1 o v2 conservando la API historica.
+
+    Devuelve ``(header, ramp, cells_list, palette_list)``. Las matrices v2 se
+    normalizan a ``(cols*rows, 1)``, igual que mode=PIXEL v1, para que previews,
+    verificadores y benchmarks existentes no necesiten rutas especiales.
+    """
+    with open(path, "rb") as fh:
+        buf = fh.read()
+    hdr = parse_header(buf)
+    hdr["crc_ok"] = compute_crc(buf, hdr) == hdr["crc32"]
+    if hdr["version"] == 1:
+        return _decode_all_v1(buf, hdr)
+    if hdr["version"] == 2:
+        return _decode_all_v2(buf, hdr)
+    raise ValueError("version ASCL no soportada: %d" % hdr["version"])
 
 
 def cells_to_rgb(hdr, cells, palette):
@@ -189,7 +253,7 @@ def main(argv=None):
 
     hdr, ramp, cells_list, pal_list = decode_all(args.input)
     print("-- HEADER --")
-    print("  modo     : %s   v%d   fps %d   crc cuerpo %s" %
+    print("  modo     : %s   v%d   fps %d   crc ASCL %s" %
           (MODE_LABEL[hdr["mode"]], hdr["version"], hdr["fps"],
            "OK" if hdr["crc_ok"] else "MISMATCH"))
     print("  grilla   : %dx%d   paleta %d   n_frames %d   rampa(%d)" %

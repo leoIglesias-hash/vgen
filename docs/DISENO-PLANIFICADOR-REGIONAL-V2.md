@@ -1,6 +1,9 @@
 # Diseño del planificador regional ASCL v2
 
-Estado: propuesta técnica previa al prototipo. No reserva opcodes ni modifica ASCL v1.
+Estado: documento histórico y propuesta para un futuro modo near-lossless. La parte
+lossless exacta ya fue implementada y su contrato normativo está en
+`ASCL-format-spec.md` §13 y `DISENO-ASCL-V2-TILES.md`. Este archivo no reserva opcodes ni
+modifica ASCL v1; sus nombres preliminares no deben usarse para decodificar V2 actual.
 
 Este documento formaliza la selección entre cambios por celda, máscara y bloque, junto
 con un modo temporal con pérdida opcional. Complementa `DISENO-ASCL-V2-TILES.md` y la
@@ -51,7 +54,10 @@ Orden conceptual:
 7. tile denso general: `PAL8`;
 8. comparar el frame completo con DELTA_MASK v1, `MASK_ZLIB` y ZLIB.
 
-Los nombres son provisionales. V2-00 mide antes de fijar números de opcode.
+Esta lista conserva el razonamiento previo al prototipo. En la revisión implementada no
+existen `REPEAT`, `HOLD_TICKS`, `SOLID_RUN`, `PACK4` separado ni `MASK_ZLIB`: repetición
+usa `SKIP_RUN`, `SOLID` cubre un tile, y `PAL4` es el nombre normativo del packing de
+4 bits. Los números y layouts vigentes están únicamente en la especificación §13.
 
 ## 3. Unidad regional
 

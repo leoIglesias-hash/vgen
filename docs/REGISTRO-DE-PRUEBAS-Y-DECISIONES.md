@@ -351,3 +351,113 @@ legacy, `keyCode=9` continúa siendo Tab para no romper navegación; el hotspot 
 - Falta medir p50/p95, cuadros perdidos, RAM, CPU y temperatura en los equipos objetivo.
 - El `outputs/clip.asclv` local puede no ser el HQ; en el servidor se debe publicar el
   artefacto HQ bajo ese nombre si se quiere que el player estable lo abra.
+
+## Instancia 005 - Primera revisión ASCL v2 exacta y experimento de remap
+
+Fecha: 2026-08-14.
+
+Estado: **implementación y verificación local cerradas**. El artefacto HQ v2 final ya fue
+generado, identificado por hash y comparado cuadro por cuadro. La promoción de v2 sobre
+v1 en Smart TV sigue pendiente de la prueba física TV-02.
+
+### Motivo y alcance
+
+Se implementó una revisión del codec que representa con menos bytes la misma matriz de
+índices ya aprobada en v1. No vuelve a cuantizar el video, no usa IA ni una persona para
+elegir calidad y no aplica near-lossless. La selección compara longitudes binarias de
+candidatos reversibles.
+
+La revisión fija:
+
+- envelope `ASCLVID2` de 16 B: magic, `ascl_len`, `audio_len`, ASCL y audio;
+- header ASCL de 32 B, byte 26 `tile_size=16`, byte 27 `codec_flags=1`;
+- CRC v2 sobre bytes `0..27` y `32..EOF`;
+- tags 0..3 v1 como fallback, 4..7 regionales y 8/9 predictores;
+- opcodes `SKIP_RUN`, `SOLID`, `SPARSE`, `MASK`, `PACK1`, `PACK2`, `PAL4`, `PAL8`;
+- LEB128 uint32 canónico, máscaras/packing LSB-first y cobertura exacta de tiles;
+- predictores LEFT, TOP, GRADIENT, PREVIOUS_SUB y PREVIOUS_XOR, todos reversibles;
+- `--format v1|v2`, con **v1 como default**;
+- ReaderV2 ES5 y factory compartidos por Canvas2D/WebGL1.
+
+`PACK4` era un nombre preliminar de `PAL4`; no son opcodes distintos. Solo `SKIP_RUN`
+tiene longitud de corrida. `SOLID` siempre cubre un tile y no existe `SOLID_RUN`.
+
+### Invariante de compatibilidad y tamaño
+
+El transcodificador conserva por frame el tag/payload v1 original. Regional o predictor
+solo gana si su payload es estrictamente menor; un empate conserva el candidato anterior.
+Como header, offsets, frame header, paleta y envelope mantienen su tamaño, el v2 no puede
+crecer respecto del v1 de entrada. El audio de un bundle se copia byte a byte.
+
+La matriz, paleta visible, FPS y dimensiones son las mismas. V2 inicial solo admite
+`mode=PIXEL`; v1 continúa cubriendo los demás modos.
+
+### Resultado final exacto sin remap de paleta
+
+Se transcodificó el HQ 768 definitivo sin remap y sin volver a cuantizar:
+
+| Evidencia | V1 | V2 |
+|---|---:|---:|
+| Bundle | 17.935.310 B | 17.935.305 B |
+| ASCL interior | 17.754.437 B | 17.754.432 B |
+| Audio | 180.857 B | 180.857 B, idéntico |
+| Tags R/Z/D/M | 0 / 89 / 1 / 141 | 0 / 89 / 0 / 141 |
+| Tags regionales Kraw/Kz/Draw/Dz | — | 0 / 0 / 1 / 0 |
+| Tags predictores Kz/Dz | — | 0 / 0 |
+
+- V1 SHA-256: `346B4BE704E15B1855DB15C989774116247600C5911A98E908BB7FAD2E15BB70`.
+- V2 SHA-256: `6FF3E71E3B090B4546C265AA60D22C65CF9382E0B207D6DCCB29AEFFF713573A`.
+- `ReaderV1` y `ReaderV2` reconstruyeron RGBA idéntico en **231/231 frames**.
+- El audio de 180.857 B fue idéntico byte por byte.
+- CRC interior v1 y v2 válidos; envelope e inner version concordantes.
+
+El ahorro real es **5 B**: un DELTA v1 fue reemplazado por un
+`REGIONAL_DELTA_RAW` más corto. El resto mantuvo sus payloads v1. El dato no justifica
+promover v2 por peso en este clip, pero demuestra que el invariante de no crecimiento y
+la compatibilidad exacta funcionan sobre el artefacto de producto.
+
+### Experimento offline de remap exacto
+
+Se evaluó reordenar IDs dentro de cada época/GOP y permutar conjuntamente las entradas
+RGB. Este remap no cambia el color mostrado: cada índice nuevo apunta al mismo RGB que el
+índice anterior correspondiente.
+
+Resultado de laboratorio:
+
+| Métrica | Resultado |
+|---|---:|
+| GOP con candidato binariamente menor | 89 / 89 |
+| Bundle base | 17.935.310 B |
+| Bundle remapeado estimado | 17.763.683 B |
+| Ahorro | 171.627 B (0,9569%) |
+| RGB reconstruido byte-exacto | 231 / 231 frames |
+| Tags predictores | 94 / 231 |
+| Distribución | 28 LEFT, 16 TOP, 50 PREVIOUS_SUB |
+| Tiempo offline del laboratorio | 414,4 s |
+
+Sin remap no se elegía ningún predictor en este HQ. El remap hace que 94 frames usen
+predictores; esto puede aumentar trabajo de inflate/reconstrucción en el dispositivo,
+aunque el procesamiento offline prolongado sea aceptable.
+
+### Reader, dirty y memoria
+
+ReaderV2 valida header, CRC, offsets, bloques, paleta, bounds, stream completo, padding e
+índices antes de consolidar un frame. El dirty set combina celdas exactas para cambios
+dispersos y tiles para comandos densos; keyframe/paleta marca full. Canvas2D y WebGL1
+consumen la misma matriz y API.
+
+El gate de memoria se corrige: no se promete cero memoria proporcional. `cells`, RGBA,
+bitsets y scratch dependen de la grilla. Se exige que el loop estable reutilice buffers
+acotados y no reserve un nuevo frame completo en cada cuadro.
+
+### Decisión de esta instancia
+
+- Mantener `--format v1` como default.
+- Conservar v2 exacto como salida opt-in; la verificación local queda cerrada.
+- **No implementar ni activar el remap por defecto**: menos de 1% de ahorro estimado no
+  compensa asumir una posible regresión de CPU en TVs viejos.
+- Tratar el remap como perfil futuro solo si un benchmark físico demuestra CPU, RAM,
+  p95 y cuadros perdidos equivalentes o mejores.
+- Mantener descarga completa/cacheable; streaming y Range no forman parte de esta revisión.
+- Ejecutar TV-02 en equipos reales antes de una decisión de producto. El HQ final ya fue
+  generado sin sobrescribir v1 y la igualdad Python/JavaScript quedó comprobada.

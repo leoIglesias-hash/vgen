@@ -49,6 +49,8 @@
 
 <script src="inflate.js"></script>
 <script src="reader.js"></script>
+<script src="reader-v2.js"></script>
+<script src="reader-factory.js"></script>
 <script src="render-canvas2d.js"></script>
 <script src="render-webgl.js"></script>
 <script>
@@ -126,14 +128,15 @@
   function modeName(m){ return ["ASCII_BW","ASCII_PAL","ASCII_RGB","PIXEL"][m]; }
 
   function openAscl(buf,byteOffset,byteLength){
-    reader=window.ASCL.parse(buf,byteOffset,byteLength);
+    var readerAPI=window.ASCILINEReader || window.ASCL;
+    reader=readerAPI.parse(buf,byteOffset,byteLength);
     var h=reader.header;
     elRecon.value=(h.flags & FLAG_RECON_SOFT)?"soft":"nearest";
     var used=pickRenderer();
     reader.decodedIndex=-1; reader.seek(0); renderer.draw(reader); lastShown=0;
     elPlay.disabled=false;
-    elBadge.textContent=modeName(h.mode)+" "+h.cols+"x"+h.rows+" @"+h.fps+"fps - "+h.nFrames+"f";
-    log("Cargado: "+modeName(h.mode)+"  grilla "+h.cols+"x"+h.rows+"  fps "+h.fps+
+    elBadge.textContent="ASCL v"+h.version+" "+modeName(h.mode)+" "+h.cols+"x"+h.rows+" @"+h.fps+"fps - "+h.nFrames+"f";
+    log("Cargado: ASCL v"+h.version+"  "+modeName(h.mode)+"  grilla "+h.cols+"x"+h.rows+"  fps "+h.fps+
         "  frames "+h.nFrames+"\nrenderer: "+used+"  - reconstruccion: "+elRecon.value+
         (hasAudio?"  - audio: si":"  - audio: no (reloj interno)"));
   }
@@ -144,12 +147,12 @@
     openAscl(buf,0,buf.byteLength);
   }
 
-  // .asclv = bundle: magic "ASCLVID1"(8) + ascl_len(u32) + audio_len(u32) + ascl + audio
+  // .asclv = ASCLVID1/2 + ascl_len(u32) + audio_len(u32) + ascl + audio
   function isBundle(buf){
     if(buf.byteLength<16) return false;
     var b=new Uint8Array(buf,0,8), s="";
     for(var i=0;i<8;i++) s+=String.fromCharCode(b[i]);
-    return s==="ASCLVID1";
+    return s==="ASCLVID1" || s==="ASCLVID2";
   }
   function toAB(buf){
     if (buf instanceof ArrayBuffer) return buf;
@@ -163,7 +166,8 @@
   }
   function looksBundle(buf){
     var u = new Uint8Array(buf);
-    return u.length >= 8 && u[0]===65 && u[1]===83 && u[2]===67 && u[3]===76 && u[4]===86 && u[5]===73 && u[6]===68 && u[7]===49; // "ASCLVID1"
+    return u.length >= 8 && u[0]===65 && u[1]===83 && u[2]===67 && u[3]===76 &&
+      u[4]===86 && u[5]===73 && u[6]===68 && (u[7]===49 || u[7]===50);
   }
   function loadData(buf){
     buf = toAB(buf);
@@ -171,11 +175,12 @@
   }
   function loadBundle(buf){
     buf = toAB(buf);
-    var dv=new DataView(buf);
+    var dv=new DataView(buf), bytes=new Uint8Array(buf);
     var asclLen=dv.getUint32(8,true), audioLen=dv.getUint32(12,true);
-    if(asclLen<32 || 16+asclLen+audioLen>buf.byteLength){
+    if(asclLen<32 || 16+asclLen+audioLen!==buf.byteLength){
       throw new Error("bundle truncado o longitudes invalidas");
     }
+    if(bytes[7]-48!==bytes[20]){ throw new Error("version ASCLV/ASCL incompatible"); }
     if(audioLen>0){
       var audioView=new Uint8Array(buf,16+asclLen,audioLen);
       setAudioBlob(makeBlob([audioView],"audio/mpeg"));
