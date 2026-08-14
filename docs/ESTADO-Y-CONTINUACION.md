@@ -1,5 +1,10 @@
 # ASCILINE — Estado del proyecto y cómo continuar (handoff para otra sesión Cowork)
 
+> **Documento histórico.** Conserva el traspaso de las primeras sesiones, pero sus
+> pendientes ya no representan el estado actual. Para continuar desde la versión Oklab
+> adaptativa use `HOJA-DE-RUTA-TECNICA-V2.md` y
+> `REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`.
+
 > Documento de traspaso. Resume qué se construyó, las decisiones tomadas, el estado de
 > cada fase, los comandos clave y lo que falta. Para el detalle del formato ver
 > `docs/ASCL-format-spec.md`; para el contexto original ver `docs/ASCILINE-contexto.md`.

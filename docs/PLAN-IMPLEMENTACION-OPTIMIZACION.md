@@ -4,6 +4,10 @@ Fecha de inicio: 2026-08-11
 Rama: `feature/quality-optimization`  
 Base recuperable: commit `1c2c0b2`
 
+La ejecución posterior al cierre de las mejoras v1 se controla desde
+`docs/HOJA-DE-RUTA-TECNICA-V2.md`. Allí están dependencias, entregables, métricas y
+gates; este documento conserva principios y arquitectura.
+
 ## 1. Principios no negociables
 
 1. El `.asclv` sigue siendo un unico recurso cacheable.

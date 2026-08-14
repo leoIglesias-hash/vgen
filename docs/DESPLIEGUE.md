@@ -20,6 +20,11 @@ Recomendado (no obligatorio) para rendimiento y cache en webviews:
 - Cabeceras de cache para archivos versionados por hash:
   `Cache-Control: public, max-age=31536000, immutable`.
 - Nombrar los clips con un hash, ej. `promo.a1b2c3.asclv`, para invalidar cache al actualizar.
+- Si el player usa una URL estable que se reemplaza, como `outputs/clip.asclv`, no usar
+  `immutable`: enviar `ETag` o `Last-Modified` con `Cache-Control: public, no-cache`. El
+  navegador conserva el cuerpo, pero revalida y puede recibir `304`.
+- Enviar `Content-Type: application/octet-stream` y `Content-Length`. XHR no garantiza
+  persistencia por sí solo: la política real la determinan estas cabeceras y el WebView.
 
 Ejemplo nginx mínimo:
 ```

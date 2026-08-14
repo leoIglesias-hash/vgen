@@ -114,6 +114,19 @@ Las pruebas, observaciones visuales y decisiones por version se conservan en
 configuracion; si cambia el modo, la grilla, los FPS, la paleta, el dithering o el codec,
 debe validarse nuevamente.
 
+### Documentación activa
+
+- `docs/HOJA-DE-RUTA-TECNICA-V2.md`: backlog vigente, dependencias y gates.
+- `docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md`: principios e invariantes.
+- `docs/ASCL-format-spec.md`: formato v1.
+- `docs/DISENO-ASCL-V2-TILES.md`: propuesta binaria v2.
+- `docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`: decisiones append-only.
+- `docs/BENCHMARK-V1-ADAPTATIVO-OKLAB.md`: evidencia de la versión actual.
+- `docs/DESPLIEGUE.md`: hosting y caché.
+
+`ESTADO-Y-CONTINUACION.md`, `GENERAR-1080-Y-VARIANTES.md` y los diseños preliminares
+quedan como evidencia histórica; no constituyen el backlog actual.
+
 ## Reproducir
 
 Abrí `frontend/player.html`, elegí el `.asclv` y Play. El `.asclv` ya contiene video y

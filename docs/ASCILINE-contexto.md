@@ -1,6 +1,10 @@
 # ASCILINE — Documento de contexto para Cowork
 
-> Documento de trabajo. Reúne el análisis del proyecto original, las mejoras propuestas, las decisiones pendientes, los archivos a crear y un roadmap por fases. El prompt de arranque está en archivo aparte (`ASCILINE-prompt-cowork.md`).
+> **Documento histórico de contexto original.** No contiene el estado actual ni la cola
+> vigente. Para continuar use `HOJA-DE-RUTA-TECNICA-V2.md`.
+
+> Documento de trabajo original. Reúne el análisis inicial, las mejoras propuestas, las
+> decisiones pendientes de esa etapa y el primer roadmap por fases.
 
 ---
 

@@ -1,5 +1,8 @@
 # Generar el 1080p pendiente y la tanda de variantes (en tu PC)
 
+> **Documento histórico.** Este procedimiento corresponde al pipeline global anterior.
+> El backlog vigente está en `HOJA-DE-RUTA-TECNICA-V2.md`.
+
 La VM de cómputo de la sesión Cowork está caída, así que el encode hay que correrlo en tu
 máquina. El encoder es Python + ffmpeg (offline); no necesita internet ni servidor.
 

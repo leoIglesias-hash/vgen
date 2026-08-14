@@ -1,5 +1,9 @@
 # Diseño de dithering selectivo offline
 
+> **Diseño histórico.** La implementación actual incluye `off|selective|auto`, presupuesto
+> de celdas, histéresis y guardas. Estado y resultados: `BENCHMARK-V1-ADAPTATIVO-OKLAB.md`
+> y `REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`.
+
 ## Objetivo y alcance
 
 Reducir bandas visibles al usar paletas pequeñas sin trasladar trabajo al navegador ni

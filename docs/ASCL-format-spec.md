@@ -4,8 +4,8 @@
 > El encoder (offline) hace todo el cómputo una vez; el reader (cliente, ES2015-safe)
 > solo parsea bytes y dibuja. El servidor sirve un **archivo estático** → ≈0 cómputo en playtime.
 >
-> Estado: **Fase 1** (imagen fija, `n_frames = 1`). El formato ya contempla video
-> (`n_frames > 1`, tag DELTA, paleta per-escena/global) para no rehacer el spec en Fase 3.
+> Estado: formato v1 implementado para imagen y video. Incluye RAW, ZLIB, DELTA,
+> DELTA_MASK, paletas globales/temporales y envelope `.asclv` con audio.
 
 ---
 
@@ -15,7 +15,7 @@
 |---|---|---|
 | **D1** Resolución | **variable** (`cols`/`rows` en header), objetivo 1080p | header |
 | **D2** Render | el `.ascl` es agnóstico al renderer; sirve a Canvas2D `fillText`, glyph-atlas e instancing WebGL | reader elige en runtime |
-| **D3** Paleta | **256 colores, per-frame** (default). `flags` permite per-escena/global sin romper el formato | header `flags` + `pal_count` por frame |
+| **D3** Paleta | 1..256 colores; global, bloque/adaptativa o per-frame. `encoder.py` directo conserva per-frame y `make_clip.py` usa global como defaults de interfaz | header `flags` + `pal_count` por frame |
 | **D9** Fork | encoder/reader construidos sobre `YusufB5/ASCILINE` (rampa, delta y tags reusados) | — |
 | FPS | **configurable**, default 15 (20/25/30 válidos) | header `fps` |
 | Peso | **1 byte/celda** vía índice de paleta | plano de índices |
@@ -42,7 +42,7 @@ leen con `DataView.getUint16(off, true)` / `getUint32(off, true)`.
 │  …                                                                  │
 │  FRAME #(n-1)                                                       │
 └──────────────────────────────────────────────────────────────────┘
-            (el audio NO va acá: archivo .mp3 aparte — ver §7)
+       (el audio no forma parte del .ascl interior; el .asclv lo adjunta — ver §7)
 ```
 
 Imagen fija = exactamente lo mismo con `n_frames = 1`: header + (ramp si ASCII) +
@@ -137,7 +137,7 @@ keyframe sin recorrer todo. Para imagen: un solo offset.
 ```
 ┌───────────────────────────────────────────────────────────────┐
 │ uint32 LE  block_len   │ bytes que siguen a este campo          │
-│ uint8      tag         │ 0=RAW · 1=ZLIB · 2=DELTA               │
+│ uint8      tag         │ 0=RAW · 1=ZLIB · 2=DELTA · 3=DELTA_MASK│
 │ uint16 LE  pal_count   │ entradas de paleta en ESTE frame (0=reusa) │
 │ uint8[pal_count*3]     │ paleta RGB de este frame (si pal_count>0) │
 │ uint8[...]             │ payload de planos (según tag, ver 5.3) │
@@ -197,13 +197,26 @@ offline, pero requiere decoder zstd en JS → se trata como lujo, nunca requisit
 
 ---
 
-## 7. Audio (carril separado)
+## 7. Audio y envelope `.asclv`
 
-El audio **no** va dentro del `.ascl`. Es un archivo aparte (`clip.mp3`) que actúa como
-**reloj maestro**: el frame a mostrar es `Math.floor(audio.currentTime × fps)`; si el render
-se atrasa, se **descartan frames**, el audio nunca espera. MP3 es el piso universal
-(lo decodifica el webview más viejo); Opus/AAC donde haya soporte. **Nunca PCM crudo.**
-Para imagen fija no hay audio. (Detalle completo en Fases 4 y 5.)
+El audio no forma parte del `.ascl` interior. El artefacto normal de distribución es un
+único `.asclv` cacheable:
+
+```text
+magic      8 bytes = "ASCLVID1"
+ascl_len   uint32 LE
+audio_len  uint32 LE, 0 si no hay audio
+ascl       ascl_len bytes
+audio      audio_len bytes, MP3 en la versión actual
+```
+
+El reader crea vistas dentro del mismo `ArrayBuffer`, sin copiar el `.ascl` completo, y
+expone el audio mediante `Blob`/object URL. Un `.ascl` suelto con MP3 externo se conserva
+solo como entrada legacy del player tradicional.
+
+El audio es el **reloj maestro**: el frame visible es
+`Math.floor(audio.currentTime × fps)`; si el render se atrasa se descartan frames y el
+audio nunca espera. MP3 es el piso universal. Una imagen puede usar `audio_len=0`.
 
 ---
 
