@@ -1,8 +1,10 @@
 import os
+import stat
 import struct
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -67,6 +69,44 @@ class AsclBundleV2Test(unittest.TestCase):
             self.assertEqual((video_len, audio_len), (len(video), len(audio)))
             self.assertEqual(total, ascl_bundle.HEADER_SIZE + len(video) + len(audio))
             self.assertEqual(version, 2)
+
+    def test_failed_atomic_publish_preserves_previous_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out_path = os.path.join(directory, "stable.asclv")
+            with open(out_path, "wb") as stream:
+                stream.write(b"previous")
+            with mock.patch.object(ascl_bundle.os, "replace",
+                                   side_effect=OSError("locked")):
+                with self.assertRaises(OSError):
+                    ascl_bundle.pack_bytes(
+                        b"ASCL" + bytes((2,)) + b"new", b"audio", out_path)
+            with open(out_path, "rb") as stream:
+                self.assertEqual(stream.read(), b"previous")
+            self.assertFalse(any(name.endswith(".tmp")
+                                 for name in os.listdir(directory)))
+
+    @unittest.skipIf(os.name == "nt", "permisos POSIX")
+    def test_atomic_publish_preserves_existing_permissions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out_path = os.path.join(directory, "served.asclv")
+            with open(out_path, "wb") as stream:
+                stream.write(b"previous")
+            os.chmod(out_path, 0o640)
+            ascl_bundle.pack_bytes(
+                b"ASCL" + bytes((2,)) + b"new", b"audio", out_path)
+            self.assertEqual(stat.S_IMODE(os.stat(out_path).st_mode), 0o640)
+
+    @unittest.skipIf(os.name == "nt", "permisos POSIX")
+    def test_new_atomic_publish_honors_umask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out_path = os.path.join(directory, "served.asclv")
+            previous_umask = os.umask(0o027)
+            try:
+                ascl_bundle.pack_bytes(
+                    b"ASCL" + bytes((2,)) + b"new", b"", out_path)
+            finally:
+                os.umask(previous_umask)
+            self.assertEqual(stat.S_IMODE(os.stat(out_path).st_mode), 0o640)
 
 
 if __name__ == "__main__":

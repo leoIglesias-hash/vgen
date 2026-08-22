@@ -18,10 +18,10 @@
 | **D1** Resolución | **variable** (`cols`/`rows` en header), objetivo 1080p | header |
 | **D2** Render | el `.ascl` es agnóstico al renderer; sirve a Canvas2D `fillText`, glyph-atlas e instancing WebGL | reader elige en runtime |
 | **D3** Paleta | 1..256 colores; global, bloque/adaptativa o per-frame. `encoder.py` directo conserva per-frame y `make_clip.py` usa global como defaults de interfaz | header `flags` + `pal_count` por frame |
-| **D9** Fork | encoder/reader construidos sobre `YusufB5/ASCILINE` (rampa, delta y tags reusados) | — |
+| **D9** Procedencia | relación conceptual declarada con `YusufB5/ASCILINE`; implementación standalone de rampa, delta y selección por bytes | auditoría/licencia pendientes antes de publicación pública |
 | FPS | **configurable**, default 15 (20/25/30 válidos) | header `fps` |
 | Peso | **1 byte/celda** vía índice de paleta | plano de índices |
-| Compresión | `zlib` (DEFLATE) por frame, o RAW + gzip/br por HTTP (ver §6) | tag por frame |
+| Compresión | el encoder elige `zlib` (DEFLATE) o RAW por frame; transporte HTTP `identity` por defecto (ver §6) | tag por frame |
 
 **Endianness:** todos los enteros multi-byte son **little-endian (LE)**. En el reader se
 leen con `DataView.getUint16(off, true)` / `getUint32(off, true)`.
@@ -108,7 +108,9 @@ abajo; dentro de cada fila, izquierda a derecha). 1 byte por celda salvo RGB.
 - **`rgb`**: 3 bytes `R,G,B` por celda (modo 16M, sin paleta).
 
 > **PIXEL (modo 3)** es el camino de máxima eficiencia: **1 byte/celda** + paleta de 256.
-> Es el que sube a 1080p barato (en WebGL: 1 `texImage2D` del plano de índices + 1 draw call).
+> Ese byte describe la matriz ASCL. El renderer WebGL1 actual convierte los índices a un
+> buffer RGBA persistente y sube esa textura con `texImage2D`/`texSubImage2D`; no sube una
+> textura de índices ni cambia la representación lógica que comparte con Canvas2D.
 
 ---
 
@@ -155,11 +157,11 @@ keyframe sin recorrer todo. Para imagen: un solo offset.
 
 ### 5.3 `tag` — codificación del payload de planos
 
-> **Optimización A+B (encoder `_encode_opt.py`):** además del DELTA por índices (tag 2),
+> **Optimización A+B (encoder principal):** además del DELTA por índices (tag 2),
 > existe DELTA por **máscara de bits** (tag 3). Opcionalmente, un **umbral perceptual T**
 > (distancia Euclídea RGB vía paleta) trata como "sin cambio" los pixeles cuyo color difiere
 > ≤ T de lo ya mostrado (T=0 = lossless). Todo el umbral vive en el encoder: el decoder solo
-> reconstruye lo emitido, por lo que el player sigue ES2015 y la compatibilidad es total.
+> reconstruye lo emitido, por lo que no agrega una API ni algoritmo al player ES5.
 
 
 Los planos se **concatenan** en el orden de §3 y forman el "payload crudo". Luego:
@@ -169,7 +171,7 @@ Los planos se **concatenan** en el orden de §3 y forman el "payload crudo". Lue
 | 0 | `RAW`   | planos crudos, tal cual | frames incompresibles o `--compress none` |
 | 1 | `ZLIB`  | `zlib(planos crudos)` (DEFLATE) | caso general; el encoder elige RAW vs ZLIB y se queda con el más chico |
 | 2 | `DELTA` | `zlib( índices_celdas_cambiadas[uint32 LE] ++ valores )` respecto al frame mostrado anterior | **video** (Fase 3); estático/poco movimiento. Plano de carácter siempre exacto |
-| 3 | `DELTA_MASK` | `zlib( máscara_bits[1 bit/celda, LSB-first, ceil(N/8) bytes] ++ valores_celdas_cambiadas )` respecto al frame anterior | **video**; gana mientras cambie <~87,5% de la imagen (mucho más barato que tag 2 en alto movimiento). El encoder elige el menor entre RAW/ZLIB/DELTA/DELTA_MASK |
+| 3 | `DELTA_MASK` | `zlib( máscara_bits[1 bit/celda, LSB-first, ceil(N/8) bytes] ++ valores_celdas_cambiadas )` respecto al frame anterior | **video**; antes de compresión, el umbral aproximado de 87,5% solo corresponde a PIXEL/BW de 1 byte por celda. El encoder materializa y elige el menor entre RAW/ZLIB/DELTA/DELTA_MASK. |
 
 En `DELTA` (tag 2), cada índice debe estar dentro de la matriz, pero v1 admite cualquier
 orden para conservar compatibilidad con productores anteriores. Si un índice se repite,
@@ -180,7 +182,8 @@ porque esa representación canónica suele comprimir mejor. El reader valida tod
 
 El encoder, por frame, prueba los candidatos aplicables y **emite el más chico**; nunca
 supera el tamaño RAW (DEFLATE puede inflar datos incompresibles, en ese caso cae a RAW).
-Esto es la misma estrategia del codec original de ASCILINE, reusada (D9).
+Esta selección por bytes sigue la estrategia conceptual declarada en D9; la procedencia
+de código se trata como un gate de publicación separado, no como parte del formato.
 
 > **DELTA** queda **especificado pero no usado en Fase 1** (imagen): una imagen es siempre
 > keyframe (RAW o ZLIB). Se activa en Fase 3 con video.
@@ -189,17 +192,19 @@ Esto es la misma estrategia del codec original de ASCILINE, reusada (D9).
 
 ## 6. Compresión y webviews viejos (nota de diseño, liga con D5)
 
-`zlib`/DEFLATE **no se decodifica nativo en JS** en webviews viejos: el reader necesitaría
-un `inflate` en JS (p.ej. `pako`, ~10 KB) para el `tag = ZLIB`. Dos caminos, ambos soportados:
+`zlib`/DEFLATE **no se decodifica nativo en JS** en webviews viejos. El proyecto distribuye
+su propio `frontend/inflate.js` ES5, con límites y buffers reutilizables, para los tags
+ZLIB/DELTA/DELTA_MASK.
 
-1. **`tag = ZLIB` + inflate en JS** — archivo más chico en disco; cuesta ~10 KB de lib y algo de CPU.
-2. **`tag = RAW` + compresión de transporte HTTP** — el `.ascl` se sirve con
-   `Content-Encoding: gzip` (universal) o `br` (donde haya). El webview descomprime **nativo**,
-   el reader recibe bytes ya crudos. Cero lib extra, ideal para el target más viejo.
+El camino vigente es `tag = ZLIB` cuando gana por bytes e inflate en JS. Forzar RAW y
+comprimir el recurso completo por HTTP queda como experimento de despliegue: el artefacto
+normal es un `.asclv` que también contiene MP3, gzip suele ahorrar poco, suma una
+descompresión completa y complica un posible Range. No es la recomendación general para
+WebViews antiguos.
 
 El encoder expone `--compress {auto,none,zlib}`:
 - `auto` (default): por frame elige el más chico entre RAW y ZLIB.
-- `none`: fuerza RAW (pensado para servir con gzip/br por HTTP).
+- `none`: fuerza RAW para experimentos controlados de transporte.
 - `zlib`: fuerza ZLIB.
 
 `zstd` (mencionado en el plan) queda para Fase 6 como **mejora opcional**: mejor ratio/velocidad
@@ -230,7 +235,9 @@ solo como entrada legacy del player tradicional.
 
 El audio es el **reloj maestro**: el frame visible es
 `Math.floor(audio.currentTime × fps)`; si el render se atrasa se descartan frames y el
-audio nunca espera. MP3 es el piso universal. Una imagen puede usar `audio_len=0`.
+audio nunca espera. MP3 es el codec base elegido por su compatibilidad amplia; la matriz
+física debe confirmar el soporte de cada familia objetivo. Una imagen puede usar
+`audio_len=0`.
 
 ---
 

@@ -16,6 +16,7 @@ Defaults (decididos con el usuario): modo pixel, 320 columnas, 15 fps, paleta gl
 import argparse
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import encoder
@@ -81,7 +82,8 @@ def main(argv=None):
                    default=encoder.selective_dither.DEFAULT_TEMPORAL_WINDOW,
                    dest="dither_window", help="ventana temporal de histeresis")
     p.add_argument("--image", action="store_true", help="forzar modo imagen (sin audio)")
-    p.add_argument("--keep", action="store_true", help="conservar los .ascl/.mp3 intermedios")
+    p.add_argument("--keep", action="store_true",
+                   help="conservar .ascl/.mp3; rechaza nombres intermedios existentes")
     args = p.parse_args(argv)
     args.cols, args.pal_size = encoder.resolve_quality_options(
         args.quality_profile, args.cols, args.pal_size, default_cols=320)
@@ -108,16 +110,53 @@ def main(argv=None):
     out_dir = os.path.abspath(os.path.join(here, "..", "outputs"))
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.splitext(os.path.basename(args.input))[0]
-    out = args.out or os.path.join(out_dir, stem + ".asclv")
+    out = os.path.abspath(args.out or os.path.join(out_dir, stem + ".asclv"))
+    input_path = os.path.abspath(args.input)
+    if os.path.splitext(out)[1].lower() != ".asclv":
+        p.error("--out debe terminar en .asclv")
+    if os.path.normcase(input_path) == os.path.normcase(out):
+        p.error("--out no puede sobrescribir el archivo de entrada")
+    try:
+        if os.path.exists(input_path) and os.path.exists(out) and \
+                os.path.samefile(input_path, out):
+            p.error("--out no puede sobrescribir el archivo de entrada")
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(out), exist_ok=True)
     out_stem = os.path.splitext(out)[0]
+    workspace = None
+    if args.keep:
+        build_stem = out_stem
+    else:
+        # Evita que dos procesos o un --out personalizado pisen sidecars del
+        # usuario. TemporaryDirectory limpia tambien si main termina con error.
+        workspace = tempfile.TemporaryDirectory(
+            prefix=".asclv-build-", dir=os.path.dirname(out))
+        build_stem = os.path.join(workspace.name, os.path.basename(out_stem))
     # v2 nace de la matriz v1 aprobada. Se usan nombres distintos para no
     # sobrescribir nunca la fuente durante la conversión.
-    tmp_ascl = out_stem + (".source-v1.ascl" if args.format == "v2" else ".ascl")
-    final_ascl = out_stem + ".ascl"
+    tmp_ascl = build_stem + (".source-v1.ascl" if args.format == "v2" else ".ascl")
+    final_ascl = build_stem + ".ascl"
     keyint = max(1, args.fps * 2)
 
     ext = os.path.splitext(args.input)[1].lower()
     is_video = (not args.image) and (ext in encoder.VIDEO_EXTS)
+    if args.keep:
+        intermediates = [tmp_ascl]
+        if args.format == "v2":
+            intermediates.append(final_ascl)
+        if is_video:
+            intermediates.append(os.path.splitext(tmp_ascl)[0] + ".mp3")
+        input_key = os.path.normcase(input_path)
+        output_key = os.path.normcase(out)
+        for intermediate in sorted(set(intermediates)):
+            path_key = os.path.normcase(os.path.abspath(intermediate))
+            if path_key in (input_key, output_key):
+                p.error("un intermedio --keep coincide con la entrada o la salida: %s" %
+                        intermediate)
+            if os.path.lexists(intermediate):
+                p.error("--keep no sobrescribe un intermedio existente: %s" %
+                        intermediate)
 
     if is_video:
         info = encoder.encode_video(args.input, tmp_ascl, args.mode, args.cols, args.rows,
@@ -142,6 +181,9 @@ def main(argv=None):
                                     dither_window=args.dither_window)
         mp3 = os.path.splitext(tmp_ascl)[0] + ".mp3"
         mp3 = mp3 if (info.get("audio") and os.path.exists(mp3)) else None
+        if mp3 is None:
+            print("AVISO: no se extrajo audio; la fuente puede no tenerlo o FFmpeg "
+                  "puede haber fallado.", file=sys.stderr)
         v2_stats = None
         bundle_ascl = tmp_ascl
         if args.format == "v2":
@@ -232,6 +274,8 @@ def main(argv=None):
             for x in (tmp_ascl, final_ascl if args.format == "v2" else None):
                 if x and os.path.exists(x):
                     os.remove(x)
+    if workspace is not None:
+        workspace.cleanup()
     return 0
 
 

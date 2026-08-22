@@ -2,7 +2,9 @@
 Pillow>=9
 numpy>=1.21
 opencv-python-headless>=4.5   # 'headless' = sin GUI, ideal para servidor
-imageio-ffmpeg>=0.6           # fallback portable si ffmpeg no esta instalado globalmente
+# 0.6 requiere Python >=3.9; 0.5.1 conserva el piso Python 3.8 del backend.
+imageio-ffmpeg>=0.5.1,<0.6; python_version < "3.9"
+imageio-ffmpeg>=0.6; python_version >= "3.9"
 # Tambien puede usarse el binario del sistema 'ffmpeg'; tiene prioridad si esta disponible:
 #   Debian/Ubuntu : sudo apt install ffmpeg
 #   macOS (brew)  : brew install ffmpeg

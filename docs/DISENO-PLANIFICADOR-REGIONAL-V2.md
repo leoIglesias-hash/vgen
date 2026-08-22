@@ -218,10 +218,11 @@ Fuentes primarias:
 
 ## 8. Descarga completa por chunks y streaming futuro
 
-El codec regional no obliga a streaming. El envelope v2 puede dividir el video en GOPs
-autocontenidos, cada uno iniciado por keyframe y con CRC. La descarga normal acumula todos
-los chunks y conserva el archivo completo cacheable. HTTP Range o reproducción progresiva
-quedan como opciones posteriores sobre la misma estructura.
+El codec regional no obliga a streaming. Una revisión **posterior a ASCLV2** podría dividir
+el video en GOPs autocontenidos, cada uno iniciado por keyframe y con CRC. El envelope
+ASCLVID2 implementado hoy no tiene chunks y rechaza bytes extra. Esa versión futura podría
+mantener un recurso completo cacheable. HTTP Range o reproducción progresiva quedan como
+opciones posteriores, no como capacidades del formato actual.
 
 La intervención matricial en vivo es otra capa: se aplica después de decodificar y antes
 de presentar dirty regions. No debe confundirse con la forma de descargar el archivo.

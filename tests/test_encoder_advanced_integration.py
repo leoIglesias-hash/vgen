@@ -63,6 +63,77 @@ def frame_headers(path):
 
 
 class AdvancedEncoderIntegrationTest(unittest.TestCase):
+    def test_make_clip_rejects_unsafe_output_paths_before_encoding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, "source.asclv")
+            with open(source, "wb") as stream:
+                stream.write(b"source")
+            with contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    make_clip.main([source, "--out", source])
+                with self.assertRaises(SystemExit):
+                    make_clip.main([source, "--out",
+                                    os.path.join(directory, "wrong.ascl")])
+
+    def test_make_clip_keep_rejects_existing_sidecar(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, "source.png")
+            output = os.path.join(directory, "clip.asclv")
+            sidecar = os.path.join(directory, "clip.ascl")
+            with open(source, "wb") as stream:
+                stream.write(b"not decoded because validation runs first")
+            with open(sidecar, "wb") as stream:
+                stream.write(b"user data")
+            with contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    make_clip.main([source, "--out", output, "--keep"])
+            with open(sidecar, "rb") as stream:
+                self.assertEqual(stream.read(), b"user data")
+
+    def test_make_clip_default_isolates_and_preserves_user_sidecars(self):
+        info = {
+            "mode": "pixel", "cols": 32, "rows": 18, "fps": 15,
+            "n_frames": 2, "palette_mode": "global", "quality_profile": "custom",
+            "pal_size": 16, "bake_smoothing": "none", "reconstruction": "nearest",
+            "flags": 12, "palette_algorithm": "kmeans-rgb", "dither": "off",
+            "dither_matrix": 4, "audio": None,
+        }
+        v2_stats = {
+            "regional_frames": 1, "predictor_frames": 0, "n_frames": 2,
+            "saved_bytes": 5, "saved_percent": 0.5,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, "source.mp4")
+            output = os.path.join(directory, "clip.asclv")
+            sidecars = [
+                os.path.join(directory, "clip.ascl"),
+                os.path.join(directory, "clip.mp3"),
+                os.path.join(directory, "clip.source-v1.ascl"),
+                os.path.join(directory, "clip.source-v1.mp3"),
+            ]
+            for sidecar in sidecars:
+                with open(sidecar, "wb") as stream:
+                    stream.write(b"user data")
+            with mock.patch.object(make_clip.encoder, "encode_video",
+                                   return_value=info) as encode_video, \
+                    mock.patch.object(make_clip.ascl_v2, "transcode_path",
+                                      return_value=v2_stats) as transcode, \
+                    mock.patch.object(make_clip.ascl_bundle, "pack",
+                                      return_value=(1000, 900, 100)), \
+                    contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(make_clip.main([
+                    source, "--out", output, "--format", "v2"]), 0)
+            temporary_source = encode_video.call_args[0][1]
+            temporary_final = transcode.call_args[0][1]
+            build_directory = os.path.dirname(temporary_source)
+            self.assertTrue(os.path.basename(build_directory).startswith(".asclv-build-"))
+            self.assertEqual(os.path.dirname(temporary_final), build_directory)
+            self.assertFalse(os.path.exists(build_directory))
+            for sidecar in sidecars:
+                with open(sidecar, "rb") as stream:
+                    self.assertEqual(stream.read(), b"user data")
+
     def test_adaptive_oklab_auto_is_v1_seekable_and_reports_boundaries(self):
         blue = color_frame((18, 65, 150))
         orange = color_frame((185, 50, 12))

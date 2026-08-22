@@ -461,3 +461,84 @@ acotados y no reserve un nuevo frame completo en cada cuadro.
 - Mantener descarga completa/cacheable; streaming y Range no forman parte de esta revisión.
 - Ejecutar TV-02 en equipos reales antes de una decisión de producto. El HQ final ya fue
   generado sin sobrescribir v1 y la igualdad Python/JavaScript quedó comprobada.
+
+## Instancia 006 - Cierre del artefacto, player TV y preparación reproducible
+
+Fecha: 2026-08-22.
+
+Estado: **cierre local preparado para publicación**, sin cambio del codec ni de la matriz
+aprobada en la Instancia 005. Referencia: tag `asclv2-exact-hq-v0.2`.
+
+### Motivo y alcance
+
+Después de aceptar visualmente el HQ v2 se ordenó la entrega: conservar un único ASCLV
+útil en `outputs/`, hacer accesible el menú técnico de caché, eliminar dependencias de
+prueba sobre artefactos ignorados y dejar inequívoco qué documentación está vigente.
+
+### Artefacto vigente
+
+- Archivo local: `outputs/clip.asclv`.
+- Origen lógico: `TKN-2441-GANADOR-v2-adaptive-oklab-hq-768.asclv`.
+- ASCLVID2, 768x432, 231 frames, 15 FPS.
+- Tamaño: 17.935.305 B; audio incluido: 180.857 B.
+- SHA-256:
+  `6FF3E71E3B090B4546C265AA60D22C65CF9382E0B207D6DCCB29AEFFF713573A`.
+
+Esto corrige la incertidumbre histórica de la Instancia 004: el `clip.asclv` local actual
+sí es el HQ v2 exacto. El nombre estable solo pertenece a la ruta de despliegue.
+
+### Limpieza y publicación
+
+- `outputs/` quedó con un único archivo, `clip.asclv`; fixtures de tests viven en
+  `tests/fixtures/` y los resultados regenerables están ignorados.
+- Los binarios v1 anteriores permanecen recuperables en el historial/tag, aunque no en
+  `HEAD`. Una publicación de toda la historia también los publica; no se reescribe sin
+  decidir primero derechos y visibilidad del repositorio.
+- El clip v2 no está en Git. Se distribuye como asset de release solo si se confirman sus
+  derechos, con hash y tamaño documentados.
+
+### Player TV y caché
+
+- La pestaña inferior izquierda ahora muestra `MENU` con opacidad visible y conserva la
+  tecla 9 como acceso alternativo.
+- La renovación libera reader, audio, Canvas/GPU, rota un token y revalida la misma ruta.
+- No se presenta como borrado global: ETag, Cache-Control y pruebas fría/caliente siguen
+  siendo responsabilidad de CACHE-001 y del servidor PHP.
+- Los mensajes provenientes de XHR/parser se insertan como texto, no como HTML.
+
+### Robustez del tooling
+
+- `make_clip.py` rechaza una salida que no termine en `.asclv` o que coincida con la
+  fuente, evitando sobrescritura/borrado accidental.
+- Sin `--keep`, los `.ascl/.mp3` intermedios viven en un directorio temporal único; con
+  `--keep`, una colisión se rechaza en lugar de sobrescribirse.
+- El bundle final se publica con escritura temporal y reemplazo atómico; un fallo conserva
+  la versión anterior y en POSIX se preservan/aplican permisos legibles por el servidor.
+- Los dos helpers antiguos que autocargaban checkpoints pickle predecibles se retiraron
+  del árbol publicable y permanecen recuperables en el historial Git.
+- Si no se extrae audio se emite una advertencia explícita.
+- Una clonación limpia ya no necesita el clip de demostración para probar la página; el gate
+  `--require-release-artifact` sí lo exige antes de crear un release.
+- Se agregó un smoke test real sobre `inputs/synthetic.mp4`: encode v1, transcode v2,
+  decode exacto y bundle.
+
+### Validación
+
+- 115 pruebas Python aprobadas.
+- 11 suites JavaScript aprobadas, incluida una auditoría global de sintaxis/API legacy.
+- `outputs/clip.asclv` validado como ASCLVID2 completo, con audio y hash esperado.
+- El workflow de CI queda configurado para ejecutar la misma regresión en Python 3.8/3.11
+  y Node 20 sin iniciar servidores ni descargar artefactos de producto. La primera corrida
+  remota verde debe registrarse después del push.
+
+### Decisión y límites
+
+- Esta es la versión correcta para continuar y para preparar el repositorio remoto.
+- V1 sigue siendo el default; v2 continúa opt-in hasta TV-02 porque en este clip ahorra
+  solo 5 B y todavía no demuestra menor CPU/RAM física.
+- No se implementa un selector automático de calidad por videos/segmentos. FPS, grilla y
+  colores son explícitos; el automatismo solo toma decisiones numéricas verificables una
+  vez fijada la matriz.
+- Intervención matricial, near-lossless y Range permanecen en revisiones futuras separadas.
+- El push público queda condicionado a decidir licencia/procedencia y derechos sobre los
+  cuatro videos del historial y el clip de release.

@@ -17,8 +17,10 @@ CLI:
     python ascl_bundle.py info   salida.asclv
 """
 import os
+import stat
 import struct
 import sys
+import tempfile
 
 MAGIC_V1 = b"ASCLVID1"
 MAGIC_V2 = b"ASCLVID2"
@@ -26,6 +28,16 @@ MAGIC = MAGIC_V1              # alias histórico para callers v1
 MAGICS = {MAGIC_V1: 1, MAGIC_V2: 2}
 HEADER_FMT = "<8sII"          # magic, ascl_len, audio_len
 HEADER_SIZE = struct.calcsize(HEADER_FMT)   # 16
+
+
+def _publish_mode(out_path):
+    """Conserva permisos existentes o aplica 0666 limitado por el umask."""
+    try:
+        return stat.S_IMODE(os.stat(out_path).st_mode) & 0o777
+    except FileNotFoundError:
+        current_umask = os.umask(0)
+        os.umask(current_umask)
+        return 0o666 & ~current_umask
 
 
 def _inner_version(ascl):
@@ -43,10 +55,33 @@ def pack_bytes(ascl, audio, out_path):
     audio = bytes(audio or b"")
     version = _inner_version(ascl)
     magic = MAGIC_V1 if version == 1 else MAGIC_V2
-    with open(out_path, "wb") as f:
-        f.write(struct.pack(HEADER_FMT, magic, len(ascl), len(audio)))
-        f.write(ascl)
-        f.write(audio)
+    out_path = os.path.abspath(out_path)
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    publish_mode = _publish_mode(out_path)
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=".asclv-", suffix=".tmp", dir=out_dir)
+    try:
+        with os.fdopen(descriptor, "wb") as f:
+            f.write(struct.pack(HEADER_FMT, magic, len(ascl), len(audio)))
+            f.write(ascl)
+            f.write(audio)
+            f.flush()
+            os.fsync(f.fileno())
+        # mkstemp crea 0600 en POSIX. Antes del replace se restaura el modo
+        # publico esperado para que Apache/nginx pueda leer el artefacto.
+        os.chmod(temporary, publish_mode)
+        os.replace(temporary, out_path)
+    except Exception:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
+        raise
     return os.path.getsize(out_path), len(ascl), len(audio)
 
 

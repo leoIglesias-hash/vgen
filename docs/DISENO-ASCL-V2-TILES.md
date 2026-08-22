@@ -4,8 +4,8 @@ Fecha de revisión: 2026-08-14.
 
 Estado: codec, transcodificador de referencia, ReaderV2 y despacho v1/v2 implementados.
 Esta es una primera revisión utilizable y verificable; no es todavía una recomendación
-de reemplazar v1 en todos los Smart TV. La promoción depende del benchmark HQ final y de
-pruebas físicas.
+de reemplazar v1 en todos los Smart TV. El benchmark HQ final ya está cerrado; la
+promoción depende únicamente de las pruebas físicas y gates de producto pendientes.
 
 La especificación normativa resumida también vive en `ASCL-format-spec.md`, §13. Este
 documento explica las decisiones de implementación, los límites y lo que queda fuera.
@@ -322,9 +322,9 @@ Pruebas automáticas requeridas:
 La aceptación de producto agrega Smart TV físico: p50/p95, cuadros perdidos, RAM, CPU,
 Canvas2D y WebGL1. Un resultado de PC/Node no sustituye ese gate.
 
-## 13. Pendientes, sin confundirlos con lo implementado
+## 13. Cierre local y pendientes de producto
 
-1. **Artefacto HQ final:** **COMPLETADO localmente**. El ASCLVID2 final pesa
+1. **Cierre local completado — artefacto HQ:** el ASCLVID2 final pesa
    17.935.305 B, ahorra 5 B, conserva RGBA en 231/231 frames y audio byte-exacto; SHA-256
    `6FF3E71E3B090B4546C265AA60D22C65CF9382E0B207D6DCCB29AEFFF713573A`.
 2. **Remap exacto de paleta:** el laboratorio permutó conjuntamente IDs y entradas RGB:

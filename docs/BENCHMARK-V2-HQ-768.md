@@ -17,12 +17,25 @@ representación binaria interna de la matriz.
 
 Ambos contienen 768×432, 231 frames, 15 FPS y audio MP3 de 180.857 B.
 
-## Protocolo reproducible
+En el árbol actual, el V2 exacto existe localmente como `outputs/clip.asclv` y está
+ignorado por Git. El V1 se recupera desde el tag `asclv2-exact-hq-v0.1`; los comandos de
+abajo restauran solo ese V1 y generan nuevamente el V2 con su nombre lógico. Para una
+publicación, el V2 aprobado se adjunta al release únicamente si se confirman sus derechos.
+
+## Protocolo de regeneración condicionado
+
+Este protocolo es reproducible solo donde el tag v0.1 y su V1 estén autorizados y
+disponibles. Si la publicación pública usa una historia saneada sin esos binarios, esta
+sección conserva trazabilidad histórica; no debe prometerse regeneración desde ese clon.
 
 Entorno de esta corrida: Windows, Python 3.12.13 y Node.js 24.19.0. Base V1 en Git:
-`abb0451`; la revisión V2 queda identificada por el tag Git de esta entrega.
+`abb0451`. La implementación v2 verificada corresponde al commit `ad4b6b7`, tag
+`asclv2-exact-hq-v0.1`; el cierre de publicación queda en `asclv2-exact-hq-v0.2`.
 
 ```powershell
+git restore --source asclv2-exact-hq-v0.1 --worktree -- `
+  outputs/TKN-2441-GANADOR-v1-adaptive-oklab-hq-768.asclv
+
 python backend/ascl_v2.py `
   outputs/TKN-2441-GANADOR-v1-adaptive-oklab-hq-768.asclv `
   outputs/TKN-2441-GANADOR-v2-adaptive-oklab-hq-768.asclv
@@ -34,11 +47,17 @@ node backend/verify_v1_v2.js `
 python backend/benchmark_quality_v1.py --decode-repeats 0 `
   v1=outputs/TKN-2441-GANADOR-v1-adaptive-oklab-hq-768.asclv `
   v2=outputs/TKN-2441-GANADOR-v2-adaptive-oklab-hq-768.asclv
+
+Get-FileHash -Algorithm SHA256 `
+  outputs/TKN-2441-GANADOR-v1-adaptive-oklab-hq-768.asclv, `
+  outputs/TKN-2441-GANADOR-v2-adaptive-oklab-hq-768.asclv
 ```
 
-La primera orden verifica en Python cada candidato regional/predictivo contra la matriz
-original antes de aceptarlo. La segunda usa los readers JavaScript reales y compara
-RGBA cuadro por cuadro, además del audio. La tercera inspecciona estructura, CRC y tags.
+`git restore` materializa el control histórico sin alterar el índice. La conversión
+verifica en Python cada candidato regional/predictivo contra la matriz original antes de
+aceptarlo. Node usa los readers JavaScript reales y compara RGBA cuadro por cuadro, además
+del audio. El benchmark inspecciona estructura, CRC y tags; el último paso debe coincidir
+con los dos SHA-256 de la tabla.
 
 ## Resultado
 
@@ -50,7 +69,9 @@ RGBA cuadro por cuadro, además del audio. La tercera inspecciona estructura, CR
 - RGBA idéntico en 231/231 frames entre ReaderV1 y ReaderV2.
 - Audio idéntico byte por byte: 180.857 B.
 - CRC interior válido en ambas versiones.
-- Regresión final: 108 pruebas Python y 10 suites JavaScript, todas aprobadas.
+- Regresión del cierre v0.1: 108 pruebas Python y 10 suites JavaScript aprobadas.
+- Regresión de publicación v0.2: 115 pruebas Python y 11 suites JavaScript aprobadas,
+  incluido el smoke real con el video sintético versionado.
 - V2 reemplazó un DELTA por `REGIONAL_DELTA_RAW`; los otros 230 payloads conservaron
   su representación v1 porque ninguna alternativa exacta era estrictamente menor.
 - Ahorro final: 5 B. No hubo aumento de archivo.

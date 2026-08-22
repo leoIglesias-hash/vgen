@@ -125,9 +125,15 @@
   var refreshGesture=new window.ASCILINECacheRefresh.GestureGuard(800);
   var closeGesture=new window.ASCILINECacheRefresh.GestureGuard(800);
 
+  function setNodeText(node,value){
+    value=value || "";
+    if(typeof node.textContent!=="undefined"){ node.textContent=value; }
+    else { node.innerText=value; }
+  }
+
   function setMessage(title, text, isError){
-    headline.innerHTML=title;
-    detail.innerHTML=text || "";
+    setNodeText(headline,title);
+    setNodeText(detail,text);
     stage.className=isError ? "error" : "";
   }
 
@@ -388,9 +394,9 @@
     ready=true;
     downloadButton.style.display="none";
     fitCanvas();
-    setMessage("Presion&aacute; una tecla del 1 al 8 o hac&eacute; click",
-      "ASCL v"+reader.header.version+" &middot; "+reader.header.cols+"x"+reader.header.rows+" &middot; "+reader.header.fps+
-      " FPS &middot; "+rendererName+" &middot; audio "+(hasAudio?"incluido":"no disponible"),false);
+    setMessage("Presioná una tecla del 1 al 8 o hacé click",
+      "ASCL v"+reader.header.version+" · "+reader.header.cols+"x"+reader.header.rows+" · "+reader.header.fps+
+      " FPS · "+rendererName+" · audio "+(hasAudio?"incluido":"no disponible"),false);
     try { stage.focus(); } catch(ignored) {}
   }
 
@@ -433,8 +439,8 @@
     if(raf){ cancelFrame(raf); raf=0; }
     if(hasAudio){ try { audio.pause(); } catch(ignored) {} }
     if(showPrompt){
-      setMessage("Finalizado &middot; presion&aacute; 1 a 8 o hac&eacute; click para repetir",
-        rendererName+" &middot; pantalla completa",false);
+      setMessage("Finalizado · presioná 1 a 8 o hacé click para repetir",
+        rendererName+" · pantalla completa",false);
     }
   }
 
@@ -473,8 +479,8 @@
       if(!activeXHR){
         beginDownload(true);
       } else {
-        setMessage("El video todav&iacute;a se est&aacute; cargando",
-          "Esper&aacute; unos segundos y volv&eacute; a presionar",false);
+        setMessage("El video todavía se está cargando",
+          "Esperá unos segundos y volvé a presionar",false);
       }
       return null;
     }
@@ -491,13 +497,13 @@
         if(result && typeof result["catch"]==="function"){
           result["catch"](function(){
             stop(false);
-            setMessage("El TV bloque&oacute; el audio",
-              "Presion&aacute; otra vez una tecla del 1 al 8 o hac&eacute; click",true);
+            setMessage("El TV bloqueó el audio",
+              "Presioná otra vez una tecla del 1 al 8 o hacé click",true);
           });
         }
       } catch(error){
         stop(false);
-        setMessage("No se pudo iniciar el audio","Volv&eacute; a presionar para reintentar",true);
+        setMessage("No se pudo iniciar el audio","Volvé a presionar para reintentar",true);
         return null;
       }
     }
@@ -559,7 +565,7 @@
     xhr=new XMLHttpRequest();
     activeXHR=xhr;
     if(manual){
-      setMessage(forceRefresh ? "Actualizando video&hellip;" : "Iniciando descarga&hellip;",
+      setMessage(forceRefresh ? "Actualizando video…" : "Iniciando descarga…",
         forceRefresh ? "Renovando solamente este archivo ASCLV" :
           "Solicitada desde el control remoto",false);
     }
@@ -580,8 +586,8 @@
     xhr.onprogress=function(event){
       if(activeXHR!==xhr){ releaseXHRHandlers(xhr); return; }
       if(event && event.lengthComputable && event.total>0){
-        setMessage("Cargando video&hellip; "+Math.round(event.loaded*100/event.total)+"%",
-          "Quedar&aacute; cacheado por el navegador",false);
+        setMessage("Cargando video… "+Math.round(event.loaded*100/event.total)+"%",
+          "Quedará cacheado por el navegador",false);
       }
     };
     xhr.onload=function(){
@@ -611,7 +617,7 @@
           setMessage("No se pudo abrir el ASCLV",error.message,true);
         }
       } else {
-        setMessage("No se pudo cargar el video","HTTP "+status+" &middot; "+source,true);
+        setMessage("No se pudo cargar el video","HTTP "+status+" · "+source,true);
       }
     };
     xhr.onerror=function(){
@@ -619,7 +625,7 @@
       activeXHR=null;
       releaseXHRHandlers(xhr);
       setMessage("No se pudo cargar el video",
-        "Us&aacute; Iniciar descarga y verific&aacute; que exista "+source,true);
+        "Usá Iniciar descarga y verificá que exista "+source,true);
     };
     xhr.onabort=function(){
       if(activeXHR===xhr){ activeXHR=null; }

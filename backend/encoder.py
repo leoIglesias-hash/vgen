@@ -3,9 +3,10 @@
 """
 encoder.py - Encoder offline ASCILINE -> contenedor .ascl (imagen Y video).
 
-Fork conceptual de YusufB5/ASCILINE: reusa la rampa por luminancia, la correccion
-de aspecto del glifo y la estrategia del codec adaptativo (probar por frame
-RAW / ZLIB / DELTA y quedarse con el mas chico). El char plane siempre es exacto.
+Relacion conceptual declarada con YusufB5/ASCILINE: este encoder standalone implementa
+la rampa por luminancia, la correccion de aspecto del glifo y la estrategia adaptativa
+de probar RAW / ZLIB / DELTA por frame. La auditoria de procedencia previa a una
+publicacion publica se registra aparte. El char plane siempre es exacto.
 
   IMAGEN (Fase 1):  un frame, n_frames = 1.  -> python encoder.py foto.jpg out.ascl
   VIDEO  (Fase 3):  N frames + tabla de offsets + DELTA temporal + audio aparte.

@@ -1,4 +1,4 @@
-# ASCILINE — Documento de contexto para Cowork
+# ASCILINE — Documento de contexto inicial
 
 > **Documento histórico de contexto original.** No contiene el estado actual ni la cola
 > vigente. Para continuar use `HOJA-DE-RUTA-TECNICA-V2.md`.
@@ -185,7 +185,7 @@ El piso universal es el **HTTP cache**; todo lo demás es mejora opcional encima
 
 ---
 
-## 8. Decisiones pendientes (a tomar en Cowork)
+## 8. Decisiones que estaban pendientes en esta etapa
 
 | # | Decisión | Opciones | Notas |
 |---|---|---|---|

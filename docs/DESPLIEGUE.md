@@ -31,6 +31,10 @@ public/
     `-- clip.asclv
 ```
 
+`player.html` usa el mismo `./outputs/clip.asclv`, de modo que ambos players funcionan con
+ese layout plano. La ruta siempre se resuelve respecto de la URL del HTML, no respecto de
+la estructura del repositorio local.
+
 Si en cambio la URL es `/frontend/tv-player.html`, la ruta relativa apunta a
 `/frontend/outputs/clip.asclv`; hay que publicar el archivo allí o configurar ese mapeo
 en PHP/Apache. No es necesario renombrar el artefacto local: `clip.asclv` es solo el
@@ -50,8 +54,11 @@ intencional: conserva un único archivo cacheable y no depende de MediaSource, S
 Service Worker ni HTTP Range. `Accept-Ranges` puede servirse, pero el player actual no lo
 usa como streaming ni carga parcial.
 
-Recomendado (no obligatorio) para rendimiento y cache en webviews:
-- Servir los `.asclv` con compresión de transporte: `gzip` (universal) o `brotli`.
+Recomendado para rendimiento y caché en webviews:
+- No activar compresión de transporte por defecto. Los frames ya contienen DEFLATE y el
+  audio es MP3, por lo que gzip suele ahorrar poco y agrega una descompresión completa.
+  Brotli no es un piso compatible con WebViews antiguos. Medir antes de habilitar gzip;
+  si se investiga HTTP Range, servir `Content-Encoding: identity`.
 - Cabeceras de cache para archivos versionados por hash:
   `Cache-Control: public, max-age=31536000, immutable`.
 - Nombrar los clips con un hash, ej. `promo.a1b2c3.asclv`, para invalidar cache al actualizar.
@@ -65,18 +72,38 @@ Recomendado (no obligatorio) para rendimiento y cache en webviews:
 - Enviar `Content-Type: application/octet-stream` y `Content-Length`. XHR no garantiza
   persistencia por sí solo: la política real la determinan estas cabeceras y el WebView.
 
+Ejemplo Apache para la URL estable usada por el TV (requiere `mod_headers` y
+`mod_setenvif`; Apache calcula `Content-Length` y ETag para el archivo estático):
+
+```apache
+SetEnvIfNoCase Request_URI "\.asclv$" no-gzip=1
+<FilesMatch "\.asclv$">
+    ForceType application/octet-stream
+    Header set Cache-Control "public, no-cache"
+</FilesMatch>
+FileETag MTime Size
+```
+
+`no-gzip` impide que `mod_deflate` transforme el cuerpo; quitar manualmente
+`Content-Encoding` no sería equivalente. Tras desplegar, verificar que una petición con
+`Accept-Encoding: gzip` siga respondiendo sin `Content-Encoding` y con el tamaño/hash del
+ASCLV original.
+
+Si PHP entrega el cuerpo en lugar de Apache, debe emitir como mínimo el mismo
+`Content-Type`, `Cache-Control`, un `ETag` o `Last-Modified`, y luego `Content-Length`
+antes de enviar el archivo. No comprimir ni transformar la respuesta desde PHP.
+
 Ejemplo nginx mínimo:
 ```
 location / {
     root /var/www/asciline/public;
     types { application/octet-stream asclv; }
-    gzip on;
-    gzip_types application/octet-stream;
+    gzip off;
 }
 ```
 
 Cómo lo abre el usuario final: `https://tu-dominio/player.html` y elige el `.asclv`,
-o un link directo `https://tu-dominio/player.html?src=promo.asclv` (autocarga).
+o un link directo `https://tu-dominio/player.html?src=outputs/promo.asclv` (autocarga).
 
 ## B) SERVIDOR DE CREACIÓN (encodear videos a .asclv)
 
@@ -90,7 +117,9 @@ Requisitos:
    pip install -r requirements.txt
    ```
    (Pillow, numpy, opencv-python-headless)
-3. **ffmpeg** como binario del sistema (NO es pip), para extraer el audio y los previews:
+3. **ffmpeg** para extraer audio y generar previews. El encoder intenta primero el
+   binario del sistema y puede usar el ejecutable portable de `imageio-ffmpeg` como
+   fallback. Para herramientas externas/previews conviene conservar ffmpeg en el PATH:
    - Debian/Ubuntu: `sudo apt install ffmpeg`
    - macOS: `brew install ffmpeg`
    - Windows: descargar de ffmpeg.org y agregar al PATH

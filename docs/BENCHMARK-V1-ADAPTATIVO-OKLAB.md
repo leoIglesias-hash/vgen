@@ -4,10 +4,11 @@ Fecha: 2026-08-12.
 
 ## Pregunta
 
-Se evaluaron juntas y por etapas cinco mejoras que no agregan trabajo nuevo al
-reproductor: paleta perceptual Oklab, bloques por cambio real de color, estabilidad
-temporal de paleta, dithering calibrado y grillas seleccionables de 640, 768 y 960
-columnas. La salida sigue siendo ASCL v1 y el player sigue recibiendo indices de un byte.
+Se evaluaron juntas y por etapas cinco mejoras que no agregan lógica perceptual al
+reproductor: paleta Oklab, bloques por cambio real de color, estabilidad temporal,
+dithering calibrado y grillas seleccionables de 640, 768 y 960 columnas. La salida sigue
+siendo ASCL v1 y el player recibe índices de un byte; el costo efectivo de cada matriz se
+mide por separado.
 
 No se uso IA, deteccion de objetos ni comparacion espacial de escenas. El detector usa
 histograma Oklab, color medio y una energia escalar de gradiente calculados offline.
@@ -21,6 +22,10 @@ histograma Oklab, color medio y una energia escalar de gradiente calculados offl
 - K-means Oklab exacto (`perceptual-lut-bits=0`), refuerzo numerico de gradientes.
 - Adaptativo: minimo 5, maximo 10, deriva 0,20, hard cut 0,58, estabilidad maxima 0,25.
 - Dither auto: Bayer 4, presupuesto 5%, mejora minima 8%, ventana 10.
+
+La fuente TKN no se distribuye en el repositorio. Reproducir estas métricas exige obtenerla
+por un canal autorizado y comprobar primero tamaño y SHA-256; sin esa fuente, los datos de
+esta página son evidencia histórica, no un benchmark regenerable desde un clon limpio.
 
 El maximo de 10 frames es una guarda, no una renovacion fija. Sobre este clip produjo
 27 bloques variables, con tamaños entre 1 y 10 frames y un hard cut exacto. El bloque de
@@ -105,8 +110,9 @@ En HQ cambio 0,57% de las celdas y en ultra 0,69%.
 - Ultra 960: medicion exploratoria local. Fue generado antes del ultimo guard de textura
   del dithering y debe regenerarse con el codigo final antes de entregarlo o versionarlo.
 
-Los dos primeros se conservan en Git. Ultra queda regenerable hasta superar la prueba
-fisica en Smart TV, para no aumentar innecesariamente el historial del repositorio.
+Los dos primeros ya no están en el árbol actual, pero siguen recuperables desde el
+historial y el tag `asclv2-exact-hq-v0.1`. Ultra queda regenerable hasta superar la prueba
+física en Smart TV, para no aumentar innecesariamente el historial del repositorio.
 
 ## Pendiente de prueba fisica
 

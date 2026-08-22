@@ -1,6 +1,7 @@
 "use strict";
 
 var assert = require("assert");
+var crypto = require("crypto");
 var fs = require("fs");
 var path = require("path");
 
@@ -9,7 +10,8 @@ var page = fs.readFileSync(
 var inline = page.match(/<script>\s*([\s\S]*?)\s*<\/script>\s*<\/body>/);
 var refreshFunction = page.match(/function refreshCurrentVideo\(\)\{([\s\S]*?)\n  \}\n\n  downloadButton\.onclick/);
 var demoPath = path.join(__dirname, "..", "outputs", "clip.asclv");
-var demo = fs.readFileSync(demoPath);
+var requireDemo = process.env.ASCLV_REQUIRE_RELEASE_ARTIFACT === "1";
+var demo = fs.existsSync(demoPath) ? fs.readFileSync(demoPath) : null;
 
 assert(inline, "la pagina TV debe contener su controlador inline");
 assert(refreshFunction, "debe existir la operacion de actualizacion completa");
@@ -46,6 +48,10 @@ assert(page.indexOf("setRequestHeader(\"Cache-Control\",\"no-cache\")") >= 0);
 assert(page.indexOf("setRequestHeader(\"Pragma\",\"no-cache\")") >= 0);
 assert(page.indexOf("ASCILINE_ASCLV_REFRESH_V1") >= 0,
   "el token de actualizacion debe persistir cuando localStorage esta disponible");
+assert(page.indexOf("headline.innerHTML") < 0 && page.indexOf("detail.innerHTML") < 0,
+  "errores XHR y del parser deben mostrarse como texto, no interpretarse como HTML");
+assert(page.indexOf("setNodeText(headline,title)") >= 0,
+  "el mensaje TV debe conservar fallback textual para navegadores antiguos");
 assert(page.indexOf("try { cacheStorage=window.localStorage") >= 0,
   "el acceso a localStorage debe tolerar navegadores que lo bloquean");
 assert(page.indexOf("stopButtonEvent(event)") >= 0,
@@ -90,9 +96,27 @@ assert(page.indexOf("16+videoLength+audioLength!==buffer.byteLength") >= 0,
   "el bundle no debe aceptar truncado ni bytes anexados");
 assert(page.indexOf("mozfullscreenchange") >= 0);
 assert(page.indexOf("MSFullscreenChange") >= 0);
-assert.strictEqual(demo.slice(0, 8).toString("ascii"), "ASCLVID2");
-assert(demo.readUInt32LE(8) > 32, "el demo debe contener video");
-assert(demo.readUInt32LE(12) > 0, "el demo debe conservar el audio incluido");
+if (demo) {
+  var magic = demo.slice(0, 8).toString("ascii");
+  assert(magic === "ASCLVID1" || magic === "ASCLVID2",
+    "el archivo de la ruta TV debe ser ASCLVID1 o ASCLVID2");
+  assert(demo.readUInt32LE(8) > 32, "el demo debe contener video");
+  assert.strictEqual(16 + demo.readUInt32LE(8) + demo.readUInt32LE(12), demo.length,
+    "el demo local no debe estar truncado ni contener bytes posteriores");
+  if (requireDemo) {
+    assert.strictEqual(magic, "ASCLVID2",
+      "el artefacto HQ del release debe conservar ASCLVID2");
+    assert(demo.readUInt32LE(12) > 0,
+      "el artefacto HQ del release debe conservar el audio incluido");
+    assert.strictEqual(
+      crypto.createHash("sha256").update(demo).digest("hex").toUpperCase(),
+      "6FF3E71E3B090B4546C265AA60D22C65CF9382E0B207D6DCCB29AEFFF713573A",
+      "el artefacto HQ no coincide con el binario aprobado");
+  }
+} else {
+  assert.strictEqual(requireDemo, false,
+    "falta outputs/clip.asclv; copie el artefacto de release o quite --require-release-artifact");
+}
 assert.strictEqual(/\b(?:let|const|class)\b/.test(inline[1]), false);
 assert.strictEqual(/=>/.test(inline[1]), false);
 assert.strictEqual(/\bfetch\b/.test(inline[1]), false);

@@ -4,6 +4,22 @@ Convierte imagen o video a una grilla de texto/bloques de color y la reproduce e
 navegador (incluso webviews viejos), **pre-encodeando offline**: el servidor de playback
 no calcula nada, solo sirve archivos estáticos.
 
+## Estado de esta versión
+
+El candidato local `asclv2-exact-hq-v0.2` está listo para pruebas físicas y para un
+repositorio privado. Una publicación pública sigue condicionada por licencia, procedencia
+y derechos de los videos históricos. ASCLV1 continúa siendo el default; ASCLV2 exacto es
+opt-in y ya abre en el mismo frontend. La regresión automática cubre 115 pruebas Python y
+11 suites JavaScript.
+
+La compatibilidad legacy es un objetivo verificado por sintaxis/API y fallbacks: frontend
+ES5, XHR, Canvas2D como piso y WebGL1 opcional. La matriz física de Smart TV/WebViews sigue
+pendiente, por lo que no se afirma compatibilidad universal con cualquier modelo.
+
+El estado técnico, lo cumplido y los límites están en
+[`docs/ESTADO-ACTUAL.md`](docs/ESTADO-ACTUAL.md). El índice que separa documentación
+vigente e histórica está en [`docs/README.md`](docs/README.md).
+
 ## Estructura
 
 ```
@@ -85,7 +101,7 @@ python make_clip.py ../inputs/video.mp4 --cols 960 --palette-size 96 \
 python make_clip.py ../inputs/video.mp4 --profile graphic \
   --palette block --palette-block-frames 0 --palette-algorithm kmeans-rgb
 
-# Reducir bandas de color sin costo nuevo en el navegador (solo mode pixel).
+# Reducir bandas sin agregar una etapa perceptual al navegador (solo mode pixel).
 python make_clip.py ../inputs/video.mp4 --palette block --palette-size 128 \
   --dither selective --dither-matrix 4
 
@@ -116,16 +132,19 @@ auditarse. Sigue siendo ASCL v1 con `PAL_PER_SCENE`, sin cambios en el player.
 `kmeans-oklab` construye y compara los colores en un espacio perceptual y pondera
 gradientes suaves para reducir banding. `--perceptual-lut-bits 0` hace cuantizacion
 Oklab exacta y prioriza calidad; valores `3..7` construyen una LUT offline para acelerar
-el procesamiento. Elegir exacto o LUT no agrega CPU, GPU ni RAM al navegador.
+el procesamiento. Elegir exacto o LUT no agrega algoritmos ni buffers al navegador; el
+costo efectivo del archivo resultante depende de sus cambios y debe medirse en el TV.
 
 `make_clip.py` usa `kmeans-rgb` por defecto: tarda más al crear el archivo, pero no agrega
-ningún trabajo al navegador y en el video TKN redujo de forma clara el error de color y de
+una etapa nueva al navegador y en el video TKN redujo de forma clara el error de color y de
 bajas frecuencias frente a MEDIANCUT. `fast-octree` es la alternativa rápida del procesador;
 `median-cut` conserva el comportamiento histórico y sigue siendo el default de `encoder.py`.
 
 El dithering selectivo se hornea como indices ASCL v1 normales: no cambia el player ni
-suma CPU/GPU al reproducir. En video se admite con paleta `global` o `block`; `per-frame`
-queda excluida para evitar inestabilidad temporal entre paletas.
+agrega un algoritmo de dither al reproducir. Sí puede modificar entropia, bytes y cantidad
+de celdas sucias, por lo que su costo efectivo queda sujeto al presupuesto y a TV-02. En
+video se admite con paleta `global` o `block`; `per-frame` queda excluida para evitar
+inestabilidad temporal entre paletas.
 
 El modo `--dither auto` agrega tres limites verificables: presupuesto maximo de celdas,
 mejora minima del error de baja frecuencia y ventana temporal de histeresis. Solo acepta
@@ -140,16 +159,26 @@ debe validarse nuevamente.
 
 ### Documentación activa
 
-- `docs/HOJA-DE-RUTA-TECNICA-V2.md`: backlog vigente, dependencias y gates.
-- `docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md`: principios e invariantes.
-- `docs/ASCL-format-spec.md`: formato v1 y primera revisión v2.
-- `docs/DISENO-ASCL-V2-TILES.md`: contrato v2 implementado, límites y pendientes.
-- `docs/BENCHMARK-V2-HQ-768.md`: evidencia exacta reproducible del primer HQ v2.
-- `docs/DISENO-PLANIFICADOR-REGIONAL-V2.md`: selección píxel/máscara/bloque y
+- [`docs/ESTADO-ACTUAL.md`](docs/ESTADO-ACTUAL.md): foto canónica de la versión.
+- [`docs/HOJA-DE-RUTA-TECNICA-V2.md`](docs/HOJA-DE-RUTA-TECNICA-V2.md): backlog vigente,
+  dependencias y gates.
+- [`docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md`](docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md):
+  principios e invariantes.
+- [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md): formato v1 y primera revisión v2.
+- [`docs/DISENO-ASCL-V2-TILES.md`](docs/DISENO-ASCL-V2-TILES.md): contrato v2
+  implementado, límites y pendientes.
+- [`docs/BENCHMARK-V2-HQ-768.md`](docs/BENCHMARK-V2-HQ-768.md): evidencia exacta del
+  primer HQ v2; su regeneración requiere conservar un V1 autorizado.
+- [`docs/DISENO-PLANIFICADOR-REGIONAL-V2.md`](docs/DISENO-PLANIFICADOR-REGIONAL-V2.md):
+  selección píxel/máscara/bloque y
   near-lossless temporal propuesto para v2.
-- `docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`: decisiones append-only.
-- `docs/BENCHMARK-V1-ADAPTATIVO-OKLAB.md`: evidencia de la versión actual.
-- `docs/DESPLIEGUE.md`: hosting y caché.
+- [`docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md):
+  decisiones append-only.
+- [`docs/BENCHMARK-V1-ADAPTATIVO-OKLAB.md`](docs/BENCHMARK-V1-ADAPTATIVO-OKLAB.md):
+  evidencia de la matriz HQ.
+- [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md): hosting y caché.
+- [`docs/PUBLICACION-GITHUB.md`](docs/PUBLICACION-GITHUB.md): artefactos, historial y
+  gates previos al push.
 
 `ESTADO-Y-CONTINUACION.md`, `GENERAR-1080-Y-VARIANTES.md` y los diseños preliminares
 quedan como evidencia histórica; no constituyen el backlog actual.
@@ -194,8 +223,9 @@ ASCLV: JavaScript no puede borrar la caché global ni sus entradas anteriores. E
 legacy, `keyCode=9` se conserva como Tab y no abre el menú; el hotspot sigue disponible.
 Hay que desplegar `cache-refresh.js` junto con los demás archivos de frontend.
 
-El servidor PHP existente debe publicar el clip en esa ruta relativa. El archivo
-versionado conserva su nombre original; `clip.asclv` es solamente su nombre al subirlo.
+El servidor PHP existente debe publicar el clip en esa ruta relativa. El artefacto local
+de esta entrega también se llama `outputs/clip.asclv`; ese nombre estable no forma parte
+del contenido binario.
 Como `./outputs/clip.asclv` se resuelve desde la URL del HTML, el despliegue recomendado
 pone los archivos de `frontend/` en el mismo directorio público que la carpeta
 `outputs/`. Si el HTML se publica como `/frontend/tv-player.html`, el clip debe existir
@@ -212,6 +242,23 @@ funcionalidad como fallback. Tanto v1 como v2 se descargan completos por XHR ant
 reproducir y se cachean como un único recurso; esta revisión no implementa streaming ni
 carga HTTP parcial.
 
+`outputs/clip.asclv` está ignorado por Git para no engordar cada commit. Un clon limpio
+puede generar una prueba libre y pequeña con:
+
+```bash
+python backend/make_clip.py inputs/synthetic.mp4 --format v2 \
+  --out outputs/synthetic-v2.asclv --cols 64 --fps 10 \
+  --palette global --palette-size 32
+```
+
+Ese archivo se abre desde el selector del player tradicional. Para probar específicamente
+la ruta fija de `tv-player.html` en un clon limpio, cambie solo `--out` por
+`outputs/clip.asclv`. No use esa variante dentro del workspace de release: reemplazaría el
+HQ local que usa la misma ruta estable.
+
+El HQ exacto se distribuye como asset de release solo después de confirmar los derechos
+del video; su hash y tamaño están en `docs/ESTADO-ACTUAL.md`.
+
 ## Verificar / preview sin navegador
 
 ```bash
@@ -227,15 +274,25 @@ python ascl_decode.py /tmp/mi-video.ascl --mp4 /tmp/preview.mp4 # MP4 de control
 
 ## Pruebas
 
+Requieren Python 3.8+ con `backend/requirements.txt` y Node.js 20 en el entorno de
+desarrollo. El frontend desplegado no necesita Node ni Python.
+
 ```bash
-python -m unittest discover -s tests -v
-node tests/test_frontend_renderers.js
-node tests/test_reader_bundle_view.js
-node tests/test_reader_safety.js
-node tests/test_cache_refresh.js
-node tests/test_tv_controller.js
-node tests/test_tv_player_page.js
-node tests/test_tv_player_runtime.js
-node tests/test_reader_v2.js
-node tests/test_reader_factory.js
+pip install -r backend/requirements.txt
+python tests/run_all.py
+
+# Gate local de release: además exige outputs/clip.asclv.
+python tests/run_all.py --require-release-artifact
 ```
+
+El workflow de CI queda configurado para la misma regresión sin descargar videos de
+producto ni iniciar servidores; la primera corrida remota se registra después del push.
+
+## Licencia
+
+La licencia de publicación todavía no está definida. El proyecto declara una relación
+conceptual con [`YusufB5/ASCILINE`](https://github.com/YusufB5/ASCILINE), cuyo
+[`LICENSE`](https://github.com/YusufB5/ASCILINE/blob/main/LICENSE) agrega una restricción
+de publicidad a MIT. No debe agregarse una licencia genérica ni hacerse un release público
+hasta resolver procedencia, atribución y compatibilidad de uso. Ver
+[`docs/PUBLICACION-GITHUB.md`](docs/PUBLICACION-GITHUB.md).

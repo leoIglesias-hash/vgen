@@ -20,16 +20,20 @@ gates; este documento conserva principios y arquitectura.
 8. No se implementa deteccion, segmentacion ni rotacion especial de objetos.
 9. La intervencion local futura usa slots explicitos sobre la matriz, nunca otra capa DOM.
 
-Estado al 2026-08-12:
+Estado al 2026-08-22:
 
 - Fase A implementada y validada en la rama de trabajo.
 - Fase B implementada y calibrada: paleta global/por frame/por bloque/adaptativa,
   K-means RGB/Oklab, estabilidad temporal y dithering auto con presupuesto. Todo el
   analisis ocurre offline y la salida sigue siendo ASCL v1.
-- Frontend TV de validacion implementado: precarga del demo versionado, fullscreen y
+- Frontend TV de validacion implementado: precarga del artefacto local en una ruta estable, fullscreen y
   play con teclas 1-8/click/toque, descarga manual, loop y fallback Canvas2D.
-- Fase E iniciada con pruebas automatizadas; falta medir en los Smart TV/WebViews reales.
-- Tiles v2 y slots permanecen en diseño.
+- Fase E tiene un harness base cubierto por regresión; faltan la instrumentación/exportación
+  de métricas y la validación en los Smart TV/WebViews reales.
+- ASCLV2 exacto por tiles/predictores, ReaderV2 y factory dual están implementados y
+  verificados localmente. Su promoción depende de TV-02.
+- Los slots de intervención matricial permanecen en diseño y requieren una revisión
+  posterior del formato; no forman parte del envelope ASCLV2 actual.
 
 ## 2. Controles de calidad
 
@@ -84,38 +88,44 @@ Aceptacion:
 
 ### Fase B - Paletas temporales y dithering
 
-- Paleta por frame, por bloque temporal y por escena.
-- El encoder prueba alternativas y elige por relacion calidad/peso.
+- Paleta por frame, por bloque temporal fijo y por bloques adaptativos definidos con
+  metricas cromaticas numericas.
+- El operador fija grilla, FPS, colores y algoritmo; no existe un selector automatico de
+  calidad ni una clasificacion de segmentos por IA o revision humana.
 - Una paleta nueva siempre comienza en keyframe para mantener seek seguro.
 - Dithering ordenado y estable, aplicado solo en gradientes que lo necesiten.
 - Sin ruido aleatorio por frame ni dependencia del renderer.
 
 Deteccion de gradientes propuesta:
 
-1. medir rango local de luminancia y magnitud de gradiente por tile;
-2. aplicar dithering solo si hay variacion suave y riesgo de banding;
-3. excluir texto, bordes fuertes y zonas planas;
-4. comparar el peso comprimido con y sin dithering;
-5. conservarlo solo si la mejora visual supera el costo configurado.
+1. medir rango local de luminancia, magnitud de gradiente y proxy de banding por tile;
+2. construir un candidato Bayer determinista solo ante variacion suave;
+3. excluir zonas planas y bordes fuertes con umbrales numericos;
+4. medir mejora del proxy y cantidad exacta de celdas modificadas;
+5. aceptarlo solo si supera la mejora minima, cabe en el presupuesto y respeta la
+   histeresis temporal configurada.
 
-Pendiente de esta fase: seleccion automatica por clip de cantidad de colores y resolucion,
-y un presupuesto directo de bytes ademas del presupuesto de celdas. La duracion de paleta
-ya es adaptativa y el dithering ya tiene presupuesto exacto de celdas e histeresis.
+La seleccion automatica por clip de colores, resolucion o FPS fue descartada: esos valores
+permanecen explicitos. Solo queda pendiente agregar un presupuesto directo de bytes al
+dithering. La duracion de paleta ya es adaptativa y el dither ya tiene presupuesto exacto
+de celdas e histeresis.
 
 ### Fase C - Formato v2 por tiles adaptativos
 
 - Reader dual v1/v2.
 - Matriz logica unica de indices.
-- Tiles de 16x16 y 32x32 evaluados offline.
-- Comandos candidatos: `REPEAT`, `SKIP`, `SOLID`, `SPARSE`, `PAL4`, `PAL8`, `ZLIB`.
-- Paleta local de 4 bits (`PAL4`) o indices de 8 bits (`PAL8`) en la v2 minima.
-- Packing de 5, 6 y 7 bits se agrega solo si los benchmarks demuestran una ganancia neta
-  frente al costo de desempaquetado en dispositivos viejos.
+- Tiles fijos de 16x16 en esta revision.
+- Comandos implementados: `SKIP_RUN`, `SOLID`, `SPARSE`, `MASK`, `PACK1`, `PACK2`,
+  `PAL4` y `PAL8`, con envolturas regionales crudas/zlib y predictores reversibles.
+- `PACK1`, `PACK2`, `PAL4` y `PAL8` cubren paletas locales de 2, 3-4, 5-16 y hasta
+  256 indices respectivamente.
 - Lista comun de tiles sucios para Canvas2D y WebGL1.
-- Eleccion exhaustiva offline del candidato mas pequeno que cumpla calidad.
+- Eleccion exhaustiva offline de la representacion exacta mas pequena para la misma
+  matriz ya aprobada; el fallback v1 por frame impide crecimiento.
 
-El encoder puede consumir mas CPU; el decoder solo copia, desempaqueta o infla el
-candidato ya elegido.
+El encoder puede consumir mas CPU. El decoder valida y ejecuta la representación ya
+elegida —incluidos predictores reversibles—, pero no evalúa candidatos ni calidad
+perceptual durante la reproducción.
 
 ### Fase D - Motor local de intervencion matricial
 
@@ -128,32 +138,24 @@ candidato ya elegido.
 
 ### Fase E - Validacion y seleccion de defaults
 
-El frontend `tv-player.html` y el demo K-means permiten comenzar esta fase sin controles
-de laboratorio en pantalla. Las mediciones fisicas todavia deben ejecutarse en cada
-familia de Smart TV/WebView objetivo.
+El frontend `tv-player.html` y el artefacto HQ permiten medir sin controles de laboratorio
+en pantalla. Esta fase no prueba casos para decidir calidad ni alimenta un selector. En
+cada familia de Smart TV/WebView se reproducen perfiles fijados manualmente —primero 640
+y 768— con la misma fuente aprobada y ambos renderers cuando esten disponibles.
 
-Variantes iniciales a producir sobre los clips de prueba:
-
-| Variante | Celdas | Colores | Reconstruccion | Bake |
-|---|---:|---:|---|---|
-| referencia | 320x180 | 256 | nearest | none |
-| equilibrada | 640x360 | 128 | soft | none |
-| detalle 64 | 960x540 | 64 | soft | none |
-| detalle 128 | 960x540 | 128 | soft | none |
-| horneada 64 | 640x360 o superior | 64 | nearest | soft |
-| adaptativa | 960x540 | 64-128 | soft | segun tile |
-
-Por variante se registran:
+Por ejecucion fisica se registran:
 
 - bytes totales y KB/s;
-- tiempo de encode;
-- tiempo p50/p95 de decode;
+- tiempo de descarga, parse y decode p50/p95;
 - tiempo Canvas2D y WebGL1;
-- RAM pico estimada;
+- RAM pico por componente;
 - frames descartados;
-- PSNR/SSIM y revision visual;
+- cache fria/caliente y revalidacion del nombre estable;
 - igualdad de la matriz comun antes de presentar;
 - resultado en las Smart TV/WebViews reales.
+
+Una revision visual puede aceptar o rechazar el artefacto ya elegido por el operador, pero
+no ordena automaticamente perfiles ni convierte una conclusion de un clip en default.
 
 ## 4. Fuera de alcance inicial
 

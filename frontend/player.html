@@ -251,9 +251,9 @@
     log("audio cargado: "+f.name+" (reloj maestro)");
   };
 
-  // Carga automatica para testeo. Si no se pasa ?src= usa DEFAULT_SRC del mismo proyecto.
+  // Carga automatica. Si no se pasa ?src= usa la misma ruta estable que el player TV.
   // OJO: leer otro archivo solo funciona servido por HTTP; desde file:// el navegador lo bloquea.
-  var DEFAULT_SRC = "../outputs/clip.asclv";
+  var DEFAULT_SRC = "./outputs/clip.asclv";
   function qs(k){ var m=new RegExp("[?&]"+k+"=([^&]+)").exec(location.search); return m?decodeURIComponent(m[1]):null; }
   var src=qs("src") || DEFAULT_SRC;
   if(src && window.XMLHttpRequest){

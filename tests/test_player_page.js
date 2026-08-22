@@ -9,6 +9,8 @@ var page = fs.readFileSync(
 var inline = page.match(/<script>\s*([\s\S]*?)\s*<\/script>\s*<\/body>/);
 
 assert(inline, "el player tradicional debe conservar controlador inline");
+assert(page.indexOf('DEFAULT_SRC = "./outputs/clip.asclv"') >= 0,
+  "ambos players deben compartir la ruta estable del despliegue plano");
 assert(page.indexOf('src="reader.js"') < page.indexOf('src="reader-v2.js"'));
 assert(page.indexOf('src="reader-v2.js"') < page.indexOf('src="reader-factory.js"'));
 assert(page.indexOf('src="reader-factory.js"') < page.indexOf('src="render-canvas2d.js"'));

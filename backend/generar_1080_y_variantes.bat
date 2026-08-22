@@ -1,13 +1,16 @@
 @echo off
 REM ============================================================
 REM  ASCILINE - Genera el 1080p pendiente + la tanda de variantes
-REM  Doble clic, o ejecutar desde la carpeta backend\.
+REM  Uso: generar_1080_y_variantes.bat "ruta\al\video.mp4"
 REM  Requiere: Python 3.8+ con requirements.txt instalado + ffmpeg en el PATH.
 REM ============================================================
 setlocal
+if "%~1"=="" (
+  echo Uso: %~nx0 "ruta\al\video.mp4"
+  exit /b 2
+)
+set "IN=%~f1"
 cd /d "%~dp0"
-
-set "IN=..\inputs\TKN-2434-VACANTE-gana-19 seg-.mp4"
 
 echo.
 echo === 1) Clip 1080p pendiente (cols 1920, 10 fps, paleta global) ===
@@ -26,5 +29,4 @@ echo.
 echo === LISTO. Revisa la carpeta outputs\ ===
 dir /b "..\outputs\*.asclv"
 echo.
-pause
 endlocal

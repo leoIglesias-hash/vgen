@@ -1,4 +1,4 @@
-# ASCILINE — Estado del proyecto y cómo continuar (handoff para otra sesión Cowork)
+# ASCILINE — Estado histórico y traspaso de las primeras sesiones
 
 > **Documento histórico.** Conserva el traspaso de las primeras sesiones, pero sus
 > pendientes ya no representan el estado actual. Para continuar desde la versión Oklab
@@ -108,10 +108,8 @@ python make_clip.py "../inputs/foto.jpg" --image             # imagen (sin audio
 python ascl_bundle.py unpack ../outputs/clip.asclv /tmp
 python ascl_decode.py /tmp/clip.ascl --mp4 /tmp/preview.mp4
 
-# Reproducir (autocarga por HTTP; file:// bloquea la lectura de otros archivos)
-cd ..  &&  python -m http.server 8000
-# abrir: http://localhost:8000/frontend/player.html
-#        http://localhost:8000/frontend/player.html?src=../outputs/clip_1080_fps10.asclv
+# Reproducir: publicar frontend/ + outputs/ en el servidor PHP/Apache existente.
+# El proyecto no incluye ni inicia un servidor auxiliar.
 ```
 
 `make_clip.py` flags: `--cols` (resolución; rows auto), `--fps` (10/12/15/20/25; tope = fps
@@ -126,25 +124,18 @@ de la fuente, acá 25), `--palette global|per-frame`, `--mode pixel|ascii-pal|as
 | Solo **reproducir** | `frontend/` + los `.asclv` | **nada** (hosting estático: nginx, GitHub Pages, S3+CDN, etc.) |
 | **Crear** clips | `backend/` | Python 3.8+ + `pip install -r requirements.txt` + **ffmpeg** del sistema |
 
-Recomendado para playback: servir `.asclv` con gzip/brotli + `Cache-Control: immutable` y
-nombres versionados por hash (`promo.a1b2c3.asclv`).
+La recomendación de esta etapa era gzip/brotli, `immutable` y nombres por hash. Fue
+reemplazada por la política medida y la ruta estable de `DESPLIEGUE.md`; no debe usarse
+como configuración actual.
 
 ---
 
-## 8. Problemas conocidos / cosas a saber para la próxima sesión
+## 8. Limitación histórica que sigue siendo relevante
 
-1. **VM de cómputo caída:** en esta sesión el entorno Linux que corre el encoder dejó de
-   arrancar ("VM service not running"). Por eso quedaron sin generar el **1080** y la **tanda
-   de variantes**. En la próxima sesión, reintentar `bash` primero; si anda, generar.
-2. **El Write/Edit truncaba archivos grandes** en este montaje: los `.py`/`.js`/`.html`
-   grandes se escribieron de forma confiable con `cat > archivo <<'EOF'` por **bash**.
-   Si bash no está, hacer edits chicos y verificar leyendo el final del archivo.
-3. **Borrado de archivos** requiere el permiso de Cowork (`allow_cowork_file_delete`), ya
-   concedido para esta carpeta en la sesión anterior; puede pedirse de nuevo.
-4. **file:// bloquea XHR**: la autocarga del player solo anda servido por HTTP
-   (`python -m http.server`). Con doble clic, usar el selector de archivo.
-5. **Claude in Chrome**: la herramienta `navigate` antepone `https://` y rompe URLs `file://`;
-   para abrir el player localmente conviene HTTP server + navigate normal, o que el usuario lo abra.
+`file://` suele bloquear XHR. La autocarga de `tv-player.html` se prueba desde el servidor
+PHP/Apache existente; con doble clic se usa el selector de archivo del player tradicional.
+Las incidencias específicas del entorno de trabajo original se retiraron porque no forman
+parte del producto ni del procedimiento reproducible.
 
 ---
 
@@ -210,8 +201,9 @@ Curva a 480 cols: T=12 → 47,7 dB (−3%), T=24 → 37,0 dB (−15%), T=40 → 
 **Archivos nuevos/entregables:**
 - `outputs/clip_1080_fps12_5.asclv` — 1080p lossless (reemplaza al de 124 MB).
 - `outputs/clip_1080_fps12_5_T24.asclv` — 1080p perceptual T=24.
-- `backend/_encode_opt.py` — encoder A+B **reanudable por checkpoint** (para entornos con
-  límite de tiempo por llamada, como la VM de Cowork; en una PC normal usar `make_clip.py --threshold`).
+- `backend/_encode_opt.py` — fue el encoder A+B reanudable de esta instancia histórica.
+  Se retiró del árbol publicable en v0.2 por usar checkpoints pickle predecibles; hoy se
+  usa `make_clip.py --threshold` y el helper solo permanece en el historial Git.
 
 **Comando oficial nuevo:** `python make_clip.py video.mp4 --cols 1920 --fps 10 --palette global --threshold 24`
 

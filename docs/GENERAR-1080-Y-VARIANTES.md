@@ -3,31 +3,35 @@
 > **Documento histórico.** Este procedimiento corresponde al pipeline global anterior.
 > El backlog vigente está en `HOJA-DE-RUTA-TECNICA-V2.md`.
 
-La VM de cómputo de la sesión Cowork está caída, así que el encode hay que correrlo en tu
-máquina. El encoder es Python + ffmpeg (offline); no necesita internet ni servidor.
+Este procedimiento se ejecuta offline en la PC que procesa el video. El encoder usa Python
+y FFmpeg; no necesita internet ni un servidor de reproducción.
 
 ## 0) Requisitos (una sola vez)
 
 1. **Python 3.8+** instalado y en el PATH.
 2. Dependencias:
    ```bat
-   cd C:\Users\Leo\Desktop\ASCILINE-video\backend
+   cd ruta\al\repositorio\backend
    pip install -r requirements.txt
    ```
 3. **ffmpeg** como binario del sistema (no es pip). Descargá de ffmpeg.org, descomprimí y
    agregá la carpeta `bin\` al PATH. Verificá con `ffmpeg -version`.
 
-## 1) Lo más rápido: el .bat
+## 1) Helper histórico de variantes
 
-Doble clic en `backend\generar_1080_y_variantes.bat` (o ejecutarlo desde una consola en
-`backend\`). Genera **10 clips** en `outputs\`: el 1080p pedido + las 9 variantes.
+Desde una consola, el helper recibe explícitamente la fuente y genera **10 clips** en
+`outputs\`: el 1080p pedido + las 9 variantes.
+
+```bat
+backend\generar_1080_y_variantes.bat "inputs\video.mp4"
+```
 
 ## 2) Comandos sueltos (si preferís control fino)
 
-Desde `C:\Users\Leo\Desktop\ASCILINE-video\backend`:
+Desde la carpeta `backend\` del repositorio:
 
 ```bat
-set "IN=..\inputs\TKN-2434-VACANTE-gana-19 seg-.mp4"
+set "IN=..\inputs\video.mp4"
 
 :: El 1080p pendiente (cols 1920, 10 fps, paleta global)
 python make_clip.py "%IN%" --cols 1920 --fps 10 --palette global --out "..\outputs\clip_1080_fps10.asclv"
@@ -68,14 +72,9 @@ groseras; el peso real lo da el KB/s que imprime cada corrida (depende del movim
 
 ## 4) Reproducir y comparar
 
-```bat
-cd C:\Users\Leo\Desktop\ASCILINE-video
-python -m http.server 8000
-```
-Abrí `http://localhost:8000/frontend/player.html` y elegí cada `.asclv`, o autocargá uno:
-`http://localhost:8000/frontend/player.html?src=../outputs/clip_1080_fps10.asclv`
-
-(El player solo autocarga servido por HTTP; `file://` bloquea la lectura de otros archivos.)
+Publicá `frontend/` y `outputs/` en el servidor PHP/Apache existente según
+`DESPLIEGUE.md`. El proyecto no inicia ni incluye un servidor auxiliar. El player
+tradicional también permite elegir un `.asclv` local mediante el selector de archivo.
 
 ## 5) Verificar sin navegador (opcional)
 

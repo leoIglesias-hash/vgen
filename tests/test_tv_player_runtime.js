@@ -80,7 +80,8 @@ function createRuntime(options) {
   ["download", "techHotspot", "techMenu", "refreshVideo", "closeTechMenu",
     "headline", "detail"].forEach(function (id) {
     elements[id] = emitter({
-      id: id, style: {}, className: "", innerHTML: "", focus: function () {},
+      id: id, style: {}, className: "", innerHTML: "", textContent: "", innerText: "",
+      focus: function () {},
       setAttribute: function () {}
     });
   });
@@ -225,7 +226,7 @@ function completeInitialDownload(runtime, buffer) {
   assert.strictEqual(runtime.stats.lastCanvasReader, runtime.stats.reader,
     "Canvas debe reutilizar exactamente el reader ya decodificado");
   assert.strictEqual(runtime.stats.lastCanvasFrame, 0);
-  assert(runtime.elements.detail.innerHTML.indexOf("canvas2d") >= 0);
+  assert(runtime.elements.detail.textContent.indexOf("canvas2d") >= 0);
 }());
 
 (function testAsclvid2UsesTheSameSingleRendererPath() {
@@ -242,7 +243,7 @@ function completeInitialDownload(runtime, buffer) {
   assert.deepStrictEqual(runtime.stats.webglDispose, [false]);
   assert.strictEqual(runtime.stats.canvasDraws, 1);
   assert.strictEqual(runtime.stats.lastCanvasFrame, 0);
-  assert(runtime.elements.detail.innerHTML.indexOf("canvas2d") >= 0,
+  assert(runtime.elements.detail.textContent.indexOf("canvas2d") >= 0,
     "la excepcion del contexto viejo no debe invalidar el fallback ya instalado");
 }());
 
@@ -297,7 +298,7 @@ function completeInitialDownload(runtime, buffer) {
   assert(runtime.stats.audioPauses >= 1);
   assert.strictEqual(runtime.elements.download.style.display, "block");
   assert.strictEqual(runtime.elements.stage.className, "error");
-  assert.strictEqual(runtime.elements.headline.innerHTML, "No se pudo abrir el ASCLV");
+  assert.strictEqual(runtime.elements.headline.textContent, "No se pudo abrir el ASCLV");
 }());
 
 console.log("TV player runtime tests: OK");

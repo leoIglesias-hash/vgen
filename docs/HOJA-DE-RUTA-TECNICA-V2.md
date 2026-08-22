@@ -1,7 +1,7 @@
 # Hoja de ruta técnica — cierre de ASCL v1 y evolución a v2
 
-Estado: plan activo desde 2026-08-14. Primera revisión v2 implementada localmente;
-benchmark de producto y promoción todavía pendientes.
+Estado: actualizado 2026-08-22. Primera revisión v2 y benchmark exacto HQ cerrados
+localmente; validación física y decisión de producto todavía pendientes.
 
 Base v1 recuperable: commit `abb0451`, tag `tv-runtime-hq-v1`.
 
@@ -11,10 +11,12 @@ tablas. Las fuentes de verdad son:
 
 | Tema | Documento |
 |---|---|
+| estado canónico de la versión | `ESTADO-ACTUAL.md` |
 | principios y arquitectura | `PLAN-IMPLEMENTACION-OPTIMIZACION.md` |
 | formato v1/v2 | `ASCL-format-spec.md` |
 | revisión v2 implementada | `DISENO-ASCL-V2-TILES.md` |
-| resultados actuales | `BENCHMARK-V1-ADAPTATIVO-OKLAB.md` |
+| matriz/calidad HQ v1 | `BENCHMARK-V1-ADAPTATIVO-OKLAB.md` |
+| codec exacto HQ v2 | `BENCHMARK-V2-HQ-768.md` |
 | decisiones por instancia | `REGISTRO-DE-PRUEBAS-Y-DECISIONES.md` |
 | hosting | `DESPLIEGUE.md` |
 
@@ -39,13 +41,14 @@ no se borran las conclusiones anteriores.
 - Una mejora no avanza si solo cambia complejidad sin reducir bytes, RAM o costo de
   reproducción bajo una métrica acordada.
 
-Artefactos de control:
+Artefactos de control y disponibilidad:
 
-| Perfil | Artefacto | Función |
+| Perfil | Artefacto lógico | Disponibilidad |
 |---|---|---|
-| eficiente | `TKN-2441-GANADOR-v1-adaptive-oklab-efficient-640.asclv` | piso de RAM/descarga |
-| HQ | `TKN-2441-GANADOR-v1-adaptive-oklab-hq-768.asclv` | candidato visual recomendado |
-| anterior | `TKN-2441-GANADOR-graphic-kmeans-block5.asclv` | control RGB block5 |
+| eficiente v1 | `TKN-2441-GANADOR-v1-adaptive-oklab-efficient-640.asclv` | historial/tag `asclv2-exact-hq-v0.1` |
+| HQ v1 | `TKN-2441-GANADOR-v1-adaptive-oklab-hq-768.asclv` | historial/tag `asclv2-exact-hq-v0.1` |
+| control RGB | `TKN-2441-GANADOR-graphic-kmeans-block5.asclv` | historial/tag `asclv2-exact-hq-v0.1` |
+| HQ v2 vigente | `outputs/clip.asclv` | local, ignorado por Git; asset de release pendiente |
 
 ## 2. Decisión sobre el frontend actual
 
@@ -144,22 +147,20 @@ Objetivo: decidir por familia de equipo si 768 puede ser general o si correspond
 768 será general solo en familias que pasen. 640 queda como perfil de compatibilidad; no
 se elimina para simular uniformidad entre capacidades físicas distintas.
 
-## 5. VAL-002 — corpus y calibración de calidad
+## 5. VAL-002 — regresión numérica determinista de calidad
 
-El TKN permitió fijar una instancia, no un default universal. Se necesita un corpus con
-fuentes y SHA-256 que cubra:
+No se implementará un selector que pruebe “casos posibles” y pretenda decidir calidad
+visual mediante una persona, IA o segmentos representativos. FPS, grilla, colores y perfil
+siguen siendo decisiones explícitas del operador.
 
-- animación plana/logos;
-- fotografía y cámara;
-- gradientes oscuros y cielos;
-- texto pequeño;
-- movimiento localizado y movimiento total;
-- cortes fuertes y escenas casi estáticas.
+VAL-002 conserva únicamente fixtures sintéticos generables —gradientes, bordes, cambios
+cromáticos, movimiento localizado y cortes— con propiedades numéricas conocidas. Sirven
+para impedir regresiones de determinismo, banding proxy, estabilidad, bytes y límites; no
+para declarar qué video “se ve mejor” ni promover automáticamente un perfil universal.
 
-En cada clip se compara estabilidad `0,25` contra `0,10` y, cuando sea necesario, `0`.
-Se mantienen FPS, celdas y colores constantes y se miden flicker, Delta Oklab, error de
-baja frecuencia, banding y bytes. Un valor se promueve a default solo si no hay regresión
-material en ninguna clase o si queda limitado a un perfil explícito.
+Una opción perceptual solo puede activarse si satisface sus restricciones matemáticas
+locales sobre la matriz completa que ya fijó el operador. La conclusión visual del TKN
+permanece limitada a esa instancia en el registro.
 
 ## 6. V1-01 — endurecimiento del reader antes de v2
 
@@ -183,24 +184,18 @@ Objetivo: congelar un piso confiable para atribuir correctamente cualquier fallo
 - seek en ambas direcciones coincide byte a byte con Python;
 - la API de los renderers no cambia.
 
-## 7. V1-OPT-01/02 — selector y presupuesto real
+## 7. V1-OPT-01/02 — decisión explícita y presupuesto real
 
-### Selector offline por restricciones
+### V1-OPT-01 — selector automático descartado
 
-Entradas: rango de FPS, resoluciones, colores, paleta, estabilidad, dithering, formato,
-tile futuro, límite de bytes, RAM teórica y clase de dispositivo. Los valores fijados por
-el usuario son restricciones duras.
+No existe una función objetiva que ordene a la vez FPS, resolución, colores, peso y
+calidad percibida sin introducir una preferencia. Por decisión del proyecto, el encoder no
+probará segmentos ni elegirá perfiles mediante IA/personas. Los valores manuales son
+restricciones duras y los perfiles solo completan valores no especificados.
 
-El procesador prueba segmentos representativos, descarta violaciones y codifica completo
-solo el frente de Pareto:
-
-```text
-min(bytes, decode_cost, ram_estimate, perceptual_error, temporal_error)
-```
-
-Debe emitir un sidecar determinista con parámetros, métricas y motivo de descarte. El
-candidato automático queda dentro de 3% del mejor peso manual conocido y 2% de su error
-perceptual, o explica qué restricción impidió alcanzarlo.
+El automatismo permitido comienza después de fijar esa matriz: elegir por bytes exactos
+entre representaciones reversibles, detectar cambios cromáticos con métricas numéricas y
+rechazar dither cuando no mejora su proxy o excede el presupuesto.
 
 ### Presupuesto de dithering en bytes
 
@@ -464,13 +459,13 @@ IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso un
 | ID | Estado | Entregable siguiente | Gate |
 |---|---|---|---|
 | VAL-001 | pendiente | matriz física 640/768 | §4 |
-| VAL-002 | pendiente | corpus y estabilidad 0/0,10/0,25 | §5 |
+| VAL-002 | parcial | ampliar fixtures numéricos deterministas, sin selector visual | §5 |
 | V1-01 | código listo | cierre físico del reader v1 | §6 |
-| V1-OPT-01 | pendiente | selector offline sin inspección visual humana | §7 |
+| V1-OPT-01 | descartado | la calidad permanece explícita; no hay selector de casos | §7 |
 | V1-OPT-02 | pendiente | presupuesto dither en bytes | §7 |
 | V1-RUNTIME-01 | código listo | RAM/p95/drops físicos | §8 |
 | V1-REL-01 | pendiente | regenerar/promover 960 solo si VAL-001 lo permite | gates físicos |
-| V2-00 | implementado | cerrar evidencia del planificador exacto | §9 |
+| V2-00 | verificado localmente | evidencia exacta cerrada; repetir solo en TV | §9 |
 | V2-01 | implementado | revisión congelada; falta aceptación física | §9 |
 | V2-02 | verificado localmente | repetir métricas en TV | §9 |
 | V2-03 | verificado localmente | repetir ReaderV2/seek en TV | §10 |
@@ -480,10 +475,11 @@ IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso un
 | INT-001 | pendiente | diseño formal de slots sin cambiar envelope v2 actual | §12 |
 | INT-002 | pendiente | slot runtime | §12 |
 | MEM-001 | pendiente | memoria por componente | §13 |
-| CACHE-001 | pendiente | caché/versionado HTTP | §13 |
+| CACHE-001 | parcial | ETag/cabeceras PHP y pruebas fría/caliente | §13 |
 | FMT-LIMIT-001 | parcial | validar artefactos reales <4 GiB | §13 |
 | RANGE-001 | diferido | prototipo solo con evidencia MEM-001 | §13 |
-| DOC-001 | en curso | mantener índice/estatus sin contradicciones | enlaces vigentes |
+| DOC-001 | completado | índice, estado, changelog y registro coherentes | enlaces vigentes |
+| PUB-001 | parcial | decidir licencia, derechos de videos e historial público | `PUBLICACION-GITHUB.md` |
 
 ## 16. Próxima sesión recomendada
 
