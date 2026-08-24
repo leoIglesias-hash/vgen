@@ -223,8 +223,14 @@ def color_change_metrics(first, second, config=None):
         second = describe_frame_color(second, config)
     if first.histogram.shape != second.histogram.shape:
         raise ValueError("los histogramas no son compatibles")
-    coefficient = float(np.sqrt(first.histogram * second.histogram).sum())
-    distribution = math.sqrt(max(0.0, 1.0 - min(1.0, coefficient)))
+    # La forma ``sqrt(1 - coefficient)`` amplifica el ruido de redondeo cerca
+    # de cero (por ejemplo, histogramas iguales acumulados en distinto orden).
+    # Esta expresion es la misma distancia de Hellinger, pero resta primero y
+    # mantiene estable el invariante de distribucion ante movimientos espaciales.
+    histogram_delta = (np.sqrt(first.histogram) -
+                       np.sqrt(second.histogram))
+    distribution = min(1.0, float(np.linalg.norm(histogram_delta)) /
+                       math.sqrt(2.0))
     # 0.55 cubre una diferencia perceptual muy grande dentro del gamut sRGB.
     mean_distance = min(1.0, float(np.linalg.norm(
         first.mean_oklab - second.mean_oklab)) / 0.55)
