@@ -1,0 +1,48 @@
+name: bench-inflate
+
+# Compara el tiempo de frontend/inflate.js de HEAD contra el de un commit base.
+# Manual; se usa para registrar la medicion de W-06 y de futuros cambios.
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: "Commit/ref con el inflate.js anterior"
+        default: "90e4b43"
+        required: true
+      repeats:
+        default: "300"
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Bench HEAD vs baseline
+        run: |
+          echo "== HEAD ($(git rev-parse --short HEAD)) =="
+          node tools/bench_inflate.js frontend/inflate.js "${{ inputs.repeats }}" | tee head.txt
+          git show "${{ inputs.baseline }}:frontend/inflate.js" > /tmp/inflate-baseline.js
+          echo "== baseline (${{ inputs.baseline }}) =="
+          node tools/bench_inflate.js /tmp/inflate-baseline.js "${{ inputs.repeats }}" | tee baseline.txt
+          {
+            echo "## bench inflate"
+            echo ""
+            echo "### HEAD"
+            echo '```'
+            cat head.txt
+            echo '```'
+            echo "### baseline ${{ inputs.baseline }}"
+            echo '```'
+            cat baseline.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

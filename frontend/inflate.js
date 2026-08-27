@@ -23,13 +23,24 @@
     throw error;
   }
 
+  /* W-06: cada arbol lleva ademas una tabla de lookup de LUT_BITS bits.
+   * lut[i] = (len << 12) | simbolo para todo codigo de longitud <= LUT_BITS,
+   * indexada por los proximos bits del stream (LSB primero, ya invertidos).
+   * 0 = entrada no cubierta: codigo mas largo o prefijo invalido; se cae al
+   * recorrido canonico bit a bit, que reproduce los errores historicos. */
+  var LUT_BITS = 9;
+  var LUT_SIZE = 1 << LUT_BITS;
+
   function makeTree() {
-    return { table: new Uint16Array(16), trans: new Uint16Array(288), maxLen: 0 };
+    return { table: new Uint16Array(16), trans: new Uint16Array(288),
+             lut: new Uint16Array(LUT_SIZE), maxLen: 0 };
   }
 
   function buildTree(t, lengths, off, num, allowEmpty) {
     var i, len, sum, left = 1, used = 0, offs = new Uint16Array(16);
+    var code, k, sym, rev, c, b, f, step, entry, idx;
     for (i = 0; i < 16; i++) t.table[i] = 0;
+    for (i = 0; i < LUT_SIZE; i++) t.lut[i] = 0;
     for (i = 0; i < num; i++) {
       len = lengths[off + i];
       if (len > 15) fail("longitud Huffman invalida");
@@ -51,6 +62,25 @@
     for (i = 0; i < num; i++) {
       len = lengths[off + i];
       if (len) t.trans[offs[len]++] = i;
+    }
+    /* Codigos canonicos en el mismo orden que trans: por longitud y, dentro
+     * de cada longitud, por indice de simbolo. */
+    code = 0;
+    idx = 0;
+    for (len = 1; len <= 15; len++) {
+      code <<= 1;
+      for (k = 0; k < t.table[len]; k++) {
+        sym = t.trans[idx++];
+        if (len <= LUT_BITS) {
+          rev = 0;
+          c = code;
+          for (b = 0; b < len; b++) { rev = (rev << 1) | (c & 1); c >>= 1; }
+          entry = (len << 12) | sym;
+          step = 1 << len;
+          for (f = rev; f < LUT_SIZE; f += step) t.lut[f] = entry;
+        }
+        code++;
+      }
     }
   }
 
@@ -118,33 +148,82 @@
     d.dest[d.op++] = value;
   }
 
-  function getBit(d) {
-    var bit;
+  /* W-06: bit-buffer de 32 bits. d.tag acumula bytes LSB-primero y d.bitcount
+   * cuenta los bits validos. Los bytes solo se toman de d.s cuando hacen
+   * falta, y los enteros no consumidos se devuelven al alinear a byte
+   * (bloques stored) o al terminar el stream, conservando la semantica
+   * historica de "entrada truncada" y de d.i. */
+  var BIT_MASK = [0, 1, 3, 7, 15, 31, 63, 127, 255, 511, 1023, 2047, 4095,
+                  8191, 16383, 32767];
+
+  function alignToByte(d) {
+    d.i -= d.bitcount >> 3;
+    d.tag = 0;
+    d.bitcount = 0;
+  }
+
+  function getBits(d, num, base) {
+    var tag = d.tag, bc = d.bitcount, s = d.s, i = d.i, val;
+    while (bc < num) {
+      if (i >= s.length) fail("entrada truncada");
+      tag |= s[i++] << bc;
+      bc += 8;
+    }
+    val = tag & BIT_MASK[num];
+    d.tag = tag >>> num;
+    d.bitcount = bc - num;
+    d.i = i;
+    return val + base;
+  }
+
+  function takeBit(d) {
+    var tag = d.tag, bit;
     if (d.bitcount === 0) {
-      d.tag = readByte(d);
+      if (d.i >= d.s.length) fail("entrada truncada");
+      tag = d.s[d.i++];
       d.bitcount = 8;
     }
-    bit = d.tag & 1;
-    d.tag >>>= 1;
+    bit = tag & 1;
+    d.tag = tag >>> 1;
     d.bitcount--;
     return bit;
   }
 
-  function getBits(d, num, base) {
-    var val = 0, i;
-    for (i = 0; i < num; i++) val |= getBit(d) << i;
-    return val + base;
-  }
-
-  function decodeSymbol(d, t) {
+  function walkSymbol(d, t) {
     var sum = 0, cur = 0, len;
     for (len = 1; len <= t.maxLen; len++) {
-      cur = 2 * cur + getBit(d);
+      cur = 2 * cur + takeBit(d);
       sum += t.table[len];
       cur -= t.table[len];
       if (cur < 0) return t.trans[sum + cur];
     }
     fail("codigo Huffman invalido");
+  }
+
+  function decodeSymbol(d, t) {
+    var tag = d.tag, bc = d.bitcount, s = d.s, i = d.i, entry, len;
+    while (bc < LUT_BITS && i < s.length) {
+      tag |= s[i++] << bc;
+      bc += 8;
+    }
+    d.tag = tag;
+    d.bitcount = bc;
+    d.i = i;
+    entry = t.lut[tag & (LUT_SIZE - 1)];
+    if (entry) {
+      len = entry >>> 12;
+      if (len <= bc) {
+        d.tag = tag >>> len;
+        d.bitcount = bc - len;
+        return entry & 0xfff;
+      }
+      /* Ningun codigo de longitud <= bits disponibles coincide: el stream
+       * termina en mitad del codigo, igual que el camino bit a bit. */
+      fail("entrada truncada");
+    }
+    /* Codigo mas largo que la tabla o prefijo invalido: recorrido canonico
+     * desde la misma posicion (la tabla solo mira, no consume). */
+    return walkSymbol(d, t);
   }
 
   var LBASE = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
@@ -190,7 +269,7 @@
 
   function inflateStored(d) {
     var length, nlength, end;
-    d.bitcount = 0;
+    alignToByte(d);
     if (d.i + 4 > d.s.length) fail("bloque stored truncado");
     length = readByte(d) | (readByte(d) << 8);
     nlength = readByte(d) | (readByte(d) << 8);
@@ -246,7 +325,7 @@
     if (!inited) initFixed();
     d = new Data(source, output, maxLength);
     do {
-      bfinal = getBit(d);
+      bfinal = getBits(d, 1, 0);
       btype = getBits(d, 2, 0);
       if (btype === 0) inflateStored(d);
       else if (btype === 1) inflateBlockData(d, sltree, sdtree);
@@ -255,6 +334,9 @@
         inflateBlockData(d, d.lt, d.dt);
       } else fail("btype invalido");
     } while (!bfinal);
+    /* Devolver los bytes enteros prefetcheados: d.i debe apuntar igual que en
+     * la version bit a bit para el chequeo de datos extra tras el stream. */
+    alignToByte(d);
     return d;
   }
 
