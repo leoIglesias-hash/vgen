@@ -114,7 +114,8 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             perceptual_lut_bits=0,
                             dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                             dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
-                            dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW):
+                            dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
+                            reserved=0):
     """Valida limites del header v1 y opciones compartidas por todos los entrypoints."""
     if mode_name not in MODE_NAMES:
         raise ValueError("mode desconocido: %s" % mode_name)
@@ -153,6 +154,10 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
         raise ValueError("dither-min-improvement debe ser >= 0")
     if int(dither_window) <= 0:
         raise ValueError("dither-window debe ser > 0")
+    if int(reserved) < 0:
+        raise ValueError("reserved debe ser >= 0")
+    if int(reserved) > 0 and int(pal_size) < int(reserved) + 22:
+        raise ValueError("palette-size debe ser >= reserved + 22 (INT-001)")
     # Construir la configuracion tambien valida min/max, umbrales y estabilidad.
     adaptive_palette.AdaptivePaletteConfig(
         min_frames=adaptive_min_frames, max_frames=adaptive_max_frames,
@@ -256,8 +261,12 @@ def _sort_palette_centers(centers):
     return centers[np.lexsort((centers[:, 2], centers[:, 1], centers[:, 0]))]
 
 
-def _kmeans_rgb_palette(sample_imgs, pal_size, max_samples=65536, seed=20260811):
+def _kmeans_rgb_palette(sample_imgs, pal_size, max_samples=65536, seed=20260811,
+                        reserved=0):
     """Paleta RGB K-means: OpenCV completo o fallback NumPy determinista."""
+    if int(reserved) > 0:
+        raise NotImplementedError(
+            "reserved>0: la exclusion del rango reservado se implementa en E-04")
     cv2 = None
     try:
         import cv2
@@ -293,22 +302,27 @@ def _kmeans_rgb_palette(sample_imgs, pal_size, max_samples=65536, seed=20260811)
 
 
 def make_global_palette(sample_imgs, pal_size, palette_algorithm="median-cut",
-                        previous_palette=None, temporal_strength=0.0):
+                        previous_palette=None, temporal_strength=0.0, reserved=0):
     """Construye una paleta ASCL y su imagen Pillow compatible.
 
     Los parametros temporales solo afectan ``kmeans-oklab``. Se agregan al final
-    para preservar las llamadas historicas de tres argumentos.
+    para preservar las llamadas historicas de tres argumentos. ``reserved``
+    (INT-001) declara cuantas entradas finales quedan fuera del video base; con
+    0 el comportamiento es identico al historico.
     """
     if not sample_imgs:
         raise ValueError("sample_imgs no puede estar vacio")
     if palette_algorithm == "kmeans-oklab":
         palette = perceptual_palette.build_perceptual_palette(
             sample_imgs, pal_size, previous_palette=previous_palette,
-            temporal_strength=temporal_strength)
+            temporal_strength=temporal_strength, reserved=reserved)
         return _palette_image(palette), palette
     if palette_algorithm == "kmeans-rgb":
-        palette = _kmeans_rgb_palette(sample_imgs, pal_size)
+        palette = _kmeans_rgb_palette(sample_imgs, pal_size, reserved=reserved)
         return _palette_image(palette), palette
+    if int(reserved) > 0:
+        raise NotImplementedError(
+            "reserved>0: la exclusion del rango reservado se implementa en E-04")
     h = sum(im.shape[0] for im in sample_imgs)
     w = sample_imgs[0].shape[1]
     stack = np.zeros((h, w, 3), np.uint8)
@@ -359,7 +373,7 @@ def sample_palette_frames(frame_block, max_samples=12):
 
 
 def iter_block_palette_frames(frames_iter, pal_size, block_frames, max_samples=12,
-                              palette_algorithm="median-cut"):
+                              palette_algorithm="median-cut", reserved=0):
     """Anota cada frame con la paleta temporal de su bloque.
 
     Solo conserva `block_frames` RGB/grises y el pequeno conjunto usado para crear
@@ -367,7 +381,8 @@ def iter_block_palette_frames(frames_iter, pal_size, block_frames, max_samples=1
     """
     for block in iter_frame_blocks(frames_iter, block_frames):
         samples = sample_palette_frames(block, max_samples)
-        pal_img, palette = make_global_palette(samples, pal_size, palette_algorithm)
+        pal_img, palette = make_global_palette(samples, pal_size, palette_algorithm,
+                                               reserved=reserved)
         for block_index, (rgb, gray) in enumerate(block):
             yield rgb, gray, pal_img, palette, block_index == 0
 
@@ -375,7 +390,7 @@ def iter_block_palette_frames(frames_iter, pal_size, block_frames, max_samples=1
 def iter_scene_palette_frames(frames_iter, pal_size, palette_mode, block_frames,
                               adaptive_config, max_samples=12,
                               palette_algorithm="median-cut",
-                              perceptual_lut_bits=0):
+                              perceptual_lut_bits=0, reserved=0):
     """Anota frames de bloques fijos o adaptativos con recursos de cuantizacion.
 
     La salida extiende internamente la tupla historica con cuantizador Oklab y un
@@ -427,7 +442,7 @@ def iter_scene_palette_frames(frames_iter, pal_size, palette_mode, block_frames,
         pal_img, palette = make_global_palette(
             samples, pal_size, palette_algorithm,
             previous_palette=previous_palette,
-            temporal_strength=stability)
+            temporal_strength=stability, reserved=reserved)
         quantizer = make_perceptual_quantizer(
             palette, palette_algorithm, perceptual_lut_bits)
         diagnostic = {
@@ -480,17 +495,20 @@ def quantize_palette_rgb(pal_img, rgb, quantizer=None):
 
 def quantize_per_frame(rgb, pal_size, palette_algorithm="median-cut",
                        perceptual_lut_bits=0, previous_palette=None,
-                       temporal_strength=0.0):
+                       temporal_strength=0.0, reserved=0):
     h, w, _ = rgb.shape
     if palette_algorithm != "median-cut":
         pal_img, palette = make_global_palette(
             [rgb], pal_size, palette_algorithm,
             previous_palette=previous_palette,
-            temporal_strength=temporal_strength)
+            temporal_strength=temporal_strength, reserved=reserved)
         quantizer = make_perceptual_quantizer(
             palette, palette_algorithm, perceptual_lut_bits)
         idx = quantize_palette_rgb(pal_img, rgb, quantizer).reshape(h, w)
         return idx, palette
+    if int(reserved) > 0:
+        raise NotImplementedError(
+            "reserved>0: la exclusion del rango reservado se implementa en E-04")
     im = Image.fromarray(rgb, "RGB").quantize(colors=pal_size, method=Image.MEDIANCUT,
                                               dither=Image.NONE)
     idx = np.asarray(im, dtype=np.uint8).reshape(h, w)
@@ -507,7 +525,7 @@ def gray_to_char_idx(gray, ramp_len):
 def frame_to_cells(rgb, gray, mode, ramp_len, pal_size, palette_mode, pal_img,
                    palette_algorithm="median-cut", quantizer=None,
                    perceptual_lut_bits=0, previous_palette=None,
-                   temporal_strength=0.0):
+                   temporal_strength=0.0, reserved=0):
     h, w = gray.shape
     N = h * w
     if mode == MODE_PIXEL:
@@ -516,7 +534,7 @@ def frame_to_cells(rgb, gray, mode, ramp_len, pal_size, palette_mode, pal_img,
             return idx.reshape(N, 1), None, 0
         idx, pal = quantize_per_frame(
             rgb, pal_size, palette_algorithm, perceptual_lut_bits,
-            previous_palette, temporal_strength)
+            previous_palette, temporal_strength, reserved)
         return idx.reshape(N, 1), pal, pal.shape[0]
     char_idx = gray_to_char_idx(gray, ramp_len).reshape(N, 1)
     if mode == MODE_ASCII_BW:
@@ -527,7 +545,7 @@ def frame_to_cells(rgb, gray, mode, ramp_len, pal_size, palette_mode, pal_img,
             return np.concatenate([char_idx, color], axis=1), None, 0
         color, pal = quantize_per_frame(
             rgb, pal_size, palette_algorithm, perceptual_lut_bits,
-            previous_palette, temporal_strength)
+            previous_palette, temporal_strength, reserved)
         return np.concatenate([char_idx, color.reshape(N, 1)], axis=1), pal, pal.shape[0]
     if mode == MODE_ASCII_RGB:
         return np.concatenate([char_idx, rgb.reshape(N, 3)], axis=1), None, 0
@@ -805,7 +823,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                  perceptual_lut_bits=0,
                  dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                  dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
-                 dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW):
+                 dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
+                 reserved=0):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             palette_block_frames, dither_mode, dither_matrix,
@@ -814,7 +833,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                             adaptive_hard_cut_threshold,
                             adaptive_stability_max, perceptual_lut_bits,
                             dither_budget, dither_min_improvement,
-                            dither_window)
+                            dither_window, reserved=reserved)
     if int(keyint) < 0:
         raise ValueError("keyint debe ser >= 0")
     if int(threshold) < 0:
@@ -848,7 +867,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             raise RuntimeError("video sin frames")
         stepS = max(1, len(allf) // 12)
         sample = [allf[k][0] for k in range(0, len(allf), stepS)]
-        pal_img, palette0 = make_global_palette(sample, pal_size, palette_algorithm)
+        pal_img, palette0 = make_global_palette(sample, pal_size, palette_algorithm,
+                                                reserved=reserved)
         global_quantizer = make_perceptual_quantizer(
             palette0, palette_algorithm, perceptual_lut_bits)
         frames_iter = allf
@@ -857,7 +877,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         frames_iter = iter_scene_palette_frames(
             source_iter, pal_size, palette_mode, effective_block_frames,
             adaptive_config, palette_algorithm=palette_algorithm,
-            perceptual_lut_bits=perceptual_lut_bits)
+            perceptual_lut_bits=perceptual_lut_bits, reserved=reserved)
     else:
         frames_iter = iter_video_frames(in_path, cols, rows, fps, bake_smoothing)
     delta_allowed = (not has_palette) or use_global or use_scene_palette
@@ -935,7 +955,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                                                    quantizer=active_quantizer,
                                                    perceptual_lut_bits=perceptual_lut_bits,
                                                    previous_palette=previous_frame_palette,
-                                                   temporal_strength=per_frame_stability)
+                                                   temporal_strength=per_frame_stability,
+                                                   reserved=reserved)
         if dither_mode != "off":
             cells, dither_details = apply_dither_mode(
                 rgb, cells, active_palette, dither_mode, dither_matrix,

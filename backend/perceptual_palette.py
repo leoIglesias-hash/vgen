@@ -435,17 +435,26 @@ def build_perceptual_palette(sample_imgs, pal_size, previous_palette=None,
                              temporal_strength=0.0,
                              max_samples=DEFAULT_MAX_SAMPLES,
                              gradient_boost=3.0, max_iter=40, tolerance=1e-5,
-                             chunk_size=DEFAULT_CHUNK_SIZE, return_info=False):
+                             chunk_size=DEFAULT_CHUNK_SIZE, return_info=False,
+                             reserved=0):
     """Construye una paleta K-means en Oklab con muestreo anti-banding.
 
     ``previous_palette`` debe tener el mismo largo. Su orden se conserva y
     ``temporal_strength`` (0..1) interpola los centros nuevos con los anteriores.
     Cero conserva solo un orden determinista; valores bajos como 0.1..0.25 son un
     punto de partida razonable para evitar parpadeo sin congelar cambios reales.
+    ``reserved`` (INT-001) declara cuantas entradas finales quedan fuera del
+    video base; con 0 el comportamiento es identico al historico.
     """
     pal_size = int(pal_size)
     if not (1 <= pal_size <= 256):
         raise ValueError("pal_size debe estar entre 1 y 256")
+    reserved = int(reserved)
+    if reserved < 0:
+        raise ValueError("reserved debe ser >= 0")
+    if reserved > 0:
+        raise NotImplementedError(
+            "reserved>0: la exclusion del rango reservado se implementa en E-04")
     max_samples = int(max_samples)
     if max_samples < pal_size:
         raise ValueError("max_samples debe ser >= pal_size")
