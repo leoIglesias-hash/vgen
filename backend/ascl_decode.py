@@ -98,48 +98,120 @@ def planes_to_cells(planes, mode, n):
     return cells
 
 
+def _inflate_bounded(payload, maximum, label):
+    """Descompresion con tope de salida: rechaza bombas y streams sucios."""
+    obj = zlib.decompressobj()
+    raw = obj.decompress(payload, int(maximum))
+    if obj.unconsumed_tail or obj.unused_data or not obj.eof:
+        raise ValueError("%s: stream zlib excede el limite o trae bytes extra"
+                         % label)
+    return raw
+
+
+def _decode_all_v1_pixel(buf, hdr):
+    """Camino PIXEL: delega en el parser transaccional de ascl_v2.
+
+    Es el mismo validador que usa el transcoder (offsets contiguos, paletas,
+    payloads acotados e indices verificados antes de mutar estado).
+    """
+    import ascl_v2
+
+    header = ascl_v2._header_fields(buf, ascl_v2.VERSION_V1)
+    cells_list, pal_list = [], []
+    current = None
+    for frame in ascl_v2._frame_blocks_v1(buf, header):
+        if frame["palette"]:
+            current = np.frombuffer(frame["palette"],
+                                    np.uint8).reshape(-1, 3).copy()
+        cells_list.append(frame["cells"].reshape(-1, 1).copy())
+        pal_list.append(current)
+    return hdr, "", cells_list, pal_list
+
+
 def _decode_all_v1(buf, hdr):
+    if hdr["mode"] == MODE_PIXEL:
+        return _decode_all_v1_pixel(buf, hdr)
     ramp = buf[HEADER_SIZE: HEADER_SIZE + hdr["ramp_len"]].decode("ascii", "replace")
-    offs = list(struct.unpack_from("<%dI" % hdr["n_frames"], buf, hdr["data_off"]))
     mode, cols, rows = hdr["mode"], hdr["cols"], hdr["rows"]
     n = cols * rows
     bpc = BYTES_PER_CELL[mode]
+    table_end = hdr["data_off"] + hdr["n_frames"] * 4
+    if table_end > len(buf):
+        raise ValueError("tabla de offsets truncada")
+    offs = list(struct.unpack_from("<%dI" % hdr["n_frames"], buf, hdr["data_off"]))
     cells_list, pal_list = [], []
     cur_pal, prev = None, None
-    for o in offs:
+    expected = table_end
+    for index, o in enumerate(offs):
+        if o != expected or o + 7 > len(buf):
+            raise ValueError("offset no contiguo o frame truncado en %d" % index)
         block_len = struct.unpack_from("<I", buf, o)[0]
+        end = o + 4 + block_len
+        if block_len < 3 or end > len(buf):
+            raise ValueError("block_len fuera de rango en %d" % index)
         p = o + 4
         tag = struct.unpack_from("<B", buf, p)[0]; p += 1
         pal_count = struct.unpack_from("<H", buf, p)[0]; p += 2
+        if pal_count > hdr["pal_size"] or pal_count > 256:
+            raise ValueError("pal_count fuera de rango en %d" % index)
         if pal_count > 0:
+            if p + pal_count * 3 > end:
+                raise ValueError("paleta truncada en %d" % index)
             cur_pal = np.frombuffer(buf, np.uint8, pal_count * 3, p).reshape(-1, 3).copy()
             p += pal_count * 3
-        payload = buf[p: o + 4 + block_len]
+        payload = buf[p:end]
+        if tag in (TAG_DELTA, TAG_DELTA_MASK) and prev is None:
+            raise ValueError("primer frame no puede ser DELTA")
         if tag == TAG_RAW:
+            if len(payload) != n * bpc:
+                raise ValueError("RAW con longitud incorrecta en %d" % index)
             cells = planes_to_cells(bytes(payload), mode, n)
         elif tag == TAG_ZLIB:
-            cells = planes_to_cells(zlib.decompress(payload), mode, n)
+            raw = _inflate_bounded(payload, n * bpc, "ZLIB")
+            if len(raw) != n * bpc:
+                raise ValueError("ZLIB con longitud incorrecta en %d" % index)
+            cells = planes_to_cells(raw, mode, n)
         elif tag == TAG_DELTA:
-            raw = zlib.decompress(payload)
+            raw = _inflate_bounded(payload, n * (4 + bpc), "DELTA")
+            if len(raw) % (4 + bpc):
+                raise ValueError("DELTA con longitud invalida en %d" % index)
             k = len(raw) // (4 + bpc)
+            if k > n:
+                raise ValueError("DELTA excede una tupla por celda en %d" % index)
             ci = np.frombuffer(raw, "<u4", k, 0)
+            if k and int(ci.max()) >= n:
+                raise ValueError("DELTA con offset fuera de rango en %d" % index)
             vals = np.frombuffer(raw, np.uint8, k * bpc, 4 * k).reshape(k, bpc)
             cells = prev.copy()
             cells[ci] = vals
         elif tag == TAG_DELTA_MASK:
-            raw = zlib.decompress(payload)
             mask_len = (n + 7) // 8
+            raw = _inflate_bounded(payload, mask_len + n * bpc, "DELTA_MASK")
+            if len(raw) < mask_len:
+                raise ValueError("DELTA_MASK truncado en %d" % index)
             changed = np.unpackbits(np.frombuffer(raw, np.uint8, mask_len, 0),
                                     count=n, bitorder="little").astype(bool)
             k = int(changed.sum())
+            if len(raw) != mask_len + k * bpc:
+                raise ValueError("DELTA_MASK con valores faltantes o extra en %d"
+                                 % index)
             vals = np.frombuffer(raw, np.uint8, k * bpc, mask_len).reshape(k, bpc)
             cells = prev.copy()
             cells[changed] = vals
         else:
             raise ValueError("tag desconocido %d" % tag)
+        active_entries = len(cur_pal) if cur_pal is not None else 0
+        if mode == MODE_ASCII_PAL and active_entries and \
+                int(cells[:, 1].max()) >= active_entries:
+            raise ValueError("indice de paleta fuera de rango en %d" % index)
+        if hdr["ramp_len"] and int(cells[:, 0].max()) >= hdr["ramp_len"]:
+            raise ValueError("indice de rampa fuera de rango en %d" % index)
         cells_list.append(cells)
         pal_list.append(cur_pal)
         prev = cells
+        expected = end
+    if expected != len(buf):
+        raise ValueError("bytes extra al final del ASCL")
     return hdr, ramp, cells_list, pal_list
 
 
@@ -165,7 +237,17 @@ def decode_all(path):
     with open(path, "rb") as fh:
         buf = fh.read()
     hdr = parse_header(buf)
-    hdr["crc_ok"] = compute_crc(buf, hdr) == hdr["crc32"]
+    computed = compute_crc(buf, hdr)
+    if hdr["version"] == 1:
+        # La spec v1 permite crc32=0 como "omitido"; cualquier otro valor debe
+        # coincidir. Antes solo se anotaba crc_ok y se decodificaba igual.
+        hdr["crc_ok"] = hdr["crc32"] == 0 or computed == hdr["crc32"]
+    else:
+        hdr["crc_ok"] = computed == hdr["crc32"]
+    if not hdr["crc_ok"]:
+        raise ValueError(
+            "CRC invalido: header declara 0x%08X y el contenido produce 0x%08X"
+            % (hdr["crc32"], computed))
     if hdr["version"] == 1:
         return _decode_all_v1(buf, hdr)
     if hdr["version"] == 2:
@@ -213,9 +295,25 @@ def render_glyph_png(hdr, ramp, cells, palette, png_path, scale):
     return img.size
 
 
+def _resolve_ffmpeg():
+    """Misma resolucion que encoder.extract_audio: binario del sistema o
+    imageio-ffmpeg como fallback, con un error claro si no hay ninguno."""
+    import shutil
+    path = shutil.which("ffmpeg")
+    if path:
+        return path
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        raise RuntimeError(
+            "no se encontro ffmpeg: instale el binario del sistema o "
+            "'pip install imageio-ffmpeg'")
+
+
 def write_mp4(frames_rgb, cols, rows, fps, scale, out_path):
     W, H = cols * scale, rows * scale
-    cmd = ["ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
+    cmd = [_resolve_ffmpeg(), "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
            "-s", "%dx%d" % (W, H), "-r", str(fps), "-i", "-",
            "-pix_fmt", "yuv420p", "-movflags", "+faststart", out_path]
     pr = subprocess.Popen(cmd, stdin=subprocess.PIPE,

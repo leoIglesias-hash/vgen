@@ -279,6 +279,9 @@
     var raw, capacity, next;
     if (!inflateZlib) fail("inflate zlib no disponible");
     if (!this._scratch) {
+      /* Arranque adaptativo deliberado (evidencia HQ: 331 KB reales frente a
+       * 1,6 MB de bound defensivo). El scratch solo crece si un frame lo
+       * necesita de verdad. */
       capacity = Math.min(maxLength, this._fullLength);
       this._scratch = new Uint8Array(capacity);
     }
@@ -289,9 +292,18 @@
           break;
         } catch (error) {
           if (!error || error.code !== "ASCL_OUTPUT_BUFFER") throw error;
-          next = Math.min(maxLength, Math.max(error.required || 0, this._scratch.length * 2));
-          if (next <= this._scratch.length) throw error;
+          /* W-04: un solo reintento con el tamano real. La duplicacion
+           * progresiva inflaba el mismo payload hasta 4 veces (n -> 2n -> 4n
+           * -> tope). El camino dinamico mide la salida exacta en una pasada
+           * y el scratch queda proporcional a lo que el frame necesito, nunca
+           * en el tope teorico del tag. */
+          raw = inflateZlib(payload, maxLength);
+          next = Math.min(maxLength, Math.max(raw.length, this._scratch.length * 2));
+          if (next < raw.length) throw error;
           this._scratch = new Uint8Array(next);
+          this._scratch.set(raw);
+          this.actualLength = raw.length;
+          break;
         }
       }
     } else {
@@ -459,7 +471,19 @@
     this._dCellCount = 0;
     clearBitset(this.dirtyCellBits);
     if (this.decodedIndex >= 0 && this.decodedIndex <= target) {
-      start = this.decodedIndex + 1;
+      /* W-02: mismo atajo que ReaderV2. En playback normal solo inspecciona el
+       * salto solicitado; si el salto cruza un keyframe, empieza alli y evita
+       * decodificar deltas que quedaran sobrescritos. Sin esto, un TV atrasado
+       * decodifica cadenas cada vez mas largas y nunca se recupera. */
+      key = target;
+      while (key > this.decodedIndex && !this._isKey(key)) key--;
+      if (key > this.decodedIndex && this._isKey(key)) {
+        start = key;
+        this.palette = this._initialPalette;
+        this.paletteEntries = this._initialPaletteEntries;
+      } else {
+        start = this.decodedIndex + 1;
+      }
     } else {
       key = target;
       while (key > 0 && !this._isKey(key)) key--;
@@ -468,7 +492,22 @@
       this.palette = this._initialPalette;
       this.paletteEntries = this._initialPaletteEntries;
     }
-    for (i = start; i <= target; i++) this._decodeOne(i);
+    try {
+      for (i = start; i <= target; i++) this._decodeOne(i);
+    } catch (error) {
+      /* W-03: rollback transaccional, como ReaderV2. Sin esto, una excepcion a
+       * mitad de cadena deja cells parcialmente mutado y el proximo seek
+       * reanuda desde un estado corrupto. */
+      this.decodedIndex = -1;
+      this.palette = this._initialPalette;
+      this.paletteEntries = this._initialPaletteEntries;
+      clearBitset(this.dirtyCellBits);
+      this.dirtyFull = false;
+      this.dirtyCellCount = 0;
+      this.dirtyY0 = this.header.rows;
+      this.dirtyY1 = -1;
+      throw error;
+    }
     this.decodedIndex = target;
     this.dirtyFull = this._dFull;
     this.dirtyY0 = this._dY0;

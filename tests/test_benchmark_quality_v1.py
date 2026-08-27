@@ -33,9 +33,13 @@ def tiny_pixel_ascl():
     offset1 = offset0 + len(frame0)
     body = struct.pack("<2I", offset0, offset1) + frame0 + frame1
     crc = zlib.crc32(body) & 0xFFFFFFFF
+    # flags = HAS_OFFSET_TABLE (8) | PAL_PER_SCENE (2): el fixture anterior
+    # declaraba paleta per-frame (solo 8) junto a un DELTA_MASK sin paleta, una
+    # combinacion no canonica que el decoder endurecido ahora rechaza (la spec
+    # habilita DELTA con paleta temporal o global, nunca per-frame).
     header = struct.pack(
         ascl_decode.HEADER_FMT,
-        b"ASCL", 1, ascl_decode.MODE_PIXEL, 8, 15,
+        b"ASCL", 1, ascl_decode.MODE_PIXEL, 10, 15,
         2, 1, 2, 2, 0, 3, data_off, 1000, 0, crc)
     return header + body
 

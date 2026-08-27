@@ -2,7 +2,8 @@
 
 Este índice separa el estado vigente de la evidencia histórica. Si dos documentos se
 contradicen, prevalecen en este orden: especificación de formato, estado actual, roadmap
-activo y registro de decisiones. Los documentos históricos explican cómo se llegó a una
+activo y registro de decisiones. Para la intervención matricial, el documento de diseño
+prevalece sobre el resumen del §12 del roadmap. Los documentos históricos explican cómo se llegó a una
 decisión, pero no definen el backlog ni los valores actuales.
 
 ## Vigentes
@@ -13,6 +14,11 @@ decisión, pero no definen el backlog ni los valores actuales.
 | [`ASCL-format-spec.md`](ASCL-format-spec.md) | contrato binario normativo de ASCL/ASCLV v1 y v2 |
 | [`HOJA-DE-RUTA-TECNICA-V2.md`](HOJA-DE-RUTA-TECNICA-V2.md) | backlog priorizado, dependencias y gates de aceptación |
 | [`PLAN-IMPLEMENTACION-OPTIMIZACION.md`](PLAN-IMPLEMENTACION-OPTIMIZACION.md) | principios e invariantes de compatibilidad y eficiencia |
+| [`PLAN-UNIFICADO-TIERS-E-INTERVENCION.md`](PLAN-UNIFICADO-TIERS-E-INTERVENCION.md) | cola de optimización por fases, colisiones resueltas y protocolo de medición |
+| [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | ejecución tarea por tarea: archivos, líneas, verificación y criterio de cierre |
+| [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) | estado vivo de la ejecución: qué está cerrado, en curso y bloqueado, y sobre qué código |
+| [`MAPA-DEL-PROYECTO.md`](MAPA-DEL-PROYECTO.md) | grafo de composición, flujo, contratos e invariantes: el punto de entrada de una sesión nueva |
+| [`DISENO-INTERVENCION-MATRICIAL.md`](DISENO-INTERVENCION-MATRICIAL.md) | diseño de INT-001: paleta reservada, glifos, slots, canal en vivo y runtime |
 | [`REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md) | bitácora append-only: contexto, medición, conclusión y alcance por instancia |
 | [`DESPLIEGUE.md`](DESPLIEGUE.md) | layout PHP/hosting, caché y archivos necesarios en el TV |
 | [`PUBLICACION-GITHUB.md`](PUBLICACION-GITHUB.md) | qué entra al repositorio/release y decisiones pendientes antes del push |

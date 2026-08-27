@@ -9,3 +9,6 @@ imageio-ffmpeg>=0.6; python_version >= "3.9"
 #   Debian/Ubuntu : sudo apt install ffmpeg
 #   macOS (brew)  : brew install ffmpeg
 #   Windows       : https://ffmpeg.org/download.html  (agregar al PATH)
+
+# Opcional: mejora la compresion DEFLATE del encoder (fallback automatico a zlib)
+# pip install zopfli

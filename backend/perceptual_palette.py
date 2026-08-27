@@ -349,7 +349,11 @@ def _initial_centers(samples, weights, count, chunk_size):
         candidate = int(np.argmax(score))
         if candidate in used or float(score[candidate]) <= 0.0:
             # Solo ocurre si hay menos colores unicos que entradas solicitadas.
+            # Buscar el siguiente indice libre en lugar de index % len(samples),
+            # que podia recaer en un centro ya usado y desperdiciar entradas.
             candidate = index % len(samples)
+            while candidate in used and len(used) < len(samples):
+                candidate = (candidate + 1) % len(samples)
         used.add(candidate)
         centers[index] = samples[candidate]
         current = np.sum((samples - centers[index]) ** 2, axis=1)

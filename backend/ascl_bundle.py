@@ -34,7 +34,9 @@ def _publish_mode(out_path):
     """Conserva permisos existentes o aplica 0666 limitado por el umask."""
     try:
         return stat.S_IMODE(os.stat(out_path).st_mode) & 0o777
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
+        # PermissionError: si os.stat falla por permisos, publicar con el modo
+        # por defecto en vez de abortar todo el pack.
         current_umask = os.umask(0)
         os.umask(current_umask)
         return 0o666 & ~current_umask
@@ -96,17 +98,26 @@ def pack(ascl_path, audio_path, out_path):
 
 
 def read_parts_info(asclv_path):
-    """Devuelve (ascl_bytes, audio_bytes, bundle_version) con validación exacta."""
+    """Devuelve (ascl_bytes, audio_bytes, bundle_version) con validación exacta.
+
+    El header se valida contra el tamaño real del archivo ANTES de cargarlo a
+    memoria: un .asclv gigante o inconsistente falla con un error claro en vez
+    de un MemoryError a mitad de lectura.
+    """
+    file_size = os.path.getsize(asclv_path)
     with open(asclv_path, "rb") as f:
-        buf = f.read()
-    if len(buf) < HEADER_SIZE:
-        raise ValueError(".asclv truncado (falta header)")
-    magic, ascl_len, audio_len = struct.unpack_from(HEADER_FMT, buf, 0)
-    if magic not in MAGICS:
-        raise ValueError("no es un .asclv (magic invalido)")
-    expected = HEADER_SIZE + ascl_len + audio_len
-    if expected != len(buf):
-        raise ValueError(".asclv truncado o con bytes extra")
+        head = f.read(HEADER_SIZE)
+        if len(head) < HEADER_SIZE:
+            raise ValueError(".asclv truncado (falta header)")
+        magic, ascl_len, audio_len = struct.unpack_from(HEADER_FMT, head, 0)
+        if magic not in MAGICS:
+            raise ValueError("no es un .asclv (magic invalido)")
+        expected = HEADER_SIZE + ascl_len + audio_len
+        if expected != file_size:
+            raise ValueError(".asclv truncado o con bytes extra")
+        buf = head + f.read()
+    if len(buf) != file_size:
+        raise ValueError(".asclv cambio de tamano durante la lectura")
     o = HEADER_SIZE
     ascl = buf[o:o + ascl_len]
     audio = buf[o + ascl_len:o + ascl_len + audio_len]

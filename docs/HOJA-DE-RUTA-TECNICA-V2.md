@@ -18,6 +18,10 @@ tablas. Las fuentes de verdad son:
 | matriz/calidad HQ v1 | `BENCHMARK-V1-ADAPTATIVO-OKLAB.md` |
 | codec exacto HQ v2 | `BENCHMARK-V2-HQ-768.md` |
 | decisiones por instancia | `REGISTRO-DE-PRUEBAS-Y-DECISIONES.md` |
+| intervención matricial | `DISENO-INTERVENCION-MATRICIAL.md` |
+| plan unificado de ejecución | `PLAN-UNIFICADO-TIERS-E-INTERVENCION.md` |
+| runbook tarea por tarea | `RUNBOOK-IMPLEMENTACION.md` |
+| estado vivo de la ejecución | `RUNBOOK-ESTADO.md` |
 | hosting | `DESPLIEGUE.md` |
 
 Si una nota histórica contradice esta hoja o el registro de decisiones, prevalecen estos
@@ -355,55 +359,87 @@ default sigue siendo v1. Se conserva el prototipo y la evidencia; no se fuerza m
 
 ## 12. INT-001/002 — intervención matricial local
 
-Antes del runtime se crea `DISENO-INTERVENCION-MATRICIAL.md`. Un slot inicial declara:
+El diseño formal vive en [`DISENO-INTERVENCION-MATRICIAL.md`](DISENO-INTERVENCION-MATRICIAL.md).
+Esta sección conserva solo el resumen y el gate; ante cualquier diferencia prevalece el
+documento de diseño.
 
-```text
-slot_id
-x, y, width, height
-start_frame, end_frame
-palette_epoch_map
-asset_table
-flags: visible, programable, transparencia
-```
+### Caso de referencia
 
-El primer prototipo admite rectángulos sin solapamiento. Los assets son parches de índices
-precalculados por época de paleta; el TV no cuantiza RGB ni detecta objetos. Transparencia
-binaria conserva la celda base.
+Un video base pregrabado muestra, en una zona declarada, valores que no existen al
+codificar: veinte números de quiniela de dos dígitos cargados en vivo.
 
-La primera revisión `ASCLVID2` no contiene secciones `SLOT/META/VIDO/AUDI`: su envelope
-de 16 B solo declara las longitudes ASCL y audio. `INT-001` debe definir una revisión
-posterior del interior o una nueva versión que conserve un solo archivo cacheable. No puede
-agregar trailing bytes al v2 actual porque los readers los rechazan deliberadamente.
+La combinatoria del resultado es 100^20 y es irrelevante. No se predefine el resultado, se
+predefine el **alfabeto**: once parches —los dígitos `0..9` más un glifo vacío— y cuarenta
+posiciones declaradas cubren el espacio completo. Con glifos de 8x12 celdas la tabla
+completa son 1.056 bytes.
+
+### Decisiones cerradas 2026-08-27
+
+- **composición**: el overlay escribe índices de paleta en `cells`, después de `seek()` y
+  antes de `draw()`. Un canvas, una matriz lógica.
+- **reserva de paleta**: diez entradas fijas en `246..255`, idénticas en todas las épocas y
+  en los cuatro modos de paleta. El índice `255` es transparencia binaria y conserva la
+  celda base.
+- **metadata**: sidecar `ASCLSLOT` durante el desarrollo, para rediseñar el panel sin
+  re-encodear; migración a `ASCLVID3` con `meta_len` al congelar el diseño.
+- **canal de datos**: recurso estático de unos 50 bytes por XHR, texto de longitud fija con
+  serial monotónico. Sin `fetch`, Promise, Worker ni `JSON` obligatorio.
+
+Queda **descartado** el `palette_epoch_map` de la versión anterior de esta sección: la
+reserva de paleta lo vuelve innecesario, porque un índice reservado significa el mismo RGB
+en toda época.
 
 ### Orden por frame
 
-1. restaurar desde un buffer pequeño el rectángulo base anterior;
-2. decodificar el frame sobre la matriz única;
-3. guardar solo el rectángulo base actual;
-4. aplicar el asset seleccionado en esas celdas;
-5. marcar sus dirty tiles;
-6. presentar normalmente.
+1. restaurar el rectángulo base anterior sobre `cells`;
+2. `reader.seek(target)`, que puede decodificar varios frames;
+3. guardar el rectángulo base actual;
+4. escribir los glifos;
+5. marcar sucia la unión del rectángulo anterior y el actual;
+6. presentar.
 
-Así una intervención no contamina el estado de un DELTA posterior. La memoria auxiliar es
-la suma de áreas activas, nunca otro `cols * rows`.
+El paso 1 antes del paso 2 es lo que impide que una cadena DELTA se calcule sobre píxeles
+contaminados. La restauración vive **fuera** de `seek()`, condición necesaria para convivir
+con el atajo a keyframe del reader v1.
 
-API ES5 propuesta:
+Un keyframe no requiere tratamiento especial: reescribe la matriz completa, de modo que lo
+restaurado se sobrescribe y lo guardado es la base nueva.
+
+### API ES5 propuesta
 
 ```text
-setSlot(slotId, assetId)
-setSlotAtFrame(slotId, assetId, frameIndex)
-clearSlot(slotId)
-getSlot(slotId)
+ASCILINEOverlay.attach(reader, meta)
+overlay.setField(fieldId, value)
+overlay.setValues(digitString)
+overlay.clearField(fieldId)
+overlay.clear()
+overlay.beforeSeek() / overlay.afterSeek()
+overlay.detach()
 ```
+
+Se agrega `markRectDirty(x, y, w, h)` simétrico en ambos readers.
+
+### Costo de referencia
+
+Con cuarenta slots de 8x12 celdas sobre 768x432 (331.776 celdas): 3.840 celdas de overlay,
+**1,16%** de la grilla, y 3.880 B de RAM auxiliar. El presupuesto declarado es 5% de la
+grilla.
 
 ### Gate
 
 - un canvas y una matriz lógica;
-- mismo CRC intervenido en ambos renderers;
-- restauración exacta al limpiar o hacer seek;
-- costo p95 de slots <10% del frame;
-- RAM acotada por áreas declaradas;
-- IDs inválidos no escriben fuera del slot.
+- mismo CRC de `cells` con overlay en Canvas2D y WebGL1;
+- restauración exacta al limpiar, al hacer seek hacia atrás y al reiniciar el loop:
+  `cells` byte-idéntico a la reproducción sin overlay;
+- costo p95 de slots <10% del presupuesto de frame;
+- RAM auxiliar acotada por las áreas declaradas, medida y no supuesta;
+- un `field_id` o un dígito inválido no escribe fuera de su slot;
+- la reproducción continúa intacta con el canal caído, corrupto o repetido;
+- el video base nunca usa un índice `>= 246` (INV-3).
+
+La primera revisión `ASCLVID2` no admite secciones adicionales: sus readers rechazan
+trailing bytes deliberadamente. Por eso la metadata vive en un sidecar hasta que
+`ASCLVID3` la incorpore.
 
 ## 13. MEM/CACHE/FMT — memoria, caché y límite de tamaño
 
@@ -462,7 +498,7 @@ IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso un
 | VAL-002 | parcial | ampliar fixtures numéricos deterministas, sin selector visual | §5 |
 | V1-01 | código listo | cierre físico del reader v1 | §6 |
 | V1-OPT-01 | descartado | la calidad permanece explícita; no hay selector de casos | §7 |
-| V1-OPT-02 | pendiente | presupuesto dither en bytes | §7 |
+| V1-OPT-02 | pendiente | presupuesto dither en bytes (absorbido como F3-6) | §7 |
 | V1-RUNTIME-01 | código listo | RAM/p95/drops físicos | §8 |
 | V1-REL-01 | pendiente | regenerar/promover 960 solo si VAL-001 lo permite | gates físicos |
 | V2-00 | verificado localmente | evidencia exacta cerrada; repetir solo en TV | §9 |
@@ -472,8 +508,8 @@ IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso un
 | V2-04 | implementado | medir dirty híbrido Canvas/WebGL | §10 |
 | V2-REMAP-01 | experimento; no default | medir CPU física antes de considerar perfil | §9 |
 | TV-02 | pendiente | go/no-go v2 físico | §11 |
-| INT-001 | pendiente | diseño formal de slots sin cambiar envelope v2 actual | §12 |
-| INT-002 | pendiente | slot runtime | §12 |
+| INT-001 | **diseño cerrado** | `DISENO-INTERVENCION-MATRICIAL.md`; implementación en F1 | §12 |
+| INT-002 | pendiente | slot runtime (F7), depende de F1, F4-2 y F4-13 | §12 |
 | MEM-001 | pendiente | memoria por componente | §13 |
 | CACHE-001 | parcial | ETag/cabeceras PHP y pruebas fría/caliente | §13 |
 | FMT-LIMIT-001 | parcial | validar artefactos reales <4 GiB | §13 |
@@ -481,14 +517,44 @@ IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso un
 | DOC-001 | completado | índice, estado, changelog y registro coherentes | enlaces vigentes |
 | PUB-001 | parcial | decidir licencia, derechos de videos e historial público | `PUBLICACION-GITHUB.md` |
 
+### Cola de optimización — auditoría 2026-08-27
+
+Colisiones y protocolo de medición en
+[`PLAN-UNIFICADO-TIERS-E-INTERVENCION.md`](PLAN-UNIFICADO-TIERS-E-INTERVENCION.md).
+Ejecución tarea por tarea, con archivo, línea y criterio de cierre, en
+[`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md).
+
+| Fase | Contenido | Carril | Depende de |
+|---|---|---|---|
+| F0 | congelar referencia; bugs de determinismo y endurecimiento de herramientas offline | ambos | — |
+| F1 | reserva de paleta, rects protegidos, glifos y sidecar | encoder | F0 |
+| F2 | Zopfli, búsqueda de `tile_size`, keyframes por corte de escena, flags de audio | encoder | F0; F2-4 espera F4-2 |
+| F3 | refit de paleta, Lloyd en uint8, muestreo total, estabilidad temporal, `PairLUT` exacto, presupuesto de dither en bytes | encoder | F1 |
+| F4 | gate ES5 ampliado, fuzzing permanente, atajo a keyframe, `_scratchMax`, `inflate` con bit-buffer, limpieza de caminos calientes v2, correcciones de seguridad del player | frontend | F0 |
+| F5 | trellis temporal y espacial con presupuesto ΔE conservador, opt-in | encoder | F1, F2 |
+| F6 | revisión **única** de formato: `SPARSE` diferencial, `tile_size` flexible, `ASCLVID3` con `meta_len`, nombre versionado | ambos | F2, F5 |
+| F7 | runtime del overlay (INT-002) | frontend | F1, F4-2, F4-13 |
+| F8 | VAL-001, TV-02 y MEM-001 con los artefactos ya optimizados | ambos | F6, F7 |
+
+Los dos carriles avanzan en paralelo. Ningún commit mezcla carriles, para poder bisecar
+una regresión por carril. La única coordinación obligatoria entre ellos antes de F6 es la
+retención de F2-4 hasta que F4-2 esté integrado.
+
+Mediciones que originan esta cola: Zopfli −12,8% en keyframes, −4,5% en DELTA y −5,1% en
+regional; `tile_size=8` −11,1% frente a 16; el reader v1 decodifica 90 frames donde el
+óptimo son 11; `inflate.js` es el 41-43% del tiempo de decode por frame.
+
 ## 16. Próxima sesión recomendada
 
-1. Desplegar ambos bundles y ejecutar VAL-001/TV-02 en Canvas2D y WebGL1 reales.
-2. Medir decode/seek/scratch, RAM, CPU y dirty híbrido v1 frente a v2 en esos equipos.
+1. Ejecutar F0 completo: congelar la referencia y corregir el `lexsort` ausente en la
+   rama OpenCV de `_kmeans_rgb_palette`. Sin eso, toda medición posterior compara contra
+   una base que no es reproducible.
+2. Abrir los dos carriles: F1 en encoder y F4-0/F4-1/F4-2 en frontend.
 3. Mantener el remap exacto fuera del default: su -0,9569% estimado requiere demostrar
    que 94 predictores no empeoran CPU/drops.
-4. Decidir go/no-go: promover v2, ofrecerlo como perfil especializado o conservar v1.
-5. Recién después retomar near-lossless o intervención matricial como revisiones separadas.
+4. Llevar a VAL-001/TV-02 los artefactos **ya optimizados**, no los actuales: medir el
+   go/no-go de v2 contra una base con Zopfli aplicado a ambos lados de la comparación.
+5. Recién después retomar `PAL5`/`PAL6` o el diccionario preset de zlib.
 
 Range continúa detrás de evidencia física: la primera revisión descarga y cachea un único
 recurso completo.

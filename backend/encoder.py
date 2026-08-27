@@ -243,10 +243,17 @@ def _kmeans_rgb_numpy(samples, pal_size, max_iter=30, tolerance=0.25):
         centers = updated
         if shift <= float(tolerance):
             break
-    # Orden explicito: el color reconstruido no cambia y los bytes si quedan
-    # estables aun si otra implementacion enumera clusters en otro orden.
-    centers = centers[np.lexsort((centers[:, 2], centers[:, 1], centers[:, 0]))]
     return np.clip(np.rint(centers), 0, 255).astype(np.uint8)
+
+
+def _sort_palette_centers(centers):
+    """Orden explicito comun a ambas ramas de K-means RGB.
+
+    El color reconstruido no cambia y los bytes quedan estables aunque una
+    implementacion (OpenCV o el fallback NumPy) enumere clusters en otro orden.
+    """
+    centers = np.asarray(centers, dtype=np.uint8)
+    return centers[np.lexsort((centers[:, 2], centers[:, 1], centers[:, 0]))]
 
 
 def _kmeans_rgb_palette(sample_imgs, pal_size, max_samples=65536, seed=20260811):
@@ -279,8 +286,10 @@ def _kmeans_rgb_palette(sample_imgs, pal_size, max_samples=65536, seed=20260811)
         _compactness, _labels, centers = cv2.kmeans(
             samples, int(pal_size), None, criteria, 1,
             cv2.KMEANS_PP_CENTERS)
-        return np.clip(np.rint(centers), 0, 255).astype(np.uint8)
-    return _kmeans_rgb_numpy(samples, pal_size, max_iter=30, tolerance=0.25)
+        centers = np.clip(np.rint(centers), 0, 255).astype(np.uint8)
+        return _sort_palette_centers(centers)
+    return _sort_palette_centers(
+        _kmeans_rgb_numpy(samples, pal_size, max_iter=30, tolerance=0.25))
 
 
 def make_global_palette(sample_imgs, pal_size, palette_algorithm="median-cut",
@@ -679,6 +688,10 @@ def iter_video_frames(in_path, cols, rows, target_fps, bake_smoothing="none"):
     if not cap.isOpened():
         raise RuntimeError("no se pudo abrir el video: %s" % in_path)
     src_fps = cap.get(cv2.CAP_PROP_FPS) or target_fps
+    # Contenedores mal indexados reportan NaN o valores absurdos; int(NaN) en
+    # output_source_index aborta el encode con un error opaco a mitad de camino.
+    if not (0 < src_fps < 1000):
+        src_fps = target_fps
     i = -1
     output_index = 0
     while True:
@@ -732,6 +745,10 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
                             dither_budget=dither_budget,
                             dither_min_improvement=dither_min_improvement,
                             dither_window=dither_window)
+    if palette_mode != "per-frame":
+        raise ValueError(
+            "encode_image solo admite --palette per-frame: una imagen no tiene "
+            "bloques temporales (recibido: %r)" % (palette_mode,))
     mode = MODE_NAMES[mode_name]
     ramp = "" if mode == MODE_PIXEL else RAMPS.get(ramp_name, ramp_name)
     src = Image.open(in_path).convert("RGB")
