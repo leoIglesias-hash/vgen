@@ -542,3 +542,34 @@ sí es el HQ v2 exacto. El nombre estable solo pertenece a la ruta de despliegue
 - Intervención matricial, near-lossless y Range permanecen en revisiones futuras separadas.
 - El push público queda condicionado a decidir licencia/procedencia y derechos sobre los
   cuatro videos del historial y el clip de release.
+
+## Instancia 007 - Referencia HQ reproducible en CI y arranque del modelo CI-only
+
+Fecha: 2026-08-27. Contexto: nueva máquina de trabajo sin Python/Node (decisión del
+operador); validación por GitHub Actions en cada push. El `clip.asclv` del release v0.2
+(SHA `6FF3E71E…`) quedó en una máquina anterior y no es regenerable sin su V1 autorizado.
+
+### Medición
+
+Workflow `encode` run #1 (commit `7286399`), fuente `TKN-2443-GANADOR- 15seg-.mp4`
+(rama `assets`), parámetros: `--format v2 --profile graphic-hq --fps 15
+--palette adaptive --palette-algorithm kmeans-oklab --dither auto`.
+
+Fila cruda de `tools/bench_ref.py --source`:
+
+```text
+| clip.asclv | 18646530 | 18829899 | 0.2433 | 231 | 94 | 9 | ZLIB:94;DELTA_MASK:136;RDELTA_RAW:1 | 34.29 | 0.00793 | f3051baafc17a0edf8e4e45e02d8c88287213ab73137f92088470ff4ce591527 |
+```
+
+768×432, 231 frames, 15 FPS, paleta 256, CRC OK (verificado por `ascl_decode` en el
+mismo run).
+
+### Conclusión y alcance
+
+- Esta fila es la **nueva referencia HQ de medición** (P-02 cerrada, adaptada): se
+  regenera de forma reproducible en CI, con SHA verificable, en lugar de depender de un
+  binario congelado local.
+- El HQ histórico del release v0.2 queda como evidencia no regenerable; sus números
+  (`BENCHMARK-V2-HQ-768.md`) siguen siendo válidos para su clip (TKN-2441).
+- Alcance: perfil graphic-hq 768 con estos parámetros exactos. Cambios de grilla, FPS,
+  paleta o dither exigen una fila nueva.

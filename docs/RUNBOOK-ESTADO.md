@@ -31,7 +31,7 @@ Reglas de uso:
 | ID | Tarea | Estado | Commit | Fecha | Notas |
 |---|---|---|---|---|---|
 | P-01 | ramas y línea base | cerrada (adaptada) | `5493455` | 2026-08-27 | sin repo real: git local sobre el snapshot, un commit por tarea con ID; regresión base 115+11 en verde |
-| P-02 | congelar las dos referencias | parcial | `5493455` | 2026-08-27 | `synthetic.baseline` congelada: SHA `c29e7728…5d1d7`. **Pendiente: el HQ.** El clip fuente real ya está local en `inputs/TKN-2443-GANADOR- 15seg-.mp4` (no se commitea); encodearlo y congelarlo requiere un entorno con Python (candidato: workflow manual de CI) |
+| P-02 | congelar las dos referencias | cerrada (adaptada) | `7286399` | 2026-08-27 | `synthetic.baseline`: SHA `c29e7728…5d1d7` (canónico kmeans-rgb+cv2 tras E-01: `9cc88e55…`). **HQ nuevo y reproducible**: `TKN-2443` encodeado por workflow `encode` run #1 (graphic-hq 768×432, 15 fps, adaptive/kmeans-oklab, dither auto, v2): 18.829.899 B, 231 frames, 94 keyframes, PSNR 34.29, Oklab 0.00793, SHA `f3051baa…1527`. Fila completa en el registro. El HQ histórico (`6FF3E71E…`) queda como evidencia no regenerable |
 | P-03 | `tools/bench_ref.py` | cerrada | `bfa2a1f` | 2026-08-27 | fila determinista verificada; PSNR/Oklab con `--source` |
 | P-04 | Zopfli opcional | cerrada | `bf8cd58` | 2026-08-27 | documentado en requirements; instalado y verificado en el entorno de trabajo |
 
@@ -41,7 +41,7 @@ Reglas de uso:
 |---|---|---|---|---|---|
 | E-01 | `lexsort` en rama OpenCV | cerrada | `6b6b65a` | 2026-08-27 | ambas ramas ordenan vía `_sort_palette_centers`; test de paridad. **El SHA de artefactos kmeans-rgb con cv2 cambia** (nuevo canónico del sintético: `9cc88e55…`); RGB verificado byte-idéntico en 40/40 frames |
 | E-02 | endurecer herramientas offline | cerrada | `d3f2bfd` | 2026-08-27 | los 7 puntos del runbook + 6 fixtures de corrupción. El fixture de benchmark declaraba flags no canónicos (per-frame + DELTA) y se corrigió a per-scene. Cierra F0 (encoder) |
-| E-03 | `reserved` cableado, default 0 | pendiente | | | |
+| E-03 | `reserved` cableado, default 0 | cerrada | `08234f1` | 2026-08-27 | cableado en las 9 funciones de la cadena de paleta; byte-identidad con `reserved=0` verificada por test en los tres caminos (global/adaptive/per-frame); `pal_size >= reserved+22`; `reserved>0` lanza `NotImplementedError` hasta E-04 (guard anti no-op). CI `regression` #9 en verde |
 | E-04 | exclusión del rango reservado (8 funciones) | pendiente | | | |
 | E-05 | rects protegidos en dither | pendiente | | | |
 | E-06 | horneado de glifos | pendiente | | | |
@@ -110,15 +110,14 @@ Reglas de uso:
 | 2026-08-27 | validación **solo por CI**: la máquina de trabajo no tiene Python ni Node; una tarea se cierra con el workflow `regression` en verde sobre su push | decisión del operador (no instalar entornos locales); el repo es privado y el plan Free de Actions alcanza de sobra para el volumen de pushes del proyecto |
 | 2026-08-27 | commits directos a `main` (un commit por tarea, ID en el mensaje); las dos ramas del runbook §0.1 quedan sin efecto | decisión del operador; continúa el historial lineal que ya traía el repo |
 | 2026-08-27 | se crea `docs/ejecutados/` (archivo de lotes cerrados) y `CLAUDE.md` en la raíz como guía de arranque post-compact | el estado vivo queda corto y navegable; la evidencia de lo cerrado no se relee en cada sesión |
+| 2026-08-27 | la referencia HQ pasa a ser **reproducible**: se regenera con el workflow `encode` desde la rama `assets` (fuente TKN-2443) en lugar de congelar un binario irrecuperable | el `clip.asclv` del release v0.2 quedó en una máquina anterior; P-02 exigía congelar antes de tocar el encoder y esta vía lo cumple con SHA verificable en CI |
+| 2026-08-27 | el `preview.mp4` del workflow `encode` es **opcional y apagado por defecto** | pregunta del operador: el producto es el `.asclv`; el mp4 es solo QA visual decodificada. La verificación real se hace con `frontend/player.html` sobre el `.asclv` |
 
 ## Próxima acción
 
-1. Carril E: **E-03** (parámetro `reserved`, default 0). Carril W: **W-06** (reescritura
-   de `inflate.js`, ahora que W-05 está en verde).
-2. Completar **P-02** (HQ): el workflow manual `encode` ya existe
-   (`.github/workflows/encode.yml`); falta subir el video fuente a la rama `assets`
-   (bloqueado desde esta sesión por permisos; el operador puede subirlo por la web de
-   GitHub) y correrlo una vez para congelar SHA-256 y fila base.
+1. Carril E: **E-04** (exclusión del rango reservado en las ocho funciones; reemplaza el
+   guard `NotImplementedError` de E-03 y su test).
+2. Carril W: **W-06** (reescritura de `inflate.js` con bit-buffer y tabla; W-05 en verde).
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.

@@ -33,6 +33,10 @@ on:
       extra:
         description: "Flags extra para make_clip.py (opcional)"
         default: ""
+      preview:
+        description: "Generar preview.mp4 de control (decodificacion del .asclv; el producto es el .asclv)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -89,10 +93,12 @@ jobs:
             cat sha256.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Preview MP4
+      - name: Preview MP4 de control (opcional)
+        if: ${{ inputs.preview }}
         run: |
           python backend/ascl_bundle.py unpack outputs/clip.asclv work
-          python backend/ascl_decode.py work/clip.ascl --mp4 outputs/preview.mp4 --no-preview
+          # sin --no-preview: ese flag corta ANTES de escribir el mp4; scale 1 = resolucion nativa
+          python backend/ascl_decode.py work/clip.ascl --mp4 outputs/preview.mp4 --scale 1
       - name: Publicar clip.asclv + medición
         uses: actions/upload-artifact@v4
         with:
@@ -103,6 +109,7 @@ jobs:
             sha256.txt
           retention-days: 14
       - name: Publicar preview.mp4
+        if: ${{ inputs.preview }}
         uses: actions/upload-artifact@v4
         with:
           name: preview-mp4
