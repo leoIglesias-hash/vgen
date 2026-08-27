@@ -36,8 +36,14 @@
              lut: new Uint16Array(LUT_SIZE), maxLen: 0 };
   }
 
+  /* W-07: buffers de trabajo a nivel modulo. inflate es sincrono y no
+   * reentrante, asi que un unico juego de arboles y scratch se reutiliza en
+   * todas las llamadas: cero allocaciones tipadas por frame en el camino
+   * estable. */
+  var sharedOffs = new Uint16Array(16);
+
   function buildTree(t, lengths, off, num, allowEmpty) {
-    var i, len, sum, left = 1, used = 0, offs = new Uint16Array(16);
+    var i, len, sum, left = 1, used = 0, offs = sharedOffs;
     var code, k, sym, rev, c, b, f, step, entry, idx;
     for (i = 0; i < 16; i++) t.table[i] = 0;
     for (i = 0; i < LUT_SIZE; i++) t.lut[i] = 0;
@@ -102,11 +108,17 @@
     return n;
   }
 
-  function Data(source, output, maxLength) {
+  /* W-07: arboles dinamicos compartidos entre llamadas (se reconstruyen por
+   * bloque dinamico; nunca sobreviven datos de una llamada anterior). */
+  var sharedLt = null, sharedDt = null;
+
+  function Data(source, output, maxLength, start, end) {
     var initial;
     if (!validSource(source)) fail("entrada invalida");
+    if (!sharedLt) { sharedLt = makeTree(); sharedDt = makeTree(); }
     this.s = source;
-    this.i = 0;
+    this.i = start || 0;
+    this.end = end === undefined ? source.length : end;
     this.tag = 0;
     this.bitcount = 0;
     this.fixed = !!output;
@@ -118,12 +130,12 @@
       this.dest = new Uint8Array(initial);
     }
     this.op = 0;
-    this.lt = makeTree();
-    this.dt = makeTree();
+    this.lt = sharedLt;
+    this.dt = sharedDt;
   }
 
   function readByte(d) {
-    if (d.i >= d.s.length) fail("entrada truncada");
+    if (d.i >= d.end) fail("entrada truncada");
     return d.s[d.i++];
   }
 
@@ -165,7 +177,7 @@
   function getBits(d, num, base) {
     var tag = d.tag, bc = d.bitcount, s = d.s, i = d.i, val;
     while (bc < num) {
-      if (i >= s.length) fail("entrada truncada");
+      if (i >= d.end) fail("entrada truncada");
       tag |= s[i++] << bc;
       bc += 8;
     }
@@ -179,7 +191,7 @@
   function takeBit(d) {
     var tag = d.tag, bit;
     if (d.bitcount === 0) {
-      if (d.i >= d.s.length) fail("entrada truncada");
+      if (d.i >= d.end) fail("entrada truncada");
       tag = d.s[d.i++];
       d.bitcount = 8;
     }
@@ -202,7 +214,7 @@
 
   function decodeSymbol(d, t) {
     var tag = d.tag, bc = d.bitcount, s = d.s, i = d.i, entry, len;
-    while (bc < LUT_BITS && i < s.length) {
+    while (bc < LUT_BITS && i < d.end) {
       tag |= s[i++] << bc;
       bc += 8;
     }
@@ -270,11 +282,11 @@
   function inflateStored(d) {
     var length, nlength, end;
     alignToByte(d);
-    if (d.i + 4 > d.s.length) fail("bloque stored truncado");
+    if (d.i + 4 > d.end) fail("bloque stored truncado");
     length = readByte(d) | (readByte(d) << 8);
     nlength = readByte(d) | (readByte(d) << 8);
     if (((length ^ 0xffff) & 0xffff) !== nlength) fail("LEN/NLEN invalido");
-    if (d.i + length > d.s.length) fail("bloque stored truncado");
+    if (d.i + length > d.end) fail("bloque stored truncado");
     ensureOutput(d, d.op + length);
     end = d.i + length;
     d.dest.set(d.s.subarray(d.i, end), d.op);
@@ -282,13 +294,22 @@
     d.i = end;
   }
 
+  /* W-07: scratch de longitudes y arbol de codigos compartidos. Las primeras
+   * 19 posiciones se limpian en cada uso (el resto se escribe completo antes
+   * de leerse). */
+  var sharedLengths = new Uint8Array(320);
+  var sharedCodeTree = null;
+
   function decodeTrees(d, lt, dt) {
     var hlit = getBits(d, 5, 257);
     var hdist = getBits(d, 5, 1);
     var hclen = getBits(d, 4, 4);
-    var i, num, sym, repeat, prev, total, lengths = new Uint8Array(320);
-    var codeTree = makeTree();
+    var i, num, sym, repeat, prev, total, lengths = sharedLengths;
+    var codeTree;
+    if (!sharedCodeTree) sharedCodeTree = makeTree();
+    codeTree = sharedCodeTree;
     if (hlit > 286 || hdist > 32) fail("cabecera Huffman invalida");
+    for (i = 0; i < 19; i++) lengths[i] = 0;
     for (i = 0; i < hclen; i++) lengths[CLCIDX[i]] = getBits(d, 3, 0);
     buildTree(codeTree, lengths, 0, 19);
     total = hlit + hdist;
@@ -320,10 +341,10 @@
     buildTree(dt, lengths, hlit, hdist, true);
   }
 
-  function inflateData(source, output, maxLength) {
+  function inflateData(source, output, maxLength, start, end) {
     var d, bfinal, btype;
     if (!inited) initFixed();
-    d = new Data(source, output, maxLength);
+    d = new Data(source, output, maxLength, start, end);
     do {
       bfinal = getBits(d, 1, 0);
       btype = getBits(d, 2, 0);
@@ -340,7 +361,9 @@
     return d;
   }
 
-  function parseZlib(source) {
+  /* W-07: valida el envoltorio zlib sin crear un subarray por frame; el
+   * DEFLATE se decodifica in situ con limites [2, length-4). */
+  function checkZlibHeader(source) {
     var cmf, flg, header;
     if (!validSource(source) || source.length < 6) fail("zlib truncado");
     cmf = source[0];
@@ -349,7 +372,6 @@
     if ((cmf & 15) !== 8 || (cmf >>> 4) > 7) fail("CMF invalido");
     if ((header % 31) !== 0) fail("FCHECK invalido");
     if (flg & 32) fail("diccionario preset no soportado");
-    return source.subarray(2, source.length - 4);
   }
 
   function adler32(bytes, length) {
@@ -378,12 +400,13 @@
   }
 
   function ASCL_inflateZlibInto(source, out, maxLength) {
-    var raw, d, limit, expected;
+    var d, limit, expected, deflateEnd;
     if (!validOutput(out)) fail("buffer de salida invalido");
     limit = normalizeLimit(maxLength, out.length);
-    raw = parseZlib(source);
-    d = inflateData(raw, out, limit);
-    if (d.i !== raw.length) fail("datos extra o DEFLATE incompleto");
+    checkZlibHeader(source);
+    deflateEnd = source.length - 4;
+    d = inflateData(source, out, limit, 2, deflateEnd);
+    if (d.i !== deflateEnd) fail("datos extra o DEFLATE incompleto");
     expected = expectedAdler(source);
     if (adler32(out, d.op) !== expected) fail("Adler32 invalido");
     return d.op;
@@ -403,9 +426,11 @@
   }
 
   function ASCL_inflateZlib(source, maxLength) {
-    var raw = parseZlib(source), limit = normalizeLimit(maxLength, MAX_DYNAMIC_OUTPUT);
-    var d = inflateData(raw, null, limit), result;
-    if (d.i !== raw.length) fail("datos extra o DEFLATE incompleto");
+    var limit = normalizeLimit(maxLength, MAX_DYNAMIC_OUTPUT), d, result, deflateEnd;
+    checkZlibHeader(source);
+    deflateEnd = source.length - 4;
+    d = inflateData(source, null, limit, 2, deflateEnd);
+    if (d.i !== deflateEnd) fail("datos extra o DEFLATE incompleto");
     result = exactResult(d);
     if (adler32(result, result.length) !== expectedAdler(source)) fail("Adler32 invalido");
     return result;

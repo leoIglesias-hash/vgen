@@ -18,6 +18,7 @@ JS_SUITES = (
     "test_tv_player_page.js",
     "test_tv_player_runtime.js",
     "test_inflate_fuzz.js",
+    "test_inflate_alloc.js",
     "test_reader_v1_seek.js",
     "test_reader_v2.js",
     "test_reader_factory.js",
