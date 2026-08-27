@@ -17,6 +17,8 @@ decisión, pero no definen el backlog ni los valores actuales.
 | [`PLAN-UNIFICADO-TIERS-E-INTERVENCION.md`](PLAN-UNIFICADO-TIERS-E-INTERVENCION.md) | cola de optimización por fases, colisiones resueltas y protocolo de medición |
 | [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | ejecución tarea por tarea: archivos, líneas, verificación y criterio de cierre |
 | [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) | estado vivo de la ejecución: qué está cerrado, en curso y bloqueado, y sobre qué código |
+| [`../CLAUDE.md`](../CLAUDE.md) | guía de arranque de sesión: orden de lectura post-compact, modelo de trabajo y ayuda-memoria de invariantes |
+| [`ejecutados/`](ejecutados/README.md) | archivo de lotes cerrados con su evidencia; lo terminado sale del estado vivo y queda acá |
 | [`MAPA-DEL-PROYECTO.md`](MAPA-DEL-PROYECTO.md) | grafo de composición, flujo, contratos e invariantes: el punto de entrada de una sesión nueva |
 | [`DISENO-INTERVENCION-MATRICIAL.md`](DISENO-INTERVENCION-MATRICIAL.md) | diseño de INT-001: paleta reservada, glifos, slots, canal en vivo y runtime |
 | [`REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md) | bitácora append-only: contexto, medición, conclusión y alcance por instancia |

@@ -20,6 +20,7 @@ Reglas de uso:
 | planificación | 2026-08-27 | snapshot ZIP `ASCILINE-video-main` (referencias `archivo:línea` del runbook corresponden a este árbol) | auditoría, diseño INT-001, plan y runbook; sin cambios de código |
 | implementación 1 | 2026-08-27 | mismo snapshot, git local `5493455` (baseline) | 8 tareas cerradas; parches en `entrega-2026-08-27/patches/`, aplicables con `git am` sobre el repo real |
 | sincronización | 2026-08-27 | clon real en `Escritorio\\repo` (baseline == snapshot, verificado) | `git am` no se aplicó; los 22 archivos finales se escribieron directo en el árbol de trabajo. Historia por tarea preservada solo en los parches; el repo la recibe como un commit |
+| implementación 2 | 2026-08-27 | clon real de GitHub, `906b010` | máquina sin Python/Node **a propósito**: la regresión se valida en GitHub Actions en cada push; commits directos a `main`, un commit por tarea |
 
 > Al iniciar cada sesión de implementación: agregar una fila con el commit o snapshot
 > sobre el que se trabaja. Si el árbol cambió desde el 2026-08-27, localizar las
@@ -30,7 +31,7 @@ Reglas de uso:
 | ID | Tarea | Estado | Commit | Fecha | Notas |
 |---|---|---|---|---|---|
 | P-01 | ramas y línea base | cerrada (adaptada) | `5493455` | 2026-08-27 | sin repo real: git local sobre el snapshot, un commit por tarea con ID; regresión base 115+11 en verde |
-| P-02 | congelar las dos referencias | parcial | `5493455` | 2026-08-27 | `synthetic.baseline` congelada: SHA `c29e7728…5d1d7`. **Pendiente: el HQ** (`outputs/clip.asclv` no está en el ZIP; congelarlo antes de tocar más el encoder) |
+| P-02 | congelar las dos referencias | parcial | `5493455` | 2026-08-27 | `synthetic.baseline` congelada: SHA `c29e7728…5d1d7`. **Pendiente: el HQ.** El clip fuente real ya está local en `inputs/TKN-2443-GANADOR- 15seg-.mp4` (no se commitea); encodearlo y congelarlo requiere un entorno con Python (candidato: workflow manual de CI) |
 | P-03 | `tools/bench_ref.py` | cerrada | `bfa2a1f` | 2026-08-27 | fila determinista verificada; PSNR/Oklab con `--source` |
 | P-04 | Zopfli opcional | cerrada | `bf8cd58` | 2026-08-27 | documentado en requirements; instalado y verificado en el entorno de trabajo |
 
@@ -106,14 +107,19 @@ Reglas de uso:
 | 2026-08-27 | el barrido de `tile_size` de E-09 es provisional; el definitivo va en S-4 | el trellis espacial (E-23) cambia la estadística de colores por tile |
 | 2026-08-27 | todo test nuevo se cablea en `tests/run_all.py` y CI en el mismo commit (regla 7) | un test que no corre en la regresión no protege nada |
 | 2026-08-27 | la validación física se mantiene al final (F8), sin prueba de humo intermedia | decisión del operador; el acceso al TV real no condiciona el arranque |
+| 2026-08-27 | validación **solo por CI**: la máquina de trabajo no tiene Python ni Node; una tarea se cierra con el workflow `regression` en verde sobre su push | decisión del operador (no instalar entornos locales); el repo es privado y el plan Free de Actions alcanza de sobra para el volumen de pushes del proyecto |
+| 2026-08-27 | commits directos a `main` (un commit por tarea, ID en el mensaje); las dos ramas del runbook §0.1 quedan sin efecto | decisión del operador; continúa el historial lineal que ya traía el repo |
+| 2026-08-27 | se crea `docs/ejecutados/` (archivo de lotes cerrados) y `CLAUDE.md` en la raíz como guía de arranque post-compact | el estado vivo queda corto y navegable; la evidencia de lo cerrado no se relee en cada sesión |
 
 ## Próxima acción
 
-1. Decidir el mecanismo de continuidad del código y aplicar `entrega-2026-08-27/patches/`
-   al repo real con `git am patches/*.patch` (o copiar `archivos/` encima y commitear).
-2. Completar **P-02**: congelar `outputs/clip.asclv` (SHA-256) — está solo en tu máquina.
-3. Carril E: **E-03** (parámetro `reserved`, default 0). Carril W: **W-06** (reescritura
+1. Carril E: **E-03** (parámetro `reserved`, default 0). Carril W: **W-06** (reescritura
    de `inflate.js`, ahora que W-05 está en verde).
+2. Completar **P-02** (HQ): definir el workflow manual de CI que encodea el clip real y
+   publica el `.asclv` + SHA-256 como artifact descargable.
+
+> El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
+> (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
 Regresión al cierre de esta sesión: **125 pruebas Python y 13 suites JavaScript, en verde**
 (base: 115 y 11).
