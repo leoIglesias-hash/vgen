@@ -75,7 +75,7 @@ Reglas de uso:
 | W-05 | fuzzing permanente de `inflate.js` | cerrada | `14dcaa8` | 2026-08-27 | 4000 mutaciones deterministas + casos dirigidos + bomba; ~300 ms, cableado en run_all. **Desbloquea W-06** |
 | W-06 | `inflate.js` bit-buffer + tabla | cerrada | `ee1d104` | 2026-08-27 | bit-buffer 32 bits + LUT de 9 bits con fallback canónico que conserva los errores históricos exactos; fuzzing W-05 y todas las suites en verde (`c6e55a8`). Medido en CI (`bench-inflate` vs `90e4b43`): corpus total 3.292→1.418 ms (**2,3×**), perfil gradientes 25,5→72,3 MB/s (**2,8×**) |
 | W-07 | cachear buffers de inflate | cerrada | `1856a7c` | 2026-08-27 | árboles lt/dt/código, scratch de longitudes y offs compartidos a nivel módulo; zlib validado sin subarray (decodifica in situ con `d.end`). `test_inflate_alloc.js`: 0 allocaciones tipadas en 50 frames dinámicos, cableado en run_all. CI en verde |
-| W-08 | `tile_size` flexible en `ReaderV2` | pendiente | | | desbloquea artefactos de E-09 |
+| W-08 | `tile_size` flexible en `ReaderV2` | cerrada | `abb1d65` | 2026-08-27 | validación pasa de `==16` a rango 4..32; test con los seis tamaños del barrido de E-09 sobre grilla 37×29 (tiles de borde) decodificados celda a celda + seis inválidos rechazados. **Habilita S-2** (artefactos de E-09). CI en verde |
 | W-09 | una pasada en `_walkRegional` | pendiente | | | conservar validación transaccional |
 | W-10 | `clearBitset` + atajo <256 en v2 | pendiente | | | |
 | W-11 | limpieza de caminos calientes v2 | pendiente | | | |
@@ -89,7 +89,7 @@ Reglas de uso:
 | ID | Qué | Estado | Fecha | Notas |
 |---|---|---|---|---|
 | S-1 | merge de F0 | cerrada | 2026-08-27 | historial lineal en el snapshot; equivale al merge |
-| S-2 | habilitar artefactos `tile_size` ≠ 16 | pendiente | | |
+| S-2 | habilitar artefactos `tile_size` ≠ 16 | cerrada | 2026-08-27 | W-08 en verde: `ReaderV2` abre los seis tamaños; E-09 puede generar artefactos |
 | S-3 | desbloquear E-10 | pendiente | | |
 | S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | pendiente | | |
 | S-5 | runtime del overlay (F7) | pendiente | | |
