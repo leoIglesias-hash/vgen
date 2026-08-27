@@ -600,3 +600,20 @@ total                   3.291,8 ms        1.417,7 ms        2,3x
   (4000 mutaciones + dirigidos + bomba) y todas las suites de readers en verde.
 - Alcance: medición en runner x64 de CI; la cifra absoluta en TV será otra,
   la relación debería sostenerse. Revalidar en F8 (validación física).
+
+## Instancia 009 - E-06: glifos horneados e inspeccion visual
+
+Fecha: 2026-08-27, commits `bc57e04` + `b0c2058` (normalizacion al pico).
+
+- Tabla de referencia 8x12 (workflow `bake-glyphs`, DejaVuSansMono de
+  ubuntu-latest): 11 glifos, 1.056 bytes, SHA-256
+  `2ee438f4558832c31d8c8bb57a9939b73a65d6df11a9b18a1d906897f533042c`.
+  Dos corridas byte-identicas verificadas con `cmp` dentro del mismo run.
+- **Inspeccion visual (una vez, como exige el runbook): aprobada.** Los diez
+  digitos son legibles a 8x12 celdas, el antialias 247..250 suaviza bordes sin
+  ensuciar el trazo 251, el fondo 246 es uniforme y el glifo 10 es todo 255.
+- Decision de diseno: la cobertura se normaliza al pico de cada glifo antes de
+  cuantizar (division entera). Sin esto, trazos mas finos que una celda (el 5
+  a 8x12) nunca alcanzan "texto pleno". La tabla depende de la fuente y el
+  tamano: la tabla que se embeba en produccion debe regenerarse y registrarse
+  con su SHA en el entorno que la emita.

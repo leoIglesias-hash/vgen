@@ -44,7 +44,7 @@ Reglas de uso:
 | E-03 | `reserved` cableado, default 0 | cerrada | `08234f1` | 2026-08-27 | cableado en las 9 funciones de la cadena de paleta; byte-identidad con `reserved=0` verificada por test en los tres caminos (global/adaptive/per-frame); `pal_size >= reserved+22`; `reserved>0` lanza `NotImplementedError` hasta E-04 (guard anti no-op). CI `regression` #9 en verde |
 | E-04 | exclusión del rango reservado (8 funciones) | cerrada | `8badec4`+`c6e55a8` | 2026-08-27 | reserva centralizada en `make_global_palette`: base `pal_size-reserved` + `reserved_colors` del operador estampadas al final (INV-4); cuantizadores, pal_img y PairLUT del dither solo ven la base (INV-3 por construcción). Test 4 estrategias × 4 modos + dither. El CI atrapó el desajuste dither/paleta y se corrigió (`c6e55a8`); regresión en verde |
 | E-05 | rects protegidos en dither | cerrada | `7879f05` | 2026-08-27 | `rects_mask` + `protected_rects` en `selective_tile_mask` y `apply_selective_dither`; rects fuera de grilla rechazados; sin rects la salida es byte-idéntica (test). CI en verde |
-| E-06 | horneado de glifos | pendiente | | | |
+| E-06 | horneado de glifos | cerrada | `bc57e04`+`b0c2058` | 2026-08-27 | `tools/bake_glyphs.py`: supersample 8×, cobertura normalizada al pico del glifo (entera), cuantización a 246..251, glifo 10 transparente. Dos corridas byte-idénticas verificadas con `cmp` en CI; tabla 8×12 SHA `2ee438f4…042c` (workflow `bake-glyphs`). **Inspección visual aprobada** (dígitos legibles, antialias correcto) y anotada en el registro. CI en verde |
 | E-07 | sidecar `ASCLSLOT` | pendiente | | | cierra F1 |
 | E-08 | Zopfli en 5 puntos, simultáneo | pendiente | | | |
 | E-09 | `tile_size` parametrizado + barrido provisional | pendiente | | | artefactos ≠16 recién tras S-2 |
@@ -115,8 +115,9 @@ Reglas de uso:
 
 ## Próxima acción
 
-1. Carril W: **W-08** (`tile_size` flexible en `ReaderV2`; desbloquea artefactos de E-09).
-2. Carril E: **E-06** (horneado de glifos, `tools/bake_glyphs.py`).
+1. Carril E: **E-07** (generador y validador del sidecar `ASCLSLOT`; cierra F1).
+2. Carril W: **W-09** (una sola pasada en `_walkRegional`, conservando la validación
+   transaccional).
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
