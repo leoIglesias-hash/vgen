@@ -1026,8 +1026,13 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                                                    reserved=reserved,
                                                    reserved_colors=reserved_colors)
         if dither_mode != "off":
+            # La misma paleta base que construyo el PairLUT: el dither no ve
+            # ni propone entradas reservadas (INV-3).
             cells, dither_details = apply_dither_mode(
-                rgb, cells, active_palette, dither_mode, dither_matrix,
+                rgb, cells,
+                (active_palette[:len(active_palette) - reserved]
+                 if reserved else active_palette),
+                dither_mode, dither_matrix,
                 pair_lut=dither_lut, temporal_state=dither_state,
                 dither_budget=dither_budget,
                 dither_min_improvement=dither_min_improvement,
