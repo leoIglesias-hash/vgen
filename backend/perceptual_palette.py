@@ -443,8 +443,9 @@ def build_perceptual_palette(sample_imgs, pal_size, previous_palette=None,
     ``temporal_strength`` (0..1) interpola los centros nuevos con los anteriores.
     Cero conserva solo un orden determinista; valores bajos como 0.1..0.25 son un
     punto de partida razonable para evitar parpadeo sin congelar cambios reales.
-    ``reserved`` (INT-001) declara cuantas entradas finales quedan fuera del
-    video base; con 0 el comportamiento es identico al historico.
+    ``reserved`` existe como guard de mal uso (INT-001): la reserva se resuelve
+    en ``encoder.make_global_palette``, que llama a este builder con el
+    ``pal_size`` ya reducido; pasarle reserved>0 directo es un error.
     """
     pal_size = int(pal_size)
     if not (1 <= pal_size <= 256):
@@ -453,8 +454,9 @@ def build_perceptual_palette(sample_imgs, pal_size, previous_palette=None,
     if reserved < 0:
         raise ValueError("reserved debe ser >= 0")
     if reserved > 0:
-        raise NotImplementedError(
-            "reserved>0: la exclusion del rango reservado se implementa en E-04")
+        raise ValueError(
+            "reserved se resuelve en make_global_palette; este builder recibe "
+            "pal_size ya reducido")
     max_samples = int(max_samples)
     if max_samples < pal_size:
         raise ValueError("max_samples debe ser >= pal_size")
