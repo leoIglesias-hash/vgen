@@ -21,6 +21,7 @@ JS_SUITES = (
     "test_inflate_alloc.js",
     "test_reader_v1_seek.js",
     "test_reader_v2.js",
+    "test_reader_v2_tilesize.js",
     "test_reader_factory.js",
     "test_player_page.js",
     "test_frontend_compatibility.js",

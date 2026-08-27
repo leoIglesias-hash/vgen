@@ -173,7 +173,9 @@
     if (h.cellFmt !== 3) fail("cell_fmt invalido");
     if (h.dataOff !== HEADER_SIZE) fail("data_off invalido");
     if (!h.charAspect) fail("char aspect invalido");
-    if (h.tileSize !== 16) fail("el prototipo requiere tile_size 16");
+    /* W-08: tile_size flexible; el resto del reader ya es generico y el
+     * limite de tiles uint16 se valida abajo. Rango del barrido de E-09. */
+    if (h.tileSize < 4 || h.tileSize > 32) fail("tile_size fuera de rango 4..32");
     if (h.codecFlags !== 1) fail("codec_flags no soportados");
     n = h.cols * h.rows;
     if (n > MAX_STATE_BYTES) fail("dimensiones exceden limite operativo");
