@@ -58,6 +58,8 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
 
 ## Estado de fases (resumen grueso — el detalle vive en RUNBOOK-ESTADO)
 
-- ✅ F0 (base congelada) · W-01..05 (gate ES5, seek v1, scratch, fuzzing inflate)
-- ▶ En curso: carril E desde **E-03**, carril W desde **W-06**
-- Pendiente: F1 (paleta reservada+glifos+sidecar), F2, F3, F5, F4 (resto), F6, F7, F8
+- ✅ F0 (base congelada) · W-01..05 · **F1 completa** (E-03..07: paleta reservada,
+  glifos, sidecar) · W-06..08 (inflate 2,3× + 0 allocs, tile_size flexible) · S-2 ·
+  P-02 (referencia HQ reproducible vía workflow `encode`)
+- ▶ En curso: carril E desde **E-08** (Zopfli), carril W desde **W-09**
+- Pendiente: F2 (resto), F3, F5, F4 (resto), F6, F7, F8

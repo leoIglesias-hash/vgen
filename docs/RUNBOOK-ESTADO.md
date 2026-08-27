@@ -45,7 +45,7 @@ Reglas de uso:
 | E-04 | exclusión del rango reservado (8 funciones) | cerrada | `8badec4`+`c6e55a8` | 2026-08-27 | reserva centralizada en `make_global_palette`: base `pal_size-reserved` + `reserved_colors` del operador estampadas al final (INV-4); cuantizadores, pal_img y PairLUT del dither solo ven la base (INV-3 por construcción). Test 4 estrategias × 4 modos + dither. El CI atrapó el desajuste dither/paleta y se corrigió (`c6e55a8`); regresión en verde |
 | E-05 | rects protegidos en dither | cerrada | `7879f05` | 2026-08-27 | `rects_mask` + `protected_rects` en `selective_tile_mask` y `apply_selective_dither`; rects fuera de grilla rechazados; sin rects la salida es byte-idéntica (test). CI en verde |
 | E-06 | horneado de glifos | cerrada | `bc57e04`+`b0c2058` | 2026-08-27 | `tools/bake_glyphs.py`: supersample 8×, cobertura normalizada al pico del glifo (entera), cuantización a 246..251, glifo 10 transparente. Dos corridas byte-idénticas verificadas con `cmp` en CI; tabla 8×12 SHA `2ee438f4…042c` (workflow `bake-glyphs`). **Inspección visual aprobada** (dígitos legibles, antialias correcto) y anotada en el registro. CI en verde |
-| E-07 | sidecar `ASCLSLOT` | pendiente | | | cierra F1 |
+| E-07 | sidecar `ASCLSLOT` | cerrada | `1d46353` | 2026-08-27 | `make_slots.py` + `slots.js` (espejo ES5); 8 fixtures negativos compartidos con veredicto idéntico en ambos validadores; sin carga parcial; CRC + verificación cruzada `reserved_rgb`. **Cierra F1** (resumen en `ejecutados/`). CI en verde |
 | E-08 | Zopfli en 5 puntos, simultáneo | pendiente | | | |
 | E-09 | `tile_size` parametrizado + barrido provisional | pendiente | | | artefactos ≠16 recién tras S-2 |
 | E-10 | keyframes en cortes de escena | bloqueada (W-02) | | | además: habilitar `need_color_descriptor` |
@@ -115,7 +115,8 @@ Reglas de uso:
 
 ## Próxima acción
 
-1. Carril E: **E-07** (generador y validador del sidecar `ASCLSLOT`; cierra F1).
+1. Carril E: **E-08** (Zopfli en los 5 puntos, simultáneo — los tres archivos en el
+   mismo commit; cuidar la simetría de compresor en `transcode_ascl_bytes`).
 2. Carril W: **W-09** (una sola pasada en `_walkRegional`, conservando la validación
    transaccional).
 

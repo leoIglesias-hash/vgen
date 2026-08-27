@@ -21,3 +21,4 @@ Reglas:
 |---|---|---|
 | 2026-08-27 | F0: base congelada (P-01..P-04, E-01, E-02, S-1) | [`2026-08-27-F0-base-congelada.md`](2026-08-27-F0-base-congelada.md) |
 | 2026-08-27 | Frontend W-01..W-05 (gate ES5, seek v1, scratch, fuzzing) | [`2026-08-27-W01-05-frontend.md`](2026-08-27-W01-05-frontend.md) |
+| 2026-08-27 | F1: paleta reservada + glifos + sidecar (E-03..E-07) | [`2026-08-27-F1-paleta-reservada-glifos-sidecar.md`](2026-08-27-F1-paleta-reservada-glifos-sidecar.md) |
