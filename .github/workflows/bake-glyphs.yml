@@ -1,0 +1,43 @@
+name: bake-glyphs
+
+# Genera la tabla de glifos (E-06) y su PNG de inspeccion visual como
+# artifacts. Manual: la inspeccion se hace una vez y se anota en el registro.
+
+on:
+  workflow_dispatch:
+    inputs:
+      glyph_w:
+        default: "8"
+      glyph_h:
+        default: "12"
+
+permissions:
+  contents: read
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -r backend/requirements.txt
+      - name: Hornear glifos (dos corridas, bytes identicos)
+        run: |
+          python tools/bake_glyphs.py --glyph-w "${{ inputs.glyph_w }}" \
+            --glyph-h "${{ inputs.glyph_h }}" \
+            --out outputs/glyphs.bin --png outputs/glyphs.png
+          python tools/bake_glyphs.py --glyph-w "${{ inputs.glyph_w }}" \
+            --glyph-h "${{ inputs.glyph_h }}" --out outputs/glyphs-2.bin
+          cmp outputs/glyphs.bin outputs/glyphs-2.bin
+          sha256sum outputs/glyphs.bin | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glyphs
+          path: |
+            outputs/glyphs.bin
+            outputs/glyphs.png
+          retention-days: 30
