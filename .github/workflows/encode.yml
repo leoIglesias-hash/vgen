@@ -1,0 +1,110 @@
+name: encode
+
+# Encodea un video fuente en la nube y publica el .asclv + preview MP4 como
+# artifacts descargables. Se lanza a mano desde la pestaña Actions ("Run workflow").
+#
+# El video fuente NO vive en main (política de .gitignore): se lee de la rama
+# huérfana `assets`, carpeta inputs/. Defaults = perfil HQ de producción
+# (graphic-hq 768, adaptive kmeans-oklab, dither auto, v2).
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Archivo dentro de inputs/ de la rama assets"
+        default: "TKN-2443-GANADOR- 15seg-.mp4"
+        required: true
+      profile:
+        description: "Perfil (custom/detail/balanced/graphic/graphic-hq/graphic-ultra/color)"
+        default: "graphic-hq"
+      fps:
+        default: "15"
+      palette:
+        description: "per-frame / global / block / adaptive"
+        default: "adaptive"
+      algorithm:
+        description: "median-cut / fast-octree / kmeans-rgb / kmeans-oklab"
+        default: "kmeans-oklab"
+      dither:
+        default: "auto"
+      format:
+        description: "v1 / v2"
+        default: "v2"
+      extra:
+        description: "Flags extra para make_clip.py (opcional)"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  encode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+      - name: Checkout rama assets (videos fuente)
+        uses: actions/checkout@v4
+        with:
+          ref: assets
+          path: assets-src
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Dependencias del encoder
+        run: python -m pip install -r backend/requirements.txt
+      - name: Encode
+        run: |
+          mkdir -p outputs work
+          SRC="assets-src/inputs/${{ inputs.source }}"
+          if [ ! -f "$SRC" ]; then
+            echo "::error::No existe $SRC en la rama assets. Subir el video a esa rama primero."
+            exit 1
+          fi
+          python backend/make_clip.py "$SRC" \
+            --format "${{ inputs.format }}" \
+            --profile "${{ inputs.profile }}" \
+            --fps "${{ inputs.fps }}" \
+            --palette "${{ inputs.palette }}" \
+            --palette-algorithm "${{ inputs.algorithm }}" \
+            --dither "${{ inputs.dither }}" \
+            ${{ inputs.extra }} \
+            --out outputs/clip.asclv
+      - name: Medición (bench_ref) y SHA-256
+        run: |
+          python tools/bench_ref.py outputs/clip.asclv \
+            --source "assets-src/inputs/${{ inputs.source }}" | tee bench.md
+          sha256sum outputs/clip.asclv | tee sha256.txt
+          {
+            echo "## Resultado del encode"
+            echo ""
+            echo "Fuente: \`${{ inputs.source }}\` · perfil \`${{ inputs.profile }}\` · ${{ inputs.fps }} fps · ${{ inputs.palette }}/${{ inputs.algorithm }} · dither ${{ inputs.dither }} · ${{ inputs.format }}"
+            echo ""
+            cat bench.md
+            echo ""
+            echo '```'
+            cat sha256.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preview MP4
+        run: |
+          python backend/ascl_bundle.py unpack outputs/clip.asclv work
+          python backend/ascl_decode.py work/clip.ascl --mp4 outputs/preview.mp4 --no-preview
+      - name: Publicar clip.asclv + medición
+        uses: actions/upload-artifact@v4
+        with:
+          name: clip-asclv
+          path: |
+            outputs/clip.asclv
+            bench.md
+            sha256.txt
+          retention-days: 14
+      - name: Publicar preview.mp4
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-mp4
+          path: outputs/preview.mp4
+          retention-days: 14

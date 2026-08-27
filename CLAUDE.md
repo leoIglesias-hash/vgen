@@ -22,8 +22,12 @@ el TV nunca cuantiza ni decide, solo ejecuta.
 - Al cerrar una tarea: actualizar su fila en `RUNBOOK-ESTADO.md`; al cerrar una fase o
   lote, sumar el resumen a `docs/ejecutados/`.
 - Todo test nuevo se cablea en `tests/run_all.py` **en el mismo commit** (regla 7).
-- Los videos de producto **no se commitean** (`.gitignore` ya lo impone). El clip HQ
-  fuente vive solo local: `inputs/TKN-2443-GANADOR- 15seg-.mp4`.
+- Los videos de producto **no se commitean a `main`** (`.gitignore` ya lo impone). El
+  clip HQ fuente vive local en `inputs/TKN-2443-GANADOR- 15seg-.mp4` y en la rama
+  huérfana **`assets`** del repo (solo insumos de encode).
+- **Generar un clip para ver:** workflow `encode` (Actions → encode → Run workflow).
+  Encodea desde la rama `assets` con el perfil HQ por defecto y publica `clip.asclv`,
+  la fila de `bench_ref`, el SHA-256 y un `preview.mp4` como artifacts descargables.
 
 ## Ayuda-memoria — no perder de vista nunca
 

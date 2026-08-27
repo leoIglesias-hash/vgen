@@ -115,8 +115,10 @@ Reglas de uso:
 
 1. Carril E: **E-03** (parámetro `reserved`, default 0). Carril W: **W-06** (reescritura
    de `inflate.js`, ahora que W-05 está en verde).
-2. Completar **P-02** (HQ): definir el workflow manual de CI que encodea el clip real y
-   publica el `.asclv` + SHA-256 como artifact descargable.
+2. Completar **P-02** (HQ): el workflow manual `encode` ya existe
+   (`.github/workflows/encode.yml`); falta subir el video fuente a la rama `assets`
+   (bloqueado desde esta sesión por permisos; el operador puede subirlo por la web de
+   GitHub) y correrlo una vez para congelar SHA-256 y fila base.
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
