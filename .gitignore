@@ -17,6 +17,9 @@ inputs/*
 # viven en tests/fixtures, no en la carpeta publica de salida.
 outputs/*
 
+# Fixtures generados por la suite Python para la suite JS (E-07)
+tests/fixtures/slots-generated/
+
 # Temporales del sistema y editores
 .DS_Store
 Thumbs.db
