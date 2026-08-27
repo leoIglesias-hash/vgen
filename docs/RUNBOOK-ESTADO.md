@@ -42,7 +42,7 @@ Reglas de uso:
 | E-01 | `lexsort` en rama OpenCV | cerrada | `6b6b65a` | 2026-08-27 | ambas ramas ordenan vía `_sort_palette_centers`; test de paridad. **El SHA de artefactos kmeans-rgb con cv2 cambia** (nuevo canónico del sintético: `9cc88e55…`); RGB verificado byte-idéntico en 40/40 frames |
 | E-02 | endurecer herramientas offline | cerrada | `d3f2bfd` | 2026-08-27 | los 7 puntos del runbook + 6 fixtures de corrupción. El fixture de benchmark declaraba flags no canónicos (per-frame + DELTA) y se corrigió a per-scene. Cierra F0 (encoder) |
 | E-03 | `reserved` cableado, default 0 | cerrada | `08234f1` | 2026-08-27 | cableado en las 9 funciones de la cadena de paleta; byte-identidad con `reserved=0` verificada por test en los tres caminos (global/adaptive/per-frame); `pal_size >= reserved+22`; `reserved>0` lanza `NotImplementedError` hasta E-04 (guard anti no-op). CI `regression` #9 en verde |
-| E-04 | exclusión del rango reservado (8 funciones) | pendiente | | | |
+| E-04 | exclusión del rango reservado (8 funciones) | cerrada | `8badec4`+`c6e55a8` | 2026-08-27 | reserva centralizada en `make_global_palette`: base `pal_size-reserved` + `reserved_colors` del operador estampadas al final (INV-4); cuantizadores, pal_img y PairLUT del dither solo ven la base (INV-3 por construcción). Test 4 estrategias × 4 modos + dither. El CI atrapó el desajuste dither/paleta y se corrigió (`c6e55a8`); regresión en verde |
 | E-05 | rects protegidos en dither | pendiente | | | |
 | E-06 | horneado de glifos | pendiente | | | |
 | E-07 | sidecar `ASCLSLOT` | pendiente | | | cierra F1 |
@@ -73,7 +73,7 @@ Reglas de uso:
 | W-03 | rollback transaccional de `seek()` v1 | cerrada | `094f0a3` | 2026-08-27 | frame corrupto deja el reader consistente; test incluido |
 | W-04 | `_scratch` proporcional, 1 reintento | cerrada | `edc07c4` | 2026-08-27 | **desvío del runbook** (ver bitácora): reservar `_scratchMax` rompía el contrato adaptativo testeado; en su lugar, primer desborde → camino dinámico una vez. 2 pasadas máx (antes 4), RAM proporcional |
 | W-05 | fuzzing permanente de `inflate.js` | cerrada | `14dcaa8` | 2026-08-27 | 4000 mutaciones deterministas + casos dirigidos + bomba; ~300 ms, cableado en run_all. **Desbloquea W-06** |
-| W-06 | `inflate.js` bit-buffer + tabla | pendiente | | | |
+| W-06 | `inflate.js` bit-buffer + tabla | cerrada | `ee1d104` | 2026-08-27 | bit-buffer 32 bits + LUT de 9 bits con fallback canónico que conserva los errores históricos exactos; fuzzing W-05 y todas las suites en verde (`c6e55a8`). Medido en CI (`bench-inflate` vs `90e4b43`): corpus total 3.292→1.418 ms (**2,3×**), perfil gradientes 25,5→72,3 MB/s (**2,8×**) |
 | W-07 | cachear buffers de inflate | pendiente | | | |
 | W-08 | `tile_size` flexible en `ReaderV2` | pendiente | | | desbloquea artefactos de E-09 |
 | W-09 | una pasada en `_walkRegional` | pendiente | | | conservar validación transaccional |
@@ -115,9 +115,8 @@ Reglas de uso:
 
 ## Próxima acción
 
-1. Carril E: **E-04** (exclusión del rango reservado en las ocho funciones; reemplaza el
-   guard `NotImplementedError` de E-03 y su test).
-2. Carril W: **W-06** (reescritura de `inflate.js` con bit-buffer y tabla; W-05 en verde).
+1. Carril E: **E-05** (rects protegidos en el dither).
+2. Carril W: **W-07** (cachear los buffers de inflate a nivel módulo).
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.

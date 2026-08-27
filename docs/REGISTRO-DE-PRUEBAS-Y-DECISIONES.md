@@ -573,3 +573,30 @@ mismo run).
   (`BENCHMARK-V2-HQ-768.md`) siguen siendo válidos para su clip (TKN-2441).
 - Alcance: perfil graphic-hq 768 con estos parámetros exactos. Cambios de grilla, FPS,
   paleta o dither exigen una fila nueva.
+
+## Instancia 008 - W-06: inflate.js con bit-buffer y tabla de 9 bits
+
+Fecha: 2026-08-27, commits `ee1d104` (+ regresión verde en `c6e55a8`).
+
+### Medición
+
+Workflow `bench-inflate` (ubuntu-latest, Node 20), corpus determinista de
+`tools/bench_inflate.js`, 300 repeticiones, HEAD `ee1d104` vs baseline `90e4b43`:
+
+```text
+                          baseline          W-06            mejora
+rachas   253 KiB          357,5 ms          360,9 ms        ~igual
+gradien  253 KiB        2.904,1 ms        1.025,9 ms        2,8x  (25,5 -> 72,3 MB/s)
+ruido     64 KiB           30,3 ms           31,0 ms        ~igual
+total                   3.291,8 ms        1.417,7 ms        2,3x
+```
+
+### Conclusión y alcance
+
+- La ganancia se concentra donde el runbook la predijo: payloads dominados por
+  decodificación Huffman (gradientes con dither, el perfil real del ASCL HQ).
+  Rachas y ruido están dominados por la copia LZ77/stored y no cambian.
+- Salida byte-idéntica garantizada por la regresión completa: fuzzing W-05
+  (4000 mutaciones + dirigidos + bomba) y todas las suites de readers en verde.
+- Alcance: medición en runner x64 de CI; la cifra absoluta en TV será otra,
+  la relación debería sostenerse. Revalidar en F8 (validación física).
