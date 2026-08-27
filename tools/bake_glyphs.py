@@ -97,6 +97,13 @@ def bake(glyph_w, glyph_h, font_path=None):
     glyphs = []
     for digit in range(10):
         coverage = render_digit(digit, glyph_w, glyph_h, font)
+        peak = int(coverage.max())
+        if peak == 0:
+            raise SystemExit("el digito %d se rendereo vacio; "
+                             "fuente o tamano inadecuados" % digit)
+        # Normalizar al pico del glifo (entera, determinista): el trazo
+        # principal siempre alcanza "texto" aunque sea mas fino que una celda.
+        coverage = (coverage * 255) // peak
         quantized = quantize_coverage(coverage)
         if not (quantized == IDX_TEXT).any():
             raise SystemExit("el digito %d no produjo texto pleno; "
