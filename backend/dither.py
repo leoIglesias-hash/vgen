@@ -169,13 +169,33 @@ def _exact_nonnegative_sum(values, chunk_size=65536):
     return total
 
 
+def rects_mask(shape, rects):
+    """Convierte rects ``(x0, y0, w, h)`` en celdas a una mascara HxW (E-05).
+
+    Un rect fuera de la grilla se rechaza: es el mismo criterio que aplicara
+    el validador del sidecar de slots (INT-001 §6.3).
+    """
+    mask = np.zeros(shape, dtype=bool)
+    height, width = shape
+    for rect in rects:
+        x0, y0, rect_w, rect_h = (int(value) for value in rect)
+        if (x0 < 0 or y0 < 0 or rect_w <= 0 or rect_h <= 0 or
+                x0 + rect_w > width or y0 + rect_h > height):
+            raise ValueError("rect fuera de la grilla: %r" % (rect,))
+        mask[y0:y0 + rect_h, x0:x0 + rect_w] = True
+    return mask
+
+
 def selective_tile_mask(rgb, baseline, palette, protected=None, tile_size=DEFAULT_TILE_SIZE,
                         min_range=8, max_protected_fraction=0.10,
-                        max_mean_gradient=12.0, min_quantization_mse=2.0):
+                        max_mean_gradient=12.0, min_quantization_mse=2.0,
+                        protected_rects=None):
     """Selecciona tiles suaves con variacion continua y error de cuantizacion.
 
     Es intencionalmente conservador: una region plana no necesita tramado y un tile
     con demasiados bordes se deja exactamente como la cuantizacion normal.
+    ``protected_rects`` (E-05) suma rectangulos declarados a la mascara
+    protegida: ninguna celda dentro de un rect puede ser tramada.
     """
     rgb = _validate_rgb(rgb)
     baseline = np.asarray(baseline, dtype=np.uint8)
@@ -195,6 +215,9 @@ def selective_tile_mask(rgb, baseline, palette, protected=None, tile_size=DEFAUL
         protected = np.asarray(protected, dtype=bool)
     if protected.shape != baseline.shape:
         raise ValueError("protected debe tener forma HxW")
+    if protected_rects:
+        # copia deliberada: no mutar la mascara del caller
+        protected = protected | rects_mask(baseline.shape, protected_rects)
 
     lum = _luminance(rgb)
     recon = palette[baseline]
@@ -692,8 +715,13 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
 
 def apply_selective_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None,
                            tile_size=DEFAULT_TILE_SIZE, return_details=False,
-                           min_gradient_range=8, base_quantizer=None):
-    """Aplica Bayer solo en gradientes aptos y conserva Q0 en bordes protegidos."""
+                           min_gradient_range=8, base_quantizer=None,
+                           protected_rects=None):
+    """Aplica Bayer solo en gradientes aptos y conserva Q0 en bordes protegidos.
+
+    ``protected_rects`` (E-05): rectangulos ``(x0, y0, w, h)`` en celdas que se
+    suman a la mascara protegida; sus celdas conservan Q0 exactamente.
+    """
     rgb = _validate_rgb(rgb)
     baseline = np.asarray(baseline, dtype=np.uint8)
     palette = np.asarray(palette, dtype=np.uint8)
@@ -705,6 +733,8 @@ def apply_selective_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None,
     pair_lut = _resolve_pair_lut(palette, pair_lut, base_quantizer)
 
     protected = edge_mask(rgb)
+    if protected_rects:
+        protected = protected | rects_mask(baseline.shape, protected_rects)
     eligible = selective_tile_mask(rgb, baseline, palette, protected,
                                     tile_size=tile_size,
                                     min_range=min_gradient_range)
