@@ -1034,3 +1034,42 @@ Si el operador quiere paridad PSNR en global, el knob natural es exponer
 el `gradient_boost` del agregado (pendiente opcional, no bloquea F3).
 Bytes +8,3 % en global sin zopfli: consecuencia de la paleta más fiel a
 gradientes (más entropía de índices); no afecta al producto.
+
+## Instancia 021 - E-15: estabilidad temporal para los cuatro algoritmos
+
+Implementación en `91a0e68` (CI en verde: 239 pruebas Python + 26 suites
+JS). `_stabilize_rgb_palette` alinea 1:1 la paleta nueva con la del bloque
+anterior reutilizando el `_align_to_previous` genérico sobre los valores
+RGB exactos (permutación sin pérdida: conserva el significado de los
+índices y las cadenas DELTA) y fusiona hacia la previa según
+`temporal_strength`. Aplicada en `make_global_palette` (kmeans-rgb,
+median-cut, fast-octree — con `pal_img` reconstruida) y en el per-frame de
+median-cut; `encode_video` calcula descriptor y estabilidad per-frame para
+los 4 algoritmos (antes solo kmeans-oklab). kmeans-rgb —el default de
+make_clip— deja de ir sin estabilización.
+
+**Error temporal en fronteras de bloque** (cierre del runbook), medido por
+`test_palette_temporal_all.py` sobre stream sintético de gradientes
+(valores impresos en el log del CI de `91a0e68`):
+
+```text
+fast-octree : antes=58.417  despues=4.333   (−93 %)
+kmeans-rgb  : antes=2.917   despues=2.021   (−31 %)
+per-frame   : antes=0.993   despues=0.993   (los centros ordenados ya alineaban en el sintético)
+```
+
+Δbytes sobre el clip real (768 graphic-hq, adaptive, kmeans-rgb, dither
+auto, v2, sin zopfli):
+
+```text
+antes  (run 33213974855): | clip.asclv | 18855007 | 19038376 | 0.2460 | 231 | 91 | 9 | ZLIB:91;DELTA_MASK:129;RDELTA_RAW:1;RDELTA_ZLIB:10 | 36.74 | 0.00967 | 7e35dc82f2eddd1f910502bd66651161893443e28000ad51ef11c226892748f0 |
+despues (run 33214345845): | clip.asclv | 18616144 | 18799513 | 0.2429 | 231 | 95 | 9 | ZLIB:95;DELTA_MASK:131;RDELTA_RAW:1;RDELTA_ZLIB:4 | 35.70 | 0.01066 | 9c7db07e2487e4c50e29eecdfe44c8568bbccf9bdc83aed20365b20c7d4cefb1 |
+```
+
+**Bytes −1,25 %** y RDELTA_ZLIB 10 → 4 (índices estables entre bloques =
+regionales v2 más baratos). Costo estático del blending: PSNR −1,04 dB y
+Oklab +10 % — es la retención de hasta 25 % de paleta previa
+(`adaptive_stability_max`, default 0,25), exactamente la semántica que
+kmeans-oklab ya aplicaba por diseño; con `--adaptive-stability-max 0`
+queda solo la alineación (permutación pura, sin costo de fidelidad). El
+producto (kmeans-oklab) no cambia de bytes por esta tarea.

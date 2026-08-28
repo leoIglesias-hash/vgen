@@ -118,12 +118,18 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   Pillow/RGB reproducen byte a byte el muestreo histórico. Instancia 020:
   **RSS 886 → 433 MB (−51 %)**, Oklab −4,5 %, PSNR RGB −0,27 dB (desvío
   registrado en bitácora; global no es el modo de producto).
-- ▶ **Próxima acción: E-15** (estabilidad temporal para los cuatro
-  algoritmos; kmeans-rgb — el default de make_clip — hoy no tiene
-  ninguna). Decisión abierta: si el operador retoma el 960, re-medirlo
-  con refit 5 (el viejo 960 sin refit quedó superado por el 768 refit 5).
+- ✅ **E-15 (estabilidad temporal ×4, 2026-08-28)**: `_stabilize_rgb_palette`
+  (`91a0e68`) — alineación 1:1 + fusión por `temporal_strength` en
+  kmeans-rgb/median-cut/fast-octree (block, adaptive y per-frame).
+  Instancia 021: fronteras −31 %/−93 % en sintético; clip real kmeans-rgb
+  −1,25 % bytes, PSNR −1,04 dB por el blending (knob
+  `--adaptive-stability-max 0` = solo alineación). Producto sin cambios.
+- ▶ **Próxima acción: E-16** (`PairLUT` exacto en dither.py: hoy el
+  dither se apaga en silencio donde la aproximación 555 elige otra base
+  que el cuantizador real). Decisión abierta: si el operador retoma el
+  960, re-medirlo con refit 5.
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).
-- Pendiente: F3 (E-15..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
+- Pendiente: F3 (E-16..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8
