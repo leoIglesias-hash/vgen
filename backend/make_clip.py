@@ -61,6 +61,9 @@ def main(argv=None):
     p.add_argument("--palette-refit", type=int, default=0,
                    help="E-12: iteraciones de refit de paleta a la asignacion "
                         "real (0=off, 3..5 tipico, max 10)")
+    p.add_argument("--palette-uint8-refine", type=int, default=0,
+                   help="E-13: iteraciones del cierre de Lloyd en dominio "
+                        "uint8, solo kmeans-oklab (0=off, 2..5 tipico, max 10)")
     p.add_argument("--threshold", type=int, default=0,
                    help="T perceptual RGB (0=lossless); pixel con paleta global/block")
     p.add_argument("--ramp", default="short")
@@ -121,7 +124,8 @@ def main(argv=None):
                                         dither_min_improvement=args.dither_min_improvement,
                                         dither_window=args.dither_window,
                                         reserved=args.reserved,
-                                        palette_refit=args.palette_refit)
+                                        palette_refit=args.palette_refit,
+                                        palette_uint8_refine=args.palette_uint8_refine)
     except ValueError as exc:
         p.error(str(exc))
     if args.reserved and args.image:
@@ -204,6 +208,7 @@ def main(argv=None):
                                     dither_window=args.dither_window,
                                     scene_keyframes=args.scene_keyframes,
                                     palette_refit=args.palette_refit,
+                                    palette_uint8_refine=args.palette_uint8_refine,
                                     reserved=args.reserved,
                                     reserved_colors=(
                                         overlay_palette.reserved_table(args.reserved)
@@ -235,6 +240,9 @@ def main(argv=None):
         print("  algoritmo de paleta: %s" % info["palette_algorithm"])
         if info.get("palette_refit"):
             print("  refit de paleta (E-12): %d iteraciones" % info["palette_refit"])
+        if info.get("palette_uint8_refine"):
+            print("  cierre Lloyd uint8 (E-13): %d iteraciones" %
+                  info["palette_uint8_refine"])
         if v2_stats is not None:
             print("  formato: ASCLVID2 lossless; %d regionales + %d predictores "
                   "de %d frames, "
@@ -288,7 +296,8 @@ def main(argv=None):
                                     dither_budget=args.dither_budget,
                                     dither_min_improvement=args.dither_min_improvement,
                                     dither_window=args.dither_window,
-                                    palette_refit=args.palette_refit)
+                                    palette_refit=args.palette_refit,
+                                    palette_uint8_refine=args.palette_uint8_refine)
         v2_stats = None
         bundle_ascl = tmp_ascl
         if args.format == "v2":
@@ -305,6 +314,9 @@ def main(argv=None):
         print("  algoritmo de paleta: %s" % info["palette_algorithm"])
         if info.get("palette_refit"):
             print("  refit de paleta (E-12): %d iteraciones" % info["palette_refit"])
+        if info.get("palette_uint8_refine"):
+            print("  cierre Lloyd uint8 (E-13): %d iteraciones" %
+                  info["palette_uint8_refine"])
         if v2_stats is not None:
             print("  formato: ASCLVID2 lossless; %d regionales + %d predictores; "
                   "%d B menos (%.2f%%)" %

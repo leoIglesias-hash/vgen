@@ -431,12 +431,61 @@ def _repair_palette_duplicates(palette, samples, weights):
     return repaired, repaired_count
 
 
+def _closing_lloyd_uint8(palette, samples, weights, iterations, chunk_size):
+    """E-13: cierra el Lloyd restringido a paletas sRGB uint8 representables.
+
+    El Lloyd principal optimiza centros Oklab continuos; el gamut map, el
+    redondeo a uint8 y la reparacion de duplicados los mueven DESPUES de la
+    ultima asignacion. Este cierre itera ese tramo final: asigna con la
+    paleta representable vigente, promedia en Oklab, vuelve a mapear /
+    redondear / reparar, y acepta el candidato SOLO si baja la inercia
+    ponderada medida con su propia asignacion — nunca degrada. El orden de
+    entradas se conserva (media por indice), asi la alineacion temporal
+    previa sigue valida. Devuelve (paleta, iteraciones aceptadas).
+    """
+    iterations = int(iterations)
+    if not (0 <= iterations <= 10):
+        raise ValueError("uint8_refine debe estar entre 0 (off) y 10")
+    current = _as_srgb8(palette)
+    if iterations == 0:
+        return current, 0
+    labels, distance = _nearest_indices(
+        samples, srgb_to_oklab(current), chunk_size=chunk_size,
+        return_distance=True)
+    inertia = float(np.sum(distance * weights))
+    accepted = 0
+    for _ in range(iterations):
+        counts = np.bincount(labels, weights=weights, minlength=len(current))
+        updated = srgb_to_oklab(current)
+        occupied = counts > 0.0
+        for channel in range(3):
+            sums = np.bincount(labels, weights=weights * samples[:, channel],
+                               minlength=len(current))
+            updated[occupied, channel] = sums[occupied] / counts[occupied]
+        candidate = oklab_to_srgb(gamut_map_oklab(updated), as_uint8=True)
+        candidate, _repaired = _repair_palette_duplicates(
+            candidate, samples, weights)
+        if np.array_equal(candidate, current):
+            break
+        candidate_labels, candidate_distance = _nearest_indices(
+            samples, srgb_to_oklab(candidate), chunk_size=chunk_size,
+            return_distance=True)
+        candidate_inertia = float(np.sum(candidate_distance * weights))
+        if candidate_inertia >= inertia:
+            break
+        current = candidate
+        labels = candidate_labels
+        inertia = candidate_inertia
+        accepted += 1
+    return current, accepted
+
+
 def build_perceptual_palette(sample_imgs, pal_size, previous_palette=None,
                              temporal_strength=0.0,
                              max_samples=DEFAULT_MAX_SAMPLES,
                              gradient_boost=3.0, max_iter=40, tolerance=1e-5,
                              chunk_size=DEFAULT_CHUNK_SIZE, return_info=False,
-                             reserved=0):
+                             reserved=0, uint8_refine=0):
     """Construye una paleta K-means en Oklab con muestreo anti-banding.
 
     ``previous_palette`` debe tener el mismo largo. Su orden se conserva y
@@ -468,6 +517,9 @@ def build_perceptual_palette(sample_imgs, pal_size, previous_palette=None,
         raise ValueError("max_iter debe ser > 0")
     if float(tolerance) < 0.0:
         raise ValueError("tolerance debe ser >= 0")
+    uint8_refine = int(uint8_refine)
+    if not (0 <= uint8_refine <= 10):
+        raise ValueError("uint8_refine debe estar entre 0 (off) y 10")
     samples, weights, sampling_info = _weighted_samples(
         sample_imgs, max_samples, gradient_boost, min_unique=pal_size)
     if previous_palette is not None:
@@ -530,6 +582,10 @@ def build_perceptual_palette(sample_imgs, pal_size, previous_palette=None,
     palette = oklab_to_srgb(mapped_centers, as_uint8=True)
     palette, repaired_duplicates = _repair_palette_duplicates(
         palette, samples, weights)
+    uint8_refine_accepted = 0
+    if uint8_refine:
+        palette, uint8_refine_accepted = _closing_lloyd_uint8(
+            palette, samples, weights, uint8_refine, chunk_size)
     final_palette_lab = srgb_to_oklab(palette)
     _final_indices, final_distance = _nearest_indices(
         samples, final_palette_lab, chunk_size=chunk_size, return_distance=True)
@@ -544,6 +600,7 @@ def build_perceptual_palette(sample_imgs, pal_size, previous_palette=None,
         "temporal_strength": float(temporal_strength),
         "gamut_mapped_count": gamut_mapped_count,
         "repaired_duplicates": int(repaired_duplicates),
+        "uint8_refine_accepted": int(uint8_refine_accepted),
         "palette_unique_count": int(len(np.unique(_packed_rgb(palette)))),
     }
     info.update(sampling_info)
