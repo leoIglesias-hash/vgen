@@ -223,3 +223,18 @@ Al ver la demo HQ el operador señaló dos cosas y decidió el rumbo:
 Reparto resultante: **texto → nativo en el mismo canvas (INT-004, ya)**;
 **gráficos → matriz** (hoy con reserva; en F6 por época, INT-005). El caso
 "video de fondo en loop + números arriba" queda cubierto por INT-004 solo.
+
+**Implementado (2026-08-28, commits `21df177` + `76ffe45`).** Detalle que el
+diseño original no anticipaba: en modo PIXEL el backing store del Canvas2D
+era cols×rows (el zoom era solo CSS), con lo que el texto nativo se habría
+pixelado igual que la matriz. La solución es `renderer.pixelScale` (opt-in
+del player, default 1 byte-idéntico): el backing pasa a cols·s×rows·s, el
+frame se escribe chico con `putImageData` y se escala con un `drawImage` del
+canvas **sobre sí mismo** (la spec de Canvas2D exige snapshot del origen, el
+solape es seguro) — sigue habiendo un solo canvas. Con escala la copia al
+canvas es siempre completa (el blit anterior pisó el origen), y el player
+marca sucias TODAS las cajas de texto declaradas en cada frame para que
+borrar un texto no deje fantasma con escala 1. La capa (`textlayer.js`)
+cachea string de fuente, anclajes y `lineWidth` por `cellPx` y limita el
+dibujo al ancho de la caja (`maxWidth`): nada se pinta fuera del rect que se
+marcó sucio.

@@ -81,12 +81,15 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   (cualquier TTF/PNG → Oklab), `make_patch_pack` demo, workflow
   `overlay=off/panel/patches`. La **ruleta** va con ASCLVID3 (F6/S-4).
   Evidencia: `docs/ejecutados/2026-08-28-INT-003-parches-genericos.md`.
-- ▶ **INT-004 (texto nativo)** es la próxima acción: pedido del operador
-  post-demo — los textos se dibujan nítidos con Canvas2D sobre el MISMO
-  canvas (la matriz queda para gráficos); tareas INT-004-A/B en el runbook
-  §4-INT-004, diseño en `docs/DISENO-PARCHES-GENERICOS.md` §10. Con texto
-  nativo se elige el renderer Canvas2D (regla 6). Después: carril E desde
-  **E-12** (el refit debe excluir la reserva vigente, 224.. o 246..).
+- ✅ **INT-004 (texto nativo)**: `textlayer.js` (`21df177`) + integración en
+  live-player (`76ffe45`) — campos grandes del sidecar v2 espejados como
+  texto serif nítido al costado de la matriz, mismos payloads para ambos;
+  con texto el renderer es Canvas2D con `pixelScale=zoom` (backing real,
+  put chico + drawImage del canvas sobre sí mismo, sin segundo canvas).
+  Evidencia: `docs/ejecutados/2026-08-28-INT-004-texto-nativo.md`.
+- ▶ **Próxima acción: carril E (F3) desde E-12** (refit de paleta a la
+  asignación real; debe excluir la reserva vigente del clip, 224.. con
+  `reserved=32` o 246.. con 10). Luego E-13..E-18.
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).

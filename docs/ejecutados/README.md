@@ -26,3 +26,4 @@ Reglas:
 | 2026-08-28 | F2: compresión E-08..E-10 (Zopfli −7,2%, tile_size 4..32, keyframes por corte) | [`2026-08-28-F2-compresion-e08-10.md`](2026-08-28-F2-compresion-e08-10.md) |
 | 2026-08-28 | F7: runtime del overlay (S-5) — overlay.js, canal de datos, referencia Python byte-idéntica, panel + live-player | [`2026-08-28-F7-runtime-overlay.md`](2026-08-28-F7-runtime-overlay.md) |
 | 2026-08-28 | INT-003: parches genéricos (vía corta) — reserva 32, ASCLSLOT v2, runtime v2 con elección/presencia, bake_patches, workflow overlay=patches | [`2026-08-28-INT-003-parches-genericos.md`](2026-08-28-INT-003-parches-genericos.md) |
+| 2026-08-28 | INT-004: texto nativo en el mismo canvas — textlayer.js + live-player (Canvas2D con backing escalado, demo lado a lado) | [`2026-08-28-INT-004-texto-nativo.md`](2026-08-28-INT-004-texto-nativo.md) |
