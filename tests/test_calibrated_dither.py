@@ -68,6 +68,12 @@ class CalibratedDitherTest(unittest.TestCase):
         direct_callback = dither.apply_selective_dither(
             rgb, baseline, palette, base_quantizer=quantizer,
             min_gradient_range=4)
+        exact_rgb = dither.apply_selective_dither(
+            rgb, baseline, palette, pair_lut=rgb_lut,
+            min_gradient_range=4, exact_pairs=True)
+        exact_perceptual = dither.apply_selective_dither(
+            rgb, baseline, palette, pair_lut=perceptual_lut,
+            min_gradient_range=4, exact_pairs=True)
         calibrated, calibrated_details = dither.apply_calibrated_dither(
             rgb, baseline, palette, pair_lut=perceptual_lut,
             max_changed_fraction=1.0, return_details=True)
@@ -75,13 +81,16 @@ class CalibratedDitherTest(unittest.TestCase):
         self.assertLess(rgb_match, 0.70)
         self.assertEqual(perceptual_match, 1.0)
         self.assertEqual(calls, [(32768, 3)])
-        # E-16: la mezcla se calcula exacta por pixel desde la base real
-        # (baseline); la base 555 de la LUT ya no gatea el tramado, asi que
-        # ambas LUT producen el MISMO resultado y ningun pixel elegible se
-        # apaga en silencio por discrepancia 555 vs cuantizador.
-        self.assertEqual(compatible.tobytes(), legacy.tobytes())
-        self.assertGreater(np.count_nonzero(compatible != baseline), 0)
+        # Default (LUT historica): la base 555 gatea el tramado, asi que la
+        # LUT compatible con el cuantizador trama mas pixeles que la RGB.
+        self.assertGreater(np.count_nonzero(compatible != baseline),
+                           np.count_nonzero(legacy != baseline))
         self.assertEqual(compatible.tobytes(), direct_callback.tobytes())
+        # E-16 opt-in (exact_pairs=True): la mezcla se calcula exacta por
+        # pixel desde la base real (baseline); ambas LUT producen el MISMO
+        # resultado y ningun pixel elegible se apaga por discrepancia 555.
+        self.assertEqual(exact_rgb.tobytes(), exact_perceptual.tobytes())
+        self.assertGreater(np.count_nonzero(exact_rgb != baseline), 0)
         self.assertTrue(np.any(calibrated != baseline))
         self.assertLess(calibrated_details["result_proxy_error"],
                         calibrated_details["baseline_proxy_error"])

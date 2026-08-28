@@ -117,7 +117,8 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                             dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                             dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
-                            reserved=0, palette_refit=0, palette_uint8_refine=0):
+                            reserved=0, palette_refit=0, palette_uint8_refine=0,
+                            dither_exact=False):
     """Valida limites del header v1 y opciones compartidas por todos los entrypoints."""
     if mode_name not in MODE_NAMES:
         raise ValueError("mode desconocido: %s" % mode_name)
@@ -162,6 +163,8 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
         raise ValueError("palette-uint8-refine debe estar entre 0 (off) y 10")
     if int(palette_uint8_refine) and palette_algorithm != "kmeans-oklab":
         raise ValueError("palette-uint8-refine solo aplica a kmeans-oklab (E-13)")
+    if int(bool(dither_exact)) and dither_mode == "off":
+        raise ValueError("dither-exact requiere dither selective o auto (E-16)")
     if int(reserved) < 0:
         raise ValueError("reserved debe ser >= 0")
     if int(reserved) > 0 and int(pal_size) < int(reserved) + 22:
@@ -826,7 +829,7 @@ def apply_dither_mode(rgb, cells, palette, dither_mode="off", dither_matrix=4,
                       dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                       dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                       dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
-                      protected_rects=None):
+                      protected_rects=None, dither_exact=False):
     """Hornea el modo de dithering elegido y conserva el shape de ``cells``."""
     if dither_mode == "off":
         return cells, None
@@ -834,7 +837,8 @@ def apply_dither_mode(rgb, cells, palette, dither_mode="off", dither_matrix=4,
     if dither_mode == "selective":
         result = selective_dither.apply_selective_dither(
             rgb, baseline, palette, matrix_size=dither_matrix,
-            pair_lut=pair_lut, protected_rects=protected_rects)
+            pair_lut=pair_lut, protected_rects=protected_rects,
+            exact_pairs=bool(dither_exact))
         return result.reshape(-1, 1), None
     if dither_mode == "auto":
         result, details = selective_dither.apply_calibrated_dither(
@@ -843,6 +847,7 @@ def apply_dither_mode(rgb, cells, palette, dither_mode="off", dither_matrix=4,
             min_proxy_improvement=dither_min_improvement,
             temporal_state=temporal_state, temporal_window=dither_window,
             protected_rects=protected_rects,
+            exact_pairs=bool(dither_exact),
             # La paleta puede renovarse sin que cambie la escena. La evidencia se
             # conserva entre bloques y el encoder resetea el estado solo en hard cut.
             temporal_context="ascl-video", reset_on_palette_change=False,
@@ -1026,7 +1031,7 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
                  dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                  dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                  dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
-                 palette_refit=0, palette_uint8_refine=0):
+                 palette_refit=0, palette_uint8_refine=0, dither_exact=False):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             dither_mode=dither_mode, dither_matrix=dither_matrix,
@@ -1036,7 +1041,8 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
                             dither_min_improvement=dither_min_improvement,
                             dither_window=dither_window,
                             palette_refit=palette_refit,
-                            palette_uint8_refine=palette_uint8_refine)
+                            palette_uint8_refine=palette_uint8_refine,
+                            dither_exact=dither_exact)
     if palette_mode != "per-frame":
         raise ValueError(
             "encode_image solo admite --palette per-frame: una imagen no tiene "
@@ -1063,7 +1069,7 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
             rgb, cells, palette, dither_mode, dither_matrix,
             pair_lut=pair_lut, dither_budget=dither_budget,
             dither_min_improvement=dither_min_improvement,
-            dither_window=dither_window)
+            dither_window=dither_window, dither_exact=dither_exact)
     tag, payload = encode_frame(cells, None, mode, 0, True, compress, False)
     frames = [{"tag": tag, "pal_count": pal_count, "palette": palette, "payload": payload}]
     if dump_cells:
@@ -1081,6 +1087,7 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
             "perceptual_lut_bits": int(perceptual_lut_bits),
             "dither": dither_mode, "dither_matrix": int(dither_matrix),
             "dither_budget": float(dither_budget),
+            "dither_exact": bool(dither_exact),
             "dither_min_improvement": float(dither_min_improvement),
             "dither_window": int(dither_window),
             "dither_changed_cells": (int(dither_details["changed_cells"])
@@ -1103,7 +1110,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                  dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                  dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
                  reserved=0, reserved_colors=None, scene_keyframes=False,
-                 protect_panel=False, palette_refit=0, palette_uint8_refine=0):
+                 protect_panel=False, palette_refit=0, palette_uint8_refine=0,
+                 dither_exact=False):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             palette_block_frames, dither_mode, dither_matrix,
@@ -1114,7 +1122,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                             dither_budget, dither_min_improvement,
                             dither_window, reserved=reserved,
                             palette_refit=palette_refit,
-                            palette_uint8_refine=palette_uint8_refine)
+                            palette_uint8_refine=palette_uint8_refine,
+                            dither_exact=dither_exact)
     reserved = int(reserved)
     if reserved:
         reserved_colors = _validate_reserved_colors(reserved, reserved_colors)
@@ -1328,7 +1337,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                 dither_budget=dither_budget,
                 dither_min_improvement=dither_min_improvement,
                 dither_window=dither_window,
-                protected_rects=panel_protected)
+                protected_rects=panel_protected,
+                dither_exact=dither_exact)
             if dither_details is not None:
                 dither_changed_cells += int(dither_details["changed_cells"])
                 dither_proxy_before += int(dither_details["baseline_proxy_error"])
@@ -1389,6 +1399,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             "perceptual_lut_bits": int(perceptual_lut_bits),
             "dither": dither_mode, "dither_matrix": int(dither_matrix),
             "dither_budget": float(dither_budget),
+            "dither_exact": bool(dither_exact),
             "dither_min_improvement": float(dither_min_improvement),
             "dither_window": int(dither_window),
             "dither_changed_cells": int(dither_changed_cells),
@@ -1479,6 +1490,9 @@ def main(argv=None):
     p.add_argument("--dither-window", "--dither-temporal-window", type=int,
                    default=selective_dither.DEFAULT_TEMPORAL_WINDOW,
                    dest="dither_window", help="ventana temporal de histeresis")
+    p.add_argument("--dither-exact", action="store_true",
+                   help="E-16 opt-in: mezcla exacta desde la base real del "
+                        "cuantizador (sin gate 555); mas CPU y mas bytes")
     args = p.parse_args(argv)
     args.cols, args.pal_size = resolve_quality_options(
         args.quality_profile, args.cols, args.pal_size, default_cols=200)
@@ -1498,7 +1512,8 @@ def main(argv=None):
                                 dither_min_improvement=args.dither_min_improvement,
                                 dither_window=args.dither_window,
                                 palette_refit=args.palette_refit,
-                                palette_uint8_refine=args.palette_uint8_refine)
+                                palette_uint8_refine=args.palette_uint8_refine,
+                                dither_exact=args.dither_exact)
     except ValueError as exc:
         p.error(str(exc))
     ext = os.path.splitext(args.input)[1].lower()
@@ -1527,7 +1542,8 @@ def main(argv=None):
                             dither_window=args.dither_window,
                             scene_keyframes=args.scene_keyframes,
                             palette_refit=args.palette_refit,
-                            palette_uint8_refine=args.palette_uint8_refine)
+                            palette_uint8_refine=args.palette_uint8_refine,
+                            dither_exact=args.dither_exact)
         secs = info["n_frames"] / float(info["fps"]) or 1
         print("OK %s  (video, %s, paleta %s)" % (args.output, info["mode"], info["palette_mode"]))
         print("  fuente   : %dx%d px" % info["src"])
@@ -1576,7 +1592,8 @@ def main(argv=None):
                             dither_min_improvement=args.dither_min_improvement,
                             dither_window=args.dither_window,
                             palette_refit=args.palette_refit,
-                            palette_uint8_refine=args.palette_uint8_refine)
+                            palette_uint8_refine=args.palette_uint8_refine,
+                            dither_exact=args.dither_exact)
         print("OK %s  (imagen, %s)" % (args.output, info["mode"]))
         print("  grilla   : %dx%d celdas" % (info["cols"], info["rows"]))
         print("  calidad  : perfil %s, hasta %d colores" %

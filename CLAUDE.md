@@ -124,17 +124,19 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   Instancia 021: fronteras −31 %/−93 % en sintético; clip real kmeans-rgb
   −1,25 % bytes, PSNR −1,04 dB por el blending (knob
   `--adaptive-stability-max 0` = solo alineación). Producto sin cambios.
-- ⏳ **E-16 (PairLUT exacto)**: código en main (`a87014a`, CI verde,
-  244 py + 26 js) — `exact_pairs` trama desde la base real del
-  cuantizador; muere el apagado silencioso 555. **Falta**: bench del run
-  33215511572 (producto 768 refit 5 zopfli) vs `adef9e53…` → Instancia
-  022 y cierre de fila.
-- ▶ **Próxima acción: 1) cerrar E-16 con ese bench; 2) E-17**
-  (presupuesto de dither en bytes, V1-OPT-02; bytes y 5 % de celdas se
-  aplican juntos); luego E-18 cierra F3. Decisión abierta: si el
-  operador retoma el 960, re-medirlo con refit 5.
+- ✅ **E-16 (PairLUT exacto, 2026-08-28)**: `exact_pairs` trama desde la
+  base real del cuantizador (muere el gate 555). Bench de producto
+  (Instancia 022, `0ed4cbbe…`): **−0,21 dB, +4,1 % Oklab, +6 % bytes,
+  +39 % tiempo → NO adoptado**; la exactitud quedó **opt-in
+  `--dither-exact`** y el default vuelve a la LUT histórica
+  byte-idéntica (el producto `adef9e53…` sigue reproducible desde main).
+  Se reevalúa con E-17.
+- ▶ **Próxima acción: E-17** (presupuesto de dither en bytes, V1-OPT-02;
+  bytes y 5 % de celdas se aplican juntos); luego E-18 cierra F3.
+  Decisión abierta: si el operador retoma el 960, re-medirlo con
+  refit 5.
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).
-- Pendiente: F3 (E-16..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
+- Pendiente: F3 (E-17..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8

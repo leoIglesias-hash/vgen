@@ -55,11 +55,37 @@ class PairLutExactTest(unittest.TestCase):
         self.assertGreater(float(np.mean(mismatch)), 0.25)
         result, details = dither.apply_selective_dither(
             rgb, baseline, PALETTE, pair_lut=rgb_lut,
-            min_gradient_range=4, return_details=True)
+            min_gradient_range=4, return_details=True, exact_pairs=True)
         changed = details["changed"]
         self.assertTrue(np.any(changed))
-        # Antes de E-16 estos pixeles quedaban en Q0 por definicion.
+        # Sin exact_pairs estos pixeles quedan en Q0 por definicion.
         self.assertTrue(np.any(changed & mismatch))
+
+    def test_default_path_keeps_historic_lut_gated_bytes(self):
+        rgb = gradient_rgb()
+        quantizer = perceptual.PerceptualQuantizer(PALETTE, lut_bits=5)
+        baseline = np.asarray(quantizer.quantize(rgb))
+        lut = dither.PairLUT(PALETTE)
+        default_result = dither.apply_selective_dither(
+            rgb, baseline, PALETTE, pair_lut=lut, min_gradient_range=4)
+        # Reconstruccion independiente del camino historico pre-E-16:
+        # LUT 555 + gate de base coincidente. Debe ser byte-identico.
+        _, details = dither.apply_selective_dither(
+            rgb, baseline, PALETTE, pair_lut=lut, min_gradient_range=4,
+            return_details=True)
+        eligible = details["eligible"]
+        keys = dither.rgb555_keys(rgb)
+        bayer = dither.BAYER_MATRICES[4]
+        yy, xx = np.indices(baseline.shape)
+        threshold = bayer[yy % 4, xx % 4]
+        choose = (eligible & (lut.base[keys] == baseline) &
+                  (threshold < lut.level[keys] * 4))
+        expected = baseline.copy()
+        expected[choose] = lut.partner[keys][choose]
+        self.assertEqual(default_result.tobytes(), expected.tobytes())
+        # Y el gate historico sigue apagando los pixeles con base 555 ajena.
+        mismatch = lut.base[keys] != baseline
+        self.assertFalse(np.any((default_result != baseline) & mismatch))
 
     def test_accepted_mixtures_beat_their_real_base(self):
         rgb = gradient_rgb()

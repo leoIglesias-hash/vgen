@@ -88,6 +88,9 @@ def main(argv=None):
     p.add_argument("--dither-window", "--dither-temporal-window", type=int,
                    default=encoder.selective_dither.DEFAULT_TEMPORAL_WINDOW,
                    dest="dither_window", help="ventana temporal de histeresis")
+    p.add_argument("--dither-exact", action="store_true",
+                   help="E-16 opt-in: mezcla exacta desde la base real del "
+                        "cuantizador (sin gate 555); mas CPU y mas bytes")
     p.add_argument("--keyint", type=int, default=0,
                    help="E-10: keyframe cada N frames (0 = fps*2, el historico)")
     p.add_argument("--scene-keyframes", action="store_true",
@@ -125,7 +128,8 @@ def main(argv=None):
                                         dither_window=args.dither_window,
                                         reserved=args.reserved,
                                         palette_refit=args.palette_refit,
-                                        palette_uint8_refine=args.palette_uint8_refine)
+                                        palette_uint8_refine=args.palette_uint8_refine,
+                                        dither_exact=args.dither_exact)
     except ValueError as exc:
         p.error(str(exc))
     if args.reserved and args.image:
@@ -209,6 +213,7 @@ def main(argv=None):
                                     scene_keyframes=args.scene_keyframes,
                                     palette_refit=args.palette_refit,
                                     palette_uint8_refine=args.palette_uint8_refine,
+                                    dither_exact=args.dither_exact,
                                     reserved=args.reserved,
                                     reserved_colors=(
                                         overlay_palette.reserved_table(args.reserved)
@@ -243,6 +248,8 @@ def main(argv=None):
         if info.get("palette_uint8_refine"):
             print("  cierre Lloyd uint8 (E-13): %d iteraciones" %
                   info["palette_uint8_refine"])
+        if info.get("dither_exact"):
+            print("  dither exacto (E-16): mezcla desde la base real")
         if v2_stats is not None:
             print("  formato: ASCLVID2 lossless; %d regionales + %d predictores "
                   "de %d frames, "
@@ -297,7 +304,8 @@ def main(argv=None):
                                     dither_min_improvement=args.dither_min_improvement,
                                     dither_window=args.dither_window,
                                     palette_refit=args.palette_refit,
-                                    palette_uint8_refine=args.palette_uint8_refine)
+                                    palette_uint8_refine=args.palette_uint8_refine,
+                                    dither_exact=args.dither_exact)
         v2_stats = None
         bundle_ascl = tmp_ascl
         if args.format == "v2":
@@ -317,6 +325,8 @@ def main(argv=None):
         if info.get("palette_uint8_refine"):
             print("  cierre Lloyd uint8 (E-13): %d iteraciones" %
                   info["palette_uint8_refine"])
+        if info.get("dither_exact"):
+            print("  dither exacto (E-16): mezcla desde la base real")
         if v2_stats is not None:
             print("  formato: ASCLVID2 lossless; %d regionales + %d predictores; "
                   "%d B menos (%.2f%%)" %

@@ -54,7 +54,7 @@ Reglas de uso:
 | E-13 | Lloyd en dominio uint8 | cerrada | `a64c7ce` | 2026-08-28 | `_closing_lloyd_uint8` en `build_perceptual_palette`: itera el tramo final (asignar → promediar en Oklab → gamut map → redondear → reparar duplicados) restringido a paletas sRGB representables, aceptando solo si baja la inercia ponderada (nunca degrada; orden de entradas conservado → alineación temporal válida). Opt-in `--palette-uint8-refine 0..10`, solo kmeans-oklab. Bench 768 con refit 5 + refine 3 (Instancia 019, `a95d0bbc…acbf`): PSNR igual, Oklab −0,5 % (0,00728), bytes +0,36 % → el producto sigue con refit 5 solo. CI en verde |
 | E-14 | paleta sobre todos los píxeles, dos pasadas | cerrada | `86eb5ae`+`f324f1e` | 2026-08-28 | modo global sin materializar (`StreamingColorAggregate` + `sample_aggregate` en el builder, sin el cap de 65.536; Pillow/RGB reproducen byte a byte el muestreo histórico con conteo+muestreo; `refit_palette` gana `sample_weights`). Instancia 020 (960 global, 15 s, `/usr/bin/time -v`): **RSS 886 → 433 MB (−51 %)**, Oklab −4,5 %, PSNR RGB −0,27 dB (**desvío registrado**: el criterio pedía PSNR ≥; kmeans-oklab optimiza el objetivo perceptual y el global no es producto). Refit sobre el agregado = no-op verificado (mismo SHA). CI en verde |
 | E-15 | estabilidad temporal, 4 algoritmos | cerrada | `91a0e68` | 2026-08-28 | `_stabilize_rgb_palette`: alineación 1:1 con la paleta previa (`_align_to_previous` genérico sobre RGB exacto, permutación sin pérdida) + fusión por `temporal_strength`; en `make_global_palette` (kmeans-rgb/median-cut/fast-octree) y en el per-frame de median-cut; estabilidad per-frame para los 4 algoritmos. Frontera de bloque (Instancia 021): fast-octree −93 %, kmeans-rgb −31 %; clip real kmeans-rgb: bytes −1,25 %, RDELTA_ZLIB 10→4; costo estático del blending PSNR −1,04 dB (knob `--adaptive-stability-max 0` = solo alineación). Producto kmeans-oklab sin cambios. CI en verde |
-| E-16 | `PairLUT` exacto | código en main, bench en curso | `a87014a` | 2026-08-28 | `exact_pairs`: base/partner/level exactos por píxel desde la base REAL del cuantizador (baseline); desaparece el gate `lut_base == baseline` que apagaba el tramado en silencio; misma matemática que la LUT (`_pairs_for` compartido, LUT byte-idéntica conservada como firma). CI verde (244 pruebas Python + 26 JS). **Falta para cerrar**: bench de producto del run **33215511572** (768 kmeans-oklab adaptive refit 5 zopfli) vs `adef9e53…` (35,46 / 0,00732 / 17.379.859 B) → Instancia 022, decidir si el clip nuevo pasa a `outputs/` |
+| E-16 | `PairLUT` exacto | cerrada (opt-in `--dither-exact`) | `a87014a` + cierre | 2026-08-28 | `exact_pairs`: base/partner/level exactos por píxel desde la base REAL del cuantizador (baseline), sin el gate `lut_base == baseline`; misma matemática que la LUT (`_pairs_for` compartido). **Bench de producto (Instancia 022, run 33215511572, `0ed4cbbe…92f5`): PSNR −0,21 dB, Oklab +4,1 %, bytes +6,0 %, tiempo +39 % vs `adef9e53…`** → NO adoptado: la exactitud queda **opt-in** (`--dither-exact`; `exact_pairs=` en las APIs) con default = camino LUT histórico byte-idéntico (test `test_default_path_keeps_historic_lut_gated_bytes`). El producto sigue reproducible desde `main`. Reevaluar con E-17 (el presupuesto en bytes es el freno correcto de su gasto extra) |
 | E-17 | presupuesto de dither en bytes | pendiente | | | cierra V1-OPT-02 |
 | E-18 | interacción dither/threshold | pendiente | | | cierra F3 |
 | E-19 | orden canónico del pipeline | pendiente | | | |
@@ -181,15 +181,11 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 | 2026-08-28 | **E-13 medido y NO adoptado en el producto**: el cierre de Lloyd uint8 (`--palette-uint8-refine 3` sobre refit 5) deja PSNR igual, baja Oklab −0,5 % y sube bytes +0,36 % (Instancia 019, `a95d0bbc…acbf`); el fondo sigue con refit 5 solo. La inercia de muestra baja siempre por construcción (gate de aceptación); la ganancia sobre el clip real es marginal | mecánica lista y testeada para cuando convenga (S-4 reevalúa combinaciones con el trellis de F5); mantener el default en 0 preserva la reproducibilidad de las referencias |
 | 2026-08-28 | **E-14 cierra con desvío del criterio de PSNR**: dos pasadas en global dan RSS −51 % (886 → 433 MB) y Oklab −4,5 %, pero PSNR RGB −0,27 dB frente al «igual o mejor» del runbook. La masa anti-banding ahora refleja el video entero (antes: 65.536 draws de 12 frames con masa aplanada) y kmeans-oklab optimiza ese objetivo perceptual, no el MSE RGB. El refit E-12 sobre el agregado resultó no-op byte-idéntico (el builder ya convergió sobre el mismo conjunto; la aceptación Oklab no encuentra mejora) — hallazgo esperado y verificado | el global no es el modo de producto (adaptive); el objetivo del proyecto es perceptual. Si se quiere paridad PSNR en global, knob futuro: `gradient_boost` del agregado. Fuente de 15 s (el clip de 90 s del runbook no existe en `assets`) |
 | 2026-08-28 | **E-15 activa la estabilización por default en los 4 algoritmos** (Δbytes sí, spec): kmeans-rgb y los Pillow ganan índices estables entre bloques (fronteras −31 %/−93 % en sintético; clip real −1,25 % bytes y RDELTA_ZLIB 10→4) al precio estático del blending (PSNR −1,04 dB con el `adaptive_stability_max` default 0,25). Es la MISMA semántica que kmeans-oklab ya tenía; quien quiera fidelidad estática pura usa `--adaptive-stability-max 0` (queda solo la alineación, sin costo) | los valores manuales del operador prevalecen (regla 9); el producto kmeans-oklab no cambia de bytes. Nota: kmeans-rgb adaptive da mejor PSNR RGB (36,74) y peor Oklab (0,00967) que el producto kmeans-oklab refit 5 (35,46 / 0,00732) — cada algoritmo gana su métrica; el fondo sigue kmeans-oklab (perceptual) |
+| 2026-08-28 | **E-16 medido y NO adoptado — la exactitud pasa a opt-in** (`--dither-exact`, default = LUT histórica byte-idéntica): el bench de producto (Instancia 022) dio PSNR −0,21 dB, Oklab +4,1 %, bytes +6,0 % y tiempo +39 %. El gate 555 actuaba de facto como freno del tramado; sin él traman muchos más píxeles y sube la entropía (DELTA_MASK 138→148, RDELTA_ZLIB 4→1). El commit `a87014a` lo había dejado default-on y rompía la reproducibilidad del producto `adef9e53…` desde `main`; el cierre lo corrige y agrega el test de bytes históricos. Criterio del operador confirmado en sesión: se adopta solo lo que mide calidad/eficiencia superior | «una mejora sin fila no existe»: la fila existe y dice que no; regla 5 (referencias reproducibles) manda sobre la pureza conceptual del dither exacto. E-17 (presupuesto en bytes) es el lugar para reevaluarlo |
 
 ## Próxima acción
 
-1. **Cerrar E-16**: bajar el bench del run **33215511572** (encode
-   producto post-E-16, despachado 2026-08-28, artifact `clip-asclv` con
-   `bench.md`+`sha256.txt`), compararlo con `adef9e53…4c05bb` (35,46 dB /
-   0,00732 / 17.379.859 B), registrar Instancia 022, decidir instalación
-   en `outputs/` (si mejora) y marcar la fila cerrada.
-2. **Carril E (F3): E-17** (presupuesto de dither en bytes, V1-OPT-02 —
+1. **Carril E (F3): E-17** (presupuesto de dither en bytes, V1-OPT-02 —
    comparar bytes reales del frame con dither vs baseline y rechazarlo
    sobre un presupuesto configurable; el límite de bytes y el 5 % de
    celdas se aplican JUNTOS). Luego E-18 cierra F3. La **ruleta** sigue
@@ -203,7 +199,9 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
    (17.379.859 B, instalada en `outputs/`, run 33203086375)** · 768
    refit 5 + uint8-refine 3 `a95d0bbc…acbf` (17.442.264 B, Oklab 0,00728,
    run 33207479295, E-13 medido sin adoptar) · 768
-   refit 3 `514be81e…a01aff` (17.425.768 B, run 33203084602) · sin refit
+   refit 3 `514be81e…a01aff` (17.425.768 B, run 33203084602) · dither
+   exacto E-16 `0ed4cbbe…92f5` (18.602.412 B, 35,25 dB, run 33215511572,
+   medido sin adoptar) · sin refit
    determinista P-02 `ebfe2eb4…4b36` (17.482.270 B, sigue reproducible
    con el flag en 0) · ultra 960 sin refit `31348a83…5688` (25.003.004 B,
    run 33193299286, superado) · panel v1 `7da584f1…5a51d` (17.197.813 B)
@@ -213,8 +211,10 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
-Regresión al cierre de esta sesión: **244 pruebas Python y 26 suites JavaScript, en verde**
-(base: 115 y 11). Último commit de tarea: `a87014a` (E-16, CI verde confirmado
-2026-08-28; bench de cierre en curso, run 33215511572); `outputs/clip.asclv` =
+Regresión al cierre de esta sesión: **245 pruebas Python y 26 suites JavaScript**
+(base: 115 y 11; el CI del commit de cierre de E-16 valida el conteo). Último
+commit de tarea: cierre de E-16 (opt-in `--dither-exact`); `outputs/clip.asclv` =
 fondo 768 **refit 5** (`adef9e53…c05bb`, SHA verificado) servido por el player
-standalone en `localhost:8123`.
+standalone en `localhost:8123`. Pendiente de verificación: re-encode de
+producto en CI para confirmar byte a byte que `main` reproduce `adef9e53…`
+tras el cierre (despachar workflow `encode` con `extra: --palette-refit 5`).

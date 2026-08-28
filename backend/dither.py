@@ -374,9 +374,9 @@ class PairLUT(object):
 
     def _build(self, max_pair_distance, min_improvement):
         # Centro de las 32768 celdas RGB555. La LUT se calcula offline una vez por
-        # paleta (global o bloque), no una vez por frame. Desde E-16 la mezcla se
-        # decide por pixel exacto (exact_pairs); la LUT queda como firma semantica
-        # de la regla base y para consumidores externos.
+        # paleta (global o bloque), no una vez por frame. Es el camino default del
+        # tramado; con exact_pairs=True (E-16, opt-in) la mezcla se decide por
+        # pixel exacto y la LUT queda como firma semantica de la regla base.
         keys = np.arange(32768, dtype=np.int32)
         colors = np.empty((32768, 3), dtype=np.int32)
         colors[:, 0] = ((keys >> 10) & 31) * 8 + 4
@@ -565,7 +565,7 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
                             return_details=False, base_quantizer=None,
                             temporal_context=None, reset_temporal=False,
                             reset_on_palette_change=True,
-                            protected_rects=None):
+                            protected_rects=None, exact_pairs=False):
     """Dithering auto calibrado por calidad, bordes, presupuesto e historial.
 
     Primero produce el mismo candidato determinista que ``selective``. Despues
@@ -608,7 +608,7 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
         rgb, baseline, palette, matrix_size=matrix_size, pair_lut=pair_lut,
         tile_size=tile_size, return_details=True,
         min_gradient_range=min_gradient_range,
-        protected_rects=protected_rects)
+        protected_rects=protected_rects, exact_pairs=exact_pairs)
     baseline_rgb = palette[baseline]
     candidate_rgb = palette[candidate]
     baseline_error = low_frequency_error_map(rgb, baseline_rgb, blur_size)
@@ -768,11 +768,16 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
 def apply_selective_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None,
                            tile_size=DEFAULT_TILE_SIZE, return_details=False,
                            min_gradient_range=8, base_quantizer=None,
-                           protected_rects=None):
+                           protected_rects=None, exact_pairs=False):
     """Aplica Bayer solo en gradientes aptos y conserva Q0 en bordes protegidos.
 
     ``protected_rects`` (E-05): rectangulos ``(x0, y0, w, h)`` en celdas que se
     suman a la mascara protegida; sus celdas conservan Q0 exactamente.
+
+    ``exact_pairs`` (E-16, opt-in): con ``True`` la mezcla parte de la base
+    real del cuantizador (``baseline``) pixel a pixel, sin el gate 555 que
+    apaga el tramado donde la LUT eligio otra base. Con ``False`` (default)
+    se conserva el camino historico por LUT: bytes identicos a pre-E-16.
     """
     rgb = _validate_rgb(rgb)
     baseline = np.asarray(baseline, dtype=np.uint8)
@@ -794,21 +799,37 @@ def apply_selective_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None,
     yy, xx = np.indices(baseline.shape)
     threshold = bayer[yy % matrix_size, xx % matrix_size]
     cells_per_quarter = (matrix_size * matrix_size) // 4
-    # E-16: base, partner y level exactos por pixel. La base ES el indice
-    # que produjo el cuantizador de produccion (baseline): el tramado ya no
-    # se apaga en silencio donde la celda RGB555 elegia otra base, y la
-    # mezcla siempre parte del color correcto.
+    if exact_pairs:
+        # E-16: base, partner y level exactos por pixel. La base ES el indice
+        # que produjo el cuantizador de produccion (baseline): el tramado no
+        # se apaga donde la celda RGB555 elegia otra base, y la mezcla parte
+        # siempre del color correcto. Cuesta mas CPU y mas bytes (mas pixeles
+        # traman); medido en Instancia 022, por eso es opt-in.
+        result = baseline.copy()
+        level_map = np.zeros(baseline.shape, dtype=np.uint8)
+        rows, cols = np.nonzero(eligible)
+        if len(rows):
+            partner_exact, level_exact = pair_lut.exact_pairs(
+                rgb[rows, cols], baseline[rows, cols])
+            level_map[rows, cols] = level_exact
+            take = (threshold[rows, cols] <
+                    level_exact.astype(np.int32) * cells_per_quarter)
+            result[rows[take], cols[take]] = partner_exact[take]
+        if return_details:
+            return result, {"protected": protected, "eligible": eligible,
+                            "changed": result != baseline, "level": level_map}
+        return result
+    keys = rgb555_keys(rgb)
+    lut_base = pair_lut.base[keys]
+    partner = pair_lut.partner[keys]
+    level = pair_lut.level[keys]
+    # PIL es quien produce Q0. Si su cuantizador eligio otro color que el RGB555
+    # usado para la LUT, conservamos Q0: nunca mezclamos desde una base incorrecta.
+    choose_partner = (eligible & (lut_base == baseline) &
+                      (threshold < level * cells_per_quarter))
     result = baseline.copy()
-    level_map = np.zeros(baseline.shape, dtype=np.uint8)
-    rows, cols = np.nonzero(eligible)
-    if len(rows):
-        partner_exact, level_exact = pair_lut.exact_pairs(
-            rgb[rows, cols], baseline[rows, cols])
-        level_map[rows, cols] = level_exact
-        take = (threshold[rows, cols] <
-                level_exact.astype(np.int32) * cells_per_quarter)
-        result[rows[take], cols[take]] = partner_exact[take]
+    result[choose_partner] = partner[choose_partner]
     if return_details:
         return result, {"protected": protected, "eligible": eligible,
-                        "changed": result != baseline, "level": level_map}
+                        "changed": result != baseline, "level": level}
     return result

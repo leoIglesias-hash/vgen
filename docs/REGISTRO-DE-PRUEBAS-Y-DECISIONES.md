@@ -1073,3 +1073,34 @@ Oklab +10 % — es la retención de hasta 25 % de paleta previa
 kmeans-oklab ya aplicaba por diseño; con `--adaptive-stability-max 0`
 queda solo la alineación (permutación pura, sin costo de fidelidad). El
 producto (kmeans-oklab) no cambia de bytes por esta tarea.
+
+## Instancia 022 - E-16: dither exacto medido; queda opt-in (--dither-exact)
+
+Código en `a87014a` (CI en verde: 244 pruebas Python + 26 suites JS):
+`exact_pairs` calcula base/partner/level por píxel desde el índice REAL
+del cuantizador, eliminando el gate 555 que apagaba el tramado en
+silencio. Bench sobre la config de producto (768 graphic-hq, adaptive,
+kmeans-oklab, dither auto, tile 16, `--palette-refit 5`, zopfli):
+
+```text
+producto  (run 33203086375): | clip.asclv | 17196490 | 17379859 | 0.2244 | 231 | 92 | 9 | ZLIB:92;DELTA_MASK:138;RDELTA_RAW:1 | 35.46 | 0.00732 | adef9e533b01fdd489ec6dacf1265f07072ecba8d15e88e79b7bd2dd5a5c05bb |
+exacto    (run 33215511572): | clip.asclv | 18419043 | 18602412 | 0.2403 | 231 | 81 | 9 | ZLIB:81;DELTA_MASK:148;RDELTA_RAW:1;RDELTA_ZLIB:1 | 35.25 | 0.00762 | 0ed4cbbef7962058e75c81b5915f87bcdc08649fec987746b6dd46f08ef092f5 |
+  wall 1:03:37 (antes 45:50, +39 %) · RSS máximo 691.644 kB
+```
+
+Resultado: **PSNR −0,21 dB, Oklab +4,1 %, bytes +6,0 %, tiempo +39 %** —
+peor en las tres métricas registradas. Causa entendida: el gate 555
+actuaba de facto como freno del tramado (menos píxeles tramaban); al
+morir, traman muchos más píxeles y eso sube la entropía (DELTA_MASK 129 →
+148, RDELTA_ZLIB 4 → 1) y baja el PSNR por píxel, sin que el proxy
+perceptual del calibrado lo compense en estas métricas.
+
+Decisión: **la exactitud E-16 queda opt-in** (`--dither-exact` en
+make_clip/encoder, `exact_pairs=` en las APIs de dither), con default =
+camino histórico por LUT byte-idéntico a pre-E-16. Así el producto
+`adef9e53…` sigue siendo reproducible desde `main` (regla 5) y el fondo
+instalado no cambia. El costo/beneficio real del dither exacto se
+reevaluará con E-17 (presupuesto de dither en bytes), que es el freno
+correcto para su mayor gasto de bytes. Test nuevo:
+`test_default_path_keeps_historic_lut_gated_bytes` reconstruye el camino
+histórico de forma independiente y exige bytes idénticos.
