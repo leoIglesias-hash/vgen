@@ -99,11 +99,20 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   canvas tras el texto; (c) INT-005/época sigue definitivo para la
   ruleta. Evidencia: `docs/ejecutados/2026-08-28-INT-006-…` +
   Instancia 017.
-- ▶ **Próxima acción: carril E (F3) desde E-12** (refit de paleta; con
-  fondo `reserved=0` no hay exclusión que aplicar) — al cerrarlo,
-  re-encodear el fondo. Decisión abierta: ¿960 como fondo en vez de 768?
+- ✅ **E-12 (refit de paleta, 2026-08-28)**: `--palette-refit 0..10`
+  opt-in (`09c4261`) — Lloyd acotado tras cada paleta con la regla de
+  asignación real del encode y aceptación monótona (nunca degrada);
+  reservadas intactas. Bench 768 `overlay=off` (Instancia 018):
+  **refit 5 = 35,46 dB / Oklab 0,00732 / 17.379.859 B**
+  (`adef9e53…c05bb`) vs 34,29 / 0,00793 de P-02 → **+1,17 dB con menos
+  bytes**; instalado en `outputs/` como fondo de producto. P-02 sigue
+  reproducible con el flag en 0.
+- ▶ **Próxima acción: E-13** (cerrar Lloyd en dominio uint8 en
+  `perceptual_palette.py`, aceptar solo si baja la inercia). Decisión
+  abierta: si el operador retoma el 960, re-medirlo con refit 5 (el
+  viejo 960 sin refit quedó superado por el 768 refit 5).
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).
-- Pendiente: F3 (E-12..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
+- Pendiente: F3 (E-13..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8

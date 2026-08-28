@@ -910,3 +910,46 @@ standalone activo (3 campos de 2 dígitos por tercios en serif dorada,
 «Simular carga» los cambia, zoom 2 nítido, «Limpiar panel» restaura el
 fondo, logo nativo persistente en play/pausa/clear); consola limpia salvo
 los 404 esperados de clip.slots/data.txt (falla suave INV-7).
+
+## Instancia 018 - E-12: refit de paleta a la asignación real (bench 768)
+
+Implementación en `09c4261` (CI `regression` 33202937713 en verde: 209
+pruebas Python + 26 suites JS). Flag opt-in `--palette-refit 0..10`
+(default 0 = bytes idénticos a los históricos): tras construir cada
+paleta, se reasignan las muestras con la MISMA regla de cuantización del
+encode (Oklab exacto/LUT para kmeans-oklab, Pillow para el resto), cada
+entrada base se recalcula como la media (`np.bincount`) de sus píxeles
+asignados y la iteración se acepta **solo si baja el error** en la
+métrica del algoritmo (nunca degrada). Reservadas intactas (INV-4),
+`pal_img` solo-base (INV-3), enhebrado en los tres caminos
+(global / block / adaptive / per-frame, incluido median-cut).
+
+Dos encodes del workflow `encode` sobre `main` `09c4261`, perfil
+graphic-hq 768, `overlay=off`, zopfli, tile 16, adaptive/kmeans-oklab,
+dither auto, 15 fps, v2 — idénticos a la referencia P-02 salvo el flag:
+
+### `--palette-refit 3` (run 33203084602)
+
+```text
+| clip.asclv | 17242399 | 17425768 | 0.2250 | 231 | 92 | 9 | ZLIB:92;DELTA_MASK:138;RDELTA_RAW:1 | 35.39 | 0.00734 | 514be81e7f1af07d50f3d565d25deaa44b21f916e0ff360484da976be5a01aff |
+```
+
+### `--palette-refit 5` (run 33203086375) - nuevo fondo de producto
+
+```text
+| clip.asclv | 17196490 | 17379859 | 0.2244 | 231 | 92 | 9 | ZLIB:92;DELTA_MASK:138;RDELTA_RAW:1 | 35.46 | 0.00732 | adef9e533b01fdd489ec6dacf1265f07072ecba8d15e88e79b7bd2dd5a5c05bb |
+```
+
+Contra P-02 (34,29 dB / 0,00793 / 17.482.270 B): refit 3 = **+1,10 dB,
+−7,4 % Oklab, −0,32 % bytes**; refit 5 = **+1,17 dB, −7,7 % Oklab,
+−0,59 % bytes**. Mejora de calidad y de tamaño a la vez, con costo solo
+offline. El 768 refit 5 supera incluso al 960 ultra sin refit (34,40 dB,
+25,0 MB) con 31 % menos de bytes: la comparación 768 vs 960 de la
+Instancia 017 queda desactualizada y debería repetirse con refit si el
+operador retoma la idea del 960.
+
+Decisión: **refit 5 pasa a ser el fondo de producto** («al cerrar E-12,
+re-encodear el fondo», runbook §Próxima acción): `outputs/clip.asclv` =
+`adef9e53…c05bb` (SHA local verificado). El flag sigue opt-in para que
+las referencias históricas (P-02 `ebfe2eb4…4b36` incluida) se mantengan
+reproducibles byte a byte; el workflow lo pasa por `extra`.
