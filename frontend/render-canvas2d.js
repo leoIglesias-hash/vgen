@@ -3,6 +3,14 @@
  *
  * - PIXEL: el backing store queda en cols x rows. El zoom es solo visual (CSS), con
  *   reconstruccion NEAREST o SOFT seleccionable sin multiplicar la RAM del canvas.
+ * - PIXEL + texto nativo (INT-004): si el player fija renderer.pixelScale = s (entero
+ *   >= 2) ANTES de init, el backing store pasa a cols*s x rows*s para que el texto de
+ *   textlayer.js se dibuje nitido a esa resolucion. El frame se escribe chico con
+ *   putImageData y se escala con UN drawImage del canvas sobre si mismo (la spec
+ *   exige snapshot del origen: no hace falta un segundo canvas). Con pixelScale el
+ *   put es siempre completo: el blit anterior piso la esquina y el texto pudo pisar
+ *   cualquier region. Con pixelScale 1 (default) el comportamiento es identico al
+ *   historico, byte a byte.
  * - ASCII (BW/PAL/RGB): dibuja glifos reales con fillText y fuente monoespaciada (D2,
  *   ruta universal). Suficiente hasta ~150 columnas.
  *
@@ -52,8 +60,12 @@
       this.glyphs = (h.mode !== MODE_PIXEL); // color modes: por defecto glifos en ASCII
     }
     if (h.mode === MODE_PIXEL) {
-      this.canvas.width = h.cols;
-      this.canvas.height = h.rows;
+      this.pixelScale = (typeof this.pixelScale === "number" &&
+        isFinite(this.pixelScale) &&
+        this.pixelScale === Math.floor(this.pixelScale) &&
+        this.pixelScale > 1) ? this.pixelScale : 1;
+      this.canvas.width = h.cols * this.pixelScale;
+      this.canvas.height = h.rows * this.pixelScale;
       this.canvas.style.width = (h.cols * this.cellPx) + "px";
       this.canvas.style.height = "auto";
       this.imgData = this.ctx.createImageData(h.cols, h.rows);
@@ -90,19 +102,39 @@
         y1 >= y0 && y1 < h.rows);
       var full = !this._imageInit || reader.dirtyFull || !dirtyKnown ||
                  !dirtyValid;
+      var scale = this.pixelScale > 1 ? this.pixelScale : 1;
 
       // Solo rows/-1 es el sentinel acordado para un cuadro exactamente repetido.
       // Cualquier otro rango invertido o fuera del frame se trata como no confiable.
-      if (!full && empty) return;
-      if (!full && typeof reader.fillRGBAChanged !== "function" &&
+      // Con pixelScale > 1 un cuadro repetido igual se re-copia: el texto nativo
+      // pudo pisar el canvas y el put chico + blit lo restauran completo.
+      if (!full && empty && scale === 1) return;
+      if (!full && !empty && typeof reader.fillRGBAChanged !== "function" &&
           typeof reader.fillRGBARows !== "function") full = true;
 
       // El primer cuadro, un keyframe/cambio de paleta o metadata dirty no confiable
       // reconstruyen todo. fillRGBA conserva compatibilidad con lectores anteriores.
       if (full) {
         reader.fillRGBA(this.rgba);
+        if (scale > 1) {
+          this._imageInit = true;
+          this._scaledPut(h);
+          return;
+        }
         this.ctx.putImageData(this.imgData, 0, 0);
         this._imageInit = true;
+      } else if (scale > 1) {
+        // El RGBA persistente se mantiene incremental, pero la copia al canvas
+        // es completa: el blit escalado del frame anterior ocupo el origen.
+        if (!empty && y1 >= y0) {
+          if (typeof reader.fillRGBAChanged === "function") {
+            reader.fillRGBAChanged(this.rgba);
+          } else {
+            reader.fillRGBARows(this.rgba, y0, y1);
+          }
+        }
+        this._scaledPut(h);
+        return;
       } else if (y1 >= y0) {
         // ImageData y su backing RGBA se crean una sola vez. El reader nuevo
         // convierte celdas exactas; el fallback convierte la banda inclusiva.
@@ -147,6 +179,15 @@
         ctx.fillText(glyph, c * cw, r * ch);
       }
     }
+  };
+
+  /* INT-004: frame chico al origen + blit escalado del canvas sobre si mismo
+   * (drawImage snapshotea el origen por spec, el solape es seguro). */
+  Canvas2DRenderer.prototype._scaledPut = function (h) {
+    var s = this.pixelScale;
+    this.ctx.putImageData(this.imgData, 0, 0);
+    this.ctx.drawImage(this.canvas, 0, 0, h.cols, h.rows,
+                       0, 0, h.cols * s, h.rows * s);
   };
 
   Canvas2DRenderer.prototype.dispose = function () {

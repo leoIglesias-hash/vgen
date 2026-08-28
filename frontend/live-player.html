@@ -15,7 +15,14 @@
       serial monotonico y validacion en 5 pasos) o con el boton de prueba,
       que genera un payload valido por campo (digitos y presencia v2);
     - si el clip no tiene reserva o el sidecar no coincide, el video se
-      reproduce igual, sin overlay (INV-7).
+      reproduce igual, sin overlay (INV-7);
+    - INT-004 (texto nativo): con sidecar v2, los campos de numeros grandes
+      se espejan como TEXTO dibujado con Canvas2D sobre el MISMO canvas,
+      despues del frame, para comparar nitidez lado a lado con la matriz.
+      Con texto declarado el renderer es Canvas2D (regla 6) y su backing
+      store escala con el zoom (pixelScale) para que el texto sea nitido.
+      Orden por frame: beforeSeek -> seek -> afterSeek -> markDirty(texto)
+      -> renderer.draw -> textLayer.draw.
 -->
 <style>
   :root{ color-scheme: dark; }
@@ -52,6 +59,7 @@
 <script src="slots.js"></script>
 <script src="overlay.js"></script>
 <script src="datachannel.js"></script>
+<script src="textlayer.js"></script>
 <script>
 (function(){
   "use strict";
@@ -64,6 +72,7 @@
   var elBadge=document.getElementById("badge"), elStatus=document.getElementById("status");
   var elSim=document.getElementById("simulate"), elClear=document.getElementById("clearOverlay");
   var reader=null, renderer=null, overlay=null, channel=null, overlayMeta=null;
+  var textLayer=null, textFields=null, textItems=null, cellScale=1;
   var playing=false, hasAudio=false, startT=0, raf=0, lastShown=-1, simSerial=0;
   var urlAPI=window.URL || window.webkitURL;
   var perf=window.performance;
@@ -85,9 +94,25 @@
     reader.seek(frame);
     if(overlay) overlay.afterSeek();
   }
+  /* INT-004: las cajas de texto se marcan sucias DESPUES del seek (el seek
+   * resetea los dirty sets) y ANTES del draw, para que el video se repinte
+   * debajo del texto viejo; se marcan TODAS las cajas declaradas (no solo
+   * las que tienen texto) para que borrar un texto no deje fantasma. */
+  function markTextDirty(){
+    var i,it;
+    textLayer.markDirty(reader);
+    for(i=0;i<textItems.length;i++){
+      it=textItems[i];
+      if(it.x+it.w<=reader.header.cols && it.y+it.h<=reader.header.rows){
+        reader.markRectDirty(it.x,it.y,it.w,it.h);
+      }
+    }
+  }
   function drawFrame(frame){
     seekTo(frame);
+    if(textLayer) markTextDirty();
     renderer.draw(reader);
+    if(textLayer) textLayer.draw(renderer.ctx,cellScale);
   }
 
   function overlayStatus(){
@@ -103,12 +128,93 @@
     nc.id="cv"; old.parentNode.replaceChild(nc,old); cv=nc;
     var cellPx=parseInt(elZoom.value,10), r=null;
     if(renderer && renderer.dispose){ try{ renderer.dispose(true); }catch(e1){} }
-    try{
-      var w=new window.WebGLRenderer(cv);
-      if(w.init(reader,cellPx,"nearest")){ r=w; } else if(w.dispose){ w.dispose(true); }
-    }catch(e2){ r=null; }
-    if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,"nearest"); }
+    /* INT-004 / regla 6: con texto nativo declarado el renderer ES Canvas2D
+     * (WebGL no gana funciones; strokeText/fillText no existen alli) */
+    if(!textLayer){
+      try{
+        var w=new window.WebGLRenderer(cv);
+        if(w.init(reader,cellPx,"nearest")){ r=w; } else if(w.dispose){ w.dispose(true); }
+      }catch(e2){ r=null; }
+    }
+    if(!r){
+      r=new window.Canvas2DRenderer(cv);
+      if(textLayer){ r.pixelScale=cellPx; }
+      r.init(reader,cellPx,"nearest");
+    }
     renderer=r;
+    cellScale=(textLayer && r.pixelScale>1)?r.pixelScale:1;
+  }
+
+  /* ---- INT-004: espejo en texto nativo de los numeros grandes ----
+   * Por cada campo v2 de digitos con slots grandes (w>=20 celdas) se declara
+   * una caja de texto al costado (misma altura, serif con borde) y cada
+   * payload aceptado alimenta la matriz Y el texto: nitidez lado a lado. */
+  function buildTextSpec(meta){
+    var items=[],fields=[],cols=reader.header.cols,i,f,s0,s1,x0,wTot,tx;
+    if(meta.version!==2) return {items:items,fields:fields};
+    for(i=0;i<meta.fields.length;i++){
+      f=meta.fields[i];
+      if(f.kind!==0) continue;
+      s0=meta.slots[f.slotIds[0]];
+      if(s0.w<20) continue;
+      s1=meta.slots[f.slotIds[f.slotIds.length-1]];
+      x0=s0.x; wTot=(s1.x+s1.w)-x0;
+      tx=x0+wTot+2;
+      if(tx+wTot>cols) tx=x0-wTot-2;
+      if(tx<0) continue;
+      items.push({id:f.fieldId,x:tx,y:s0.y,w:wTot,h:s0.h,
+        size:Math.max(1,s0.h-6),color:"#ffd700",outline:"#000000",
+        font:"serif",align:"center"});
+      fields.push(f);
+    }
+    return {items:items,fields:fields};
+  }
+  function fieldWire(f){
+    return f.kind===1 ? 1+wireWidth(f.max) : f.slotIds.length;
+  }
+  function mirrorTexts(payload){
+    var off=0,i,j,f;
+    for(i=0;i<overlayMeta.fields.length;i++){
+      f=overlayMeta.fields[i];
+      for(j=0;j<textFields.length;j++){
+        if(textFields[j]===f){
+          textLayer.setText(f.fieldId,payload.substr(off,fieldWire(f)));
+        }
+      }
+      off+=fieldWire(f);
+    }
+  }
+  function clearTexts(){
+    var j;
+    for(j=0;j<textFields.length;j++){
+      textLayer.setText(textFields[j].fieldId,"");
+    }
+  }
+  /* Todo payload aceptado (boton O canal de datos) actualiza ambos lados;
+   * clear() limpia matriz y textos juntos. */
+  function hookTextMirror(){
+    var origSet=overlay.setValues, origClear=overlay.clear;
+    overlay.setValues=function(payload){
+      var ok=origSet.call(overlay,payload);
+      if(ok) mirrorTexts(String(payload));
+      return ok;
+    };
+    overlay.clear=function(){
+      origClear.call(overlay);
+      clearTexts();
+    };
+  }
+  function tryAttachText(meta){
+    var spec=buildTextSpec(meta);
+    if(!spec.items.length || !window.ASCILINETextLayer) return;
+    textLayer=window.ASCILINETextLayer.create(spec.items);
+    if(!textLayer) return;
+    textFields=spec.fields;
+    textItems=spec.items;
+    hookTextMirror();
+    pickRenderer();
+    reader.decodedIndex=-1;
+    drawFrame(lastShown<0?0:lastShown);
   }
 
   /* ---- sidecar + canal: el fallo de cualquiera deja el video intacto ---- */
@@ -140,7 +246,10 @@
     if(channel) channel.start();
     elSim.disabled=false;
     elClear.disabled=false;
-    log(overlayStatus()+" - panel de "+overlay.nSlots+" slots; datos: "+DATA_URL+" cada 15 s.");
+    tryAttachText(meta);
+    log(overlayStatus()+" - panel de "+overlay.nSlots+" slots"+
+      (textLayer?" - texto nativo: "+textLayer.count+" campos espejados (INT-004)":"")+
+      "; datos: "+DATA_URL+" cada 15 s.");
   }
 
   /* payload valido por campo: digitos en [min,max] y, en los campos de
@@ -187,7 +296,7 @@
   elClear.onclick=function(){
     if(!overlay) return;
     overlay.clear();
-    if(reader && lastShown>=0 && !playing){ renderer.draw(reader); }
+    if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
     log("Panel limpio (clear): matriz byte-identica al video base. "+overlayStatus());
   };
 
@@ -196,7 +305,7 @@
     reader=api.parse(buf,off,len);
     pickRenderer();
     reader.decodedIndex=-1;
-    seekTo(0); renderer.draw(reader); lastShown=0;
+    drawFrame(0); lastShown=0;
     elPlay.disabled=false;
     var h=reader.header;
     elBadge.textContent="ASCL v"+h.version+" "+h.cols+"x"+h.rows+" @"+h.fps+"fps";

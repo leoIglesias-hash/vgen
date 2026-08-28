@@ -478,6 +478,59 @@ function webGLCanvas(gl, rejectLightAttributes) {
 }());
 
 
+(function testPixelScaleBackingForNativeText() {
+  // INT-004: con pixelScale el backing store crece cols*s x rows*s, el frame
+  // se escribe chico y se escala con un drawImage del canvas sobre si mismo.
+  var canvas = canvas2DMock(), reader = pixelReader(8, 5);
+  canvas.ctx.drawCalls = [];
+  canvas.ctx.drawImage = function () {
+    this.drawCalls.push(Array.prototype.slice.call(arguments));
+  };
+  var renderer = new Canvas2DRenderer(canvas);
+  renderer.pixelScale = 2;
+  assert.strictEqual(renderer.init(reader, 2, "nearest"), true);
+  assert.strictEqual(canvas.width, 16);
+  assert.strictEqual(canvas.height, 10);
+  assert.strictEqual(canvas.style.width, "16px", "el zoom CSS no cambia");
+
+  renderer.draw(reader);
+  assert.strictEqual(reader.fullCalls, 1);
+  assert.strictEqual(canvas.ctx.putCalls.length, 1);
+  assert.strictEqual(canvas.ctx.putCalls[0].length, 3);
+  assert.strictEqual(canvas.ctx.drawCalls.length, 1);
+  assert.strictEqual(canvas.ctx.drawCalls[0][0], canvas,
+    "el blit debe leer del MISMO canvas (sin segundo canvas)");
+  assert.deepStrictEqual(canvas.ctx.drawCalls[0].slice(1),
+    [0, 0, 8, 5, 0, 0, 16, 10]);
+
+  // dirty parcial: el RGBA se mantiene incremental pero el put es completo
+  reader.dirtyFull = false; reader.dirtyY0 = 2; reader.dirtyY1 = 3;
+  renderer.draw(reader);
+  assert.deepStrictEqual(reader.rowCalls, [[2, 3]]);
+  assert.strictEqual(canvas.ctx.putCalls[1].length, 3,
+    "con escala el put es completo: el blit anterior piso el origen");
+  assert.strictEqual(canvas.ctx.drawCalls.length, 2);
+
+  // cuadro repetido: igual re-copia (el texto nativo pudo pisar el canvas)
+  reader.dirtyY0 = 5; reader.dirtyY1 = -1;
+  renderer.draw(reader);
+  assert.strictEqual(reader.fullCalls, 1);
+  assert.deepStrictEqual(reader.rowCalls, [[2, 3]]);
+  assert.strictEqual(canvas.ctx.putCalls.length, 3);
+  assert.strictEqual(canvas.ctx.drawCalls.length, 3);
+
+  // un pixelScale invalido se normaliza a 1 y no toca el camino historico
+  var flat = canvas2DMock(), flatReader = pixelReader(8, 5);
+  var flatRenderer = new Canvas2DRenderer(flat);
+  flatRenderer.pixelScale = 1.5;
+  flatRenderer.init(flatReader, 4, "nearest");
+  assert.strictEqual(flatRenderer.pixelScale, 1);
+  assert.strictEqual(flat.width, 8);
+  flatRenderer.draw(flatReader);
+  assert.strictEqual(flat.ctx.putCalls.length, 1, "sin escala no hay blit");
+}());
+
+
 (function testDistributedRenderersStayES5() {
   ["render-canvas2d.js", "render-webgl.js"].forEach(function (name) {
     var source = fs.readFileSync(path.join(__dirname, "..", "frontend", name), "utf8");

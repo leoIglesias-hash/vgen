@@ -19,12 +19,13 @@ assert(page.indexOf('CLIP_URL="./outputs/clip.asclv"') >= 0);
 assert(page.indexOf('SLOTS_URL="./outputs/clip.slots"') >= 0);
 assert(page.indexOf('DATA_URL="./outputs/data.txt"') >= 0);
 
-/* orden de scripts: readers -> renderers -> slots -> overlay -> canal */
+/* orden de scripts: readers -> renderers -> slots -> overlay -> canal -> texto */
 assert(page.indexOf('src="reader.js"') < page.indexOf('src="reader-v2.js"'));
 assert(page.indexOf('src="reader-v2.js"') < page.indexOf('src="reader-factory.js"'));
 assert(page.indexOf('src="render-webgl.js"') < page.indexOf('src="slots.js"'));
 assert(page.indexOf('src="slots.js"') < page.indexOf('src="overlay.js"'));
 assert(page.indexOf('src="overlay.js"') < page.indexOf('src="datachannel.js"'));
+assert(page.indexOf('src="datachannel.js"') < page.indexOf('src="textlayer.js"'));
 
 /* un solo layer: exactamente un canvas en el markup, sin capa DOM extra */
 assert.strictEqual(page.match(/<canvas/g).length, 1,
@@ -34,6 +35,33 @@ assert.strictEqual(page.match(/<canvas/g).length, 1,
 assert(/overlay\.beforeSeek\(\);[\s\S]{0,40}reader\.seek\(frame\);[\s\S]{0,40}overlay\.afterSeek\(\);/.test(inline[1]),
   "el overlay debe envolver al seek en ese orden exacto");
 assert(inline[1].indexOf("drawFrame") >= 0);
+
+/* INT-004: orden por frame con texto nativo — seekTo (beforeSeek/seek/
+ * afterSeek) -> markDirty(texto) -> renderer.draw -> textLayer.draw */
+assert(/seekTo\(frame\);\s*if\(textLayer\) markTextDirty\(\);\s*renderer\.draw\(reader\);\s*if\(textLayer\) textLayer\.draw\(/.test(inline[1]),
+  "el texto se marca sucio tras el seek y se dibuja despues del frame");
+assert(inline[1].indexOf("textLayer.markDirty(reader)") >= 0,
+  "markTextDirty usa la API de la capa");
+assert(/markTextDirty[\s\S]{0,400}reader\.markRectDirty\(it\.x,it\.y,it\.w,it\.h\)/.test(inline[1]),
+  "todas las cajas declaradas se marcan para que borrar texto no deje fantasma");
+
+/* INT-004 / regla 6: con texto declarado el renderer ES Canvas2D y su
+ * backing store escala (pixelScale) para texto nitido */
+assert(/if\(!textLayer\)\{\s*try\{\s*var w=new window\.WebGLRenderer/.test(inline[1]),
+  "WebGL solo se intenta sin texto nativo");
+assert(inline[1].indexOf("r.pixelScale=cellPx") >= 0,
+  "el backing store del Canvas2D escala con el zoom cuando hay texto");
+assert(inline[1].indexOf("cellScale=(textLayer && r.pixelScale>1)?r.pixelScale:1") >= 0);
+
+/* INT-004: solo sidecar v2 con campos de digitos grandes genera espejo, y
+ * todo payload aceptado (boton o canal) alimenta matriz Y texto */
+assert(inline[1].indexOf("if(meta.version!==2) return") >= 0);
+assert(inline[1].indexOf("if(s0.w<20) continue") >= 0,
+  "solo los numeros grandes se espejan");
+assert(/overlay\.setValues=function\(payload\)\{\s*var ok=origSet\.call\(overlay,payload\);\s*if\(ok\) mirrorTexts\(String\(payload\)\);/.test(inline[1]),
+  "el espejo se alimenta de los mismos payloads que la matriz");
+assert(/overlay\.clear=function\(\)\{\s*origClear\.call\(overlay\);\s*clearTexts\(\);/.test(inline[1]),
+  "clear limpia matriz y textos juntos");
 
 /* INV-7: sin reserva, sin sidecar o con sidecar ajeno el video sigue */
 assert(page.indexOf("overlay inactivo") >= 0);
