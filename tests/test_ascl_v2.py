@@ -222,7 +222,9 @@ class ASCLV2TranscodeTest(unittest.TestCase):
             source_path = encode_video.call_args[0][1]
             self.assertTrue(source_path.endswith(".source-v1.ascl"))
             final_path = os.path.splitext(output)[0] + ".ascl"
-            transcode.assert_called_once_with(source_path, final_path)
+            # E-09: make_clip pasa ademas el tile regional (default 16, sin barrido)
+            transcode.assert_called_once_with(source_path, final_path,
+                                              tile_size=16, sweep=False)
             self.assertEqual(pack.call_args[0][0], final_path)
 
 
