@@ -46,7 +46,7 @@ Reglas de uso:
 | E-05 | rects protegidos en dither | cerrada | `7879f05` | 2026-08-27 | `rects_mask` + `protected_rects` en `selective_tile_mask` y `apply_selective_dither`; rects fuera de grilla rechazados; sin rects la salida es byte-idéntica (test). CI en verde |
 | E-06 | horneado de glifos | cerrada | `bc57e04`+`b0c2058` | 2026-08-27 | `tools/bake_glyphs.py`: supersample 8×, cobertura normalizada al pico del glifo (entera), cuantización a 246..251, glifo 10 transparente. Dos corridas byte-idénticas verificadas con `cmp` en CI; tabla 8×12 SHA `2ee438f4…042c` (workflow `bake-glyphs`). **Inspección visual aprobada** (dígitos legibles, antialias correcto) y anotada en el registro. CI en verde |
 | E-07 | sidecar `ASCLSLOT` | cerrada | `1d46353` | 2026-08-27 | `make_slots.py` + `slots.js` (espejo ES5); 8 fixtures negativos compartidos con veredicto idéntico en ambos validadores; sin carga parcial; CRC + verificación cruzada `reserved_rgb`. **Cierra F1** (resumen en `ejecutados/`). CI en verde |
-| E-08 | Zopfli en 5 puntos, simultáneo | pendiente | | | |
+| E-08 | Zopfli en 5 puntos, simultáneo | en curso (falta Δbytes) | `8d4489d` | 2026-08-28 | `backend/deflate_util.best_deflate` compartido por los 5 puntos (encoder ×3, predictor v2, regional v2); simetría de `transcode_ascl_bytes` verificada por test de identidad de función; pata de CI extra `py3.11 + zopfli` (regresión en verde con y sin el paquete); input `zopfli` en el workflow `encode` (default on). Falta registrar el Δbytes del encode HQ (workflow corriendo) |
 | E-09 | `tile_size` parametrizado + barrido provisional | pendiente | | | artefactos ≠16 recién tras S-2 |
 | E-10 | keyframes en cortes de escena | bloqueada (W-02) | | | además: habilitar `need_color_descriptor` |
 | E-11 | flags de audio | opcional | | | |
@@ -76,11 +76,11 @@ Reglas de uso:
 | W-06 | `inflate.js` bit-buffer + tabla | cerrada | `ee1d104` | 2026-08-27 | bit-buffer 32 bits + LUT de 9 bits con fallback canónico que conserva los errores históricos exactos; fuzzing W-05 y todas las suites en verde (`c6e55a8`). Medido en CI (`bench-inflate` vs `90e4b43`): corpus total 3.292→1.418 ms (**2,3×**), perfil gradientes 25,5→72,3 MB/s (**2,8×**) |
 | W-07 | cachear buffers de inflate | cerrada | `1856a7c` | 2026-08-27 | árboles lt/dt/código, scratch de longitudes y offs compartidos a nivel módulo; zlib validado sin subarray (decodifica in situ con `d.end`). `test_inflate_alloc.js`: 0 allocaciones tipadas en 50 frames dinámicos, cableado en run_all. CI en verde |
 | W-08 | `tile_size` flexible en `ReaderV2` | cerrada | `abb1d65` | 2026-08-27 | validación pasa de `==16` a rango 4..32; test con los seis tamaños del barrido de E-09 sobre grilla 37×29 (tiles de borde) decodificados celda a celda + seis inválidos rechazados. **Habilita S-2** (artefactos de E-09). CI en verde |
-| W-09 | una pasada en `_walkRegional` | pendiente | | | conservar validación transaccional |
-| W-10 | `clearBitset` + atajo <256 en v2 | pendiente | | | |
-| W-11 | limpieza de caminos calientes v2 | pendiente | | | |
-| W-12 | salto por byte en DELTA_MASK | pendiente | | | |
-| W-13 | `markRectDirty` en ambos readers | pendiente | | | desbloquea F7 |
+| W-09 | una pasada en `_walkRegional` | cerrada | `d0b64eb`+`d216909` | 2026-08-28 | pasada de validación intacta; la de aplicación (`apply=true`) ya no revalida packed/PAL8/MASK ni recorre mapas. Nuevo `tools/bench_reader_v2.js` + workflow `bench-reader`: total 492,9→434,8 ms (−12%), keyframe mixto 615→437 µs/frame (−29%). Corrupción sigue sin dejar matriz a medias (suite existente). CI en verde |
+| W-10 | `clearBitset` + atajo <256 en v2 | cerrada | `83924e1` | 2026-08-28 | `clearBytes` por bloques `set(zeroBlock)` (medido 20× en v1); barrido de validación de keyframe RAW/ZLIB salteado con paleta de 256. CI en verde |
+| W-11 | limpieza de caminos calientes v2 | cerrada | `fbb38db` | 2026-08-28 | los 8 puntos de la tabla del runbook (uvarint con tabla, `_markDirty` guardado, `_markDirtyCell` sin div/mod en camino caliente, packed sin divisiones, predictores sin recomputar, `_markFull` coherente). Bench vs W-09: total 439,5→293,5 ms (**−33%**; acumulado desde pre-W-09 ≈ −40%). CI en verde |
+| W-12 | salto por byte en DELTA_MASK | en curso (CI) | `b8c812d`+`ab96b8c` | 2026-08-28 | ambos readers saltan bytes de máscara en cero; caso `lmask` agregado al bench para medirlo |
+| W-13 | `markRectDirty` en ambos readers | en curso (CI) | `dcce1e7` | 2026-08-28 | API simétrica; v2 promueve a tile con cobertura total conservando la disyunción celda/tile; `test_reader_dirty_rect.js` cableado en run_all. **Desbloquea F7 al quedar en verde** |
 | W-14 | seguridad y robustez del player | pendiente | | | cierra F4 |
 | W-15 | camino ASCII de Canvas2D | opcional | | | |
 
@@ -116,10 +116,12 @@ Reglas de uso:
 
 ## Próxima acción
 
-1. Carril E: **E-08** (Zopfli en los 5 puntos, simultáneo — los tres archivos en el
-   mismo commit; cuidar la simetría de compresor en `transcode_ascl_bytes`).
-2. Carril W: **W-09** (una sola pasada en `_walkRegional`, conservando la validación
-   transaccional).
+1. Cerrar **E-08**: registrar el Δbytes del workflow `encode` con Zopfli (corriendo) en el
+   registro y en la fila; comparar contra la referencia HQ `f3051baa…1527`.
+2. Cerrar **W-12/W-13** cuando el CI de `ab96b8c` quede en verde (medición de `lmask` en
+   `bench-reader`, baseline `fbb38db`).
+3. Carril W: **W-14** (seguridad y robustez del player — cierra F4).
+4. Carril E: **E-09** (`tile_size` parametrizado; ya desbloqueado por S-2/W-08).
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.

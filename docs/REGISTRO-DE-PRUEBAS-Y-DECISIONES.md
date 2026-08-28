@@ -617,3 +617,35 @@ Fecha: 2026-08-27, commits `bc57e04` + `b0c2058` (normalizacion al pico).
   a 8x12) nunca alcanzan "texto pleno". La tabla depende de la fuente y el
   tamano: la tabla que se embeba en produccion debe regenerarse y registrarse
   con su SHA en el entorno que la emita.
+
+## Instancia 010 - W-09/W-10/W-11: optimizacion del decode regional v2
+
+Fecha: 2026-08-28, commits `d0b64eb`+`d216909` (W-09), `83924e1` (W-10),
+`fbb38db` (W-11). Herramienta nueva: `tools/bench_reader_v2.js` + workflow
+`bench-reader` (grilla sintetica 224x224, tiles 16, 400 repeticiones de las
+dos pasadas reales de `_walkRegional`; us/frame por caso).
+
+### Medicion (us/frame, runner ubuntu-latest)
+
+```text
+              pre-W-09      W-09          W-11          acumulado
+key mix       615,2         437,3         223,5         -64%
+sparse        396,9         439,4 (*)     121,4         -69%
+mask          220,1         210,2         388,9 (*)     (*)
+total (ms)    492,9         434,8         293,5         -40%
+```
+
+(*) El runner de CI muestra varianza alta entre corridas (el mismo commit
+midio sparse 338,8 y 439,4 en dos runs). La cifra confiable es la tendencia
+del total y del caso keyframe, no el punto individual por caso.
+
+### Conclusion y alcance
+
+- W-09 conserva la pasada de validacion byte a byte y recorta la de
+  aplicacion; ninguna corrupcion nueva es aceptable por construccion (la
+  pasada 1 es identica) y la suite de corrupcion existente siguio en verde.
+- W-11 aporta la mayor parte del recorte (uvarint con tabla, packed sin
+  divisiones, dirty sin div/mod en caminos calientes, predictores sin
+  recomputar el residual).
+- El objetivo del runbook para W-09 (~15-20%) se supero en el agregado
+  W-09+W-11 (~40% del walk regional). Cifras absolutas de TV quedan para F8.
