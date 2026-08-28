@@ -29,11 +29,15 @@ jobs:
           node-version: "20"
       - name: Bench HEAD vs baseline
         run: |
+          set -euo pipefail
           echo "== HEAD ($(git rev-parse --short HEAD)) =="
           node tools/bench_reader_v2.js frontend/reader-v2.js "${{ inputs.repeats }}" | tee head.txt
-          git show "${{ inputs.baseline }}:frontend/reader-v2.js" > /tmp/reader-baseline.js
+          # reader-v2.js requiere ./inflate.js: extraer el frontend baseline completo
+          mkdir -p /tmp/baseline
+          git show "${{ inputs.baseline }}:frontend/reader-v2.js" > /tmp/baseline/reader-v2.js
+          git show "${{ inputs.baseline }}:frontend/inflate.js" > /tmp/baseline/inflate.js
           echo "== baseline (${{ inputs.baseline }}) =="
-          node tools/bench_reader_v2.js /tmp/reader-baseline.js "${{ inputs.repeats }}" | tee baseline.txt
+          node tools/bench_reader_v2.js /tmp/baseline/reader-v2.js "${{ inputs.repeats }}" | tee baseline.txt
           {
             echo "## bench reader-v2 (_walkRegional)"
             echo ""
