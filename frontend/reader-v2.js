@@ -57,6 +57,8 @@
   var popCount = null;
   var lowBitIndex = null;
   var zeroBlock = new Uint8Array(4096);
+  /* W-11: 128^k para uvarint sin Math.pow por byte. */
+  var UVAR_SCALE = [1, 128, 16384, 2097152, 268435456];
 
   function fail(message) { throw new Error("ASCLv2: " + message); }
 
@@ -294,20 +296,19 @@
   ReaderV2.prototype._isKey = function (index) { return hasBit(this.keyBits, index); };
 
   ReaderV2.prototype._readUvar = function (raw, p, end) {
-    var value = 0, shift = 0, count = 0, byte;
+    var value = 0, count = 0, byte;
     while (count < 5) {
       if (p >= end) fail("uvarint truncado");
       byte = raw[p++];
+      if (count === 4 && (byte & 0xf0)) fail("uvarint excede uint32");
+      value += (byte & 0x7f) * UVAR_SCALE[count];
       count++;
-      if (count === 5 && (byte & 0xf0)) fail("uvarint excede uint32");
-      value += (byte & 0x7f) * Math.pow(2, shift);
       if ((byte & 0x80) === 0) {
         if (count > 1 && (byte & 0x7f) === 0) fail("uvarint no canonico");
         this._varValue = value;
         this._varNext = p;
         return;
       }
-      shift += 7;
     }
     fail("uvarint demasiado largo");
   };
@@ -330,17 +331,20 @@
     if ((this.dirtyTileBits[byteIndex] & mask) === 0) {
       this.dirtyTileBits[byteIndex] |= mask;
       this._dCount++;
-      /* Un tile denso reemplaza cualquier bit exacto previo que solape. */
       this._tileGeometry(tile);
-      for (y = 0; y < this._tileH; y++) {
-        base = (this._tileY + y) * this.header.cols + this._tileX;
-        for (x = 0; x < this._tileW; x++) {
-          cell = base + x;
-          cellByte = cell >>> 3;
-          cellMask = 1 << (cell & 7);
-          if (this.dirtyCellBits[cellByte] & cellMask) {
-            this.dirtyCellBits[cellByte] &= ~cellMask;
-            this._dCellCount--;
+      /* Un tile denso reemplaza cualquier bit exacto previo que solape.
+       * W-11: sin bits exactos pendientes no hay nada que barrer. */
+      if (this._dCellCount) {
+        for (y = 0; y < this._tileH; y++) {
+          base = (this._tileY + y) * this.header.cols + this._tileX;
+          for (x = 0; x < this._tileW; x++) {
+            cell = base + x;
+            cellByte = cell >>> 3;
+            cellMask = 1 << (cell & 7);
+            if (this.dirtyCellBits[cellByte] & cellMask) {
+              this.dirtyCellBits[cellByte] &= ~cellMask;
+              this._dCellCount--;
+            }
           }
         }
       }
@@ -352,12 +356,17 @@
     if (y1 > this._dY1) this._dY1 = y1;
   };
 
-  ReaderV2.prototype._markDirtyCell = function (cell) {
-    var x, y, tile, tileByte, tileMask, cellByte, cellMask;
+  /* W-11: los caminos calientes ya conocen tile y fila; pasarlos evita los
+   * cuatro div/mod por celda. Sin esos argumentos se calculan igual que antes. */
+  ReaderV2.prototype._markDirtyCell = function (cell, tile, rowY) {
+    var x, y, tileByte, tileMask, cellByte, cellMask;
     if (this._dFull) return;
-    x = cell % this.header.cols;
-    y = Math.floor(cell / this.header.cols);
-    tile = Math.floor(y / this.tileSize) * this.tileCols + Math.floor(x / this.tileSize);
+    if (tile === undefined) {
+      x = cell % this.header.cols;
+      rowY = Math.floor(cell / this.header.cols);
+      tile = Math.floor(rowY / this.tileSize) * this.tileCols + Math.floor(x / this.tileSize);
+    }
+    y = rowY;
     tileByte = tile >>> 3;
     tileMask = 1 << (tile & 7);
     if (this.dirtyTileBits[tileByte] & tileMask) return;
@@ -375,7 +384,8 @@
     this._dFull = true;
     clearBytes(this.dirtyCellBits);
     this._dCellCount = 0;
-    this._dCount = this.tileCount;
+    /* W-11: dirtyTileBits queda vacio; el contador debe ser coherente con el. */
+    this._dCount = 0;
     this._dY0 = 0;
     this._dY1 = this.header.rows - 1;
   };
@@ -421,17 +431,21 @@
     }
   };
 
-  /* Contrato W-09: el llamador ya ejecuto _tileGeometry(tile) para este tile. */
+  /* Contrato W-09: el llamador ya ejecuto _tileGeometry(tile) para este tile.
+   * W-11: cursor de bits incremental, sin divisiones por pixel. */
   ReaderV2.prototype._writeTilePacked = function (tile, raw, packedStart, bits, mapStart, mapCount) {
-    var q, code, byte, bitShift, y, x, globalIndex;
-    for (q = 0; q < this._tilePixels; q++) {
-      bitShift = (q * bits) & 7;
-      byte = raw[packedStart + Math.floor(q * bits / 8)];
-      code = (byte >>> bitShift) & ((1 << bits) - 1);
-      y = Math.floor(q / this._tileW);
-      x = q - y * this._tileW;
-      globalIndex = (this._tileY + y) * this.header.cols + this._tileX + x;
-      this.cells[globalIndex] = raw[mapStart + code];
+    var code, y, x, base, mask, byteIndex, bitShift;
+    mask = (1 << bits) - 1;
+    byteIndex = packedStart;
+    bitShift = 0;
+    for (y = 0; y < this._tileH; y++) {
+      base = (this._tileY + y) * this.header.cols + this._tileX;
+      for (x = 0; x < this._tileW; x++) {
+        code = (raw[byteIndex] >>> bitShift) & mask;
+        bitShift += bits;
+        if (bitShift === 8) { bitShift = 0; byteIndex++; }
+        this.cells[base + x] = raw[mapStart + code];
+      }
     }
   };
 
@@ -487,7 +501,7 @@
             y = Math.floor(offset / this._tileW);
             x = offset - y * this._tileW;
             globalIndex = (this._tileY + y) * this.header.cols + this._tileX + x;
-            this._markDirtyCell(globalIndex);
+            this._markDirtyCell(globalIndex, tile, this._tileY + y);
             this.cells[globalIndex] = value;
           }
         } else {
@@ -519,7 +533,7 @@
               y = Math.floor(i / this._tileW);
               x = i - y * this._tileW;
               globalIndex = (this._tileY + y) * this.header.cols + this._tileX + x;
-              this._markDirtyCell(globalIndex);
+              this._markDirtyCell(globalIndex, tile, this._tileY + y);
               this.cells[globalIndex] = value;
             }
           }
@@ -577,11 +591,13 @@
         if (apply) {
           this._writeTilePacked(tile, raw, packedStart, bits, mapStart, mapCount);
         } else {
+          byteIndex = packedStart;
+          shift = 0;
           for (i = 0; i < npix; i++) {
-            byteIndex = Math.floor(i * bits / 8);
-            shift = (i * bits) & 7;
-            code = (raw[packedStart + byteIndex] >>> shift) & ((1 << bits) - 1);
+            code = (raw[byteIndex] >>> shift) & ((1 << bits) - 1);
             if (code >= mapCount) fail("indice packed fuera de mapa");
+            shift += bits;
+            if (shift === 8) { shift = 0; byteIndex++; }
           }
           if ((npix * bits & 7) !== 0) {
             validBits = (1 << (npix * bits & 7)) - 1;
@@ -683,23 +699,25 @@
 
     if (keyframe) {
       /* raw pasa de residual a frame reconstruido, fila por fila. Todos los
-       * vecinos que consulta ya fueron reconstruidos en el mismo scratch. */
-      for (i = 0; i < this.n; i++) {
-        x = i % cols;
-        y = Math.floor(i / cols);
-        if (predictor === PRED_LEFT) {
-          predicted = x ? raw[i - 1] : 0;
-        } else if (predictor === PRED_TOP) {
-          predicted = y ? raw[i - cols] : 0;
-        } else {
-          left = x ? raw[i - 1] : 0;
-          top = y ? raw[i - cols] : 0;
-          topLeft = x && y ? raw[i - cols - 1] : 0;
-          predicted = (left + top - topLeft) & 255;
+       * vecinos que consulta ya fueron reconstruidos en el mismo scratch.
+       * W-11: bucle anidado con acumulador, sin div/mod por celda. */
+      i = 0;
+      for (y = 0; y < this.header.rows; y++) {
+        for (x = 0; x < cols; x++, i++) {
+          if (predictor === PRED_LEFT) {
+            predicted = x ? raw[i - 1] : 0;
+          } else if (predictor === PRED_TOP) {
+            predicted = y ? raw[i - cols] : 0;
+          } else {
+            left = x ? raw[i - 1] : 0;
+            top = y ? raw[i - cols] : 0;
+            topLeft = x && y ? raw[i - cols - 1] : 0;
+            predicted = (left + top - topLeft) & 255;
+          }
+          value = (predicted + raw[i]) & 255;
+          this._validateIndex(value, paletteEntries);
+          raw[i] = value;
         }
-        value = (predicted + raw[i]) & 255;
-        this._validateIndex(value, paletteEntries);
-        raw[i] = value;
       }
       this.cells.set(raw.subarray(0, this.n));
       this._markFull();
@@ -707,16 +725,17 @@
     }
 
     /* Primera pasada: ni cells ni dirty cambian hasta que cada indice final
-     * quedo validado contra la paleta activa. */
+     * quedo validado contra la paleta activa. W-11: el valor final validado se
+     * guarda en el scratch para no recomputar el residual en la segunda. */
     for (i = 0; i < this.n; i++) {
       value = predictor === PRED_PREVIOUS_SUB ?
         ((this.cells[i] + raw[i]) & 255) : (this.cells[i] ^ raw[i]);
       this._validateIndex(value, paletteEntries);
+      raw[i] = value;
     }
     for (i = 0; i < this.n; i++) {
-      if (raw[i] !== 0) {
-        this.cells[i] = predictor === PRED_PREVIOUS_SUB ?
-          ((this.cells[i] + raw[i]) & 255) : (this.cells[i] ^ raw[i]);
+      if (raw[i] !== this.cells[i]) {
+        this.cells[i] = raw[i];
         this._markDirtyCell(i);
       }
     }
