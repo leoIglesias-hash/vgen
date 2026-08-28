@@ -87,22 +87,21 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   con texto el renderer es Canvas2D con `pixelScale=zoom` (backing real,
   put chico + drawImage del canvas sobre sí mismo, sin segundo canvas).
   Evidencia: `docs/ejecutados/2026-08-28-INT-004-texto-nativo.md`.
-- ✅ **INT-006-B (texto standalone)**: `textfeed.js` (`49e2b4a` + fix gate
-  `2c81856`) — sin sidecar el player declara 3 campos de 2 dígitos por
-  tercios y botón+canal los alimentan (`datachannel.js` intacto).
-  ✅ **INT-006-C (D7=a, imagen nativa)**: `3e51ce8` — el operador entregó
-  el logo; `outputs/logo.png` (opcional) se dibuja con drawImage sobre el
-  MISMO canvas tras el texto, caja sucia por frame, 404 = nada cambia;
-  (c) INT-005/época sigue definitivo para la ruleta.
-- ▶ **Próxima acción: cerrar INT-006-A** — los dos encodes `overlay=off`
-  están corriendo (runs 33193293258 hq-768 / 33193299286 ultra-960):
-  bajar artifacts, verificar SHA (768 debería reproducir `ebfe2eb4…4b36`),
-  registrar bench 768 vs 960, dejar el 768 en `outputs/clip.asclv` y
-  **borrar `outputs/clip.slots` y `data.txt`** (logo.png queda). Cierre de
-  etapa: player standalone verificado con el fondo nuevo + ejecutados +
-  aviso al operador. Después: carril E desde **E-12** (refit; con
-  `reserved=0` no hay exclusión que aplicar) y re-encode del fondo al
-  cerrarlo.
+- ✅ **INT-006 (carril completo, 2026-08-28)**: (A) fondo re-encodeado
+  `overlay=off` — el **768 reproduce byte a byte la referencia P-02**
+  (`ebfe2eb4…4b36`, 17.482.270 B, instalado en `outputs/`; PSNR 34,29) y
+  el **960** quedó medido (`31348a83…5688`, 25,0 MB, 34,40) por si el
+  operador lo prefiere; `clip.slots`/`data.txt` borrados. (B) texto
+  standalone: `textfeed.js` (`49e2b4a`+fix `2c81856`) — sin sidecar el
+  player declara 3 campos de 2 dígitos por tercios; botón+canal los
+  alimentan (`datachannel.js` intacto). (C) **D7=a imagen nativa**
+  (`3e51ce8`): `outputs/logo.png` opcional con drawImage sobre el MISMO
+  canvas tras el texto; (c) INT-005/época sigue definitivo para la
+  ruleta. Evidencia: `docs/ejecutados/2026-08-28-INT-006-…` +
+  Instancia 017.
+- ▶ **Próxima acción: carril E (F3) desde E-12** (refit de paleta; con
+  fondo `reserved=0` no hay exclusión que aplicar) — al cerrarlo,
+  re-encodear el fondo. Decisión abierta: ¿960 como fondo en vez de 768?
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).

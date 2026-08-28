@@ -131,9 +131,9 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 
 | ID | Tarea | Estado | Commit | Fecha | Notas |
 |---|---|---|---|---|---|
-| INT-006-A | fondo HQ `overlay=off` (768 y candidato 960) + registro + outputs limpio | en curso | | 2026-08-28 | encodes despachados (runs 33193293258 hq / 33193299286 ultra); resta bajar artifacts, verificar SHA, registrar bench y limpiar `outputs/` |
+| INT-006-A | fondo HQ `overlay=off` (768 y candidato 960) + registro + outputs limpio | cerrada | (solo dispatch) | 2026-08-28 | **768 reproduce byte a byte la referencia P-02** (`ebfe2eb4…4b36`, 17.482.270 B; PSNR 34,29 / Oklab 0,00793, run 33193293258); **960** `31348a83…5688` (25.003.004 B; 34,40 / 0,00776, run 33193299286) queda como dato — el 768 sigue de producto (valores del operador). `outputs/` limpio: clip 768 con SHA verificado, `clip.slots`/`data.txt` borrados, `logo.png` queda. Registro: **Instancia 017** |
 | INT-006-B | `textfeed.js` + live-player standalone (texto sin sidecar, sim + canal) | cerrada | `49e2b4a` + fix `2c81856` | 2026-08-28 | `ASCILINETextFeed.create(capa,campos)` → `digitCount`/`setValues` todo-o-nada (misma interfaz que consume `datachannel.js`, sin cambios); sin overlay de matriz el player declara 3 campos de 2 dígitos por tercios (dimensionados por cols/rows) y botón+canal los alimentan; suite `test_textfeed.js` cableada; el fix quita un backtick de comentario que volteó el gate ES5 del test de página (CI rojo → verde en el siguiente push) |
-| INT-006-C | intervención de la imagen del operador (decisión D7) | cerrada (código) | `3e51ce8` | 2026-08-28 | el operador entregó `inputs/logonuevo150.png` (logo TeleKino) y **D7 se resuelve en (a) nativa**: `drawImage` del PNG (`outputs/logo.png`, opcional) sobre el MISMO canvas después del texto, caja en celdas (cols/4, aspecto preservado, esquina sup. der.) marcada sucia por frame; solo activa con texto declarado (renderer ya Canvas2D); 404 = nada cambia (INV-7); verificado en navegador sobre el clip de parches (play/sim/zoom/clear sin errores de consola); (c) INT-005/época sigue como definitivo para la ruleta |
+| INT-006-C | intervención de la imagen del operador (decisión D7) | cerrada | `3e51ce8` | 2026-08-28 | el operador entregó `inputs/logonuevo150.png` (logo TeleKino) y **D7 se resuelve en (a) nativa**: `drawImage` del PNG (`outputs/logo.png`, opcional) sobre el MISMO canvas después del texto, caja en celdas (cols/4, aspecto preservado, esquina sup. der.) marcada sucia por frame; solo activa con texto declarado (renderer ya Canvas2D); 404 = nada cambia (INV-7); verificado en navegador sobre el clip de parches (play/sim/zoom/clear sin errores de consola); (c) INT-005/época sigue como definitivo para la ruleta |
 
 ## Sincronización y fases finales
 
@@ -180,23 +180,20 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 
 ## Próxima acción
 
-1. **Cierre de INT-006-A** (en curso): cuando terminen los dos encodes
-   (runs 33193293258 hq-768 / 33193299286 ultra-960), bajar artifacts,
-   verificar SHA (el 768 debería reproducir `ebfe2eb4…4b36`), registrar las
-   dos filas de bench, dejar el 768 en `outputs/clip.asclv` y **borrar
-   `outputs/clip.slots` y `outputs/data.txt`** (el `logo.png` local queda:
-   lo usa la imagen nativa de INT-006-C).
-2. **Cierre de etapa INT-006**: player local levantado con el fondo nuevo —
-   verificar el modo standalone en navegador (3 campos de texto + logo
-   nativo + sim/canal), actualizar `docs/ejecutados/` y avisar al operador.
-3. Después: carril E (F3) desde **E-12** (refit; con fondo `reserved=0` no
-   hay exclusión que aplicar, el parámetro queda para clips con reserva) —
-   al cerrarlo, re-encodear el fondo. La **ruleta** sigue siendo INT-005 en
-   F6/S-4. F5 y F8 sin cambios.
-5. Referencias HQ vigentes: sin reserva `ebfe2eb4…4b36` (17.482.270 B) ·
-   panel v1 `7da584f1…5a51d` (17.197.813 B) · parches v2 `c315a13a…8e63`
-   (16.465.367 B) + sidecar `678b392d…2c56` (queda como demo de INT-003/004,
-   ya no es el fondo de producto).
+1. **Carril E (F3) desde E-12** (refit de paleta): con el fondo
+   `reserved=0` no hay exclusión que aplicar (el parámetro queda para
+   clips con reserva); al cerrar E-12, re-encodear el fondo. Siguen
+   E-13..E-18. La **ruleta** sigue siendo INT-005 en F6/S-4. F5 y F8 sin
+   cambios.
+2. Decisión abierta para el operador: ¿prefiere el **960**
+   (`graphic-ultra`, +0,11 dB / −2,1 % Oklab, 25,0 MB) como fondo en
+   lugar del 768 tras verlo? — está medido y citable por SHA
+   (Instancia 017).
+3. Referencias HQ vigentes: **producto = sin reserva `ebfe2eb4…4b36`
+   (17.482.270 B, instalada en `outputs/`)** · ultra 960 `31348a83…5688`
+   (25.003.004 B, artifact del run 33193299286) · panel v1
+   `7da584f1…5a51d` (17.197.813 B) · parches v2 `c315a13a…8e63`
+   (16.465.367 B) + sidecar `678b392d…2c56` (demo de INT-003/004).
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.

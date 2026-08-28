@@ -871,3 +871,42 @@ grande en serif dorada aparece en una posición DISTINTA en cada tercio del
 clip (izquierda → centro → derecha) con la palabra de elección verde y el
 panel de 20 números simultáneos; la carga simulada generó un payload válido
 por campo (dígitos de presencia incluidos) y repintó en pausa.
+
+## Instancia 017 - INT-006-A: fondo sin reserva, 768 vs 960 (overlay=off)
+
+Dos encodes del workflow `encode` sobre `main` `7cc1fdc` con `overlay=off`,
+`zopfli=on`, `tile=16`, `palette=adaptive`, `algorithm=kmeans-oklab`,
+`dither=auto`, `fps=15`, formato v2:
+
+### graphic-hq 768 (run 33193293258) - fondo de producto
+
+```text
+| clip.asclv | 17298901 | 17482270 | 0.2257 | 231 | 94 | 9 | ZLIB:94;DELTA_MASK:136;RDELTA_RAW:1 | 34.29 | 0.00793 | ebfe2eb4c8e0148b1ce6730b990abc4f6283ed40bf7977b7e7c3f548b3134b36 |
+```
+
+**Reproduce byte a byte la referencia HQ de P-02/E-08** (`ebfe2eb4…4b36`,
+17.482.270 B): determinismo confirmado tras todo el carril INT (el encoder
+no cambió para clips sin reserva). PSNR 34,29 dB / Oklab 0,00793 — la base
+recupera los 256 colores (+0,24 dB frente al clip de parches `c315a13a…`).
+
+### graphic-ultra 960 (run 33193299286) - candidato «mayor calidad»
+
+```text
+| clip.asclv | 24819635 | 25003004 | 0.2073 | 231 | 119 | 9 | ZLIB:119;DELTA_MASK:108;RDELTA_RAW:1;RDELTA_ZLIB:3 | 34.40 | 0.00776 | 31348a83da40d0997379c03f2e7f863ae5b41a9dee17317f3922baed07585688 |
+```
+
++0,11 dB PSNR y −2,1% de error Oklab frente al 768, a +43% de bytes
+(25,0 MB vs 17,5 MB) y más celdas por frame en el decode del TV. Decisión:
+el **768 queda como fondo de producto** (valores manuales del operador
+prevalecen); el 960 queda medido y citable por SHA si el operador lo
+prefiere al verlo.
+
+### outputs/ y verificación en navegador
+
+`outputs/clip.asclv` = el 768 (SHA local verificado); `clip.slots` y
+`data.txt` **borrados** (eran del clip de parches). `logo.png` (logo
+TeleKino del operador) queda para la imagen nativa. Player local:
+standalone activo (3 campos de 2 dígitos por tercios en serif dorada,
+«Simular carga» los cambia, zoom 2 nítido, «Limpiar panel» restaura el
+fondo, logo nativo persistente en play/pausa/clear); consola limpia salvo
+los 404 esperados de clip.slots/data.txt (falla suave INV-7).
