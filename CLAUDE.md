@@ -72,6 +72,8 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   workflow `encode` con `overlay=on` publica `clip.asclv`+`clip.slots`;
   `live-player.html` lo reproduce) · S-1/S-2/S-3 · P-02 (HQ reproducible;
   con Zopfli: 17.482.270 B, `ebfe2eb4…4b36`)
-- ▶ Carril E sigue en F3 desde **E-12** (el refit debe excluir 246..255).
+- ▶ **INT-003 (parches genéricos de imagen)** es el próximo pedido del operador:
+  leer `docs/DISENO-PARCHES-GENERICOS.md` y resolver D1..D6 con él antes de
+  codear. Carril E sigue en F3 desde **E-12** (el refit debe excluir 246..255).
 - Pendiente: F3 (E-12..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8

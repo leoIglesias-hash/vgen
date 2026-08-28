@@ -126,16 +126,25 @@ Reglas de uso:
 | 2026-08-28 | S-5 se cierra con los gates de INT-002 verificables en CI; el costo p95 y MEM-001 (físicos, en TV) se difieren a F8-2/F8-4 | esos dos gates requieren el hardware real; el plan ya prevé medirlos allí con y sin overlay. La RAM auxiliar en CI es la declarada (3.880 B) por construcción y con identidad de buffers testeada |
 | 2026-08-28 | el runtime F7 usa el **sidecar** (fase §7.1); la migración a `ASCLVID3` queda para F6 (S-4) como estaba planificado | permite rediseñar el panel sin re-encodear; los readers actuales rechazan ASCLVID3 limpiamente |
 | 2026-08-28 | `make_clip --reserved 10` activa también la protección del panel en el dither (`protect_panel`); los RGB reservados canónicos viven en `backend/overlay_palette.py` y la geometría del panel en `backend/overlay_panel.py` (única fuente para sidecar y dither) | INT-001 §11: el base bajo el panel no deriva; una sola fuente de verdad evita que sidecar y exclusión se desalineen |
+| 2026-08-28 | El operador pide generalizar el overlay a **parches de imagen arbitrarios** (tipografía libre, random de momento/posición, ruleta que coincide con el resultado). Queda como propuesta INT-003 en `DISENO-PARCHES-GENERICOS.md`, con las decisiones D1..D6 abiertas | pedido posterior al cierre de F7; el runtime por frame no cambia (pinta índices y restaura bytes) — lo que se generaliza es metadata, horneado y canal. No arrancar sin resolver D1..D6 con el operador |
 
 ## Próxima acción
 
-1. Carril E (F3): **E-12** (refit de paleta a la asignación real) y siguientes E-13..E-18.
+1. **INT-003 — parches genéricos de imagen** (pedido del operador 2026-08-28):
+   generalizar el overlay de glifos a imágenes horneadas (cualquier tipografía,
+   selección aleatoria de momento/posición, caso ruleta que coincide con el
+   resultado del juego). Leer [`DISENO-PARCHES-GENERICOS.md`](DISENO-PARCHES-GENERICOS.md)
+   y **resolver las decisiones D1..D6 con el operador antes de tocar código**.
+   La vía corta (tipografía libre + números random con slots candidatos) sale
+   casi gratis del mecanismo F7; la ruleta exige decidir paleta/área/formato.
+2. Carril E (F3): **E-12** (refit de paleta a la asignación real) y siguientes E-13..E-18.
    Con `reserved` ya cableado, E-12 debe excluir los índices 246..255 del refit (§4.2).
-2. La referencia HQ **con overlay** se genera con el workflow `encode` (`overlay=on`,
-   `zopfli=on`, `tile=16`): publica `clip.asclv` + `clip.slots`. La referencia HQ sin
-   overlay sigue siendo SHA `ebfe2eb4…4b36` (17.482.270 B). El barrido definitivo de
-   tile queda en S-4.
-3. F5 (trellis/near-lossless) y F6 (S-4) siguen pendientes; F8 requiere F6 + F7 (F7 ya
+3. La referencia HQ **con overlay** ya está publicada: workflow `encode` run 33138773906
+   (`overlay=on`, `zopfli=on`, `tile=16`) → `clip.asclv` 17.197.813 B SHA `7da584f1…5a51d`
+   + `clip.slots` 1.950 B SHA `ec77023c…7c56` (ambos verificados y en `outputs/` local).
+   La referencia HQ sin overlay sigue siendo SHA `ebfe2eb4…4b36` (17.482.270 B) para
+   comparaciones del carril E. El barrido definitivo de tile queda en S-4.
+4. F5 (trellis/near-lossless) y F6 (S-4) siguen pendientes; F8 requiere F6 + F7 (F7 ya
    cerrada). Al implementar trellis: excluir los rects del panel (mecanismo ya plumbeado).
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
