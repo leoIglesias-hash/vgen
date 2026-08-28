@@ -128,6 +128,17 @@ function buildMaskStream(value) {
   return new Uint8Array(out);
 }
 
+/* DELTA_MASK legacy (tag 3): ~5% de densidad, dos tercios de bytes en cero,
+ * el perfil del que habla W-12. */
+function buildLegacyMask(value) {
+  var out = [], maskLen = Math.ceil(COLS * ROWS / 8), i, changed = 0;
+  for (i = 0; i < maskLen; i++) {
+    if (i % 3 === 0) { out.push(0x21); changed += 2; } else { out.push(0); }
+  }
+  for (i = 0; i < changed; i++) out.push(value);
+  return new Uint8Array(out);
+}
+
 function blockBytes(tag, palette, payload) {
   var palLen = palette ? palette.length : 0;
   var body = new Uint8Array(3 + palLen + payload.length);
@@ -191,24 +202,26 @@ reader.seek(0);
 var CASES = [
   { name: "key mix ", keyframe: true, streams: [keyStream] },
   { name: "sparse  ", keyframe: false, streams: [buildSparseStream(20), buildSparseStream(21)] },
-  { name: "mask    ", keyframe: false, streams: [buildMaskStream(24), buildMaskStream(25)] }
+  { name: "mask    ", keyframe: false, streams: [buildMaskStream(24), buildMaskStream(25)] },
+  { name: "lmask   ", legacy: true, streams: [buildLegacyMask(26), buildLegacyMask(27)] }
 ];
+
+function runOnce(c, s) {
+  if (c.legacy) {
+    reader._decodeLegacyDelta(3, s, s.length, PAL_ENTRIES);
+  } else {
+    reader._walkRegional(s, s.length, c.keyframe, PAL_ENTRIES, false);
+    reader._walkRegional(s, s.length, c.keyframe, PAL_ENTRIES, true);
+  }
+}
 
 var ci, c, k, s, t0, t1, ms, total = 0;
 for (ci = 0; ci < CASES.length; ci++) {
   c = CASES[ci];
-  /* calentamiento + verificacion de que ambas pasadas aceptan el stream */
-  for (k = 0; k < 6; k++) {
-    s = c.streams[k % c.streams.length];
-    reader._walkRegional(s, s.length, c.keyframe, PAL_ENTRIES, false);
-    reader._walkRegional(s, s.length, c.keyframe, PAL_ENTRIES, true);
-  }
+  /* calentamiento + verificacion de que el stream se acepta */
+  for (k = 0; k < 6; k++) runOnce(c, c.streams[k % c.streams.length]);
   t0 = process.hrtime();
-  for (k = 0; k < repeats; k++) {
-    s = c.streams[k % c.streams.length];
-    reader._walkRegional(s, s.length, c.keyframe, PAL_ENTRIES, false);
-    reader._walkRegional(s, s.length, c.keyframe, PAL_ENTRIES, true);
-  }
+  for (k = 0; k < repeats; k++) runOnce(c, c.streams[k % c.streams.length]);
   t1 = process.hrtime(t0);
   ms = t1[0] * 1000 + t1[1] / 1e6;
   total += ms;
