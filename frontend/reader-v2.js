@@ -405,18 +405,18 @@
     if (value >= paletteEntries) fail("indice de paleta fuera de rango");
   };
 
+  /* Contrato W-09: el llamador ya ejecuto _tileGeometry(tile) para este tile. */
   ReaderV2.prototype._writeTileValue = function (tile, value) {
     var y, x, base;
-    this._tileGeometry(tile);
     for (y = 0; y < this._tileH; y++) {
       base = (this._tileY + y) * this.header.cols + this._tileX;
       for (x = 0; x < this._tileW; x++) this.cells[base + x] = value;
     }
   };
 
+  /* Contrato W-09: el llamador ya ejecuto _tileGeometry(tile) para este tile. */
   ReaderV2.prototype._writeTilePacked = function (tile, raw, packedStart, bits, mapStart, mapCount) {
     var q, code, byte, bitShift, y, x, globalIndex;
-    this._tileGeometry(tile);
     for (q = 0; q < this._tilePixels; q++) {
       bitShift = (q * bits) & 7;
       byte = raw[packedStart + Math.floor(q * bits / 8)];
@@ -430,11 +430,15 @@
 
   /*
    * Recorre el mismo stream dos veces. apply=false no modifica ningun estado de
-   * video; apply=true se ejecuta solo despues de una validacion completa exitosa.
+   * video y ejecuta TODA la validacion; apply=true corre solo despues de una
+   * validacion completa exitosa y omite las verificaciones ya hechas (W-09),
+   * limitandose a re-parsear el stream (inmutable entre pasadas) y escribir.
+   * La propiedad transaccional "validar todo antes de mutar una celda" vive en
+   * ese orden de llamadas; ningun fail nuevo puede aparecer con apply=true.
    */
   ReaderV2.prototype._walkRegional = function (raw, length, keyframe, paletteEntries, apply) {
     var p = 0, cursor = 0, opcode, run, tile, npix, i, k, offset, previousOffset;
-    var value, maskLength, changed, byte, validBits, valuesStart, q, globalIndex;
+    var value, maskLength, changed, validBits, valuesStart, q, globalIndex;
     var mapStart, mapCount, packedStart, packedLength, bits, code, shift, lastMap;
     var y, x, byteIndex;
     if (!length) fail("stream regional vacio");
@@ -442,8 +446,6 @@
       if (cursor >= this.tileCount) fail("bytes posteriores a cobertura regional");
       opcode = raw[p++];
       tile = cursor;
-      this._tileGeometry(tile);
-      npix = this._tilePixels;
 
       if (opcode === OP_SKIP_RUN) {
         if (keyframe) fail("SKIP no permitido en keyframe");
@@ -454,63 +456,89 @@
         continue;
       }
 
+      this._tileGeometry(tile);
+      npix = this._tilePixels;
+
       if (opcode === OP_SOLID) {
         if (p >= length) fail("SOLID truncado");
         value = raw[p++];
-        this._validateIndex(value, paletteEntries);
-        if (apply) this._writeTileValue(tile, value);
+        if (apply) {
+          this._writeTileValue(tile, value);
+        } else {
+          this._validateIndex(value, paletteEntries);
+        }
       } else if (opcode === OP_SPARSE) {
         if (keyframe) fail("SPARSE no permitido en keyframe");
         this._readUvar(raw, p, length);
         k = this._varValue; p = this._varNext;
         if (!k || k > npix) fail("SPARSE count invalido");
-        previousOffset = -1;
-        for (i = 0; i < k; i++) {
-          this._readUvar(raw, p, length);
-          offset = this._varValue; p = this._varNext;
-          if (offset >= npix || offset <= previousOffset) fail("offset SPARSE no canonico");
-          if (p >= length) fail("SPARSE truncado");
-          value = raw[p++];
-          this._validateIndex(value, paletteEntries);
-          y = Math.floor(offset / this._tileW);
-          x = offset - y * this._tileW;
-          globalIndex = (this._tileY + y) * this.header.cols + this._tileX + x;
-          if (value === this.cells[globalIndex]) fail("SPARSE contiene escritura identica");
-          if (apply) {
+        if (apply) {
+          for (i = 0; i < k; i++) {
+            this._readUvar(raw, p, length);
+            offset = this._varValue; p = this._varNext;
+            value = raw[p++];
+            y = Math.floor(offset / this._tileW);
+            x = offset - y * this._tileW;
+            globalIndex = (this._tileY + y) * this.header.cols + this._tileX + x;
             this._markDirtyCell(globalIndex);
             this.cells[globalIndex] = value;
           }
-          previousOffset = offset;
+        } else {
+          previousOffset = -1;
+          for (i = 0; i < k; i++) {
+            this._readUvar(raw, p, length);
+            offset = this._varValue; p = this._varNext;
+            if (offset >= npix || offset <= previousOffset) fail("offset SPARSE no canonico");
+            if (p >= length) fail("SPARSE truncado");
+            value = raw[p++];
+            this._validateIndex(value, paletteEntries);
+            y = Math.floor(offset / this._tileW);
+            x = offset - y * this._tileW;
+            globalIndex = (this._tileY + y) * this.header.cols + this._tileX + x;
+            if (value === this.cells[globalIndex]) fail("SPARSE contiene escritura identica");
+            previousOffset = offset;
+          }
         }
       } else if (opcode === OP_MASK) {
         if (keyframe) fail("MASK no permitido en keyframe");
         maskLength = Math.ceil(npix / 8);
         if (p + maskLength > length) fail("MASK truncado");
-        if ((npix & 7) !== 0) {
-          validBits = (1 << (npix & 7)) - 1;
-          if (raw[p + maskLength - 1] & (~validBits & 255)) fail("MASK con padding activo");
-        }
-        changed = 0;
-        for (i = 0; i < maskLength; i++) changed += getPopCount(raw[p + i]);
-        if (!changed) fail("MASK vacio");
         valuesStart = p + maskLength;
-        if (valuesStart + changed > length) fail("valores MASK truncados");
-        q = 0;
-        for (i = 0; i < npix; i++) {
-          if ((raw[p + (i >>> 3)] >>> (i & 7)) & 1) {
-            value = raw[valuesStart + q++];
-            this._validateIndex(value, paletteEntries);
-            y = Math.floor(i / this._tileW);
-            x = i - y * this._tileW;
-            globalIndex = (this._tileY + y) * this.header.cols + this._tileX + x;
-            if (value === this.cells[globalIndex]) fail("MASK contiene escritura identica");
-            if (apply) {
+        if (apply) {
+          q = 0;
+          for (i = 0; i < npix; i++) {
+            if ((raw[p + (i >>> 3)] >>> (i & 7)) & 1) {
+              value = raw[valuesStart + q++];
+              y = Math.floor(i / this._tileW);
+              x = i - y * this._tileW;
+              globalIndex = (this._tileY + y) * this.header.cols + this._tileX + x;
               this._markDirtyCell(globalIndex);
               this.cells[globalIndex] = value;
             }
           }
+          p = valuesStart + q;
+        } else {
+          if ((npix & 7) !== 0) {
+            validBits = (1 << (npix & 7)) - 1;
+            if (raw[p + maskLength - 1] & (~validBits & 255)) fail("MASK con padding activo");
+          }
+          changed = 0;
+          for (i = 0; i < maskLength; i++) changed += getPopCount(raw[p + i]);
+          if (!changed) fail("MASK vacio");
+          if (valuesStart + changed > length) fail("valores MASK truncados");
+          q = 0;
+          for (i = 0; i < npix; i++) {
+            if ((raw[p + (i >>> 3)] >>> (i & 7)) & 1) {
+              value = raw[valuesStart + q++];
+              this._validateIndex(value, paletteEntries);
+              y = Math.floor(i / this._tileW);
+              x = i - y * this._tileW;
+              globalIndex = (this._tileY + y) * this.header.cols + this._tileX + x;
+              if (value === this.cells[globalIndex]) fail("MASK contiene escritura identica");
+            }
+          }
+          p = valuesStart + changed;
         }
-        p = valuesStart + changed;
       } else if (opcode === OP_PACK1 || opcode === OP_PACK2 || opcode === OP_PAL4) {
         bits = opcode === OP_PACK1 ? 1 : (opcode === OP_PACK2 ? 2 : 4);
         if (opcode === OP_PACK1) {
@@ -525,39 +553,47 @@
         }
         mapStart = p;
         if (p + mapCount > length) fail("mapa packed truncado");
-        lastMap = -1;
-        for (i = 0; i < mapCount; i++) {
-          value = raw[p++];
-          this._validateIndex(value, paletteEntries);
-          if (value <= lastMap) fail("mapa packed no canonico");
-          lastMap = value;
+        if (apply) {
+          p += mapCount;
+        } else {
+          lastMap = -1;
+          for (i = 0; i < mapCount; i++) {
+            value = raw[p++];
+            this._validateIndex(value, paletteEntries);
+            if (value <= lastMap) fail("mapa packed no canonico");
+            lastMap = value;
+          }
         }
         packedStart = p;
         packedLength = Math.ceil(npix * bits / 8);
         if (p + packedLength > length) fail("indices packed truncados");
-        for (i = 0; i < npix; i++) {
-          byteIndex = Math.floor(i * bits / 8);
-          shift = (i * bits) & 7;
-          code = (raw[packedStart + byteIndex] >>> shift) & ((1 << bits) - 1);
-          if (code >= mapCount) fail("indice packed fuera de mapa");
-        }
-        if ((npix * bits & 7) !== 0) {
-          validBits = (1 << (npix * bits & 7)) - 1;
-          if (raw[packedStart + packedLength - 1] & (~validBits & 255)) {
-            fail("packed con padding activo");
+        if (apply) {
+          this._writeTilePacked(tile, raw, packedStart, bits, mapStart, mapCount);
+        } else {
+          for (i = 0; i < npix; i++) {
+            byteIndex = Math.floor(i * bits / 8);
+            shift = (i * bits) & 7;
+            code = (raw[packedStart + byteIndex] >>> shift) & ((1 << bits) - 1);
+            if (code >= mapCount) fail("indice packed fuera de mapa");
+          }
+          if ((npix * bits & 7) !== 0) {
+            validBits = (1 << (npix * bits & 7)) - 1;
+            if (raw[packedStart + packedLength - 1] & (~validBits & 255)) {
+              fail("packed con padding activo");
+            }
           }
         }
-        if (apply) this._writeTilePacked(tile, raw, packedStart, bits, mapStart, mapCount);
         p += packedLength;
       } else if (opcode === OP_PAL8) {
         if (p + npix > length) fail("PAL8 truncado");
-        for (i = 0; i < npix; i++) this._validateIndex(raw[p + i], paletteEntries);
         if (apply) {
           q = 0;
           for (y = 0; y < this._tileH; y++) {
             globalIndex = (this._tileY + y) * this.header.cols + this._tileX;
             for (x = 0; x < this._tileW; x++) this.cells[globalIndex + x] = raw[p + q++];
           }
+        } else {
+          for (i = 0; i < npix; i++) this._validateIndex(raw[p + i], paletteEntries);
         }
         p += npix;
       } else {

@@ -1,0 +1,48 @@
+name: bench-reader
+
+# Compara el tiempo de _walkRegional (frontend/reader-v2.js) de HEAD contra el
+# de un commit base. Manual; registra la medicion de W-09 y de futuros cambios.
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: "Commit/ref con el reader-v2.js anterior"
+        default: "8d4489d"
+        required: true
+      repeats:
+        default: "400"
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Bench HEAD vs baseline
+        run: |
+          echo "== HEAD ($(git rev-parse --short HEAD)) =="
+          node tools/bench_reader_v2.js frontend/reader-v2.js "${{ inputs.repeats }}" | tee head.txt
+          git show "${{ inputs.baseline }}:frontend/reader-v2.js" > /tmp/reader-baseline.js
+          echo "== baseline (${{ inputs.baseline }}) =="
+          node tools/bench_reader_v2.js /tmp/reader-baseline.js "${{ inputs.repeats }}" | tee baseline.txt
+          {
+            echo "## bench reader-v2 (_walkRegional)"
+            echo ""
+            echo "### HEAD"
+            echo '```'
+            cat head.txt
+            echo '```'
+            echo "### baseline ${{ inputs.baseline }}"
+            echo '```'
+            cat baseline.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
