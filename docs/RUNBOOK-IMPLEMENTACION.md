@@ -687,6 +687,38 @@ como precondición la anterior. La ruleta NO está en este carril (va con
   números en tipografía libre apareciendo en posiciones/momentos aleatorios;
   docs al día (estado, registro, ejecutados).
 
+## 4-INT-004. Carril INT-004 — texto nativo en el mismo canvas
+
+Pedido del operador (2026-08-28, tras la demo INT-003): los textos se dibujan
+nítidos con la API de texto de Canvas2D sobre el MISMO canvas, después del
+frame; la matriz queda para gráficos. Diseño en
+[`DISENO-PARCHES-GENERICOS.md`](DISENO-PARCHES-GENERICOS.md) §10.
+
+### INT-004-A — Módulo `frontend/textlayer.js`
+
+- **Acción:** ES5 estricto, sin dependencias. `ASCILINETextLayer.create(items)
+  -> capa | null` (todo-o-nada); item: caja en CELDAS (`x,y,w,h`), `size`
+  (altura de texto en celdas), `color`, `outline`, `font`, `align`.
+  `setText(id, str)` valida y devuelve bool (INV-7); `markDirty(reader)`
+  marca las cajas con texto via `markRectDirty` (el video se repinta debajo);
+  `draw(ctx, cellPx)` pinta borde + relleno a resolución del canvas con la
+  fuente pedida (cache del string de fuente por `cellPx`: sin allocaciones
+  repetidas en el camino caliente).
+- **Cierre:** suite JS nueva cableada en `run_all.py`: create/setText
+  todo-o-nada, escalado por `cellPx`, orden stroke→fill, `markDirty` con las
+  cajas exactas, texto vacío no dibuja ni marca; gate ES5 en verde. CI verde.
+
+### INT-004-B — Integración en `live-player.html`
+
+- **Precondición:** INT-004-A.
+- **Acción:** con items de texto declarados, `pickRenderer` elige Canvas2D
+  (el piso: WebGL no gana funciones); orden por frame: `beforeSeek → seek →
+  afterSeek → markDirty(texto) → renderer.draw → textLayer.draw`. Demo: tres
+  textos nativos (serif, con borde) espejando los números grandes de la
+  matriz para comparar nitidez lado a lado; «Simular carga» alimenta ambos.
+- **Cierre:** `test_live_player_page.js` cubre el orden y la elección de
+  renderer; CI verde; player local levantado para el operador.
+
 ---
 
 ## 5. Definición de terminado

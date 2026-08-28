@@ -109,6 +109,18 @@ Diseño cerrado con el operador (D1..D6, 2026-08-28) en
 | INT-003-E | bake_patches.py (fuente libre + PNG → reserva 32) | cerrada | `7f0e3d1` | 2026-08-28 | texto con cualquier TTF y color + PNG con alpha → nearest Oklab en 224..254, alpha→255; determinista; los parches horneados alimentan un sidecar v2 válido |
 | INT-003-F | integración: workflow `overlay=patches`, live-player, cierre de etapa | cerrada | `da28408` | 2026-08-28 | `make_patch_pack.py` (panel v2 + 3 números grandes serif por tercios + palabra de elección), `live-player.html` paramétrico, workflow `overlay=off/panel/patches`. Clip HQ `patches` publicado (run 33176566955): 16.465.367 B SHA `c315a13a…8e63` + sidecar v2 15.511 B SHA `678b392d…2c56`; verificado en navegador (Instancia 016), player local levantado |
 
+## Carril INT-004 — texto nativo en el mismo canvas
+
+Pedido del operador (2026-08-28, tras ver la demo INT-003): el texto se ve
+pixelado dentro de la matriz (el piso físico es la celda) — se dibuja nativo
+con Canvas2D sobre el MISMO canvas, después del frame. Diseño en
+`DISENO-PARCHES-GENERICOS.md` §10; tareas en el runbook §4-INT-004.
+
+| ID | Tarea | Estado | Commit | Fecha | Notas |
+|---|---|---|---|---|---|
+| INT-004-A | `frontend/textlayer.js` (create/setText/markDirty/draw, ES5, todo-o-nada) | pendiente | | | |
+| INT-004-B | integración en live-player (Canvas2D cuando hay texto; demo lado a lado con la matriz) | pendiente | | | |
+
 ## Sincronización y fases finales
 
 | ID | Qué | Estado | Fecha | Notas |
@@ -143,16 +155,26 @@ Diseño cerrado con el operador (D1..D6, 2026-08-28) en
 | 2026-08-28 | `make_clip --reserved 10` activa también la protección del panel en el dither (`protect_panel`); los RGB reservados canónicos viven en `backend/overlay_palette.py` y la geometría del panel en `backend/overlay_panel.py` (única fuente para sidecar y dither) | INT-001 §11: el base bajo el panel no deriva; una sola fuente de verdad evita que sidecar y exclusión se desalineen |
 | 2026-08-28 | El operador pide generalizar el overlay a **parches de imagen arbitrarios** (tipografía libre, random de momento/posición, ruleta que coincide con el resultado). Queda como propuesta INT-003 en `DISENO-PARCHES-GENERICOS.md`, con las decisiones D1..D6 abiertas | pedido posterior al cierre de F7; el runtime por frame no cambia (pinta índices y restaura bytes) — lo que se generaliza es metadata, horneado y canal. No arrancar sin resolver D1..D6 con el operador |
 | 2026-08-28 | **D1..D6 resueltas con el operador**: D1 = ampliar la reserva a 32 (224..255, las 10 actuales conservan índice y RGB); D2/D3/D6 = vía corta ahora con presupuesto 5% **por frame** + techo de RAM 25%, ruleta con `ASCLVID3` (F6); D4 = slots candidatos fijos (solape espacial permitido solo con ventanas disjuntas); D5 = canal todo-numérico con dígito de presencia para campos de elección | respuestas del operador en sesión; el diseño concreto (spec ASCLSLOT v2, colores 224..245, wire) quedó en `DISENO-PARCHES-GENERICOS.md` y las tareas INT-003-A..F en el runbook de implementación |
+| 2026-08-28 | **Revisión post-demo con el operador**: los TEXTOS pasan a dibujarse nativos con Canvas2D sobre el MISMO canvas (INT-004) — un solo elemento canvas, la regla «jamás un segundo canvas ni DOM overlay» se mantiene, pero el texto ya no vive en la matriz (no byte-verificable; propiedad documentada). Cuando hay texto nativo se elige el renderer Canvas2D (el piso): WebGL no gana funciones que Canvas2D no tenga | el piso físico de nitidez dentro de la matriz es la celda (~65x90 px un dígito de 26x36 en 1080p) y el horneado v2 sin antialias lo evidencia; el operador preguntó por el mismo canvas y es viable. La matriz queda para GRÁFICOS |
+| 2026-08-28 | La caída de calidad de la reserva de 32 (Instancias 015/016) se resuelve a futuro con **INT-005 (parches por época, F6)**: el elemento interventor se declara ANTES del encode con su ventana temporal y se cuantiza contra las paletas de las épocas de esa ventana — paleta completa sin reservar entradas. Idea del operador. Mientras tanto la reserva 32 sigue vigente y E-12 recupera calidad de la base | «al procesar el video debería procesarse al mismo tiempo la fracción que interviene… le diríamos al procesador que va del minuto tal al tal» — evita el costo permanente de paleta y es el modelo natural para la ruleta en `ASCLVID3` |
 
 ## Próxima acción
 
-1. Carril E (F3) desde **E-12** (refit de paleta a la asignación real): con la
-   reserva paramétrica ya cableada, el refit debe excluir la reserva vigente
-   del clip (224.. con `reserved=32`, 246.. con 10). Luego E-13..E-18.
-2. La **ruleta** (INT-003 fase 2) se diseña junto con `ASCLVID3` en F6/S-4:
-   revisar D2/D3 (área ~12%, límite por parche) y decidir paleta del parche
-   grande. F8 medirá p95/MEM-001 con el peor frame v2.
-3. Referencias HQ vigentes: sin reserva `ebfe2eb4…4b36` (17.482.270 B) ·
+1. **INT-004-A y B** (texto nativo en el mismo canvas, runbook §4-INT-004):
+   `textlayer.js` + integración en live-player con demo lado a lado (texto
+   nativo vs dígitos de matriz) y «Simular carga» alimentando ambos. Es la
+   respuesta al pedido de nitidez del operador y cubre solo el caso «video en
+   loop de fondo + números arriba».
+2. Carril E (F3) desde **E-12** (refit de paleta a la asignación real): el
+   refit debe excluir la reserva vigente del clip (224.. con `reserved=32`,
+   246.. con 10). Luego E-13..E-18.
+3. La **ruleta** se diseña en F6/S-4 con el modelo **INT-005 (parches por
+   época)** — idea del operador: el elemento gráfico se declara antes del
+   encode con su ventana temporal y se cuantiza contra las paletas de las
+   épocas de esa ventana (paleta completa, sin costo de reserva para la
+   base). Ver `DISENO-PARCHES-GENERICOS.md` §10. F8 medirá p95/MEM-001 con el
+   peor frame v2.
+4. Referencias HQ vigentes: sin reserva `ebfe2eb4…4b36` (17.482.270 B) ·
    panel v1 `7da584f1…5a51d` (17.197.813 B) · **parches v2 `c315a13a…8e63`
    (16.465.367 B)** + sidecar `678b392d…2c56`.
 2. Carril E (F3): **E-12** (refit de paleta a la asignación real) y siguientes E-13..E-18.

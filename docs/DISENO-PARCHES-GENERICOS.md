@@ -190,3 +190,36 @@ geometría en runtime.
 - **F6 (S-4 / ASCLVID3):** ahí se diseña la **ruleta** (parche grande, D2/D3
   revisados, posible paleta por época) — una sola migración adicional.
 - **F8:** mide MEM-001/costo con el peor frame del presupuesto v2 (5%).
+
+## 10. Revisión post-demo (operador, 2026-08-28) — INT-004 e INT-005
+
+Al ver la demo HQ el operador señaló dos cosas y decidió el rumbo:
+
+1. **Nitidez del texto.** Dentro de la matriz el piso físico es la celda
+   (768x432): un dígito de 26x36 celdas son ~65x90 px en un TV 1080p, y el
+   horneado v2 sin antialias lo hace notar. Pregunta del operador: ¿se puede
+   dibujar el texto en el MISMO canvas? **Sí** → nace **INT-004 (texto
+   nativo)**: los TEXTOS se dibujan con `fillText/strokeText` sobre el mismo
+   canvas después de pintar el frame, a resolución de pantalla, con cualquier
+   fuente y borde. Un solo elemento canvas (la regla "jamás un segundo canvas
+   ni DOM overlay" se mantiene); el texto ya no vive en la matriz de celdas
+   (no es byte-verificable ni queda en el video decodificado — se documenta
+   como propiedad, no como bug). Requiere renderer Canvas2D: cuando hay texto
+   nativo se elige Canvas2D (el piso) en lugar de WebGL, para no darle a un
+   renderer una función que el otro no tiene. Las celdas bajo cada texto se
+   marcan sucias en cada frame (`markRectDirty`) para que el video se repinte
+   debajo antes de redibujar el texto.
+2. **Costo de calidad de la reserva (Instancia 015/016).** Idea del operador
+   que queda como diseño para F6 (**INT-005, parches por época**): los
+   elementos interventores GRÁFICOS (la ruleta) se declaran ANTES del encode
+   con su ventana temporal ("del minuto tal al tal") y el encoder procesa el
+   video y las variantes del parche JUNTOS, cuantizando el parche contra las
+   paletas de las épocas de su ventana. Paleta completa para el arte, sin
+   reservar entradas (la base no pierde colores). El sidecar ata parche →
+   ventana → época; re-encodear exige re-hornear (aceptado: es el mismo
+   pipeline). La reserva chica queda solo para lo que deba ser verificable
+   byte a byte en la matriz.
+
+Reparto resultante: **texto → nativo en el mismo canvas (INT-004, ya)**;
+**gráficos → matriz** (hoy con reserva; en F6 por época, INT-005). El caso
+"video de fondo en loop + números arriba" queda cubierto por INT-004 solo.

@@ -41,9 +41,12 @@ el TV nunca cuantiza ni decide, solo ejecuta.
    2015 de features: sin `fetch`/`Promise`/`Worker`/`WASM`/`JSON`/arrow/`let`/`const`/
    template strings. El gate `tests/test_frontend_compatibility.js` lo verifica; correrlo
    mentalmente antes de escribir cada línea de frontend.
-2. **Un solo layer:** la intervención en vivo (overlay de resultados) escribe índices
-   sobre la **misma matriz de celdas** del video, con 10 entradas de paleta reservadas
-   (246..255, la 255 transparente). Jamás un segundo canvas ni un DOM overlay.
+2. **Un solo layer (un solo elemento canvas):** la intervención GRÁFICA escribe índices
+   sobre la **misma matriz de celdas** del video, con paleta reservada paramétrica
+   (10 → 246..255 o 32 → 224..255; la 255 siempre transparente). Jamás un segundo
+   canvas ni un DOM overlay. Desde INT-004 (2026-08-28), los TEXTOS se dibujan
+   nativos con la API de texto de Canvas2D **sobre ese mismo canvas**, después del
+   frame (no viven en la matriz; con texto nativo el renderer es Canvas2D).
 3. **Optimización siempre en el front, pero ganando calidad de imagen:** el costo se paga
    offline (Oklab, K-means, dither, trellis); el front solo se optimiza para hacer *menos
    trabajo por frame*, nunca degradando la imagen ya decidida por el encoder.
@@ -78,7 +81,14 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   (cualquier TTF/PNG → Oklab), `make_patch_pack` demo, workflow
   `overlay=off/panel/patches`. La **ruleta** va con ASCLVID3 (F6/S-4).
   Evidencia: `docs/ejecutados/2026-08-28-INT-003-parches-genericos.md`.
-- ▶ Carril E (F3) desde **E-12** (el refit debe excluir la reserva vigente,
-  224.. o 246.. según el clip).
+- ▶ **INT-004 (texto nativo)** es la próxima acción: pedido del operador
+  post-demo — los textos se dibujan nítidos con Canvas2D sobre el MISMO
+  canvas (la matriz queda para gráficos); tareas INT-004-A/B en el runbook
+  §4-INT-004, diseño en `docs/DISENO-PARCHES-GENERICOS.md` §10. Con texto
+  nativo se elige el renderer Canvas2D (regla 6). Después: carril E desde
+  **E-12** (el refit debe excluir la reserva vigente, 224.. o 246..).
+- La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
+  (parches por época)**: el gráfico se declara antes del encode con su
+  ventana y se cuantiza contra las paletas de esas épocas (sin reserva).
 - Pendiente: F3 (E-12..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8
