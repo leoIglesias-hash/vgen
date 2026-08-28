@@ -26,6 +26,7 @@ assert(page.indexOf('src="render-webgl.js"') < page.indexOf('src="slots.js"'));
 assert(page.indexOf('src="slots.js"') < page.indexOf('src="overlay.js"'));
 assert(page.indexOf('src="overlay.js"') < page.indexOf('src="datachannel.js"'));
 assert(page.indexOf('src="datachannel.js"') < page.indexOf('src="textlayer.js"'));
+assert(page.indexOf('src="textlayer.js"') < page.indexOf('src="textfeed.js"'));
 
 /* un solo layer: exactamente un canvas en el markup, sin capa DOM extra */
 assert.strictEqual(page.match(/<canvas/g).length, 1,
@@ -64,6 +65,27 @@ assert(/overlay\.clear=function\(\)\{\s*origClear\.call\(overlay\);\s*clearTexts
   "clear limpia matriz y textos juntos");
 assert(/overlay\.clear\(\);\s*if\(reader && lastShown>=0 && !playing\)\{\s*if\(textLayer\) markTextDirty\(\);\s*renderer\.draw\(reader\);\s*if\(textLayer\) textLayer\.draw\(/.test(inline[1]),
   "limpiar dibuja SIN re-seek: el seek resetearia los rects que clear() dejo marcados");
+
+/* INT-006: texto standalone — sin overlay de matriz el player declara tres
+ * campos de 2 digitos dimensionados por cols/rows, el feed (textfeed.js)
+ * expone la interfaz digitCount/setValues y el canal lo consume SIN cambios */
+assert(inline[1].indexOf("function standaloneSpec()") >= 0);
+assert(inline[1].indexOf("function attachStandalone(reason)") >= 0);
+assert(inline[1].indexOf("fields.push({id:k+1,width:2})") >= 0,
+  "tres campos de 2 digitos por defecto");
+assert(inline[1].indexOf("textFeed=window.ASCILINETextFeed.create(textLayer,spec.fields)") >= 0);
+assert(inline[1].indexOf("ASCILINEDataChannel.create(DATA_URL,textFeed,{intervalMs:15000})") >= 0,
+  "el canal consume el feed con la misma interfaz que el overlay");
+/* todos los caminos sin overlay de matriz caen al modo standalone */
+assert(/attachStandalone\("Sin sidecar \("/.test(inline[1]));
+assert(/s\.onerror=function\(\)\{ attachStandalone\("Sin sidecar/.test(inline[1]));
+assert(/attachStandalone\("attach devolvio null/.test(inline[1]));
+assert(/attachStandalone\("Sidecar rechazado: "/.test(inline[1]));
+assert(/attachStandalone\("Clip sin paleta completa/.test(inline[1]));
+/* boton de carga y limpieza en standalone: mismo orden sin re-seek */
+assert(/else if\(textFeed\)\{\s*digits=randomDigits\(textFeed\.digitCount\);/.test(inline[1]));
+assert(/else if\(textFeed && textLayer\)\{[\s\S]{0,400}textLayer\.setText\(feedFields\[j\]\.id,""\);[\s\S]{0,200}markTextDirty\(\);\s*renderer\.draw\(reader\);\s*textLayer\.draw\(/.test(inline[1]),
+  "limpiar en standalone vacia los textos y repinta sin re-seek");
 
 /* INV-7: sin reserva, sin sidecar o con sidecar ajeno el video sigue */
 assert(page.indexOf("overlay inactivo") >= 0);

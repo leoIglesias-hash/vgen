@@ -23,6 +23,12 @@
       store escala con el zoom (pixelScale) para que el texto sea nitido.
       Orden por frame: beforeSeek -> seek -> afterSeek -> markDirty(texto)
       -> renderer.draw -> textLayer.draw.
+    - INT-006 (texto standalone): sin sidecar (fondo sin reserva), el player
+      declara tres campos de texto de 2 digitos por defecto (tercios
+      horizontales, dimensionados por cols/rows) y los alimenta con
+      textfeed.js, que expone la MISMA interfaz digitCount/setValues que
+      consume datachannel.js (sin cambios). Si data.txt no existe el canal
+      falla suave (INV-7).
 -->
 <style>
   :root{ color-scheme: dark; }
@@ -60,6 +66,7 @@
 <script src="overlay.js"></script>
 <script src="datachannel.js"></script>
 <script src="textlayer.js"></script>
+<script src="textfeed.js"></script>
 <script>
 (function(){
   "use strict";
@@ -73,6 +80,7 @@
   var elSim=document.getElementById("simulate"), elClear=document.getElementById("clearOverlay");
   var reader=null, renderer=null, overlay=null, channel=null, overlayMeta=null;
   var textLayer=null, textFields=null, textItems=null, cellScale=1;
+  var textFeed=null, feedFields=null;
   var playing=false, hasAudio=false, startT=0, raf=0, lastShown=-1, simSerial=0;
   var urlAPI=window.URL || window.webkitURL;
   var perf=window.performance;
@@ -217,11 +225,57 @@
     drawFrame(lastShown<0?0:lastShown);
   }
 
+  /* ---- INT-006: texto standalone (fondo sin reserva, sin sidecar) ----
+   * Sin overlay de matriz el player declara tres campos de 2 digitos en las
+   * posiciones de la demo (tercios horizontales, centrados verticalmente),
+   * dimensionados por cols/rows. El feed (textfeed.js) expone digitCount y
+   * setValues, la MISMA interfaz que el canal de datos ya consume: boton y
+   * canal alimentan el texto igual que alimentaban la matriz. */
+  function standaloneSpec(){
+    var cols=reader.header.cols, rows=reader.header.rows;
+    var w=Math.floor(cols/8), h=Math.floor(rows/5);
+    var items=[], fields=[], k, x, y;
+    if(w<2 || h<2) return {items:items,fields:fields};
+    y=Math.floor((rows-h)/2);
+    for(k=0;k<3;k++){
+      x=Math.floor(cols*(2*k+1)/6-w/2);
+      if(x<0 || x+w>cols) continue;
+      items.push({id:k+1,x:x,y:y,w:w,h:h,size:Math.max(1,h-4),
+        color:"#ffd700",outline:"#000000",font:"serif",align:"center"});
+      fields.push({id:k+1,width:2});
+    }
+    return {items:items,fields:fields};
+  }
+  /* Cualquier fallo deja el video como esta y solo informa `reason` (INV-7). */
+  function attachStandalone(reason){
+    var spec;
+    if(overlay || textLayer || !window.ASCILINETextLayer ||
+       !window.ASCILINETextFeed){ log(reason); return; }
+    spec=standaloneSpec();
+    if(!spec.items.length){ log(reason); return; }
+    textLayer=window.ASCILINETextLayer.create(spec.items);
+    if(!textLayer){ log(reason); return; }
+    textFeed=window.ASCILINETextFeed.create(textLayer,spec.fields);
+    if(!textFeed){ textLayer=null; log(reason); return; }
+    feedFields=spec.fields;
+    textItems=spec.items;
+    pickRenderer();
+    reader.decodedIndex=-1;
+    drawFrame(lastShown<0?0:lastShown);
+    channel=window.ASCILINEDataChannel.create(DATA_URL,textFeed,{intervalMs:15000});
+    if(channel) channel.start();
+    elSim.disabled=false;
+    elClear.disabled=false;
+    log(reason+" Texto standalone: "+textLayer.count+
+      " campos de 2 digitos (INT-006); datos: "+DATA_URL+
+      " cada 15 s (si falta, el canal falla suave).");
+  }
+
   /* ---- sidecar + canal: el fallo de cualquiera deja el video intacto ---- */
   function tryAttachOverlay(bytes){
     var h=reader.header, tail, i, meta, palReserved, first;
     if(h.palSize!==256 || reader.paletteEntries!==256){
-      log("Clip sin paleta completa: overlay inactivo (regenerar con overlay=panel o patches). El video sigue.");
+      attachStandalone("Clip sin paleta completa: overlay de matriz inactivo. El video sigue.");
       return;
     }
     /* verificacion cruzada parametrica: la cola reservada del bundle valida
@@ -233,12 +287,12 @@
     try{
       meta=window.ASCL_parseSlots(bytes,h.cols,h.rows,h.nFrames,tail);
     }catch(err){
-      log("Sidecar rechazado: "+err.message+". El video sigue sin overlay.");
+      attachStandalone("Sidecar rechazado: "+err.message+". El video sigue sin overlay de matriz.");
       return;
     }
     overlay=window.ASCILINEOverlay.attach(reader,meta);
     if(!overlay){
-      log("attach devolvio null (sidecar de otro bundle): video sin overlay.");
+      attachStandalone("attach devolvio null (sidecar de otro bundle): video sin overlay de matriz.");
       return;
     }
     overlayMeta=meta;
@@ -284,27 +338,57 @@
     return out;
   }
 
+  /* INT-006: la carga simulada alimenta lo que haya activo — el overlay de
+   * matriz (con espejo de texto via el wrap) o el feed standalone. */
+  function randomDigits(n){
+    var out="",i;
+    for(i=0;i<n;i++) out+=String.fromCharCode(48+Math.floor(Math.random()*10));
+    return out;
+  }
   elSim.onclick=function(){
-    if(!overlay || !overlayMeta) return;
-    var digits=randomPayload(overlayMeta.fields);
-    simSerial++;
-    if(overlay.setValues(digits)){
-      if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
-      log("Carga simulada #"+simSerial+" aplicada ("+digits.substring(0,8)+"...). "+overlayStatus());
+    var digits;
+    if(overlay && overlayMeta){
+      digits=randomPayload(overlayMeta.fields);
+      simSerial++;
+      if(overlay.setValues(digits)){
+        if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
+        log("Carga simulada #"+simSerial+" aplicada ("+digits.substring(0,8)+"...). "+overlayStatus());
+      }
+    } else if(textFeed){
+      digits=randomDigits(textFeed.digitCount);
+      simSerial++;
+      if(textFeed.setValues(digits)){
+        if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
+        log("Carga simulada #"+simSerial+" aplicada ("+digits+"): texto standalone (INT-006).");
+      }
     }
   };
   /* clear() ya restauro cells y dejo marcados los rects: NO se re-seekea
    * (el seek resetea los dirty sets y perderia esos marks); se dibuja
    * directo, marcando ademas las cajas de texto para borrar el texto viejo */
   elClear.onclick=function(){
-    if(!overlay) return;
-    overlay.clear();
-    if(reader && lastShown>=0 && !playing){
-      if(textLayer) markTextDirty();
-      renderer.draw(reader);
-      if(textLayer) textLayer.draw(renderer.ctx,cellScale);
+    var j;
+    if(overlay){
+      overlay.clear();
+      if(reader && lastShown>=0 && !playing){
+        if(textLayer) markTextDirty();
+        renderer.draw(reader);
+        if(textLayer) textLayer.draw(renderer.ctx,cellScale);
+      }
+      log("Panel limpio (clear): matriz byte-identica al video base. "+overlayStatus());
+    } else if(textFeed && textLayer){
+      /* standalone: no hay matriz que restaurar; se vacian los textos y se
+       * repinta el fondo debajo (markTextDirty marca TODAS las cajas) */
+      for(j=0;j<feedFields.length;j++){
+        textLayer.setText(feedFields[j].id,"");
+      }
+      if(reader && lastShown>=0 && !playing){
+        markTextDirty();
+        renderer.draw(reader);
+        textLayer.draw(renderer.ctx,cellScale);
+      }
+      log("Textos limpios: fondo intacto (texto standalone, INT-006).");
     }
-    log("Panel limpio (clear): matriz byte-identica al video base. "+overlayStatus());
   };
 
   function openAscl(buf,off,len){
@@ -382,10 +466,10 @@
         if(s.status===200 && s.response && s.response.byteLength){
           tryAttachOverlay(new Uint8Array(s.response));
         } else {
-          log("Sin sidecar ("+SLOTS_URL+"): video sin overlay. Generarlo con el workflow encode (overlay=panel o patches).");
+          attachStandalone("Sin sidecar ("+SLOTS_URL+"): video sin overlay de matriz.");
         }
       };
-      s.onerror=function(){ log("Sin sidecar: video sin overlay."); };
+      s.onerror=function(){ attachStandalone("Sin sidecar: video sin overlay de matriz."); };
       s.send();
     }catch(err){ log("Error: "+err.message); }
   };

@@ -34,6 +34,7 @@ JS_SUITES = (
     "test_overlay_cross.js",
     "test_overlay_v2_cross.js",
     "test_textlayer.js",
+    "test_textfeed.js",
     "test_frontend_compatibility.js",
 )
 
