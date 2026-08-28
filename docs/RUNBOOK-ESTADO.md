@@ -121,6 +121,20 @@ con Canvas2D sobre el MISMO canvas, después del frame. Diseño en
 | INT-004-A | `frontend/textlayer.js` (create/setText/markDirty/draw, ES5, todo-o-nada) | cerrada | `21df177` | 2026-08-28 | `ASCILINETextLayer.create(items)` todo-o-nada; `setText` valida y conserva (INV-7); `markDirty` marca solo cajas con texto dentro de grilla; `draw` stroke→fill con `maxWidth` de la caja y cache de fuente/anclajes por `cellPx` (cero allocaciones en el camino caliente); suite `test_textlayer.js` cableada en `run_all.py`; gate ES5 en verde |
 | INT-004-B | integración en live-player (Canvas2D cuando hay texto; demo lado a lado con la matriz) | cerrada | `76ffe45` + fix `07bc0da` | 2026-08-28 | con sidecar v2, los campos de dígitos con slots ≥20 celdas se espejan como texto serif con borde al costado de cada posición; todo payload aceptado (botón o canal) alimenta matriz Y texto (wrap de `setValues`/`clear`); `pickRenderer` va a Canvas2D con `pixelScale=zoom` (backing real cols·s×rows·s: put chico + `drawImage` del canvas sobre sí mismo — sin segundo canvas); orden por frame `seekTo → markDirty(texto) → renderer.draw → textLayer.draw` cubierto por `test_live_player_page.js`; `test_frontend_renderers.js` cubre `pixelScale` (default 1 idéntico al histórico) |
 
+## Carril INT-006 — fondo sin reserva + texto standalone
+
+Pedido del operador (2026-08-28, tras ver la demo INT-004): re-procesar el
+fondo SIN la reserva de números de matriz (ya no sirve: el texto es nativo),
+con la máxima calidad de las herramientas existentes, dejando las fuentes
+interviniendo como ahora; después pasa una imagen para probar la
+intervención gráfica. Tareas en el runbook §4-INT-006.
+
+| ID | Tarea | Estado | Commit | Fecha | Notas |
+|---|---|---|---|---|---|
+| INT-006-A | fondo HQ `overlay=off` (768 y candidato 960) + registro + outputs limpio | pendiente | | | solo dispatch del workflow `encode`; borrar clip.slots/data.txt viejos de `outputs/` |
+| INT-006-B | `textfeed.js` + live-player standalone (texto sin sidecar, sim + canal) | pendiente | | | datachannel.js sin cambios (misma interfaz digitCount/setValues) |
+| INT-006-C | intervención de la imagen del operador (decisión D7) | bloqueada | | | espera la imagen; opciones a/b/c en el runbook §4-INT-006-C |
+
 ## Sincronización y fases finales
 
 | ID | Qué | Estado | Fecha | Notas |
@@ -159,26 +173,31 @@ con Canvas2D sobre el MISMO canvas, después del frame. Diseño en
 | 2026-08-28 | La caída de calidad de la reserva de 32 (Instancias 015/016) se resuelve a futuro con **INT-005 (parches por época, F6)**: el elemento interventor se declara ANTES del encode con su ventana temporal y se cuantiza contra las paletas de las épocas de esa ventana — paleta completa sin reservar entradas. Idea del operador. Mientras tanto la reserva 32 sigue vigente y E-12 recupera calidad de la base | «al procesar el video debería procesarse al mismo tiempo la fracción que interviene… le diríamos al procesador que va del minuto tal al tal» — evita el costo permanente de paleta y es el modelo natural para la ruleta en `ASCLVID3` |
 | 2026-08-28 | **Desvío técnico de INT-004-B**: en modo PIXEL el backing store del Canvas2D era cols×rows (el zoom era solo CSS), así que el texto nativo se habría pixelado igual. Se agrega `renderer.pixelScale` (opt-in del player, default 1 byte-idéntico): backing cols·s×rows·s, frame chico con `putImageData` + un `drawImage` del canvas **sobre sí mismo** (la spec exige snapshot del origen) — sin segundo canvas, la regla se mantiene. Con escala el put es siempre completo y el player marca TODAS las cajas de texto declaradas por frame (no solo las con texto) para que borrar un texto no deje fantasma | sin esto INT-004 no entregaba nitidez real; el costo (put completo + blit por frame) es del live-player de demo — `tv-player.html` no se toca y con `pixelScale=1` el camino histórico es idéntico |
 | 2026-08-28 | **Fix post-verificación en navegador** (`07bc0da`): «Limpiar panel» había pasado de `renderer.draw` directo a `drawFrame` y los dígitos de la matriz persistían tras clear — `clear()` restaura cells y deja los rects marcados, pero el `seek` del mismo frame dentro de `drawFrame` resetea los dirty sets y perdía esos marks (canvas/rgba viejos). Se dibuja de nuevo directo, marcando además las cajas de texto | encontrado probando el player en navegador antes de entregar; el orden por frame normal no cambia (los marks del overlay ocurren en `afterSeek`, después del seek); test de página nuevo fija el camino sin re-seek |
+| 2026-08-28 | La raíz de `tools/serve-local.ps1` pasa de `player.html` a `live-player.html` (`c9ea17e`) | el operador abrió `localhost:8123/` y vio el player viejo de archivos; lo que se revisa al cierre de etapa es el runtime real |
+| 2026-08-28 | **Nueva dirección del operador (post-demo INT-004)**: «volver a procesar el video de fondo… está con la intervención de píxeles con números y eso ya no nos sirve… procesalo para que tenga más calidad, la mayor calidad posible con las herramientas que fuimos desarrollando y dejamos las fuentes activas interviniendo como ahora; luego te paso una imagen y probamos procesarla». Nace el carril **INT-006** (A: fondo `overlay=off` con bench 768 vs 960; B: texto standalone sin sidecar vía `textfeed.js`; C: imagen → decisión D7 nativa/reserva/época) | con el texto nativo, la reserva de 32 solo servía a los números de matriz: quitarla recupera los 256 colores de la base (−0,24 dB recuperados) sin perder la intervención. E-12 pasa a ejecutarse DESPUÉS de INT-006 y amerita re-encode del fondo al cerrar |
 
 ## Próxima acción
 
-1. Carril E (F3) desde **E-12** (refit de paleta a la asignación real): el
-   refit debe excluir la reserva vigente del clip (224.. con `reserved=32`,
-   246.. con 10). Luego E-13..E-18.
-2. La **ruleta** se diseña en F6/S-4 con el modelo **INT-005 (parches por
-   época)** — idea del operador: el elemento gráfico se declara antes del
-   encode con su ventana temporal y se cuantiza contra las paletas de las
-   épocas de esa ventana (paleta completa, sin costo de reserva para la
-   base). Ver `DISENO-PARCHES-GENERICOS.md` §10. F8 medirá p95/MEM-001 con el
-   peor frame v2.
-3. Referencias HQ vigentes: sin reserva `ebfe2eb4…4b36` (17.482.270 B) ·
-   panel v1 `7da584f1…5a51d` (17.197.813 B) · **parches v2 `c315a13a…8e63`
-   (16.465.367 B)** + sidecar `678b392d…2c56`. El clip HQ de parches sirve
-   también para la demo INT-004 (los campos grandes del sidecar se espejan
-   como texto nativo en `live-player.html`, zoom 2 = backing 2×).
-4. F5 (trellis/near-lossless) y F6 (S-4) siguen pendientes; F8 requiere F6 +
-   F7 (F7 ya cerrada). Al implementar trellis: excluir los rects del panel
-   (mecanismo ya plumbeado).
+1. **INT-006-A** (runbook §4-INT-006): re-encodear el fondo con
+   `overlay=off` (workflow `encode`; perfil `graphic-hq` 768 + candidato
+   `graphic-ultra` 960 para comparar), registrar las filas de bench, bajar
+   el 768 a `outputs/` **borrando `clip.slots` y `data.txt` viejos**.
+2. **INT-006-B**: `frontend/textfeed.js` + modo standalone del live-player
+   (texto nativo sin sidecar: items por defecto, «Simular carga», canal vía
+   la misma interfaz `digitCount`/`setValues`; `datachannel.js` sin
+   cambios). Cierre de etapa: player local con el fondo nuevo y los números
+   nítidos encima.
+3. **INT-006-C** (bloqueada): cuando el operador pase la imagen, resolver
+   **D7** (nativa con `drawImage` / matriz con reserva 32 / época INT-005)
+   y probarla en el player.
+4. Después: carril E (F3) desde **E-12** (refit; con fondo `reserved=0` no
+   hay exclusión que aplicar, el parámetro queda para clips con reserva) —
+   al cerrarlo, re-encodear el fondo. La **ruleta** sigue siendo INT-005 en
+   F6/S-4. F5 y F8 sin cambios.
+5. Referencias HQ vigentes: sin reserva `ebfe2eb4…4b36` (17.482.270 B) ·
+   panel v1 `7da584f1…5a51d` (17.197.813 B) · parches v2 `c315a13a…8e63`
+   (16.465.367 B) + sidecar `678b392d…2c56` (queda como demo de INT-003/004,
+   ya no es el fondo de producto).
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.

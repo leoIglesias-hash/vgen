@@ -719,6 +719,79 @@ frame; la matriz queda para gráficos. Diseño en
 - **Cierre:** `test_live_player_page.js` cubre el orden y la elección de
   renderer; CI verde; player local levantado para el operador.
 
+## 4-INT-006. Carril INT-006 — fondo sin reserva + texto standalone
+
+Pedido del operador (2026-08-28, tras ver la demo INT-004): el fondo actual
+está encodeado con reserva de 32 para los números de matriz, que ya no
+sirven (el texto es nativo). Se re-procesa el fondo **sin reserva** con la
+máxima calidad de las herramientas ya desarrolladas, dejando los textos
+nativos interviniendo como ahora — pero sin depender del sidecar de parches.
+Después el operador pasa una imagen para probar la intervención gráfica
+(decisión D7, ver INT-006-C).
+
+### INT-006-A — Fondo HQ sin reserva, máxima calidad actual
+
+- **Herramientas:** workflow `encode` (sin cambios de código; solo dispatch).
+- **Acción:** dos encodes desde la rama `assets` con `overlay=off` (sin
+  reserva: la base recupera los 256 colores), `zopfli=on`, `tile=16`,
+  `palette=adaptive`, `algorithm=kmeans-oklab`, `dither=auto`, `fps=15`:
+  1. perfil `graphic-hq` (768 — el perfil de producción vigente; debería
+     reproducir `ebfe2eb4…4b36` / 17.482.270 B si nada cambió);
+  2. perfil `graphic-ultra` (960 — candidato «mayor calidad posible»; más
+     celdas, archivo y decode más caros: es dato para que el operador elija).
+- Bajar ambos artifacts, verificar SHA, registrar las dos filas de
+  `bench_ref` (PSNR RGB y error Oklab) en el registro. Dejar en `outputs/`
+  el **768** como fondo de producto (los valores manuales del operador
+  prevalecen; el 960 queda como artifact citado por SHA salvo que el
+  operador lo prefiera al ver los números).
+- **Importante:** borrar `outputs/clip.slots` y `outputs/data.txt` viejos
+  (son del clip de parches; con el fondo nuevo el overlay de matriz no debe
+  intentar attach).
+- **Cierre:** fila(s) de registro con bytes/PSNR/Oklab/SHA de ambos
+  perfiles; `outputs/clip.asclv` nuevo verificado por SHA. Δbytes: sí.
+
+### INT-006-B — Texto nativo standalone (sin sidecar)
+
+- **Precondición:** INT-004 cerrado (ya). Puede hacerse en paralelo con A.
+- **Archivos:** `frontend/textfeed.js` (nuevo), `frontend/live-player.html`,
+  suites nuevas + `test_live_player_page.js`.
+- **Acción:**
+  1. `textfeed.js` (ES5, sin dependencias): `ASCILINETextFeed.create(capa,
+     campos)` con campos `[{id, width}]` → objeto con `digitCount` (suma de
+     anchos) y `setValues(digits)` (todo-numérico, longitud exacta,
+     todo-o-nada; escribe cada tramo con `capa.setText`). Es la misma
+     interfaz que consume `datachannel.js`, que queda **sin cambios**.
+  2. `live-player.html`: si NO hay overlay de matriz (sin sidecar, attach
+     nulo o clip sin reserva), declarar items de texto por defecto (tres
+     campos de 2 dígitos en las tres posiciones de la demo INT-004,
+     dimensionados por cols/rows) + crear el feed; «Simular carga» genera el
+     payload del feed; el canal de datos apunta al feed si `data.txt`
+     existe (si no existe, el canal falla suave: INV-7). `pickRenderer` y el
+     orden por frame ya son genéricos (INT-004-B).
+- **Cierre:** suite JS nueva de `textfeed.js` cableada en `run_all.py`
+  (mismo commit); `test_live_player_page.js` cubre el modo standalone; gate
+  ES5 en verde; CI verde; **player local levantado** con el fondo nuevo de A
+  y los números nítidos encima («Simular carga» los cambia).
+
+### INT-006-C — Imagen del operador (decisión D7, bloqueada)
+
+- **Precondición:** el operador entrega la imagen. **No arrancar antes.**
+- **D7 — cómo interviene un GRÁFICO sobre el fondo sin reserva** (resolver
+  con el operador al llegar la imagen):
+  - (a) **nativa**: `drawImage` de la imagen sobre el MISMO canvas después
+    del frame, como el texto (nitidez de pantalla, cero costo de paleta;
+    el gráfico deja de ser byte-verificable y la regla 2 se reformula
+    igual que se hizo con el texto);
+  - (b) **matriz con reserva 32**: pipeline INT-003 ya listo
+    (`bake_patches` PNG → sidecar v2), pero exige re-encodear el fondo con
+    `--reserved 32` y volver a pagar el costo de calidad (−0,24 dB);
+  - (c) **esperar INT-005** (parches por época, F6): sin costo de paleta,
+    pero requiere el envelope ASCLVID3.
+  - Recomendación a validar: (a) para probar ya con la imagen (coherente
+    con lo decidido para el texto), (c) como definitivo para la ruleta.
+- **Cierre:** decisión D7 registrada + prueba con la imagen real en el
+  player local.
+
 ---
 
 ## 5. Definición de terminado

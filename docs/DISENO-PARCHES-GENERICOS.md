@@ -238,3 +238,25 @@ borrar un texto no deje fantasma con escala 1. La capa (`textlayer.js`)
 cachea string de fuente, anclajes y `lineWidth` por `cellPx` y limita el
 dibujo al ancho de la caja (`maxWidth`): nada se pinta fuera del rect que se
 marcó sucio.
+
+## 11. INT-006 (operador, 2026-08-28) — fondo sin reserva y decisión D7
+
+Al ver la demo INT-004 el operador decidió: el fondo se re-procesa **sin la
+reserva** (los números de matriz ya no sirven — el texto es nativo) con la
+máxima calidad de las herramientas existentes, y los textos siguen
+interviniendo **standalone** (sin sidecar de parches). Tareas INT-006-A/B/C
+en el runbook §4-INT-006.
+
+**D7 (abierta — se resuelve cuando el operador entregue la imagen):** cómo
+interviene un GRÁFICO sobre un fondo `reserved=0`:
+
+| Opción | Cómo | Costo | Propiedad |
+|---|---|---|---|
+| (a) nativa | `drawImage` de la imagen sobre el MISMO canvas tras el frame, como el texto | cero paleta; renderer Canvas2D | el gráfico no es byte-verificable (igual que el texto; regla 2 se reformularía) |
+| (b) reserva 32 | pipeline INT-003 tal cual (`bake_patches` PNG → sidecar v2) | re-encodear el fondo con `--reserved 32`: −0,24 dB en la base | byte-verificable en la matriz |
+| (c) época (INT-005) | declarar antes del encode con ventana temporal, cuantizar contra las paletas de esas épocas | requiere ASCLVID3 (F6) | byte-verificable y sin costo de paleta |
+
+Recomendación a validar con el operador: (a) para probar la imagen ya —
+coherente con lo decidido para el texto —, (c) como modelo definitivo (la
+ruleta). (b) queda disponible si la verificación byte a byte importa antes
+de F6.
