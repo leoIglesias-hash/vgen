@@ -199,4 +199,6 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
 Regresión al cierre de esta sesión: **199 pruebas Python y 26 suites JavaScript, en verde**
-(base: 115 y 11).
+(base: 115 y 11). Último commit de la etapa INT-006: `c672b7f` (cierre, CI verde
+confirmado 2026-08-28); el operador quedó avisado con el player standalone
+levantado (fondo 768 nuevo + 3 textos + logo nativo) en `localhost:8123`.
