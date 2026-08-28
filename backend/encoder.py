@@ -879,7 +879,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                  dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                  dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                  dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
-                 reserved=0, reserved_colors=None):
+                 reserved=0, reserved_colors=None, scene_keyframes=False):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             palette_block_frames, dither_mode, dither_matrix,
@@ -970,6 +970,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     dither_proxy_before = 0
     dither_proxy_after = 0
     dither_temporal_resets = 0
+    scene_cut_keyframes = 0
     for frame_data in frames_iter:
         block_start = False
         active_pal_img = pal_img
@@ -994,7 +995,10 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
 
         # La memoria del dithering atraviesa cambios normales de paleta. Solo un
         # corte cromatico fuerte entre frames consecutivos la reinicia.
+        # E-10: con keyframes por corte, el descriptor se calcula siempre;
+        # sin esto hard_cut es constante False en --palette global y block.
         need_color_descriptor = (dither_state is not None or
+                                 scene_keyframes or
                                  (palette_algorithm == "kmeans-oklab" and
                                   has_palette and palette_mode == "per-frame"))
         current_descriptor = (adaptive_palette.describe_frame_color(
@@ -1010,7 +1014,11 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                 dither_state.reset()
                 dither_temporal_resets += 1
 
-        keyframe = (idx == 0) or block_start or (keyint > 0 and idx % keyint == 0)
+        scene_cut_keyframe = bool(scene_keyframes and hard_cut and idx > 0)
+        keyframe = ((idx == 0) or block_start or scene_cut_keyframe or
+                    (keyint > 0 and idx % keyint == 0))
+        if scene_cut_keyframe and not block_start:
+            scene_cut_keyframes += 1
         per_frame_stability = 0.0
         if (palette_algorithm == "kmeans-oklab" and has_palette and
                 palette_mode == "per-frame" and previous_frame_palette is not None):
@@ -1100,6 +1108,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             "dither_window": int(dither_window),
             "dither_changed_cells": int(dither_changed_cells),
             "dither_temporal_resets": int(dither_temporal_resets),
+            "scene_keyframes": bool(scene_keyframes),
+            "scene_cut_keyframes": int(scene_cut_keyframes),
             "dither_proxy_improvement": (
                 (float(dither_proxy_before - dither_proxy_after) /
                  float(dither_proxy_before)) if dither_proxy_before else 0.0),
@@ -1153,6 +1163,9 @@ def main(argv=None):
     p.add_argument("--char-aspect", type=float, default=DEFAULT_CHAR_ASPECT)
     p.add_argument("--compress", choices=["auto", "none", "zlib"], default="auto")
     p.add_argument("--keyint", type=int, default=0, help="keyframe cada N frames (0 = fps*2)")
+    p.add_argument("--scene-keyframes", action="store_true",
+                   help="E-10: keyframe en cada corte de escena detectado; "
+                        "permite --keyint largos sin cadenas DELTA que crucen cortes")
     p.add_argument("--no-audio", action="store_true")
     p.add_argument("--force-video", action="store_true")
     p.add_argument("--force-image", action="store_true")
@@ -1218,7 +1231,8 @@ def main(argv=None):
                             perceptual_lut_bits=args.perceptual_lut_bits,
                             dither_budget=args.dither_budget,
                             dither_min_improvement=args.dither_min_improvement,
-                            dither_window=args.dither_window)
+                            dither_window=args.dither_window,
+                            scene_keyframes=args.scene_keyframes)
         secs = info["n_frames"] / float(info["fps"]) or 1
         print("OK %s  (video, %s, paleta %s)" % (args.output, info["mode"], info["palette_mode"]))
         print("  fuente   : %dx%d px" % info["src"])

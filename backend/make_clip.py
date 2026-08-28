@@ -81,6 +81,10 @@ def main(argv=None):
     p.add_argument("--dither-window", "--dither-temporal-window", type=int,
                    default=encoder.selective_dither.DEFAULT_TEMPORAL_WINDOW,
                    dest="dither_window", help="ventana temporal de histeresis")
+    p.add_argument("--keyint", type=int, default=0,
+                   help="E-10: keyframe cada N frames (0 = fps*2, el historico)")
+    p.add_argument("--scene-keyframes", action="store_true",
+                   help="E-10: keyframe en cada corte de escena; habilita --keyint largos")
     p.add_argument("--tile-size", type=int, default=ascl_v2.DEFAULT_TILE_SIZE,
                    help="E-09: tile regional v2 en 4..32 (default %d)"
                    % ascl_v2.DEFAULT_TILE_SIZE)
@@ -143,7 +147,7 @@ def main(argv=None):
     # sobrescribir nunca la fuente durante la conversión.
     tmp_ascl = build_stem + (".source-v1.ascl" if args.format == "v2" else ".ascl")
     final_ascl = build_stem + ".ascl"
-    keyint = max(1, args.fps * 2)
+    keyint = args.keyint if args.keyint > 0 else max(1, args.fps * 2)
 
     ext = os.path.splitext(args.input)[1].lower()
     is_video = (not args.image) and (ext in encoder.VIDEO_EXTS)
@@ -184,7 +188,8 @@ def main(argv=None):
                                     perceptual_lut_bits=args.perceptual_lut_bits,
                                     dither_budget=args.dither_budget,
                                     dither_min_improvement=args.dither_min_improvement,
-                                    dither_window=args.dither_window)
+                                    dither_window=args.dither_window,
+                                    scene_keyframes=args.scene_keyframes)
         mp3 = os.path.splitext(tmp_ascl)[0] + ".mp3"
         mp3 = mp3 if (info.get("audio") and os.path.exists(mp3)) else None
         if mp3 is None:
