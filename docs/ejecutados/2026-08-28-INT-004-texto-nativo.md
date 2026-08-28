@@ -49,5 +49,13 @@ dirty parcial, cuadro repetido re-copiado, normalización de escala inválida).
 - El caso «video de fondo en loop + números arriba» queda cubierto por
   INT-004 solo (sin sidecar de parches, si se declaran items a mano).
 
+Fix posterior (`07bc0da`, encontrado verificando el player en navegador):
+«Limpiar panel» dibuja sin re-seek — `clear()` deja los rects restaurados
+marcados y el seek del mismo frame los reseteaba (los dígitos persistían en
+pantalla). Test de página fija el camino.
+
 Regresión al cierre: 199 pruebas Python + 25 suites JS en verde
-(commits `21df177` y `76ffe45`, workflow `regression`).
+(commits `21df177`, `76ffe45` y `07bc0da`, workflow `regression`).
+Verificado en navegador: attach «texto nativo: 3 campos espejados», carga
+simulada actualiza matriz y texto juntos, zoom 2 = backing 1536×864, play
+con textos persistentes sobre el video, clear deja el frame base limpio.
