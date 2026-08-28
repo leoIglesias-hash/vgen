@@ -56,6 +56,10 @@ FLAG_PAL_PER_SCENE = 2
 FLAG_PAL_GLOBAL = 4
 CODEC_FLAG_REGIONAL = 1
 DEFAULT_TILE_SIZE = 16
+# E-09: rango que ReaderV2 acepta (W-08) y barrido estandar por archivo.
+MIN_TILE_SIZE = 4
+MAX_TILE_SIZE = 32
+SWEEP_TILE_SIZES = (4, 8, 12, 16, 24, 32)
 MAX_DECODE_BYTES = 64 * 1024 * 1024
 
 
@@ -121,24 +125,27 @@ def _header_fields(buf, expected_version=None):
     if data_off + n_frames * 4 > len(buf):
         _fail("tabla de offsets truncada")
     n = cols * rows
-    tile_cols = (cols + DEFAULT_TILE_SIZE - 1) // DEFAULT_TILE_SIZE
-    tile_rows = (rows + DEFAULT_TILE_SIZE - 1) // DEFAULT_TILE_SIZE
-    tile_count = tile_cols * tile_rows
-    # Mismos topes que ReaderV2: evitan que un header diminuto declare un
-    # inflate de varios GiB y garantizan que el resultado sea reproducible en TV.
     if n * 5 > MAX_DECODE_BYTES:
         _fail("dimensiones exceden limite DELTA operativo")
-    if n * 7 + tile_count * 8 > MAX_DECODE_BYTES:
-        _fail("dimensiones exceden limite regional operativo")
     if version == VERSION_V1 and reserved != 0:
         _fail("reserved v1 debe ser cero")
+    effective_tile = DEFAULT_TILE_SIZE
     if version == VERSION_V2:
         tile_size = reserved & 255
         codec_flags = reserved >> 8
-        if tile_size != DEFAULT_TILE_SIZE:
-            _fail("tile_size v2 no soportado: %d" % tile_size)
+        # E-09: mismo rango 4..32 que ReaderV2 (W-08).
+        if tile_size < MIN_TILE_SIZE or tile_size > MAX_TILE_SIZE:
+            _fail("tile_size v2 fuera de rango 4..32: %d" % tile_size)
         if codec_flags != CODEC_FLAG_REGIONAL:
             _fail("codec_flags v2 no soportado: 0x%02X" % codec_flags)
+        effective_tile = tile_size
+    tile_cols = (cols + effective_tile - 1) // effective_tile
+    tile_rows = (rows + effective_tile - 1) // effective_tile
+    tile_count = tile_cols * tile_rows
+    # Mismos topes que ReaderV2: evitan que un header diminuto declare un
+    # inflate de varios GiB y garantizan que el resultado sea reproducible en TV.
+    if n * 7 + tile_count * 8 > MAX_DECODE_BYTES:
+        _fail("dimensiones exceden limite regional operativo")
     return {
         "fields": fields,
         "version": version,
@@ -460,8 +467,18 @@ def transcode_ascl_bytes(source, tile_size=DEFAULT_TILE_SIZE,
     source = bytes(source)
     header = _header_fields(source, VERSION_V1)
     _validate_crc(source, header)
-    if tile_size != DEFAULT_TILE_SIZE or codec_flags != CODEC_FLAG_REGIONAL:
-        _fail("esta revision v2 exige tile_size=16 y codec_flags=0x01")
+    tile_size = int(tile_size)
+    # E-09: cualquier tile del rango del reader; el ganador del barrido se
+    # emite en el byte 26 del header (via _build_v2).
+    if tile_size < MIN_TILE_SIZE or tile_size > MAX_TILE_SIZE:
+        _fail("tile_size v2 fuera de rango 4..32: %d" % tile_size)
+    if codec_flags != CODEC_FLAG_REGIONAL:
+        _fail("esta revision v2 exige codec_flags=0x01")
+    _tc = (header["cols"] + tile_size - 1) // tile_size
+    _tr = (header["rows"] + tile_size - 1) // tile_size
+    if header["cols"] * header["rows"] * 7 + _tc * _tr * 8 > MAX_DECODE_BYTES:
+        _fail("dimensiones exceden limite regional operativo para tile_size=%d"
+              % tile_size)
 
     blocks = []
     previous = None
@@ -548,6 +565,30 @@ def transcode_ascl_bytes(source, tile_size=DEFAULT_TILE_SIZE,
         "tile_size": tile_size,
         "codec_flags": codec_flags,
     }
+    return result, stats
+
+
+def transcode_ascl_bytes_sweep(source, tile_sizes=SWEEP_TILE_SIZES,
+                               verify_roundtrip=True):
+    """E-09: transcodifica con cada tile_size del barrido y devuelve el menor.
+
+    Determinista: en empate de bytes gana el tile_size mas chico. El resultado
+    agrega ``stats["sweep"]`` con ``(tile_size, bytes)`` por candidato.
+    Ganador provisional: el barrido definitivo se repite en S-4 (E-23 cambia
+    la estadistica de colores por tile).
+    """
+    if not tile_sizes:
+        _fail("barrido de tile_size vacio")
+    best = None
+    sweep = []
+    for tile_size in tile_sizes:
+        candidate, stats = transcode_ascl_bytes(
+            source, tile_size=tile_size, verify_roundtrip=verify_roundtrip)
+        sweep.append((int(tile_size), len(candidate)))
+        if best is None or len(candidate) < len(best[0]):
+            best = (candidate, stats)
+    result, stats = best
+    stats["sweep"] = tuple(sweep)
     return result, stats
 
 
@@ -647,8 +688,15 @@ def decode_ascl_v2_bytes(source):
     return header, frames
 
 
-def transcode_path(input_path, output_path, verify_roundtrip=True):
+def transcode_path(input_path, output_path, verify_roundtrip=True,
+                   tile_size=DEFAULT_TILE_SIZE, sweep=False):
     """Convierte .ascl o .asclv v1 sin sobrescribir la fuente."""
+    def _convert(ascl):
+        if sweep:
+            return transcode_ascl_bytes_sweep(
+                ascl, verify_roundtrip=verify_roundtrip)
+        return transcode_ascl_bytes(
+            ascl, tile_size=tile_size, verify_roundtrip=verify_roundtrip)
     input_resolved = os.path.normcase(os.path.realpath(os.path.abspath(input_path)))
     output_resolved = os.path.normcase(os.path.realpath(os.path.abspath(output_path)))
     same_path = input_resolved == output_resolved
@@ -668,14 +716,14 @@ def transcode_path(input_path, output_path, verify_roundtrip=True):
         ascl, audio, version = ascl_bundle.read_parts_info(input_path)
         if version != VERSION_V1:
             _fail("el bundle de entrada no es v1")
-        converted, stats = transcode_ascl_bytes(ascl, verify_roundtrip=verify_roundtrip)
+        converted, stats = _convert(ascl)
         total, video_bytes, audio_bytes = ascl_bundle.pack_bytes(converted, audio, output_path)
         stats.update({"bundle": True, "bundle_bytes": total,
                       "video_bytes": video_bytes, "audio_bytes": audio_bytes})
     else:
         with open(input_path, "rb") as fh:
             ascl = fh.read()
-        converted, stats = transcode_ascl_bytes(ascl, verify_roundtrip=verify_roundtrip)
+        converted, stats = _convert(ascl)
         with open(output_path, "wb") as fh:
             fh.write(converted)
         stats.update({"bundle": False, "video_bytes": len(converted), "audio_bytes": 0})
@@ -689,13 +737,23 @@ def main(argv=None):
     parser.add_argument("output")
     parser.add_argument("--no-verify-roundtrip", action="store_true",
                         help="omite verificar los candidatos v2 (no recomendado)")
+    parser.add_argument("--tile-size", type=int, default=DEFAULT_TILE_SIZE,
+                        help="tile regional 4..32 (default %d)" % DEFAULT_TILE_SIZE)
+    parser.add_argument("--tile-sweep", action="store_true",
+                        help="E-09: barre %s y conserva el menor"
+                        % (SWEEP_TILE_SIZES,))
     args = parser.parse_args(argv)
     try:
         stats = transcode_path(args.input, args.output,
-                               verify_roundtrip=not args.no_verify_roundtrip)
+                               verify_roundtrip=not args.no_verify_roundtrip,
+                               tile_size=args.tile_size, sweep=args.tile_sweep)
     except (ASCLV2Error, OSError) as exc:
         parser.error(str(exc))
     print("OK %s" % args.output)
+    if stats.get("sweep"):
+        print("  barrido tile_size: %s -> ganador %d" %
+              (", ".join("%d:%d B" % pair for pair in stats["sweep"]),
+               stats["tile_size"]))
     print("  v2 lossless: %d regionales + %d predictores de %d frames; "
           "%d B -> %d B (%.2f%% menos)" %
           (stats["regional_frames"], stats["predictor_frames"],

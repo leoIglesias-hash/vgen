@@ -81,6 +81,12 @@ def main(argv=None):
     p.add_argument("--dither-window", "--dither-temporal-window", type=int,
                    default=encoder.selective_dither.DEFAULT_TEMPORAL_WINDOW,
                    dest="dither_window", help="ventana temporal de histeresis")
+    p.add_argument("--tile-size", type=int, default=ascl_v2.DEFAULT_TILE_SIZE,
+                   help="E-09: tile regional v2 en 4..32 (default %d)"
+                   % ascl_v2.DEFAULT_TILE_SIZE)
+    p.add_argument("--tile-sweep", action="store_true",
+                   help="E-09: barre %s y conserva el archivo menor"
+                   % (ascl_v2.SWEEP_TILE_SIZES,))
     p.add_argument("--image", action="store_true", help="forzar modo imagen (sin audio)")
     p.add_argument("--keep", action="store_true",
                    help="conservar .ascl/.mp3; rechaza nombres intermedios existentes")
@@ -187,7 +193,9 @@ def main(argv=None):
         v2_stats = None
         bundle_ascl = tmp_ascl
         if args.format == "v2":
-            v2_stats = ascl_v2.transcode_path(tmp_ascl, final_ascl)
+            v2_stats = ascl_v2.transcode_path(
+                tmp_ascl, final_ascl,
+                tile_size=args.tile_size, sweep=args.tile_sweep)
             bundle_ascl = final_ascl
         total, la, lau = ascl_bundle.pack(bundle_ascl, mp3, out)
         secs = info["n_frames"] / float(info["fps"]) or 1
@@ -206,6 +214,10 @@ def main(argv=None):
                   (v2_stats["regional_frames"], v2_stats.get("predictor_frames", 0),
                    v2_stats["n_frames"],
                    v2_stats["saved_bytes"], v2_stats["saved_percent"]))
+            if v2_stats.get("sweep"):
+                print("  barrido tile_size: %s -> ganador %d" %
+                      (", ".join("%d:%d B" % pair for pair in v2_stats["sweep"]),
+                       v2_stats["tile_size"]))
         else:
             print("  formato: ASCLVID1")
         print("  dither: %s%s" %
@@ -251,7 +263,9 @@ def main(argv=None):
         v2_stats = None
         bundle_ascl = tmp_ascl
         if args.format == "v2":
-            v2_stats = ascl_v2.transcode_path(tmp_ascl, final_ascl)
+            v2_stats = ascl_v2.transcode_path(
+                tmp_ascl, final_ascl,
+                tile_size=args.tile_size, sweep=args.tile_sweep)
             bundle_ascl = final_ascl
         total, la, lau = ascl_bundle.pack(bundle_ascl, None, out)
         print("OK %s  (imagen, %s %dx%d, %.1f KB)" %
@@ -265,6 +279,10 @@ def main(argv=None):
                   "%d B menos (%.2f%%)" %
                   (v2_stats["regional_frames"], v2_stats.get("predictor_frames", 0),
                    v2_stats["saved_bytes"], v2_stats["saved_percent"]))
+            if v2_stats.get("sweep"):
+                print("  barrido tile_size: %s -> ganador %d" %
+                      (", ".join("%d:%d B" % pair for pair in v2_stats["sweep"]),
+                       v2_stats["tile_size"]))
         else:
             print("  formato: ASCLVID1")
         print("  dither: %s%s" %

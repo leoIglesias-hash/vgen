@@ -104,7 +104,8 @@ class ASCLV2TranscodeTest(unittest.TestCase):
     def test_rejects_crc_header_mutation_and_in_place_conversion(self):
         converted, _ = ascl_v2.transcode_ascl_bytes(self.source)
         corrupt = bytearray(converted)
-        corrupt[26] = 8
+        # E-09: 8 es un tile valido del barrido; 3 queda fuera del rango 4..32.
+        corrupt[26] = 3
         with self.assertRaisesRegex(ValueError, "tile_size"):
             ascl_v2.decode_ascl_v2_bytes(corrupt)
         corrupt = bytearray(converted)

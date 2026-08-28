@@ -41,6 +41,9 @@ on:
         description: "Comprimir con Zopfli (E-08): archivo mas chico, encode mas lento"
         type: boolean
         default: true
+      tile:
+        description: "E-09: tile regional v2 (4..32) o 'sweep' para barrer {4,8,12,16,24,32}"
+        default: "16"
 
 permissions:
   contents: read
@@ -75,6 +78,11 @@ jobs:
             echo "::error::No existe $SRC en la rama assets. Subir el video a esa rama primero."
             exit 1
           fi
+          if [ "${{ inputs.tile }}" = "sweep" ]; then
+            TILE_ARGS="--tile-sweep"
+          else
+            TILE_ARGS="--tile-size ${{ inputs.tile }}"
+          fi
           python backend/make_clip.py "$SRC" \
             --format "${{ inputs.format }}" \
             --profile "${{ inputs.profile }}" \
@@ -82,6 +90,7 @@ jobs:
             --palette "${{ inputs.palette }}" \
             --palette-algorithm "${{ inputs.algorithm }}" \
             --dither "${{ inputs.dither }}" \
+            $TILE_ARGS \
             ${{ inputs.extra }} \
             --out outputs/clip.asclv
       - name: Medición (bench_ref) y SHA-256
@@ -92,7 +101,7 @@ jobs:
           {
             echo "## Resultado del encode"
             echo ""
-            echo "Fuente: \`${{ inputs.source }}\` · perfil \`${{ inputs.profile }}\` · ${{ inputs.fps }} fps · ${{ inputs.palette }}/${{ inputs.algorithm }} · dither ${{ inputs.dither }} · ${{ inputs.format }} · zopfli ${{ inputs.zopfli }}"
+            echo "Fuente: \`${{ inputs.source }}\` · perfil \`${{ inputs.profile }}\` · ${{ inputs.fps }} fps · ${{ inputs.palette }}/${{ inputs.algorithm }} · dither ${{ inputs.dither }} · ${{ inputs.format }} · zopfli ${{ inputs.zopfli }} · tile ${{ inputs.tile }}"
             echo ""
             cat bench.md
             echo ""
