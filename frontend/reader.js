@@ -342,7 +342,7 @@
     var o = this._offset(index), blockLen = this.dv.getUint32(o, true), blockEnd = o + 4 + blockLen;
     var p = o + 4, tag = this.bytes[p++], palCount = this.dv.getUint16(p, true), palBytes = palCount * 3;
     var payload, raw, actual, mode = this.header.mode, n = this.n, bpc = this.bpc;
-    var k, rdv, valueOffset, j, m, off, base, vb, maskLen, changed, vp, byte, validBits;
+    var k, rdv, valueOffset, j, m, off, base, vb, maskLen, changed, vp, byte, validBits, bit;
     var dirtyByte, dirtyMask, newBits;
     var lo = -1, hi = -1, full = false, cells = this.cells;
     var nextPalette = this.palette, nextPaletteEntries = this.paletteEntries;
@@ -428,13 +428,20 @@
         }
       }
       vp = maskLen;
-      for (j = 0; j < n; j++) {
-        byte = raw[j >>> 3];
-        if ((byte >>> (j & 7)) & 1) {
-          if (lo < 0) lo = j;
-          hi = j;
-          base = j * bpc;
-          for (m = 0; m < bpc; m++) cells[base + m] = raw[vp++];
+      /* W-12: dos tercios de los bytes de mascara son cero a baja densidad;
+       * saltarlos entero evita ocho lecturas de bit por byte. Los bits de
+       * padding ya fueron validados en cero, asi que off < n siempre. */
+      for (j = 0; j < maskLen; j++) {
+        byte = raw[j];
+        if (!byte) continue;
+        for (bit = 0; bit < 8; bit++) {
+          if ((byte >>> bit) & 1) {
+            off = (j << 3) + bit;
+            if (lo < 0) lo = off;
+            hi = off;
+            base = off * bpc;
+            for (m = 0; m < bpc; m++) cells[base + m] = raw[vp++];
+          }
         }
       }
     } else {

@@ -633,7 +633,7 @@
   };
 
   ReaderV2.prototype._decodeLegacyDelta = function (tag, raw, actual, paletteEntries) {
-    var k, rdv, valueStart, i, off, value, maskLen, changed, validBits, p;
+    var k, rdv, valueStart, i, off, value, maskLen, changed, validBits, p, byte, bit;
     if (tag === TAG_DELTA) {
       if (actual % 5 !== 0) fail("DELTA con longitud invalida");
       k = actual / 5;
@@ -664,11 +664,18 @@
     if (actual !== maskLen + changed) fail("DELTA_MASK con longitud invalida");
     for (i = 0; i < changed; i++) this._validateIndex(raw[maskLen + i], paletteEntries);
     p = maskLen;
-    for (i = 0; i < this.n; i++) {
-      if ((raw[i >>> 3] >>> (i & 7)) & 1) {
-        value = raw[p++];
-        if (this.cells[i] !== value) this._markDirtyCell(i);
-        this.cells[i] = value;
+    /* W-12: salto por byte de mascara en cero; el padding ya se valido en 0,
+     * de modo que el indice reconstruido nunca sale de la grilla. */
+    for (i = 0; i < maskLen; i++) {
+      byte = raw[i];
+      if (!byte) continue;
+      for (bit = 0; bit < 8; bit++) {
+        if ((byte >>> bit) & 1) {
+          off = (i << 3) + bit;
+          value = raw[p++];
+          if (this.cells[off] !== value) this._markDirtyCell(off);
+          this.cells[off] = value;
+        }
       }
     }
   };
