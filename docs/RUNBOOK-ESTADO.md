@@ -112,6 +112,7 @@ Reglas de uso:
 | 2026-08-27 | se crea `docs/ejecutados/` (archivo de lotes cerrados) y `CLAUDE.md` en la raíz como guía de arranque post-compact | el estado vivo queda corto y navegable; la evidencia de lo cerrado no se relee en cada sesión |
 | 2026-08-27 | la referencia HQ pasa a ser **reproducible**: se regenera con el workflow `encode` desde la rama `assets` (fuente TKN-2443) en lugar de congelar un binario irrecuperable | el `clip.asclv` del release v0.2 quedó en una máquina anterior; P-02 exigía congelar antes de tocar el encoder y esta vía lo cumple con SHA verificable en CI |
 | 2026-08-27 | el `preview.mp4` del workflow `encode` es **opcional y apagado por defecto** | pregunta del operador: el producto es el `.asclv`; el mp4 es solo QA visual decodificada. La verificación real se hace con `frontend/player.html` sobre el `.asclv` |
+| 2026-08-27 | se agrega `frontend/demo-overlay.html`: **demo de laboratorio** del mecanismo INT-001 (glifos E-06 escritos como índices sobre la matriz, celdas restauradas tras cada draw) | pedido del operador de ver números sobre el video ya. NO es el runtime F7 (S-5): usa nearest-index sobre la paleta vigente porque el clip de referencia tiene `reserved=0`. Al implementar F7, esta demo se reemplaza o se recicla como página de prueba |
 
 ## Próxima acción
 
