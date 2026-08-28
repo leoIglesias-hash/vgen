@@ -29,6 +29,11 @@
       textfeed.js, que expone la MISMA interfaz digitCount/setValues que
       consume datachannel.js (sin cambios). Si data.txt no existe el canal
       falla suave (INV-7).
+    - INT-006-C (D7=a, imagen nativa): un PNG opcional (outputs/logo.png) se
+      dibuja con drawImage sobre el MISMO canvas despues del texto, igual que
+      el texto nativo: no vive en la matriz (no es byte-verificable), su caja
+      se marca sucia cada frame y solo se activa con texto declarado (el
+      renderer ya es Canvas2D con pixelScale). Sin imagen, nada cambia.
 -->
 <style>
   :root{ color-scheme: dark; }
@@ -73,6 +78,7 @@
   var CLIP_URL="./outputs/clip.asclv";
   var SLOTS_URL="./outputs/clip.slots";
   var DATA_URL="./outputs/data.txt";
+  var IMG_URL="./outputs/logo.png";
 
   var cv=document.getElementById("cv"), audio=document.getElementById("audio");
   var elPlay=document.getElementById("play"), elZoom=document.getElementById("zoom");
@@ -81,6 +87,7 @@
   var reader=null, renderer=null, overlay=null, channel=null, overlayMeta=null;
   var textLayer=null, textFields=null, textItems=null, cellScale=1;
   var textFeed=null, feedFields=null;
+  var imgEl=null, imgBox=null;
   var playing=false, hasAudio=false, startT=0, raf=0, lastShown=-1, simSerial=0;
   var urlAPI=window.URL || window.webkitURL;
   var perf=window.performance;
@@ -115,12 +122,24 @@
         reader.markRectDirty(it.x,it.y,it.w,it.h);
       }
     }
+    /* INT-006-C: la caja de la imagen nativa tambien se repinta debajo */
+    if(imgBox){
+      reader.markRectDirty(imgBox.x,imgBox.y,imgBox.w,imgBox.h);
+    }
+  }
+  /* INT-006-C (D7=a): la imagen se dibuja DESPUES del texto, escalada por
+   * cellScale como el, sobre el mismo canvas (un solo layer) */
+  function drawImg(){
+    renderer.ctx.drawImage(imgEl,
+      imgBox.x*cellScale,imgBox.y*cellScale,
+      imgBox.w*cellScale,imgBox.h*cellScale);
   }
   function drawFrame(frame){
     seekTo(frame);
     if(textLayer) markTextDirty();
     renderer.draw(reader);
     if(textLayer) textLayer.draw(renderer.ctx,cellScale);
+    if(imgBox) drawImg();
   }
 
   function overlayStatus(){
@@ -223,6 +242,7 @@
     pickRenderer();
     reader.decodedIndex=-1;
     drawFrame(lastShown<0?0:lastShown);
+    tryAttachImage();
   }
 
   /* ---- INT-006: texto standalone (fondo sin reserva, sin sidecar) ----
@@ -269,6 +289,30 @@
     log(reason+" Texto standalone: "+textLayer.count+
       " campos de 2 digitos (INT-006); datos: "+DATA_URL+
       " cada 15 s (si falta, el canal falla suave).");
+    tryAttachImage();
+  }
+
+  /* ---- INT-006-C: imagen nativa opcional (decision D7, opcion a) ----
+   * Solo con texto declarado (renderer ya Canvas2D con pixelScale). La caja
+   * se dimensiona en celdas (un cuarto del ancho, aspecto preservado) en la
+   * esquina superior derecha. Sin imagen o caja inviable: nada cambia. */
+  function tryAttachImage(){
+    var im;
+    if(!textLayer || imgEl || !window.Image) return;
+    im=new Image();
+    im.onload=function(){
+      var cols=reader.header.cols, rows=reader.header.rows;
+      var w=Math.floor(cols/4);
+      var h=Math.round(w*im.naturalHeight/im.naturalWidth);
+      if(w<1 || h<1 || cols-w-2<0 || h+4>rows) return;
+      imgEl=im;
+      imgBox={x:cols-w-2,y:2,w:w,h:h};
+      if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
+      log("Imagen nativa activa (INT-006-C, D7=a): "+IMG_URL+
+        " en "+imgBox.w+"x"+imgBox.h+" celdas, esquina superior derecha.");
+    };
+    im.onerror=function(){ /* sin imagen: nada cambia (INV-7) */ };
+    im.src=IMG_URL;
   }
 
   /* ---- sidecar + canal: el fallo de cualquiera deja el video intacto ---- */
@@ -374,6 +418,7 @@
         if(textLayer) markTextDirty();
         renderer.draw(reader);
         if(textLayer) textLayer.draw(renderer.ctx,cellScale);
+        if(imgBox) drawImg();
       }
       log("Panel limpio (clear): matriz byte-identica al video base. "+overlayStatus());
     } else if(textFeed && textLayer){
@@ -386,6 +431,7 @@
         markTextDirty();
         renderer.draw(reader);
         textLayer.draw(renderer.ctx,cellScale);
+        if(imgBox) drawImg();
       }
       log("Textos limpios: fondo intacto (texto standalone, INT-006).");
     }

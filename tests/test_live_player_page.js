@@ -87,6 +87,22 @@ assert(/else if\(textFeed\)\{\s*digits=randomDigits\(textFeed\.digitCount\);/.te
 assert(/else if\(textFeed && textLayer\)\{[\s\S]{0,400}textLayer\.setText\(feedFields\[j\]\.id,""\);[\s\S]{0,200}markTextDirty\(\);\s*renderer\.draw\(reader\);\s*textLayer\.draw\(/.test(inline[1]),
   "limpiar en standalone vacia los textos y repinta sin re-seek");
 
+/* INT-006-C (D7=a): imagen nativa opcional con drawImage sobre el MISMO
+ * canvas, despues del texto; su caja se marca sucia cada frame; sin imagen
+ * (404) nada cambia (INV-7) */
+assert(page.indexOf('IMG_URL="./outputs/logo.png"') >= 0);
+assert(inline[1].indexOf("function tryAttachImage()") >= 0);
+assert(/if\(!textLayer \|\| imgEl \|\| !window\.Image\) return;/.test(inline[1]),
+  "la imagen solo se activa con texto declarado (renderer ya Canvas2D)");
+assert(/renderer\.draw\(reader\);\s*if\(textLayer\) textLayer\.draw\(renderer\.ctx,cellScale\);\s*if\(imgBox\) drawImg\(\);/.test(inline[1]),
+  "la imagen se dibuja despues del frame y del texto");
+assert(/if\(imgBox\)\{\s*reader\.markRectDirty\(imgBox\.x,imgBox\.y,imgBox\.w,imgBox\.h\);/.test(inline[1]),
+  "la caja de la imagen se repinta debajo cada frame");
+assert(inline[1].indexOf("im.onerror=function(){") >= 0,
+  "sin imagen nada cambia (INV-7)");
+assert(/imgBox\.x\*cellScale,imgBox\.y\*cellScale/.test(inline[1]),
+  "la imagen escala con cellScale como el texto");
+
 /* INV-7: sin reserva, sin sidecar o con sidecar ajeno el video sigue */
 assert(page.indexOf("overlay inactivo") >= 0);
 assert(page.indexOf("El video sigue") >= 0);
