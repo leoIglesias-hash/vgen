@@ -28,6 +28,12 @@ el TV nunca cuantiza ni decide, solo ejecuta.
 - **Generar un clip para ver:** workflow `encode` (Actions → encode → Run workflow).
   Encodea desde la rama `assets` con el perfil HQ por defecto y publica `clip.asclv`,
   la fila de `bench_ref`, el SHA-256 y un `preview.mp4` como artifacts descargables.
+- **Al cerrar cada etapa, levantar el player para el operador** (pedido 2026-08-28):
+  bajar el último `clip.asclv` del CI a `outputs/` (verificar SHA), correr
+  `tools/serve-local.ps1` (puerto 8123, layout plano, **`Cache-Control: no-store`**
+  para que nunca vea caché vieja) y avisarle que abra `http://localhost:8123/`.
+- **Documentación siempre al día antes de cualquier compact:** estado, registro,
+  ejecutados y este archivo se actualizan al cierre de cada tarea/etapa, nunca "después".
 
 ## Ayuda-memoria — no perder de vista nunca
 
