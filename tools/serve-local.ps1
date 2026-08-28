@@ -17,7 +17,9 @@ while ($listener.IsListening) {
   try {
     $ctx = $listener.GetContext()
     $rel = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath).TrimStart('/')
-    if ($rel -eq "") { $rel = "player.html" }
+    # La raiz abre el runtime real (overlay + texto nativo), que es lo que el
+    # operador revisa al cierre de cada etapa; player.html sigue en /player.html.
+    if ($rel -eq "") { $rel = "live-player.html" }
     $relWin = $rel -replace '/', '\'
     $candidates = @((Join-Path $root $relWin), (Join-Path (Join-Path $root "frontend") $relWin))
     $full = $null
