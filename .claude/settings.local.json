@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell(Select-String -Path backend\\\\ascl_bundle.py -Pattern 'add_argument|add_parser|def main' | ForEach-Object { $_.LineNumber.ToString\\(\\) + ': ' + $_.Line.Trim\\(\\) })"
-    ]
-  }
-}
