@@ -38,6 +38,7 @@ from PIL import Image
 import dither as selective_dither
 import adaptive_palette
 import perceptual_palette
+from deflate_util import best_deflate
 
 MAGIC          = b"ASCL"
 VERSION        = 1
@@ -647,7 +648,7 @@ def cells_to_planes_bytes(cells, mode):
 def encode_frame(cells, prev_cells, mode, frame_index, keyframe, compress, delta_allowed):
     planes = cells_to_planes_bytes(cells, mode)
     candidates = []
-    full_z = zlib.compress(planes, 9)
+    full_z = best_deflate(planes, 9)
     if compress == "none":
         candidates.append((TAG_RAW, planes))
     elif compress == "zlib":
@@ -659,10 +660,10 @@ def encode_frame(cells, prev_cells, mode, frame_index, keyframe, compress, delta
         ci = np.nonzero(changed)[0].astype("<u4")
         if ci.size < cells.shape[0]:
             vals = cells[changed]
-            delta_z = zlib.compress(ci.tobytes() + vals.tobytes(), 9)
+            delta_z = best_deflate(ci.tobytes() + vals.tobytes(), 9)
             candidates.append((TAG_DELTA, delta_z))
             mask = np.packbits(changed.astype(np.uint8), bitorder="little")
-            mask_z = zlib.compress(mask.tobytes() + vals.tobytes(), 9)
+            mask_z = best_deflate(mask.tobytes() + vals.tobytes(), 9)
             candidates.append((TAG_DELTA_MASK, mask_z))
     tag, payload = min(candidates, key=lambda c: len(c[1]))
     if len(planes) < len(payload):

@@ -37,6 +37,10 @@ on:
         description: "Generar preview.mp4 de control (decodificacion del .asclv; el producto es el .asclv)"
         type: boolean
         default: false
+      zopfli:
+        description: "Comprimir con Zopfli (E-08): archivo mas chico, encode mas lento"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -60,6 +64,9 @@ jobs:
           cache: pip
       - name: Dependencias del encoder
         run: python -m pip install -r backend/requirements.txt
+      - name: Zopfli (E-08, opcional)
+        if: ${{ inputs.zopfli }}
+        run: python -m pip install zopfli
       - name: Encode
         run: |
           mkdir -p outputs work
@@ -85,7 +92,7 @@ jobs:
           {
             echo "## Resultado del encode"
             echo ""
-            echo "Fuente: \`${{ inputs.source }}\` · perfil \`${{ inputs.profile }}\` · ${{ inputs.fps }} fps · ${{ inputs.palette }}/${{ inputs.algorithm }} · dither ${{ inputs.dither }} · ${{ inputs.format }}"
+            echo "Fuente: \`${{ inputs.source }}\` · perfil \`${{ inputs.profile }}\` · ${{ inputs.fps }} fps · ${{ inputs.palette }}/${{ inputs.algorithm }} · dither ${{ inputs.dither }} · ${{ inputs.format }} · zopfli ${{ inputs.zopfli }}"
             echo ""
             cat bench.md
             echo ""

@@ -20,6 +20,7 @@ import numpy as np
 
 import ascl_bundle
 import regional_codec_v2
+from deflate_util import best_deflate
 
 
 MAGIC = b"ASCL"
@@ -335,7 +336,7 @@ def encode_predictor_payload(matrix, keyframe, previous=None, zlib_level=9):
     candidates = []
     for predictor in predictor_ids:
         residual = _predict_residual(matrix, predictor, previous)
-        payload = bytes((predictor,)) + zlib.compress(residual.tobytes(), zlib_level)
+        payload = bytes((predictor,)) + best_deflate(residual.tobytes(), zlib_level)
         candidates.append((len(payload), predictor, payload))
     _length, predictor, payload = min(candidates, key=lambda item: (item[0], item[1]))
     return ((TAG_PREDICT_KEY_ZLIB if keyframe else TAG_PREDICT_DELTA_ZLIB),

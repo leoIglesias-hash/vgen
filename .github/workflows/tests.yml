@@ -9,12 +9,18 @@ permissions:
 
 jobs:
   test:
+    name: test (py${{ matrix.python-version }}${{ matrix.zopfli && ' + zopfli' || '' }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.11"]
+        zopfli: [false]
+        include:
+          # E-08: la regresion debe estar en verde CON y SIN Zopfli instalado.
+          - python-version: "3.11"
+            zopfli: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,5 +35,8 @@ jobs:
           node-version: "20"
       - name: Install encoder dependencies
         run: python -m pip install -r backend/requirements.txt
+      - name: Install Zopfli (pata E-08)
+        if: ${{ matrix.zopfli }}
+        run: python -m pip install zopfli
       - name: Run Python and JavaScript regression
         run: python tests/run_all.py

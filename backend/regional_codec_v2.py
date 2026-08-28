@@ -25,6 +25,8 @@ import zlib
 
 import numpy as np
 
+from deflate_util import best_deflate
+
 
 OP_SKIP_RUN = 0x00
 OP_SOLID = 0x01
@@ -319,7 +321,7 @@ def encode_payload(current: np.ndarray, previous: Optional[np.ndarray] = None,
     # Una matriz no vacia siempre cubre al menos un tile/comando.
     if not raw:
         raise AssertionError("stream regional vacio")
-    compressed = zlib.compress(raw, zlib_level)
+    compressed = best_deflate(raw, zlib_level)
     repeat = (not keyframe and not dirty and
               raw == bytes((OP_SKIP_RUN,)) + _uvarint(tile_count))
     return RegionalEncoding(
