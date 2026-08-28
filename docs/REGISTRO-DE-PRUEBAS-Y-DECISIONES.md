@@ -649,3 +649,19 @@ del total y del caso keyframe, no el punto individual por caso.
   recomputar el residual).
 - El objetivo del runbook para W-09 (~15-20%) se supero en el agregado
   W-09+W-11 (~40% del walk regional). Cifras absolutas de TV quedan para F8.
+
+## Instancia 011 - W-12: salto por byte en DELTA_MASK
+
+Fecha: 2026-08-28, commits `b8c812d` (readers) + `ab96b8c` (caso de bench).
+
+Bench `bench-reader` (caso `lmask`: DELTA_MASK legacy sintetico de ~5% de
+densidad, dos tercios de los bytes de mascara en cero), HEAD `ab96b8c` vs
+baseline `fbb38db`:
+
+```text
+lmask   169,4 us/frame -> 80,6 us/frame   (-52%)
+```
+
+El runbook estimaba ~29%; el perfil sintetico con exactamente 2/3 de bytes en
+cero rinde mas. La equivalencia de salida la garantiza la suite existente
+(dirty exacto y celdas identicas en ambos readers).
