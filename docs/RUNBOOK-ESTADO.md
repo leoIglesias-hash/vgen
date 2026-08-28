@@ -51,7 +51,7 @@ Reglas de uso:
 | E-10 | keyframes en cortes de escena | cerrada | `1523f4d` | 2026-08-28 | opt-in `--scene-keyframes` (default off = bytes idénticos, verificado por test): `need_color_descriptor` se calcula siempre con el flag, `hard_cut` fuerza keyframe, `--keyint` expuesto también en make_clip para GOPs largos. Test: corte parcial sintético pasa de cadena DELTA 7 a 3, keyframes 1→2, celdas decodificadas idénticas con y sin el flag. **Cierra F2 (E-08..E-10)**. CI en verde |
 | E-11 | flags de audio | opcional | | | |
 | E-12 | refit de paleta a asignación real | cerrada | `09c4261` | 2026-08-28 | opt-in `--palette-refit 0..10` (default 0 = bytes idénticos): Lloyd acotado tras cada paleta con la misma regla de asignación del encode (Oklab exacto/LUT o Pillow), media por `np.bincount`, aceptación solo si baja el error en la métrica del algoritmo; reservadas intactas (INV-4), pal_img solo-base (INV-3); enhebrado global/block/adaptive/per-frame (incl. median-cut). Bench 768 `overlay=off` (Instancia 018): refit 3 → 35,39 dB / 0,00734; **refit 5 → 35,46 dB / 0,00732 y −0,59 % bytes** (17.379.859 B, `adef9e53…c05bb`) vs 34,29 / 0,00793 de P-02; fondo re-encodeado e instalado en `outputs/`. CI en verde |
-| E-13 | Lloyd en dominio uint8 | pendiente | | | |
+| E-13 | Lloyd en dominio uint8 | cerrada | `a64c7ce` | 2026-08-28 | `_closing_lloyd_uint8` en `build_perceptual_palette`: itera el tramo final (asignar → promediar en Oklab → gamut map → redondear → reparar duplicados) restringido a paletas sRGB representables, aceptando solo si baja la inercia ponderada (nunca degrada; orden de entradas conservado → alineación temporal válida). Opt-in `--palette-uint8-refine 0..10`, solo kmeans-oklab. Bench 768 con refit 5 + refine 3 (Instancia 019, `a95d0bbc…acbf`): PSNR igual, Oklab −0,5 % (0,00728), bytes +0,36 % → el producto sigue con refit 5 solo. CI en verde |
 | E-14 | paleta sobre todos los píxeles, dos pasadas | pendiente | | | resuelve también el OOM del modo global |
 | E-15 | estabilidad temporal, 4 algoritmos | pendiente | | | |
 | E-16 | `PairLUT` exacto | pendiente | | | |
@@ -178,19 +178,23 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 | 2026-08-28 | CI rojo en `49e2b4a` (INT-006-B): un backtick en un comentario del script inline volteó el gate ES5 de `test_live_player_page.js`; fix hacia adelante en `2c81856` (verde) | el gate barre `let/const/class/=>/backtick` también dentro de comentarios: los comentarios del inline no llevan backticks |
 | 2026-08-28 | **Nueva dirección del operador (post-demo INT-004)**: «volver a procesar el video de fondo… está con la intervención de píxeles con números y eso ya no nos sirve… procesalo para que tenga más calidad, la mayor calidad posible con las herramientas que fuimos desarrollando y dejamos las fuentes activas interviniendo como ahora; luego te paso una imagen y probamos procesarla». Nace el carril **INT-006** (A: fondo `overlay=off` con bench 768 vs 960; B: texto standalone sin sidecar vía `textfeed.js`; C: imagen → decisión D7 nativa/reserva/época) | con el texto nativo, la reserva de 32 solo servía a los números de matriz: quitarla recupera los 256 colores de la base (−0,24 dB recuperados) sin perder la intervención. E-12 pasa a ejecutarse DESPUÉS de INT-006 y amerita re-encode del fondo al cerrar |
 | 2026-08-28 | **E-12 cierra con el refit 5 como fondo de producto**: el 768 con `--palette-refit 5` (35,46 dB / Oklab 0,00732 / 17.379.859 B) gana +1,17 dB y −0,59 % de bytes sobre P-02, y supera al 960 ultra sin refit con 31 % menos bytes; se instala en `outputs/` (SHA `adef9e53…c05bb` verificado) cumpliendo el «al cerrar E-12, re-encodear el fondo» en el mismo cierre. El flag queda **opt-in (default 0)** para preservar la reproducibilidad byte a byte de las referencias históricas; el workflow lo pasa por `extra` | la aceptación monótona en la métrica del algoritmo garantiza que el refit nunca degrada (propiedad testeada en los 4 algoritmos); refit 3 quedó también medido (35,39 dB, `514be81e…`) por si el costo de encode importara. La comparación 768 vs 960 de la Instancia 017 queda desactualizada: re-medir el 960 con refit antes de reabrirla |
+| 2026-08-28 | **E-13 medido y NO adoptado en el producto**: el cierre de Lloyd uint8 (`--palette-uint8-refine 3` sobre refit 5) deja PSNR igual, baja Oklab −0,5 % y sube bytes +0,36 % (Instancia 019, `a95d0bbc…acbf`); el fondo sigue con refit 5 solo. La inercia de muestra baja siempre por construcción (gate de aceptación); la ganancia sobre el clip real es marginal | mecánica lista y testeada para cuando convenga (S-4 reevalúa combinaciones con el trellis de F5); mantener el default en 0 preserva la reproducibilidad de las referencias |
 
 ## Próxima acción
 
-1. **Carril E (F3): E-13** (cerrar Lloyd en dominio uint8,
-   `perceptual_palette.py:472-521`: iterar tras gamut map / reparación de
-   duplicados aceptando solo si baja la inercia). Siguen E-14..E-18. La
-   **ruleta** sigue siendo INT-005 en F6/S-4. F5 y F8 sin cambios.
+1. **Carril E (F3): E-14** (paleta sobre todos los píxeles en dos
+   pasadas — `_weighted_samples` sin el límite de 65.536 muestras y sin
+   materializar el video completo en RAM; medir RSS máximo con
+   graphic-ultra). Siguen E-15..E-18. La **ruleta** sigue siendo INT-005
+   en F6/S-4. F5 y F8 sin cambios.
 2. Decisión abierta para el operador: el fondo ahora es el **768 refit 5**
    (35,46 dB), que supera al 960 ultra sin refit (34,40 dB) con 31 %
    menos bytes — si retoma la idea del 960, hay que re-medirlo con
    `--palette-refit 5` antes de comparar.
 3. Referencias HQ vigentes: **producto = 768 refit 5 `adef9e53…c05bb`
    (17.379.859 B, instalada en `outputs/`, run 33203086375)** · 768
+   refit 5 + uint8-refine 3 `a95d0bbc…acbf` (17.442.264 B, Oklab 0,00728,
+   run 33207479295, E-13 medido sin adoptar) · 768
    refit 3 `514be81e…a01aff` (17.425.768 B, run 33203084602) · sin refit
    determinista P-02 `ebfe2eb4…4b36` (17.482.270 B, sigue reproducible
    con el flag en 0) · ultra 960 sin refit `31348a83…5688` (25.003.004 B,
@@ -201,7 +205,7 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
-Regresión al cierre de esta sesión: **209 pruebas Python y 26 suites JavaScript, en verde**
-(base: 115 y 11). Último commit de tarea: `09c4261` (E-12, CI verde confirmado
+Regresión al cierre de esta sesión: **219 pruebas Python y 26 suites JavaScript, en verde**
+(base: 115 y 11). Último commit de tarea: `a64c7ce` (E-13, CI verde confirmado
 2026-08-28); `outputs/clip.asclv` = fondo 768 **refit 5** (`adef9e53…c05bb`,
 SHA verificado) servido por el player standalone en `localhost:8123`.

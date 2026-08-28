@@ -953,3 +953,37 @@ re-encodear el fondo», runbook §Próxima acción): `outputs/clip.asclv` =
 `adef9e53…c05bb` (SHA local verificado). El flag sigue opt-in para que
 las referencias históricas (P-02 `ebfe2eb4…4b36` incluida) se mantengan
 reproducibles byte a byte; el workflow lo pasa por `extra`.
+
+## Instancia 019 - E-13: cierre de Lloyd en dominio uint8 (bench 768)
+
+Implementación en `a64c7ce` (CI `regression` en verde). El Lloyd principal
+de `build_perceptual_palette` optimiza centros Oklab continuos; el gamut
+map, el redondeo a uint8 y la reparación de duplicados los movían DESPUÉS
+de la última asignación. `_closing_lloyd_uint8` itera ese tramo final
+restringido a paletas sRGB representables (asignar → promediar en Oklab →
+mapear/redondear/reparar) y acepta cada vuelta **solo si baja la inercia
+ponderada** — nunca degrada, conserva el orden de entradas (la alineación
+temporal previa sigue válida) y es determinista. Opt-in
+`--palette-uint8-refine 0..10` (default 0 = bytes idénticos), solo
+kmeans-oklab; `info["uint8_refine_accepted"]` lo reporta.
+
+Encode 768 `overlay=off` con `--palette-refit 5 --palette-uint8-refine 3`
+(run 33207479295):
+
+```text
+| clip.asclv | 17258895 | 17442264 | 0.2252 | 231 | 93 | 9 | ZLIB:93;DELTA_MASK:137;RDELTA_RAW:1 | 35.46 | 0.00728 | a95d0bbc6ef0a2ed42c40a2cd0fbeb517e31279900f4a77fcdf9ec08cfdeacbf |
+```
+
+Contra el refit 5 solo (`adef9e53…`, 35,46 / 0,00732 / 17.379.859 B):
+PSNR igual, **Oklab −0,5 %** (0,00732 → 0,00728), bytes **+0,36 %**
+(+62.405 B). La inercia de muestra baja siempre por construcción (gate de
+aceptación, testeado en `test_palette_uint8_refine.py`); sobre el clip
+real la ganancia perceptual es marginal y cuesta unos KB de paleta menos
+comprimible.
+
+Decisión: **el fondo de producto sigue siendo el refit 5 solo**
+(`adef9e53…c05bb` en `outputs/`); E-13 queda medido y citable
+(`a95d0bbc…acbf`) — si el operador prefiere optimizar el error perceptual
+puro, se activa agregando `--palette-uint8-refine 3` al `extra` del
+workflow. El barrido definitivo de S-4 (artefactos finales) reevaluará la
+combinación con el trellis de F5.
