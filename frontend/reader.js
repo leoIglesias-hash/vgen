@@ -523,6 +523,39 @@
     return this;
   };
 
+  /* W-13: la intervencion en vivo (overlay INT-001) marca el rect de celdas
+   * que acaba de escribir para que el proximo draw repinte exactamente eso.
+   * Rect en celdas. Con un repintado completo pendiente es un no-op. */
+  Reader.prototype.markRectDirty = function (x0, y0, w, h) {
+    var cols = this.header.cols, rows = this.header.rows;
+    var x, y, cell, byteIdx, mask, x1, y1;
+    x0 = Number(x0); y0 = Number(y0); w = Number(w); h = Number(h);
+    if (x0 !== Math.floor(x0) || y0 !== Math.floor(y0) ||
+        w !== Math.floor(w) || h !== Math.floor(h)) fail("rect dirty no entero");
+    if (x0 < 0 || y0 < 0 || w < 1 || h < 1 || x0 + w > cols || y0 + h > rows) {
+      fail("rect dirty fuera de grilla");
+    }
+    if (this.dirtyFull || this._dFull) return this;
+    x1 = x0 + w; y1 = y0 + h;
+    for (y = y0; y < y1; y++) {
+      for (x = x0; x < x1; x++) {
+        cell = y * cols + x;
+        byteIdx = cell >>> 3;
+        mask = 1 << (cell & 7);
+        if ((this.dirtyCellBits[byteIdx] & mask) === 0) {
+          this.dirtyCellBits[byteIdx] |= mask;
+          this._dCellCount++;
+        }
+      }
+    }
+    if (y0 < this._dY0) this._dY0 = y0;
+    if (y1 - 1 > this._dY1) this._dY1 = y1 - 1;
+    this.dirtyCellCount = this._dCellCount;
+    if (y0 < this.dirtyY0) this.dirtyY0 = y0;
+    if (y1 - 1 > this.dirtyY1) this.dirtyY1 = y1 - 1;
+    return this;
+  };
+
   /* Escribe filas inclusivas en offsets absolutos del RGBA de frame completo. */
   Reader.prototype.fillRGBARows = function (out, y0, y1) {
     var mode = this.header.mode, cols = this.header.cols, cells = this.cells, pal = this.palette;

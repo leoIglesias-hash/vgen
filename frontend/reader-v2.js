@@ -872,6 +872,13 @@
       throw error;
     }
     this.decodedIndex = target;
+    this._publishDirty();
+    return this;
+  };
+
+  /* Publica el estado dirty interno en los campos que consume el renderer. */
+  ReaderV2.prototype._publishDirty = function () {
+    var i, byteIndex, byte, bit;
     this.dirtyFull = this._dFull;
     this.dirtyY0 = this._dY0;
     this.dirtyY1 = this._dY1;
@@ -889,6 +896,48 @@
       }
       this.dirtyCount = i;
     }
+  };
+
+  /* W-13: contraparte simetrica de ReaderV1.markRectDirty. Marca celdas
+   * exactas y promueve a tile cuando el rect cubre el tile entero, conservando
+   * la disyuncion celda/tile del resto del reader. */
+  ReaderV2.prototype.markRectDirty = function (x0, y0, w, h) {
+    var cols = this.header.cols, rows = this.header.rows;
+    var x1, y1, tx0, tx1, ty0, ty1, tx, ty, tile, ix0, ix1, iy0, iy1, x, y;
+    x0 = Number(x0); y0 = Number(y0); w = Number(w); h = Number(h);
+    if (x0 !== Math.floor(x0) || y0 !== Math.floor(y0) ||
+        w !== Math.floor(w) || h !== Math.floor(h)) fail("rect dirty no entero");
+    if (x0 < 0 || y0 < 0 || w < 1 || h < 1 || x0 + w > cols || y0 + h > rows) {
+      fail("rect dirty fuera de grilla");
+    }
+    if (this.dirtyFull || this._dFull) return this;
+    x1 = x0 + w; y1 = y0 + h;
+    tx0 = Math.floor(x0 / this.tileSize); tx1 = Math.floor((x1 - 1) / this.tileSize);
+    ty0 = Math.floor(y0 / this.tileSize); ty1 = Math.floor((y1 - 1) / this.tileSize);
+    for (ty = ty0; ty <= ty1; ty++) {
+      for (tx = tx0; tx <= tx1; tx++) {
+        tile = ty * this.tileCols + tx;
+        this._tileGeometry(tile);
+        ix0 = x0 > this._tileX ? x0 : this._tileX;
+        iy0 = y0 > this._tileY ? y0 : this._tileY;
+        ix1 = x1 < this._tileX + this._tileW ? x1 : this._tileX + this._tileW;
+        iy1 = y1 < this._tileY + this._tileH ? y1 : this._tileY + this._tileH;
+        if (ix0 === this._tileX && iy0 === this._tileY &&
+            ix1 === this._tileX + this._tileW && iy1 === this._tileY + this._tileH) {
+          /* Cobertura total: tile denso; _markDirty limpia bits exactos solapados. */
+          this._markDirty(tile);
+        } else {
+          for (y = iy0; y < iy1; y++) {
+            for (x = ix0; x < ix1; x++) {
+              this._markDirtyCell(y * cols + x, tile, y);
+            }
+          }
+          if (iy0 < this._dY0) this._dY0 = iy0;
+          if (iy1 - 1 > this._dY1) this._dY1 = iy1 - 1;
+        }
+      }
+    }
+    this._publishDirty();
     return this;
   };
 

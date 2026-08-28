@@ -20,6 +20,7 @@ JS_SUITES = (
     "test_inflate_fuzz.js",
     "test_inflate_alloc.js",
     "test_reader_v1_seek.js",
+    "test_reader_dirty_rect.js",
     "test_reader_v2.js",
     "test_reader_v2_tilesize.js",
     "test_reader_factory.js",
