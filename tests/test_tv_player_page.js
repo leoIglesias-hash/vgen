@@ -96,10 +96,32 @@ assert(page.indexOf("16+videoLength+audioLength!==buffer.byteLength") >= 0,
   "el bundle no debe aceptar truncado ni bytes anexados");
 assert(page.indexOf("mozfullscreenchange") >= 0);
 assert(page.indexOf("MSFullscreenChange") >= 0);
+
+/* W-14: robustez del player TV */
+assert(page.indexOf("reader.header.version===1 && !reader.header.crc32") >= 0,
+  "un ASCL v1 con CRC en cero debe rechazarse explicitamente");
+assert(page.indexOf("ASCL v1 sin CRC32") >= 0);
+assert(page.indexOf("webglcontextrestored") >= 0,
+  "una perdida transitoria de contexto no debe degradar a Canvas para siempre");
+assert(page.indexOf("watchContextRestore(watched)") >= 0,
+  "el fallback debe dejar armada la vuelta a WebGL");
+assert(page.indexOf("detachRestoreWatch();\n    disposeRenderer(true)") >= 0,
+  "el refresco debe soltar tambien la escucha de restauracion");
+assert(page.indexOf("nativeRequestFrame && nativeCancelFrame") >= 0,
+  "requestFrame/cancelFrame deben elegirse como par");
+assert(page.indexOf("nativeRequestFrame.call(window,fn)") >= 0 &&
+  page.indexOf("nativeCancelFrame.call(window,id)") >= 0,
+  "los nativos deben invocarse con window como receptor");
 if (demo) {
   var magic = demo.slice(0, 8).toString("ascii");
   assert(magic === "ASCLVID1" || magic === "ASCLVID2",
     "el archivo de la ruta TV debe ser ASCLVID1 o ASCLVID2");
+  /* W-14: inventario — si el artefacto local es v1, debe llevar CRC real,
+     porque la pagina TV ahora rechaza v1 con CRC en cero. */
+  if (demo[20] === 1) {
+    assert(demo.readUInt32LE(16 + 28) !== 0,
+      "el artefacto v1 del inventario debe llevar CRC32 distinto de cero");
+  }
   assert(demo.readUInt32LE(8) > 32, "el demo debe contener video");
   assert.strictEqual(16 + demo.readUInt32LE(8) + demo.readUInt32LE(12), demo.length,
     "el demo local no debe estar truncado ni contener bytes posteriores");

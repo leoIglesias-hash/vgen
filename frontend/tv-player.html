@@ -101,11 +101,21 @@
   var now=(perf && typeof perf.now==="function") ?
     function(){ return perf.now(); } :
     function(){ return Date.now ? Date.now() : new Date().getTime(); };
-  var requestFrame=window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
-    window.mozRequestAnimationFrame || window.msRequestAnimationFrame ||
-    function(fn){ return window.setTimeout(function(){ fn(now()); },16); };
-  var cancelFrame=window.cancelAnimationFrame || window.webkitCancelAnimationFrame ||
-    window.mozCancelAnimationFrame || window.msCancelAnimationFrame || window.clearTimeout;
+  /* W-14: requestFrame/cancelFrame se eligen como PAR. Mezclar rAF nativo con
+     clearTimeout deja frames imposibles de cancelar; los nativos se invocan
+     con window como receptor para evitar Illegal invocation en WebViews. */
+  var nativeRequestFrame=window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
+    window.mozRequestAnimationFrame || window.msRequestAnimationFrame;
+  var nativeCancelFrame=window.cancelAnimationFrame || window.webkitCancelAnimationFrame ||
+    window.mozCancelAnimationFrame || window.msCancelAnimationFrame;
+  var requestFrame, cancelFrame;
+  if(nativeRequestFrame && nativeCancelFrame){
+    requestFrame=function(fn){ return nativeRequestFrame.call(window,fn); };
+    cancelFrame=function(id){ nativeCancelFrame.call(window,id); };
+  } else {
+    requestFrame=function(fn){ return window.setTimeout(function(){ fn(now()); },16); };
+    cancelFrame=function(id){ window.clearTimeout(id); };
+  }
 
   function qs(name){
     var match=new RegExp("[?&]"+name+"=([^&]+)").exec(window.location.search);
@@ -211,6 +221,59 @@
     }
   }
 
+  /* W-14: una perdida de contexto GPU transitoria no debe degradar a Canvas2D
+     para siempre. Tras el fallback se escucha webglcontextrestored en el canvas
+     perdido; si el contexto vuelve, se reintenta WebGL sobre un canvas nuevo. */
+  var restoreWatchCanvas=null, restoreWatchHandler=null, restoreWatchLegacy=false;
+
+  function detachRestoreWatch(){
+    var watched=restoreWatchCanvas, handler=restoreWatchHandler;
+    if(watched && handler){
+      try {
+        if(restoreWatchLegacy && watched.detachEvent){
+          watched.detachEvent("onwebglcontextrestored",handler);
+        } else if(watched.removeEventListener){
+          watched.removeEventListener("webglcontextrestored",handler,false);
+        }
+      } catch(ignoredRestoreDetach) {}
+    }
+    restoreWatchCanvas=null;
+    restoreWatchHandler=null;
+    restoreWatchLegacy=false;
+  }
+
+  function watchContextRestore(canvasNode){
+    detachRestoreWatch();
+    if(!canvasNode || requestedRenderer==="canvas2d"){ return; }
+    restoreWatchHandler=function(){
+      detachRestoreWatch();
+      if(!reader || rendererName!=="canvas2d"){ return; }
+      try {
+        chooseRenderer(activeReconstruction);
+        drawCurrent();
+        fitCanvas();
+      } catch(error){
+        try { fallbackToCanvas(false); } catch(secondError){ renderFailure(secondError); }
+      }
+    };
+    try {
+      if(canvasNode.addEventListener){
+        canvasNode.addEventListener("webglcontextrestored",restoreWatchHandler,false);
+      } else if(canvasNode.attachEvent){
+        restoreWatchLegacy=true;
+        canvasNode.attachEvent("onwebglcontextrestored",restoreWatchHandler);
+      } else {
+        restoreWatchHandler=null;
+        return;
+      }
+    } catch(ignoredRestoreAttach){
+      restoreWatchHandler=null;
+      restoreWatchLegacy=false;
+      return;
+    }
+    restoreWatchCanvas=canvasNode;
+  }
+
   function freshCanvas(){
     var old=cv, replacement=document.createElement("canvas");
     replacement.id="cv";
@@ -227,6 +290,7 @@
     /* El canvas viejo puede conservar el contexto y el renderer puede conservar
        buffers RGBA. Al cortar todas las referencias antes de la nueva XHR no
        coexistiran intencionalmente dos videos completos en memoria. */
+    detachRestoreWatch();
     disposeRenderer(true);
     reader=null;
     lastShown=-1;
@@ -269,7 +333,12 @@
       if(watched!==cv || rendererName!=="webgl"){ return; }
       if(event && event.preventDefault){ event.preventDefault(); }
       else if(event){ event.returnValue=false; }
-      try { fallbackToCanvas(true); }
+      try {
+        fallbackToCanvas(true);
+        /* W-14: preventDefault permite que el contexto se restaure; si eso
+           ocurre, volvemos a WebGL en lugar de quedar en Canvas para siempre. */
+        watchContextRestore(watched);
+      }
       catch(error){ renderFailure(error); }
     };
     try {
@@ -385,6 +454,13 @@
   function openAscl(buffer,offset,length){
     var readerAPI=window.ASCILINEReader || window.ASCL;
     reader=readerAPI.parse(buffer,offset,length);
+    /* W-14: el reader v1 saltea la verificacion cuando el campo CRC es cero.
+       En el TV eso significa reproducir bytes sin integridad verificada: se
+       rechaza explicito. Todo artefacto del pipeline actual escribe su CRC. */
+    if(reader.header.version===1 && !reader.header.crc32){
+      reader=null;
+      throw new Error("ASCL v1 sin CRC32: regenerar el artefacto con el encoder actual");
+    }
     var reconstruction=(reader.header.flags & FLAG_RECON_SOFT) ? "soft" : "nearest";
     chooseRenderer(reconstruction);
     reader.decodedIndex=-1;

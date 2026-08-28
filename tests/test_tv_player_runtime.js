@@ -108,8 +108,12 @@ function createRuntime(options) {
   MockXHR.prototype.abort = function () { if (this.onabort) this.onabort(); };
 
   function reader() {
+    var header = { flags: 0, cols: 8, rows: 5, fps: 1, nFrames: 3 }, key;
+    if (options.readerHeader) {
+      for (key in options.readerHeader) header[key] = options.readerHeader[key];
+    }
     return {
-      header: { flags: 0, cols: 8, rows: 5, fps: 1, nFrames: 3 },
+      header: header,
       decodedIndex: -1,
       seek: function (index) { this.decodedIndex = index; },
       fillRGBA: function () {}, fillRGBARows: function () {}
@@ -299,6 +303,45 @@ function completeInitialDownload(runtime, buffer) {
   assert.strictEqual(runtime.elements.download.style.display, "block");
   assert.strictEqual(runtime.elements.stage.className, "error");
   assert.strictEqual(runtime.elements.headline.textContent, "No se pudo abrir el ASCLV");
+}());
+
+/* W-14: un ASCL v1 con CRC en cero (verificacion salteada por el reader) se
+ * rechaza explicito en el TV. */
+(function testV1WithoutCrcIsRejected() {
+  var runtime = createRuntime({ readerHeader: { version: 1, crc32: 0 } });
+  completeInitialDownload(runtime, bundle(0));
+  assert.strictEqual(runtime.elements.stage.className, "error");
+  assert.strictEqual(runtime.elements.headline.textContent, "No se pudo abrir el ASCLV");
+  assert(runtime.elements.detail.textContent.indexOf("sin CRC32") >= 0);
+  assert.strictEqual(runtime.elements.download.style.display, "block");
+}());
+
+(function testV1WithCrcStillPlays() {
+  var runtime = createRuntime({ readerHeader: { version: 1, crc32: 0x1234 } });
+  completeInitialDownload(runtime, bundle(0));
+  assert.strictEqual(runtime.stats.webglDraws, 1);
+  assert.notStrictEqual(runtime.elements.stage.className, "error");
+}());
+
+/* W-14: una perdida de contexto transitoria vuelve a WebGL cuando el contexto
+ * se restaura, en lugar de quedar en Canvas2D para siempre. */
+(function testContextRestoreReturnsToWebGL() {
+  var runtime = createRuntime();
+  completeInitialDownload(runtime, bundle(0));
+  var webglCanvas = runtime.elements.cv;
+  webglCanvas.emit("webglcontextlost", { preventDefault: function () {} });
+  assert.strictEqual(runtime.stats.canvasDraws, 1, "fallback a Canvas tras la perdida");
+  assert.strictEqual(webglCanvas.listenerCount("webglcontextrestored"), 1,
+    "el canvas perdido debe quedar escuchando la restauracion");
+
+  webglCanvas.emit("webglcontextrestored", {});
+  assert.strictEqual(runtime.stats.webglDraws, 2,
+    "el contexto restaurado debe reinstalar WebGL");
+  assert.strictEqual(webglCanvas.listenerCount("webglcontextrestored"), 0,
+    "la escucha de restauracion se consume una sola vez");
+  assert.strictEqual(runtime.elements.cv.listenerCount("webglcontextlost"), 1,
+    "el WebGL nuevo vuelve a vigilar la perdida de contexto");
+  assert(runtime.elements.cv !== webglCanvas, "WebGL se reinstala sobre un canvas nuevo");
 }());
 
 console.log("TV player runtime tests: OK");

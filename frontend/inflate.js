@@ -1,9 +1,9 @@
 /*
  * inflate.js - DEFLATE/zlib minimo y acotado, ES5, sin dependencias.
  *
- * API legacy (conservada):
- *   ASCL_inflateZlib(u8[, maxLength]) -> Uint8Array
- *   ASCL_inflateRaw(u8[, maxLength])  -> Uint8Array
+ * API legacy (conservada; W-14: maxLength es OBLIGATORIO):
+ *   ASCL_inflateZlib(u8, maxLength) -> Uint8Array
+ *   ASCL_inflateRaw(u8, maxLength)  -> Uint8Array
  *
  * API sin asignacion proporcional (usada por reader.js):
  *   ASCL_inflateZlibInto(u8, out, maxLength) -> actualLength
@@ -64,6 +64,10 @@
       if (left < 0) fail("arbol Huffman sobre-suscripto");
       if (t.table[i]) t.maxLen = i;
     }
+    /* W-14 (RFC 1951): un arbol incompleto solo es legal con un unico codigo
+     * (distancias) o vacio (allowEmpty). Cualquier otro deja prefijos que
+     * decodifican basura de forma silenciosa. */
+    if (left > 0 && used > 1) fail("arbol Huffman sub-suscripto");
     for (sum = 0, i = 0; i < 16; i++) { offs[i] = sum; sum += t.table[i]; }
     for (i = 0; i < num; i++) {
       len = lengths[off + i];
@@ -246,14 +250,16 @@
 
   var sltree = makeTree(), sdtree = makeTree(), inited = false;
   function initFixed() {
-    var i, lengths = new Uint8Array(288), dl = new Uint8Array(30);
+    var i, lengths = new Uint8Array(288), dl = new Uint8Array(32);
     for (i = 0; i < 144; i++) lengths[i] = 8;
     for (; i < 256; i++) lengths[i] = 9;
     for (; i < 280; i++) lengths[i] = 7;
     for (; i < 288; i++) lengths[i] = 8;
     buildTree(sltree, lengths, 0, 288);
-    for (i = 0; i < 30; i++) dl[i] = 5;
-    buildTree(sdtree, dl, 0, 30);
+    /* RFC 1951 3.2.6: el arbol fijo de distancias asigna codigo de 5 bits a
+     * los 32 simbolos (30 y 31 no aparecen en datos, pero el arbol es completo). */
+    for (i = 0; i < 32; i++) dl[i] = 5;
+    buildTree(sdtree, dl, 0, 32);
     inited = true;
   }
 
@@ -420,13 +426,22 @@
     return result;
   }
 
+  /* W-14: sin maxLength el default era ~2 GB; en un TV eso es una bomba de
+   * descompresion. La API publica lo exige siempre. */
+  function requireLimit(maxLength) {
+    if (maxLength === undefined || maxLength === null) {
+      fail("maxLength es obligatorio en la API publica");
+    }
+    return normalizeLimit(maxLength, MAX_DYNAMIC_OUTPUT);
+  }
+
   function ASCL_inflateRaw(source, maxLength) {
-    var limit = normalizeLimit(maxLength, MAX_DYNAMIC_OUTPUT);
+    var limit = requireLimit(maxLength);
     return exactResult(inflateData(source, null, limit));
   }
 
   function ASCL_inflateZlib(source, maxLength) {
-    var limit = normalizeLimit(maxLength, MAX_DYNAMIC_OUTPUT), d, result, deflateEnd;
+    var limit = requireLimit(maxLength), d, result, deflateEnd;
     checkZlibHeader(source);
     deflateEnd = source.length - 4;
     d = inflateData(source, null, limit, 2, deflateEnd);

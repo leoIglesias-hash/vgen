@@ -70,11 +70,21 @@
   var now=(perf && typeof perf.now==="function")
     ? function(){ return perf.now(); }
     : function(){ return Date.now ? Date.now() : new Date().getTime(); };
-  var requestFrame=window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
-    window.mozRequestAnimationFrame || window.msRequestAnimationFrame ||
-    function(fn){ return window.setTimeout(function(){ fn(now()); },16); };
-  var cancelFrame=window.cancelAnimationFrame || window.webkitCancelAnimationFrame ||
-    window.mozCancelAnimationFrame || window.msCancelAnimationFrame || window.clearTimeout;
+  // W-14: requestFrame/cancelFrame se eligen como PAR. Mezclar rAF nativo con
+  // clearTimeout deja frames imposibles de cancelar; ademas los nativos deben
+  // invocarse con window como receptor o algunos motores lanzan Illegal invocation.
+  var nativeRequestFrame=window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
+    window.mozRequestAnimationFrame || window.msRequestAnimationFrame;
+  var nativeCancelFrame=window.cancelAnimationFrame || window.webkitCancelAnimationFrame ||
+    window.mozCancelAnimationFrame || window.msCancelAnimationFrame;
+  var requestFrame, cancelFrame;
+  if(nativeRequestFrame && nativeCancelFrame){
+    requestFrame=function(fn){ return nativeRequestFrame.call(window,fn); };
+    cancelFrame=function(id){ nativeCancelFrame.call(window,id); };
+  } else {
+    requestFrame=function(fn){ return window.setTimeout(function(){ fn(now()); },16); };
+    cancelFrame=function(id){ window.clearTimeout(id); };
+  }
 
   function log(s){ elStatus.textContent=s; }
 
@@ -107,20 +117,29 @@
   }
 
   function pickRenderer(){
+    // W-14: liberar el renderer anterior antes de crear otro; sin esto cada
+    // cambio de renderer o zoom abandona un contexto WebGL vivo.
+    if(renderer && typeof renderer.dispose==="function"){
+      try { renderer.dispose(true); } catch(ignoredDispose){}
+    }
+    renderer=null;
     freshCanvas();
     var want=elRend.value, cellPx=parseInt(elZoom.value,10);
     var reconstruction=elRecon.value;
     var mode=reader.header.mode;
     var r=null, used="";
     function tryWebGL(){
-      try { var w=new window.WebGLRenderer(cv); return w.init(reader,cellPx,reconstruction)?w:null; }
-      catch(err){ return null; }
+      var w=null;
+      try { w=new window.WebGLRenderer(cv); if(w.init(reader,cellPx,reconstruction)){ return w; } }
+      catch(err){}
+      if(w && typeof w.dispose==="function"){ try { w.dispose(true); } catch(ignoredWebGL){} }
+      return null;
     }
     if(want==="canvas2d"){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,reconstruction); used="canvas2d"; }
-    else if(want==="webgl"){ r=tryWebGL(); used=r?"webgl":"(webgl no disponible)"; if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,reconstruction); used="canvas2d (fallback)"; } }
+    else if(want==="webgl"){ r=tryWebGL(); used=r?"webgl":"(webgl no disponible)"; if(!r){ freshCanvas(); r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,reconstruction); used="canvas2d (fallback)"; } }
     else {
       if(mode===window.ASCL.MODE_PIXEL){ r=tryWebGL(); used=r?"webgl":""; }
-      if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,reconstruction); used=used?"canvas2d (fallback)":"canvas2d"; }
+      if(!r){ if(used!==""||mode===window.ASCL.MODE_PIXEL){ freshCanvas(); } r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,reconstruction); used=used?"canvas2d (fallback)":"canvas2d"; }
     }
     renderer=r; return used;
   }
@@ -205,8 +224,16 @@
     }
     if(target!==lastShown){
       if(target>lastShown+1) dropped += (target-lastShown-1);
-      reader.seek(target);
-      renderer.draw(reader);
+      // W-14: una excepcion de seek/draw no debe dejar el loop vivo con el
+      // audio sonando sobre un cuadro congelado.
+      try {
+        reader.seek(target);
+        renderer.draw(reader);
+      } catch(err){
+        stop();
+        log("Error de reproduccion en el frame "+target+": "+err.message);
+        return;
+      }
       drawn++; lastShown=target;
     }
     raf=requestFrame(loop);
@@ -251,11 +278,12 @@
     log("audio cargado: "+f.name+" (reloj maestro)");
   };
 
-  // Carga automatica. Si no se pasa ?src= usa la misma ruta estable que el player TV.
+  // Carga automatica de la ruta estable, la misma que el player TV.
+  // W-14: sin ?src= arbitrario (igual que tv-player); otro archivo se carga
+  // con el selector local, nunca por query string.
   // OJO: leer otro archivo solo funciona servido por HTTP; desde file:// el navegador lo bloquea.
   var DEFAULT_SRC = "./outputs/clip.asclv";
-  function qs(k){ var m=new RegExp("[?&]"+k+"=([^&]+)").exec(location.search); return m?decodeURIComponent(m[1]):null; }
-  var src=qs("src") || DEFAULT_SRC;
+  var src=DEFAULT_SRC;
   if(src && window.XMLHttpRequest){
     var x=new XMLHttpRequest(); x.open("GET",src,true); x.responseType="arraybuffer";
     x.onload=function(){ if(x.status<400||x.status===0){ try{ loadData(x.response); }catch(err){ log("Error: "+err.message); } } };

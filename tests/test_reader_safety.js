@@ -164,7 +164,7 @@ function expectError(fn, pattern) {
     zlib.deflateSync(text, { strategy: zlib.constants.Z_FIXED })
   ];
   variants.forEach(function (compressed) {
-    var legacy = inflate.ASCL_inflateZlib(compressed);
+    var legacy = inflate.ASCL_inflateZlib(compressed, text.length);
     var out = new Uint8Array(text.length), actual;
     assert.deepStrictEqual(Buffer.from(legacy), text);
     actual = inflate.ASCL_inflateZlibInto(compressed, out, out.length);
@@ -172,17 +172,66 @@ function expectError(fn, pattern) {
     assert.deepStrictEqual(Buffer.from(out), text);
   });
   var rawDeflate = zlib.deflateRawSync(text), rawOut = new Uint8Array(text.length);
-  assert.deepStrictEqual(Buffer.from(inflate.ASCL_inflateRaw(rawDeflate)), text);
+  assert.deepStrictEqual(Buffer.from(inflate.ASCL_inflateRaw(rawDeflate, text.length)), text);
   assert.strictEqual(inflate.ASCL_inflateRawInto(rawDeflate, rawOut, rawOut.length), text.length);
   assert.deepStrictEqual(Buffer.from(rawOut), text);
   expectError(function () {
     inflate.ASCL_inflateZlibInto(variants[0], new Uint8Array(10), 10);
   }, /maxLength|insuficiente/);
   var badAdler = Buffer.from(variants[0]); badAdler[badAdler.length - 1] ^= 1;
-  expectError(function () { inflate.ASCL_inflateZlib(badAdler); }, /Adler32/);
+  expectError(function () { inflate.ASCL_inflateZlib(badAdler, text.length); }, /Adler32/);
   var badHeader = Buffer.from(variants[0]); badHeader[0] = 0;
-  expectError(function () { inflate.ASCL_inflateZlib(badHeader); }, /CMF/);
-  expectError(function () { inflate.ASCL_inflateZlib(variants[0].subarray(0, 5)); }, /truncado|entrada/);
+  expectError(function () { inflate.ASCL_inflateZlib(badHeader, text.length); }, /CMF/);
+  expectError(function () {
+    inflate.ASCL_inflateZlib(variants[0].subarray(0, 5), text.length);
+  }, /truncado|entrada/);
+  /* W-14: maxLength obligatorio en la API publica; el default de ~2 GB era
+   * una bomba de descompresion esperando a un TV. */
+  expectError(function () { inflate.ASCL_inflateZlib(variants[0]); }, /obligatorio/);
+  expectError(function () { inflate.ASCL_inflateRaw(rawDeflate); }, /obligatorio/);
+}());
+
+(function testInflaterRejectsUnderSubscribedHuffmanTree() {
+  /* W-14 (RFC 1951): bloque dinamico cuyo arbol literal tiene dos codigos de
+   * longitud 2 (incompleto: quedan prefijos sin asignar). Construido a mano
+   * bit a bit, LSB primero como exige DEFLATE. */
+  var bits = [], bytes = [], i, acc = 0, pos = 0;
+  function putBits(value, count) {
+    for (i = 0; i < count; i++) bits.push((value >>> i) & 1);
+  }
+  function putCode(value, count) {
+    /* Los codigos Huffman se emiten MSB primero. */
+    for (i = count - 1; i >= 0; i--) bits.push((value >>> i) & 1);
+  }
+  putBits(1, 1);          /* BFINAL */
+  putBits(2, 2);          /* BTYPE dinamico */
+  putBits(0, 5);          /* HLIT  = 257 */
+  putBits(0, 5);          /* HDIST = 1 */
+  putBits(14, 4);         /* HCLEN = 18 */
+  /* Longitudes del arbol de codigos en el orden CLCIDX:
+     simbolo 18 -> 1 bit, simbolos 1 y 2 -> 2 bits, resto 0. */
+  var CLCIDX = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+  for (i = 0; i < 18; i++) {
+    var symbol = CLCIDX[i];
+    if (symbol === 18) putBits(1, 3);
+    else if (symbol === 1 || symbol === 2) putBits(2, 3);
+    else putBits(0, 3);
+  }
+  /* Arbol canonico resultante: 18 -> 0; 1 -> 10; 2 -> 11. */
+  putCode(3, 2);          /* lit 0: longitud 2 */
+  putCode(0, 1); putBits(127, 7);  /* 18: 138 ceros */
+  putCode(0, 1); putBits(106, 7);  /* 18: 117 ceros (total 255) */
+  putCode(3, 2);          /* lit 256: longitud 2 */
+  putCode(2, 2);          /* dist 0: longitud 1 (unico codigo, legal) */
+  for (i = 0; i < bits.length; i++) {
+    acc |= bits[i] << pos;
+    pos++;
+    if (pos === 8) { bytes.push(acc); acc = 0; pos = 0; }
+  }
+  if (pos) bytes.push(acc);
+  expectError(function () {
+    inflate.ASCL_inflateRaw(new Uint8Array(bytes), 4096);
+  }, /sub-suscripto/);
 }());
 
 (function testReaderGrowsScratchOnlyWhenRealOutputRequiresIt() {
