@@ -124,10 +124,15 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   Instancia 021: fronteras −31 %/−93 % en sintético; clip real kmeans-rgb
   −1,25 % bytes, PSNR −1,04 dB por el blending (knob
   `--adaptive-stability-max 0` = solo alineación). Producto sin cambios.
-- ▶ **Próxima acción: E-16** (`PairLUT` exacto en dither.py: hoy el
-  dither se apaga en silencio donde la aproximación 555 elige otra base
-  que el cuantizador real). Decisión abierta: si el operador retoma el
-  960, re-medirlo con refit 5.
+- ⏳ **E-16 (PairLUT exacto)**: código en main (`a87014a`, CI verde,
+  244 py + 26 js) — `exact_pairs` trama desde la base real del
+  cuantizador; muere el apagado silencioso 555. **Falta**: bench del run
+  33215511572 (producto 768 refit 5 zopfli) vs `adef9e53…` → Instancia
+  022 y cierre de fila.
+- ▶ **Próxima acción: 1) cerrar E-16 con ese bench; 2) E-17**
+  (presupuesto de dither en bytes, V1-OPT-02; bytes y 5 % de celdas se
+  aplican juntos); luego E-18 cierra F3. Decisión abierta: si el
+  operador retoma el 960, re-medirlo con refit 5.
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).

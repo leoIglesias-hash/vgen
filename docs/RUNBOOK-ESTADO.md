@@ -54,7 +54,7 @@ Reglas de uso:
 | E-13 | Lloyd en dominio uint8 | cerrada | `a64c7ce` | 2026-08-28 | `_closing_lloyd_uint8` en `build_perceptual_palette`: itera el tramo final (asignar → promediar en Oklab → gamut map → redondear → reparar duplicados) restringido a paletas sRGB representables, aceptando solo si baja la inercia ponderada (nunca degrada; orden de entradas conservado → alineación temporal válida). Opt-in `--palette-uint8-refine 0..10`, solo kmeans-oklab. Bench 768 con refit 5 + refine 3 (Instancia 019, `a95d0bbc…acbf`): PSNR igual, Oklab −0,5 % (0,00728), bytes +0,36 % → el producto sigue con refit 5 solo. CI en verde |
 | E-14 | paleta sobre todos los píxeles, dos pasadas | cerrada | `86eb5ae`+`f324f1e` | 2026-08-28 | modo global sin materializar (`StreamingColorAggregate` + `sample_aggregate` en el builder, sin el cap de 65.536; Pillow/RGB reproducen byte a byte el muestreo histórico con conteo+muestreo; `refit_palette` gana `sample_weights`). Instancia 020 (960 global, 15 s, `/usr/bin/time -v`): **RSS 886 → 433 MB (−51 %)**, Oklab −4,5 %, PSNR RGB −0,27 dB (**desvío registrado**: el criterio pedía PSNR ≥; kmeans-oklab optimiza el objetivo perceptual y el global no es producto). Refit sobre el agregado = no-op verificado (mismo SHA). CI en verde |
 | E-15 | estabilidad temporal, 4 algoritmos | cerrada | `91a0e68` | 2026-08-28 | `_stabilize_rgb_palette`: alineación 1:1 con la paleta previa (`_align_to_previous` genérico sobre RGB exacto, permutación sin pérdida) + fusión por `temporal_strength`; en `make_global_palette` (kmeans-rgb/median-cut/fast-octree) y en el per-frame de median-cut; estabilidad per-frame para los 4 algoritmos. Frontera de bloque (Instancia 021): fast-octree −93 %, kmeans-rgb −31 %; clip real kmeans-rgb: bytes −1,25 %, RDELTA_ZLIB 10→4; costo estático del blending PSNR −1,04 dB (knob `--adaptive-stability-max 0` = solo alineación). Producto kmeans-oklab sin cambios. CI en verde |
-| E-16 | `PairLUT` exacto | pendiente | | | |
+| E-16 | `PairLUT` exacto | código en main, bench en curso | `a87014a` | 2026-08-28 | `exact_pairs`: base/partner/level exactos por píxel desde la base REAL del cuantizador (baseline); desaparece el gate `lut_base == baseline` que apagaba el tramado en silencio; misma matemática que la LUT (`_pairs_for` compartido, LUT byte-idéntica conservada como firma). CI verde (244 pruebas Python + 26 JS). **Falta para cerrar**: bench de producto del run **33215511572** (768 kmeans-oklab adaptive refit 5 zopfli) vs `adef9e53…` (35,46 / 0,00732 / 17.379.859 B) → Instancia 022, decidir si el clip nuevo pasa a `outputs/` |
 | E-17 | presupuesto de dither en bytes | pendiente | | | cierra V1-OPT-02 |
 | E-18 | interacción dither/threshold | pendiente | | | cierra F3 |
 | E-19 | orden canónico del pipeline | pendiente | | | |
@@ -184,13 +184,17 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 
 ## Próxima acción
 
-1. **Carril E (F3): E-16** (`PairLUT` exacto — `dither.py:287-344` y
-   `721-722`: base, partner y level exactos por píxel en lugar de
-   indexar por `rgb555_keys`; hoy el dither se apaga en silencio donde
-   la aproximación 555 elige otra base que el cuantizador real). Siguen
-   E-17..E-18. La **ruleta** sigue siendo INT-005 en F6/S-4. F5 y F8
-   sin cambios. Opcional no bloqueante: knob de `gradient_boost` del
-   agregado E-14 si el operador pide paridad PSNR en modo global.
+1. **Cerrar E-16**: bajar el bench del run **33215511572** (encode
+   producto post-E-16, despachado 2026-08-28, artifact `clip-asclv` con
+   `bench.md`+`sha256.txt`), compararlo con `adef9e53…4c05bb` (35,46 dB /
+   0,00732 / 17.379.859 B), registrar Instancia 022, decidir instalación
+   en `outputs/` (si mejora) y marcar la fila cerrada.
+2. **Carril E (F3): E-17** (presupuesto de dither en bytes, V1-OPT-02 —
+   comparar bytes reales del frame con dither vs baseline y rechazarlo
+   sobre un presupuesto configurable; el límite de bytes y el 5 % de
+   celdas se aplican JUNTOS). Luego E-18 cierra F3. La **ruleta** sigue
+   siendo INT-005 en F6/S-4. F5 y F8 sin cambios. Opcional no
+   bloqueante: knob de `gradient_boost` del agregado E-14.
 2. Decisión abierta para el operador: el fondo ahora es el **768 refit 5**
    (35,46 dB), que supera al 960 ultra sin refit (34,40 dB) con 31 %
    menos bytes — si retoma la idea del 960, hay que re-medirlo con
@@ -209,7 +213,8 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
-Regresión al cierre de esta sesión: **239 pruebas Python y 26 suites JavaScript, en verde**
-(base: 115 y 11). Último commit de tarea: `91a0e68` (E-15, CI verde confirmado
-2026-08-28); `outputs/clip.asclv` = fondo 768 **refit 5** (`adef9e53…c05bb`,
-SHA verificado) servido por el player standalone en `localhost:8123`.
+Regresión al cierre de esta sesión: **244 pruebas Python y 26 suites JavaScript, en verde**
+(base: 115 y 11). Último commit de tarea: `a87014a` (E-16, CI verde confirmado
+2026-08-28; bench de cierre en curso, run 33215511572); `outputs/clip.asclv` =
+fondo 768 **refit 5** (`adef9e53…c05bb`, SHA verificado) servido por el player
+standalone en `localhost:8123`.
