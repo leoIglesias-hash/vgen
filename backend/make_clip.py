@@ -93,8 +93,8 @@ def main(argv=None):
                    help="E-09: barre %s y conserva el archivo menor"
                    % (ascl_v2.SWEEP_TILE_SIZES,))
     p.add_argument("--reserved", type=int, default=0,
-                   help="F7: entradas de paleta reservadas al overlay (0 o 10); "
-                   "con 10 se estampan los RGB canonicos de overlay_palette")
+                   help="entradas de paleta reservadas al overlay (0, 10 o 32); "
+                   "se estampan los RGB canonicos de overlay_palette (F7 / INT-003)")
     p.add_argument("--image", action="store_true", help="forzar modo imagen (sin audio)")
     p.add_argument("--keep", action="store_true",
                    help="conservar .ascl/.mp3; rechaza nombres intermedios existentes")
@@ -122,6 +122,8 @@ def main(argv=None):
         p.error(str(exc))
     if args.reserved and args.image:
         p.error("--reserved es para video (el overlay F7 no cubre imagenes)")
+    if args.reserved not in (0,) + overlay_palette.RESERVED_COUNTS:
+        p.error("--reserved debe ser 0, 10 o 32 (reservas canonicas)")
 
     here = os.path.dirname(os.path.abspath(__file__))
     out_dir = os.path.abspath(os.path.join(here, "..", "outputs"))
@@ -199,7 +201,7 @@ def main(argv=None):
                                     scene_keyframes=args.scene_keyframes,
                                     reserved=args.reserved,
                                     reserved_colors=(
-                                        overlay_palette.RESERVED_RGB
+                                        overlay_palette.reserved_table(args.reserved)
                                         if args.reserved else None),
                                     # INT-001 §11: con overlay, el dither no
                                     # toca los rects del panel canonico
