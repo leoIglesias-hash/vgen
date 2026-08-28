@@ -197,11 +197,13 @@ function expectError(fn, pattern) {
    * bit a bit, LSB primero como exige DEFLATE. */
   var bits = [], bytes = [], i, acc = 0, pos = 0;
   function putBits(value, count) {
-    for (i = 0; i < count; i++) bits.push((value >>> i) & 1);
+    var b;
+    for (b = 0; b < count; b++) bits.push((value >>> b) & 1);
   }
   function putCode(value, count) {
     /* Los codigos Huffman se emiten MSB primero. */
-    for (i = count - 1; i >= 0; i--) bits.push((value >>> i) & 1);
+    var b;
+    for (b = count - 1; b >= 0; b--) bits.push((value >>> b) & 1);
   }
   putBits(1, 1);          /* BFINAL */
   putBits(2, 2);          /* BTYPE dinamico */
