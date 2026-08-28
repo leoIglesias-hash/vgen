@@ -279,8 +279,8 @@
   };
 
   // Carga automatica de la ruta estable, la misma que el player TV.
-  // W-14: sin ?src= arbitrario (igual que tv-player); otro archivo se carga
-  // con el selector local, nunca por query string.
+  // W-14: sin parametro de origen arbitrario por query string (igual que
+  // tv-player); otro archivo se carga unicamente con el selector local.
   // OJO: leer otro archivo solo funciona servido por HTTP; desde file:// el navegador lo bloquea.
   var DEFAULT_SRC = "./outputs/clip.asclv";
   var src=DEFAULT_SRC;
