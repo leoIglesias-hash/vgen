@@ -75,8 +75,12 @@ class CalibratedDitherTest(unittest.TestCase):
         self.assertLess(rgb_match, 0.70)
         self.assertEqual(perceptual_match, 1.0)
         self.assertEqual(calls, [(32768, 3)])
-        self.assertGreater(np.count_nonzero(compatible != baseline),
-                           np.count_nonzero(legacy != baseline))
+        # E-16: la mezcla se calcula exacta por pixel desde la base real
+        # (baseline); la base 555 de la LUT ya no gatea el tramado, asi que
+        # ambas LUT producen el MISMO resultado y ningun pixel elegible se
+        # apaga en silencio por discrepancia 555 vs cuantizador.
+        self.assertEqual(compatible.tobytes(), legacy.tobytes())
+        self.assertGreater(np.count_nonzero(compatible != baseline), 0)
         self.assertEqual(compatible.tobytes(), direct_callback.tobytes())
         self.assertTrue(np.any(calibrated != baseline))
         self.assertLess(calibrated_details["result_proxy_error"],

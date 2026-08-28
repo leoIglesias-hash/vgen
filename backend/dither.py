@@ -279,8 +279,10 @@ class PairLUT(object):
             raise ValueError("ASCL v1 admite hasta 256 colores")
         self.palette = np.ascontiguousarray(palette)
         self.base_quantizer = base_quantizer
+        self.max_pair_distance = int(max_pair_distance)
+        self.min_improvement = float(min_improvement)
         self.base, self.partner, self.level = self._build(
-            int(max_pair_distance), float(min_improvement))
+            self.max_pair_distance, self.min_improvement)
         # Firma semantica compacta para reiniciar la histeresis si cambia la
         # regla base aun cuando la paleta RGB siga siendo identica.
         self.base_signature = hashlib.sha256(self.base.tobytes()).digest()
@@ -307,9 +309,74 @@ class PairLUT(object):
             raise ValueError("base_quantizer devolvio un indice fuera de palette")
         return indices
 
+    def _pairs_for(self, src, base):
+        """Partner y level para cada (color fuente, indice base) dados.
+
+        La MISMA matematica alimenta la LUT 555 offline (``_build``) y el
+        camino exacto por pixel (E-16, ``exact_pairs``): mezcla de dos
+        colores de paleta a lo largo del segmento base→partner con
+        cobertura 0..4, aceptada solo si mejora sobre la base pura.
+        ``src`` es Nx3 int32 y ``base`` N int32.
+        """
+        pal = self.palette.astype(np.int32)
+        max_pair_sq = self.max_pair_distance * self.max_pair_distance
+        a = pal[base]
+        vector = pal[None, :, :] - a[:, None, :]
+        pair_sq = np.sum(vector * vector, axis=2)
+        rel = src - a
+        projection = np.sum(rel[:, None, :] * vector, axis=2)
+        safe_pair_sq = np.maximum(pair_sq, 1)
+        fraction = projection.astype(np.float64) / safe_pair_sq.astype(np.float64)
+        levels = np.floor(np.clip(fraction, 0.0, 1.0) * 4.0 + 0.5).astype(np.int16)
+        mixed4 = a[:, None, :] * (4 - levels[:, :, None]) + \
+                 pal[None, :, :] * levels[:, :, None]
+        mix_delta4 = src[:, None, :] * 4 - mixed4
+        mix_error4 = np.sum(mix_delta4 * mix_delta4, axis=2)
+        invalid = ((pair_sq == 0) | (pair_sq > max_pair_sq) | (levels == 0))
+        mix_error4[invalid] = np.iinfo(np.int32).max
+        partner = np.argmin(mix_error4, axis=1).astype(np.int32)
+        row = np.arange(len(src))
+        chosen_error4 = mix_error4[row, partner]
+        baseline_error4 = np.sum(rel * rel, axis=1) * 16
+        improves = chosen_error4 < baseline_error4 * (1.0 - self.min_improvement)
+        chosen_level = levels[row, partner]
+        chosen_level[~improves] = 0
+        partner[~improves] = base[~improves]
+        return partner, chosen_level
+
+    def exact_pairs(self, rgb_flat, base_indices, chunk_size=4096):
+        """E-16: partner/level exactos para pixeles reales y su base real.
+
+        Reemplaza el lookup 555 en la aplicacion del dither: la base es el
+        indice que produjo el cuantizador de produccion (``baseline``),
+        nunca la aproximacion de la celda 555, asi el tramado ya no se
+        apaga en silencio donde ambas discrepaban.
+        """
+        src = np.asarray(rgb_flat, dtype=np.int32).reshape(-1, 3)
+        base = np.asarray(base_indices, dtype=np.int32).reshape(-1)
+        if len(src) != len(base):
+            raise ValueError("rgb y base deben tener el mismo largo")
+        if len(base) and (int(base.min()) < 0 or
+                          int(base.max()) >= len(self.palette)):
+            raise ValueError("indice base fuera de palette")
+        chunk_size = int(chunk_size)
+        if chunk_size <= 0:
+            raise ValueError("chunk_size debe ser > 0")
+        partner = np.empty(len(src), dtype=np.uint8)
+        level = np.empty(len(src), dtype=np.uint8)
+        for start in range(0, len(src), chunk_size):
+            stop = min(start + chunk_size, len(src))
+            chunk_partner, chunk_level = self._pairs_for(
+                src[start:stop], base[start:stop])
+            partner[start:stop] = chunk_partner.astype(np.uint8)
+            level[start:stop] = chunk_level.astype(np.uint8)
+        return partner, level
+
     def _build(self, max_pair_distance, min_improvement):
         # Centro de las 32768 celdas RGB555. La LUT se calcula offline una vez por
-        # paleta (global o bloque), no una vez por frame.
+        # paleta (global o bloque), no una vez por frame. Desde E-16 la mezcla se
+        # decide por pixel exacto (exact_pairs); la LUT queda como firma semantica
+        # de la regla base y para consumidores externos.
         keys = np.arange(32768, dtype=np.int32)
         colors = np.empty((32768, 3), dtype=np.int32)
         colors[:, 0] = ((keys >> 10) & 31) * 8 + 4
@@ -320,7 +387,6 @@ class PairLUT(object):
         base_out = np.empty(32768, dtype=np.uint8)
         partner_out = np.empty(32768, dtype=np.uint8)
         level_out = np.zeros(32768, dtype=np.uint8)
-        max_pair_sq = max_pair_distance * max_pair_distance
         quantized_base = (self._quantize_base(colors)
                           if self.base_quantizer is not None else None)
 
@@ -329,32 +395,13 @@ class PairLUT(object):
         for start in range(0, 32768, chunk_size):
             stop = min(start + chunk_size, 32768)
             src = colors[start:stop]
-            nearest_delta = src[:, None, :] - pal[None, :, :]
-            nearest_error = np.sum(nearest_delta * nearest_delta, axis=2)
-            base = (quantized_base[start:stop] if quantized_base is not None
-                    else np.argmin(nearest_error, axis=1).astype(np.int32))
-            a = pal[base]
-            vector = pal[None, :, :] - a[:, None, :]
-            pair_sq = np.sum(vector * vector, axis=2)
-            rel = src - a
-            projection = np.sum(rel[:, None, :] * vector, axis=2)
-            safe_pair_sq = np.maximum(pair_sq, 1)
-            fraction = projection.astype(np.float64) / safe_pair_sq.astype(np.float64)
-            levels = np.floor(np.clip(fraction, 0.0, 1.0) * 4.0 + 0.5).astype(np.int16)
-            mixed4 = a[:, None, :] * (4 - levels[:, :, None]) + \
-                     pal[None, :, :] * levels[:, :, None]
-            mix_delta4 = src[:, None, :] * 4 - mixed4
-            mix_error4 = np.sum(mix_delta4 * mix_delta4, axis=2)
-            invalid = ((pair_sq == 0) | (pair_sq > max_pair_sq) | (levels == 0))
-            mix_error4[invalid] = np.iinfo(np.int32).max
-            partner = np.argmin(mix_error4, axis=1).astype(np.int32)
-            row = np.arange(stop - start)
-            chosen_error4 = mix_error4[row, partner]
-            baseline_error4 = nearest_error[row, base] * 16
-            improves = chosen_error4 < baseline_error4 * (1.0 - min_improvement)
-            chosen_level = levels[row, partner]
-            chosen_level[~improves] = 0
-            partner[~improves] = base[~improves]
+            if quantized_base is not None:
+                base = quantized_base[start:stop]
+            else:
+                nearest_delta = src[:, None, :] - pal[None, :, :]
+                nearest_error = np.sum(nearest_delta * nearest_delta, axis=2)
+                base = np.argmin(nearest_error, axis=1).astype(np.int32)
+            partner, chosen_level = self._pairs_for(src, base)
             base_out[start:stop] = base.astype(np.uint8)
             partner_out[start:stop] = partner.astype(np.uint8)
             level_out[start:stop] = chosen_level.astype(np.uint8)
@@ -743,21 +790,25 @@ def apply_selective_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None,
     eligible = selective_tile_mask(rgb, baseline, palette, protected,
                                     tile_size=tile_size,
                                     min_range=min_gradient_range)
-    keys = rgb555_keys(rgb)
-    lut_base = pair_lut.base[keys]
-    partner = pair_lut.partner[keys]
-    level = pair_lut.level[keys]
     bayer = BAYER_MATRICES[matrix_size]
     yy, xx = np.indices(baseline.shape)
     threshold = bayer[yy % matrix_size, xx % matrix_size]
     cells_per_quarter = (matrix_size * matrix_size) // 4
-    # PIL es quien produce Q0. Si su cuantizador eligio otro color que el RGB555
-    # usado para la LUT, conservamos Q0: nunca mezclamos desde una base incorrecta.
-    choose_partner = (eligible & (lut_base == baseline) &
-                      (threshold < level * cells_per_quarter))
+    # E-16: base, partner y level exactos por pixel. La base ES el indice
+    # que produjo el cuantizador de produccion (baseline): el tramado ya no
+    # se apaga en silencio donde la celda RGB555 elegia otra base, y la
+    # mezcla siempre parte del color correcto.
     result = baseline.copy()
-    result[choose_partner] = partner[choose_partner]
+    level_map = np.zeros(baseline.shape, dtype=np.uint8)
+    rows, cols = np.nonzero(eligible)
+    if len(rows):
+        partner_exact, level_exact = pair_lut.exact_pairs(
+            rgb[rows, cols], baseline[rows, cols])
+        level_map[rows, cols] = level_exact
+        take = (threshold[rows, cols] <
+                level_exact.astype(np.int32) * cells_per_quarter)
+        result[rows[take], cols[take]] = partner_exact[take]
     if return_details:
         return result, {"protected": protected, "eligible": eligible,
-                        "changed": result != baseline, "level": level}
+                        "changed": result != baseline, "level": level_map}
     return result
