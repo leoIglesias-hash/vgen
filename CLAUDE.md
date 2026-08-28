@@ -87,16 +87,22 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   con texto el renderer es Canvas2D con `pixelScale=zoom` (backing real,
   put chico + drawImage del canvas sobre sí mismo, sin segundo canvas).
   Evidencia: `docs/ejecutados/2026-08-28-INT-004-texto-nativo.md`.
-- ▶ **Próxima acción: INT-006 (fondo sin reserva + texto standalone,
-  runbook §4-INT-006)** — pedido del operador 2026-08-28: (A) re-encodear
-  el fondo con `overlay=off` (los números de matriz ya no sirven; la base
-  recupera 256 colores), bench 768 vs 960, outputs limpio sin sidecar
-  viejo; (B) `textfeed.js` + live-player standalone (texto nativo sin
-  sidecar, misma interfaz `digitCount`/`setValues` para el canal); (C,
-  bloqueada) el operador pasa una imagen → decisión **D7** (nativa con
-  drawImage / reserva 32 / época INT-005). Después: carril E desde
-  **E-12** (refit; excluir la reserva vigente si el clip la tiene) y
-  re-encode del fondo al cerrarlo.
+- ✅ **INT-006-B (texto standalone)**: `textfeed.js` (`49e2b4a` + fix gate
+  `2c81856`) — sin sidecar el player declara 3 campos de 2 dígitos por
+  tercios y botón+canal los alimentan (`datachannel.js` intacto).
+  ✅ **INT-006-C (D7=a, imagen nativa)**: `3e51ce8` — el operador entregó
+  el logo; `outputs/logo.png` (opcional) se dibuja con drawImage sobre el
+  MISMO canvas tras el texto, caja sucia por frame, 404 = nada cambia;
+  (c) INT-005/época sigue definitivo para la ruleta.
+- ▶ **Próxima acción: cerrar INT-006-A** — los dos encodes `overlay=off`
+  están corriendo (runs 33193293258 hq-768 / 33193299286 ultra-960):
+  bajar artifacts, verificar SHA (768 debería reproducir `ebfe2eb4…4b36`),
+  registrar bench 768 vs 960, dejar el 768 en `outputs/clip.asclv` y
+  **borrar `outputs/clip.slots` y `data.txt`** (logo.png queda). Cierre de
+  etapa: player standalone verificado con el fondo nuevo + ejecutados +
+  aviso al operador. Después: carril E desde **E-12** (refit; con
+  `reserved=0` no hay exclusión que aplicar) y re-encode del fondo al
+  cerrarlo.
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).

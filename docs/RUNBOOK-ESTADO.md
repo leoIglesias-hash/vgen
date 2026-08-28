@@ -131,9 +131,9 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 
 | ID | Tarea | Estado | Commit | Fecha | Notas |
 |---|---|---|---|---|---|
-| INT-006-A | fondo HQ `overlay=off` (768 y candidato 960) + registro + outputs limpio | pendiente | | | solo dispatch del workflow `encode`; borrar clip.slots/data.txt viejos de `outputs/` |
-| INT-006-B | `textfeed.js` + live-player standalone (texto sin sidecar, sim + canal) | pendiente | | | datachannel.js sin cambios (misma interfaz digitCount/setValues) |
-| INT-006-C | intervención de la imagen del operador (decisión D7) | bloqueada | | | espera la imagen; opciones a/b/c en el runbook §4-INT-006-C |
+| INT-006-A | fondo HQ `overlay=off` (768 y candidato 960) + registro + outputs limpio | en curso | | 2026-08-28 | encodes despachados (runs 33193293258 hq / 33193299286 ultra); resta bajar artifacts, verificar SHA, registrar bench y limpiar `outputs/` |
+| INT-006-B | `textfeed.js` + live-player standalone (texto sin sidecar, sim + canal) | cerrada | `49e2b4a` + fix `2c81856` | 2026-08-28 | `ASCILINETextFeed.create(capa,campos)` → `digitCount`/`setValues` todo-o-nada (misma interfaz que consume `datachannel.js`, sin cambios); sin overlay de matriz el player declara 3 campos de 2 dígitos por tercios (dimensionados por cols/rows) y botón+canal los alimentan; suite `test_textfeed.js` cableada; el fix quita un backtick de comentario que volteó el gate ES5 del test de página (CI rojo → verde en el siguiente push) |
+| INT-006-C | intervención de la imagen del operador (decisión D7) | cerrada (código) | `3e51ce8` | 2026-08-28 | el operador entregó `inputs/logonuevo150.png` (logo TeleKino) y **D7 se resuelve en (a) nativa**: `drawImage` del PNG (`outputs/logo.png`, opcional) sobre el MISMO canvas después del texto, caja en celdas (cols/4, aspecto preservado, esquina sup. der.) marcada sucia por frame; solo activa con texto declarado (renderer ya Canvas2D); 404 = nada cambia (INV-7); verificado en navegador sobre el clip de parches (play/sim/zoom/clear sin errores de consola); (c) INT-005/época sigue como definitivo para la ruleta |
 
 ## Sincronización y fases finales
 
@@ -174,23 +174,22 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 | 2026-08-28 | **Desvío técnico de INT-004-B**: en modo PIXEL el backing store del Canvas2D era cols×rows (el zoom era solo CSS), así que el texto nativo se habría pixelado igual. Se agrega `renderer.pixelScale` (opt-in del player, default 1 byte-idéntico): backing cols·s×rows·s, frame chico con `putImageData` + un `drawImage` del canvas **sobre sí mismo** (la spec exige snapshot del origen) — sin segundo canvas, la regla se mantiene. Con escala el put es siempre completo y el player marca TODAS las cajas de texto declaradas por frame (no solo las con texto) para que borrar un texto no deje fantasma | sin esto INT-004 no entregaba nitidez real; el costo (put completo + blit por frame) es del live-player de demo — `tv-player.html` no se toca y con `pixelScale=1` el camino histórico es idéntico |
 | 2026-08-28 | **Fix post-verificación en navegador** (`07bc0da`): «Limpiar panel» había pasado de `renderer.draw` directo a `drawFrame` y los dígitos de la matriz persistían tras clear — `clear()` restaura cells y deja los rects marcados, pero el `seek` del mismo frame dentro de `drawFrame` resetea los dirty sets y perdía esos marks (canvas/rgba viejos). Se dibuja de nuevo directo, marcando además las cajas de texto | encontrado probando el player en navegador antes de entregar; el orden por frame normal no cambia (los marks del overlay ocurren en `afterSeek`, después del seek); test de página nuevo fija el camino sin re-seek |
 | 2026-08-28 | La raíz de `tools/serve-local.ps1` pasa de `player.html` a `live-player.html` (`c9ea17e`) | el operador abrió `localhost:8123/` y vio el player viejo de archivos; lo que se revisa al cierre de etapa es el runtime real |
+| 2026-08-28 | **D7 resuelta en (a) — imagen nativa** (`3e51ce8`): el operador entregó el logo (`inputs/logonuevo150.png`) y la prueba se hace con `drawImage` sobre el MISMO canvas después del texto, como recomendaba el diseño §11 — cero costo de paleta, coherente con la decisión del texto (el gráfico deja de ser byte-verificable: misma propiedad documentada). La opción (c) INT-005/época sigue como definitiva para la ruleta; (b) reserva 32 queda disponible si el operador la pide al ver el resultado | «luego te paso una imagen y probamos procesarla»: la vía (a) prueba ya sin re-encodear ni pagar −0,24 dB; el operador valida al ver el player |
+| 2026-08-28 | CI rojo en `49e2b4a` (INT-006-B): un backtick en un comentario del script inline volteó el gate ES5 de `test_live_player_page.js`; fix hacia adelante en `2c81856` (verde) | el gate barre `let/const/class/=>/backtick` también dentro de comentarios: los comentarios del inline no llevan backticks |
 | 2026-08-28 | **Nueva dirección del operador (post-demo INT-004)**: «volver a procesar el video de fondo… está con la intervención de píxeles con números y eso ya no nos sirve… procesalo para que tenga más calidad, la mayor calidad posible con las herramientas que fuimos desarrollando y dejamos las fuentes activas interviniendo como ahora; luego te paso una imagen y probamos procesarla». Nace el carril **INT-006** (A: fondo `overlay=off` con bench 768 vs 960; B: texto standalone sin sidecar vía `textfeed.js`; C: imagen → decisión D7 nativa/reserva/época) | con el texto nativo, la reserva de 32 solo servía a los números de matriz: quitarla recupera los 256 colores de la base (−0,24 dB recuperados) sin perder la intervención. E-12 pasa a ejecutarse DESPUÉS de INT-006 y amerita re-encode del fondo al cerrar |
 
 ## Próxima acción
 
-1. **INT-006-A** (runbook §4-INT-006): re-encodear el fondo con
-   `overlay=off` (workflow `encode`; perfil `graphic-hq` 768 + candidato
-   `graphic-ultra` 960 para comparar), registrar las filas de bench, bajar
-   el 768 a `outputs/` **borrando `clip.slots` y `data.txt` viejos**.
-2. **INT-006-B**: `frontend/textfeed.js` + modo standalone del live-player
-   (texto nativo sin sidecar: items por defecto, «Simular carga», canal vía
-   la misma interfaz `digitCount`/`setValues`; `datachannel.js` sin
-   cambios). Cierre de etapa: player local con el fondo nuevo y los números
-   nítidos encima.
-3. **INT-006-C** (bloqueada): cuando el operador pase la imagen, resolver
-   **D7** (nativa con `drawImage` / matriz con reserva 32 / época INT-005)
-   y probarla en el player.
-4. Después: carril E (F3) desde **E-12** (refit; con fondo `reserved=0` no
+1. **Cierre de INT-006-A** (en curso): cuando terminen los dos encodes
+   (runs 33193293258 hq-768 / 33193299286 ultra-960), bajar artifacts,
+   verificar SHA (el 768 debería reproducir `ebfe2eb4…4b36`), registrar las
+   dos filas de bench, dejar el 768 en `outputs/clip.asclv` y **borrar
+   `outputs/clip.slots` y `outputs/data.txt`** (el `logo.png` local queda:
+   lo usa la imagen nativa de INT-006-C).
+2. **Cierre de etapa INT-006**: player local levantado con el fondo nuevo —
+   verificar el modo standalone en navegador (3 campos de texto + logo
+   nativo + sim/canal), actualizar `docs/ejecutados/` y avisar al operador.
+3. Después: carril E (F3) desde **E-12** (refit; con fondo `reserved=0` no
    hay exclusión que aplicar, el parámetro queda para clips con reserva) —
    al cerrarlo, re-encodear el fondo. La **ruleta** sigue siendo INT-005 en
    F6/S-4. F5 y F8 sin cambios.
@@ -202,5 +201,5 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
-Regresión al cierre de esta sesión: **199 pruebas Python y 25 suites JavaScript, en verde**
+Regresión al cierre de esta sesión: **199 pruebas Python y 26 suites JavaScript, en verde**
 (base: 115 y 11).

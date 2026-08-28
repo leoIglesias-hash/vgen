@@ -247,8 +247,16 @@ máxima calidad de las herramientas existentes, y los textos siguen
 interviniendo **standalone** (sin sidecar de parches). Tareas INT-006-A/B/C
 en el runbook §4-INT-006.
 
-**D7 (abierta — se resuelve cuando el operador entregue la imagen):** cómo
-interviene un GRÁFICO sobre un fondo `reserved=0`:
+**D7 (resuelta 2026-08-28 en (a) — imagen nativa, `3e51ce8`):** el operador
+entregó la imagen (`inputs/logonuevo150.png`, logo TeleKino con alfa) y la
+prueba se implementó por la vía recomendada (a): el live-player carga un PNG
+opcional (`outputs/logo.png`) y lo dibuja con `drawImage` sobre el MISMO
+canvas después del texto — caja en celdas (cols/4 de ancho, aspecto
+preservado, esquina superior derecha) marcada sucia cada frame, solo activa
+con texto declarado (el renderer ya es Canvas2D con `pixelScale`), 404 =
+nada cambia (INV-7). (c) sigue como modelo definitivo para la ruleta; (b)
+queda disponible si la verificación byte a byte importa antes de F6. Las
+opciones evaluadas:
 
 | Opción | Cómo | Costo | Propiedad |
 |---|---|---|---|
