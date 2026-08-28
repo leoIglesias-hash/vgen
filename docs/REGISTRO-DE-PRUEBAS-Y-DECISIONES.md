@@ -841,3 +841,33 @@ Runs 33174111941 (base) y 33174113632 (reserved 32). El archivo con reserva
 es ~5% MENOR: la base pasa de 256 a 224 colores y el panel queda excluido del
 dither (menos celdas cambiadas). El costo es −0,47 dB PSNR / +0,00092 Oklab
 sobre el sintético; para el clip HQ real se medirá al cierre de INT-003-F.
+
+## Instancia 016 - INT-003-F: clip HQ con parches genéricos (overlay=patches)
+
+Workflow `encode` run 33176566955 (`overlay=patches`, `zopfli=on`, `tile=16`,
+resto perfil HQ de producción), sobre `main` `da28408`:
+
+```text
+clip.asclv (bundle)   16.465.367 B   231 frames, 94 keyframes, 9 epocas
+                      tags ZLIB:94 DELTA_MASK:136 RDELTA_RAW:1
+PSNR RGB / Oklab      34,05 / 0,00827   (panel reserved=10: 34,14 / 0,00799;
+                      sin reserva: 34,29 / 0,00793 - la base baja a 224
+                      colores y el panel queda fuera del dither)
+SHA-256 clip          c315a13a8b635aba1cd9383a0030b9f9b991ce9fff5d96f0020e375cc9eb8e63
+clip.slots (v2)       15.511 B: 25 parches (11 mono 8x12 + 11 serif 26x36 +
+                      3 palabras 64x14), 47 slots, 24 campos
+SHA-256 slots         678b392dfa55ef262f0d57fe9dc1792e20440026de1a10f05c4dadec8a762c56
+data.txt              58 B: serial 1 + payload de 48 digitos (con presencia)
+```
+
+Nota: el bundle con parches es ~4,3% MENOR que la referencia con panel
+(17.197.813 B) — mas entradas reservadas = base mas chica y mejor compresion,
+al costo de −0,09 dB PSNR frente al panel.
+
+Reproducción verificada en navegador (`live-player.html` + serve-local):
+attach v2 activo (48 digitos, 47 slots); el canal aplicó el serial 1 de
+`data.txt` y rechazó la recarga ("serial repetido o retrocedido"); el numero
+grande en serif dorada aparece en una posición DISTINTA en cada tercio del
+clip (izquierda → centro → derecha) con la palabra de elección verde y el
+panel de 20 números simultáneos; la carga simulada generó un payload válido
+por campo (dígitos de presencia incluidos) y repintó en pausa.

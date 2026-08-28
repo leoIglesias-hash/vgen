@@ -104,10 +104,10 @@ Diseño cerrado con el operador (D1..D6, 2026-08-28) en
 |---|---|---|---|---|---|
 | INT-003-A | reserva ampliada a 32 (224..255) | cerrada | `7156fd9` | 2026-08-28 | cola F7 (246..255) bit-idéntica dentro de la tabla de 32; `--reserved` acepta 0/10/32; costo medido en el sintético: −0,47 dB PSNR y archivo ~5% menor (Instancia 015) |
 | INT-003-B | ASCLSLOT v2 Python (parches heterogéneos, kind, presupuestos) | cerrada | `735eee3` | 2026-08-28 | `build_v2`/`_validate_v2` en `make_slots.py`; presupuesto 5% por frame (barrido de eventos) + RAM 25%; solape espacial solo con ventanas disjuntas; corpus con un rechazo por regla |
-| INT-003-C | slots.js espejo v2 | pendiente | | | |
-| INT-003-D | runtime v2 + referencia Python (NONE, elección, presencia) | pendiente | | | |
-| INT-003-E | bake_patches.py (fuente libre + PNG → reserva 32) | pendiente | | | |
-| INT-003-F | integración: workflow `overlay=patches`, live-player, cierre de etapa | pendiente | | | |
+| INT-003-C | slots.js espejo v2 | cerrada | `5e03091` | 2026-08-28 | corpus completo generado por Python (35 fixtures) y verificado byte a byte en JS con el mismo veredicto/mensaje; despacho por byte de versión, v1 intacta |
+| INT-003-D | runtime v2 + referencia Python (NONE, elección, presencia) | cerrada | `8c3e55f` | 2026-08-28 | `overlay.js` normaliza v1/v2 a una sola forma interna (v1 byte-idéntico, suite F7 sin tocar); `values` u16 con `NONE=65535` (no pinta, no guarda base, no marca sucio); fixtures cruzados con clip real `reserved=32`: 8 frames byte-idénticos; `datachannel.js` sin cambios (longitud v2 vía `digitCount`) |
+| INT-003-E | bake_patches.py (fuente libre + PNG → reserva 32) | cerrada | `7f0e3d1` | 2026-08-28 | texto con cualquier TTF y color + PNG con alpha → nearest Oklab en 224..254, alpha→255; determinista; los parches horneados alimentan un sidecar v2 válido |
+| INT-003-F | integración: workflow `overlay=patches`, live-player, cierre de etapa | cerrada | `da28408` | 2026-08-28 | `make_patch_pack.py` (panel v2 + 3 números grandes serif por tercios + palabra de elección), `live-player.html` paramétrico, workflow `overlay=off/panel/patches`. Clip HQ `patches` publicado (run 33176566955): 16.465.367 B SHA `c315a13a…8e63` + sidecar v2 15.511 B SHA `678b392d…2c56`; verificado en navegador (Instancia 016), player local levantado |
 
 ## Sincronización y fases finales
 
@@ -146,10 +146,15 @@ Diseño cerrado con el operador (D1..D6, 2026-08-28) en
 
 ## Próxima acción
 
-1. **Ejecutar INT-003-A..F en orden** (`RUNBOOK-IMPLEMENTACION.md` §4-INT-003):
-   A reserva 32 → B ASCLSLOT v2 Python → C slots.js espejo → D runtime v2 →
-   E bake_patches → F integración + cierre de etapa con player para el operador.
-   El diseño cerrado está en [`DISENO-PARCHES-GENERICOS.md`](DISENO-PARCHES-GENERICOS.md).
+1. Carril E (F3) desde **E-12** (refit de paleta a la asignación real): con la
+   reserva paramétrica ya cableada, el refit debe excluir la reserva vigente
+   del clip (224.. con `reserved=32`, 246.. con 10). Luego E-13..E-18.
+2. La **ruleta** (INT-003 fase 2) se diseña junto con `ASCLVID3` en F6/S-4:
+   revisar D2/D3 (área ~12%, límite por parche) y decidir paleta del parche
+   grande. F8 medirá p95/MEM-001 con el peor frame v2.
+3. Referencias HQ vigentes: sin reserva `ebfe2eb4…4b36` (17.482.270 B) ·
+   panel v1 `7da584f1…5a51d` (17.197.813 B) · **parches v2 `c315a13a…8e63`
+   (16.465.367 B)** + sidecar `678b392d…2c56`.
 2. Carril E (F3): **E-12** (refit de paleta a la asignación real) y siguientes E-13..E-18.
    Con `reserved` ya cableado, E-12 debe excluir los índices 246..255 del refit (§4.2).
 3. La referencia HQ **con overlay** ya está publicada: workflow `encode` run 33138773906
@@ -163,5 +168,5 @@ Diseño cerrado con el operador (D1..D6, 2026-08-28) en
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
-Regresión al cierre de esta sesión: **168 pruebas Python y 21 suites JavaScript, en verde**
+Regresión al cierre de esta sesión: **199 pruebas Python y 24 suites JavaScript, en verde**
 (base: 115 y 11).

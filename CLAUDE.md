@@ -72,11 +72,13 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   workflow `encode` con `overlay=on` publica `clip.asclv`+`clip.slots`;
   `live-player.html` lo reproduce) · S-1/S-2/S-3 · P-02 (HQ reproducible;
   con Zopfli: 17.482.270 B, `ebfe2eb4…4b36`)
-- ▶ **INT-003 (parches genéricos) en implementación**: D1..D6 resueltas con el
-  operador el 2026-08-28 (reserva 32 en 224..255, vía corta ahora, ruleta con
-  ASCLVID3, slots candidatos, canal con presencia). Diseño cerrado en
-  `docs/DISENO-PARCHES-GENERICOS.md`; tareas INT-003-A..F en el runbook de
-  implementación §4-INT-003, avance en RUNBOOK-ESTADO (Carril INT-003).
-  Carril E sigue en F3 desde **E-12** (el refit debe excluir la reserva vigente).
+- ✅ **INT-003 (vía corta)**: reserva de 32 (224..255, cola F7 intacta),
+  ASCLSLOT v2 (parches heterogéneos, kind dígitos/elección, presupuestos por
+  frame), runtime v2 con NONE y presencia (v1 byte-idéntico), `bake_patches`
+  (cualquier TTF/PNG → Oklab), `make_patch_pack` demo, workflow
+  `overlay=off/panel/patches`. La **ruleta** va con ASCLVID3 (F6/S-4).
+  Evidencia: `docs/ejecutados/2026-08-28-INT-003-parches-genericos.md`.
+- ▶ Carril E (F3) desde **E-12** (el refit debe excluir la reserva vigente,
+  224.. o 246.. según el clip).
 - Pendiente: F3 (E-12..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8
