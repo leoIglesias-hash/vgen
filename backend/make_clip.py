@@ -200,7 +200,10 @@ def main(argv=None):
                                     reserved=args.reserved,
                                     reserved_colors=(
                                         overlay_palette.RESERVED_RGB
-                                        if args.reserved else None))
+                                        if args.reserved else None),
+                                    # INT-001 §11: con overlay, el dither no
+                                    # toca los rects del panel canonico
+                                    protect_panel=bool(args.reserved))
         mp3 = os.path.splitext(tmp_ascl)[0] + ".mp3"
         mp3 = mp3 if (info.get("audio") and os.path.exists(mp3)) else None
         if mp3 is None:

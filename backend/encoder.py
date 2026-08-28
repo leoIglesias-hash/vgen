@@ -37,6 +37,7 @@ from PIL import Image
 
 import dither as selective_dither
 import adaptive_palette
+import overlay_panel
 import perceptual_palette
 from deflate_util import best_deflate
 
@@ -611,7 +612,8 @@ def apply_dither_mode(rgb, cells, palette, dither_mode="off", dither_matrix=4,
                       pair_lut=None, temporal_state=None,
                       dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                       dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
-                      dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW):
+                      dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
+                      protected_rects=None):
     """Hornea el modo de dithering elegido y conserva el shape de ``cells``."""
     if dither_mode == "off":
         return cells, None
@@ -619,7 +621,7 @@ def apply_dither_mode(rgb, cells, palette, dither_mode="off", dither_matrix=4,
     if dither_mode == "selective":
         result = selective_dither.apply_selective_dither(
             rgb, baseline, palette, matrix_size=dither_matrix,
-            pair_lut=pair_lut)
+            pair_lut=pair_lut, protected_rects=protected_rects)
         return result.reshape(-1, 1), None
     if dither_mode == "auto":
         result, details = selective_dither.apply_calibrated_dither(
@@ -627,6 +629,7 @@ def apply_dither_mode(rgb, cells, palette, dither_mode="off", dither_matrix=4,
             pair_lut=pair_lut, max_changed_fraction=dither_budget,
             min_proxy_improvement=dither_min_improvement,
             temporal_state=temporal_state, temporal_window=dither_window,
+            protected_rects=protected_rects,
             # La paleta puede renovarse sin que cambie la escena. La evidencia se
             # conserva entre bloques y el encoder resetea el estado solo en hard cut.
             temporal_context="ascl-video", reset_on_palette_change=False,
@@ -879,7 +882,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                  dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                  dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                  dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
-                 reserved=0, reserved_colors=None, scene_keyframes=False):
+                 reserved=0, reserved_colors=None, scene_keyframes=False,
+                 protect_panel=False):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             palette_block_frames, dither_mode, dither_matrix,
@@ -909,6 +913,11 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     ramp = "" if mode == MODE_PIXEL else RAMPS.get(ramp_name, ramp_name)
     sw, sh = probe_size(in_path)
     cols, rows = compute_grid(sw, sh, cols, rows, mode, char_aspect)
+    # F7 / INT-001 §11: con overlay, los rects del panel quedan fuera del
+    # dither (mecanismo protected de E-05). La geometria es la misma que la
+    # del sidecar, por construccion (overlay_panel).
+    panel_protected = (overlay_panel.panel_rects(cols, rows)
+                       if protect_panel else None)
     has_palette = mode in (MODE_PIXEL, MODE_ASCII_PAL)
     use_global = has_palette and palette_mode == "global"
     use_block = has_palette and palette_mode == "block"
@@ -1045,7 +1054,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                 pair_lut=dither_lut, temporal_state=dither_state,
                 dither_budget=dither_budget,
                 dither_min_improvement=dither_min_improvement,
-                dither_window=dither_window)
+                dither_window=dither_window,
+                protected_rects=panel_protected)
             if dither_details is not None:
                 dither_changed_cells += int(dither_details["changed_cells"])
                 dither_proxy_before += int(dither_details["baseline_proxy_error"])

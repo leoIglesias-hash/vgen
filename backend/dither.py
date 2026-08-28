@@ -517,7 +517,8 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
                             deactivation=DEFAULT_TEMPORAL_DEACTIVATION,
                             return_details=False, base_quantizer=None,
                             temporal_context=None, reset_temporal=False,
-                            reset_on_palette_change=True):
+                            reset_on_palette_change=True,
+                            protected_rects=None):
     """Dithering auto calibrado por calidad, bordes, presupuesto e historial.
 
     Primero produce el mismo candidato determinista que ``selective``. Despues
@@ -553,10 +554,14 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
         raise ValueError("min_gradient_range debe ser >= 0")
 
     pair_lut = _resolve_pair_lut(palette, pair_lut, base_quantizer)
+    # E-05/F7: los rects protegidos entran por el candidato selectivo, que ya
+    # conserva Q0 exacto dentro de ellos; asi ninguna celda protegida puede
+    # aparecer como "cambiada" en la seleccion calibrada.
     candidate, candidate_details = apply_selective_dither(
         rgb, baseline, palette, matrix_size=matrix_size, pair_lut=pair_lut,
         tile_size=tile_size, return_details=True,
-        min_gradient_range=min_gradient_range)
+        min_gradient_range=min_gradient_range,
+        protected_rects=protected_rects)
     baseline_rgb = palette[baseline]
     candidate_rgb = palette[candidate]
     baseline_error = low_frequency_error_map(rgb, baseline_rgb, blur_size)

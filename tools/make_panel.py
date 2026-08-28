@@ -24,39 +24,23 @@ sys.path.insert(0, HERE)
 import ascl_bundle  # noqa: E402
 import ascl_decode  # noqa: E402
 import make_slots  # noqa: E402
+import overlay_panel  # noqa: E402
 from overlay_palette import reserved_rgb_bytes  # noqa: E402
 
-GLYPH_W, GLYPH_H = 8, 12
-N_FIELDS = 20
-GROUPS_PER_ROW = 10
-DIGIT_GAP = 2     # celdas entre los dos digitos de un numero
-GROUP_GAP = 20    # celdas entre numeros de una misma fila
-ROW_GAP = 8       # celdas entre las dos filas
-BOTTOM_MARGIN = 16
+GLYPH_W, GLYPH_H = overlay_panel.GLYPH_W, overlay_panel.GLYPH_H
+N_FIELDS = overlay_panel.N_FIELDS
 
 
 def panel_spec(cols, rows, n_frames, glyph_table):
-    """Layout determinista del panel; lanza ValueError si la grilla no alcanza."""
-    group_w = GLYPH_W * 2 + DIGIT_GAP
-    row_w = GROUPS_PER_ROW * group_w + (GROUPS_PER_ROW - 1) * GROUP_GAP
-    if row_w > cols:
-        raise ValueError("grilla de %d columnas no alcanza para el panel (%d)"
-                         % (cols, row_w))
-    x0 = (cols - row_w) // 2
-    y_bottom = rows - GLYPH_H - BOTTOM_MARGIN
-    y_top = y_bottom - GLYPH_H - ROW_GAP
-    if y_top < 0:
-        raise ValueError("grilla de %d filas no alcanza para el panel" % rows)
+    """Spec del sidecar sobre la geometria compartida (overlay_panel)."""
+    rects = overlay_panel.panel_rects(cols, rows)
     slots, fields = [], []
     for number in range(N_FIELDS):
-        row, column = divmod(number, GROUPS_PER_ROW)
-        x = x0 + column * (group_w + GROUP_GAP)
-        y = y_top if row == 0 else y_bottom
         first = len(slots)
-        slots.append({"x": x, "y": y, "start": 0,
-                      "end": n_frames - 1, "flags": 1})
-        slots.append({"x": x + GLYPH_W + DIGIT_GAP, "y": y, "start": 0,
-                      "end": n_frames - 1, "flags": 1})
+        for k in (0, 1):
+            x, y, _w, _h = rects[number * 2 + k]
+            slots.append({"x": x, "y": y, "start": 0,
+                          "end": n_frames - 1, "flags": 1})
         fields.append({"field_id": number + 1, "slot_ids": [first, first + 1],
                        "min": 0, "max": 99, "pad": 1})
     return {
