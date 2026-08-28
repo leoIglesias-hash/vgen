@@ -696,3 +696,37 @@ agrega exactamente 1 keyframe (cadena maxima 3) y el decoder Python reconstruye
 celdas identicas en ambos casos. Default off = salida byte-identica (test).
 En el perfil HQ actual (paleta adaptive) los cortes ya abren bloque/keyframe,
 por eso el flag es opt-in pensado para --palette global/block con keyint largo.
+
+## Instancia 013 - E-09: barrido de tile_size sobre ambas referencias
+
+Fecha: 2026-08-28. Workflow `encode` con `tile=sweep`, `zopfli=off` (comparable
+con las referencias zlib). Round-trip exacto verificado por el transcodificador
+en cada candidato (verify_roundtrip).
+
+### HQ (TKN-2443, graphic-hq 768, adaptive/kmeans-oklab, dither auto)
+
+```text
+tile      4          8          12         16         24         32
+bytes     18.646.195 18.646.497 18.646.530 18.646.530 18.646.530 18.646.443
+ganador   4 (-335 B vs 16; 0,002%)
+```
+
+Solo 5 de 231 frames eligen el codec regional: los payloads v1 (ZLIB llenos y
+DELTA_MASK) dominan y el tile_size casi no incide HOY en este perfil. SHA del
+artefacto barrido: `7fc4aac6...789b` (18.829.564 B bundle).
+
+### Sintetica (synthetic.mp4, mismos parametros de workflow)
+
+```text
+tile      4        8        12       16       24       32
+bytes     368.020  363.562  368.020  357.979  368.020  368.020
+ganador   16 (-2,73% vs v1; 37/60 frames regionales)
+```
+
+### Conclusion
+
+- El mecanismo queda operativo (byte 26 + sweep determinista); el ganador HQ es
+  marginal y el sintetico confirma el default 16. **El barrido definitivo va en
+  S-4**, cuando el trellis espacial (E-23) cambie la estadistica por tile.
+- Ambas referencias medidas con zlib puro; con Zopfli las magnitudes relativas
+  pueden moverse y se re-mediran al regenerar artefactos de produccion.
