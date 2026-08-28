@@ -102,8 +102,8 @@ Diseño cerrado con el operador (D1..D6, 2026-08-28) en
 
 | ID | Tarea | Estado | Commit | Fecha | Notas |
 |---|---|---|---|---|---|
-| INT-003-A | reserva ampliada a 32 (224..255) | pendiente | | | |
-| INT-003-B | ASCLSLOT v2 Python (parches heterogéneos, kind, presupuestos) | pendiente | | | |
+| INT-003-A | reserva ampliada a 32 (224..255) | cerrada | `7156fd9` | 2026-08-28 | cola F7 (246..255) bit-idéntica dentro de la tabla de 32; `--reserved` acepta 0/10/32; costo medido en el sintético: −0,47 dB PSNR y archivo ~5% menor (Instancia 015) |
+| INT-003-B | ASCLSLOT v2 Python (parches heterogéneos, kind, presupuestos) | cerrada | `735eee3` | 2026-08-28 | `build_v2`/`_validate_v2` en `make_slots.py`; presupuesto 5% por frame (barrido de eventos) + RAM 25%; solape espacial solo con ventanas disjuntas; corpus con un rechazo por regla |
 | INT-003-C | slots.js espejo v2 | pendiente | | | |
 | INT-003-D | runtime v2 + referencia Python (NONE, elección, presencia) | pendiente | | | |
 | INT-003-E | bake_patches.py (fuente libre + PNG → reserva 32) | pendiente | | | |

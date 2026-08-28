@@ -815,3 +815,29 @@ persistentes a traves de cortes de escena y cadenas DELTA; el canal rechazo en
 vivo una recarga con el mismo serial ("serial repetido o retrocedido") y la
 carga simulada repinto el panel. La referencia HQ **sin** overlay
 (`ebfe2eb4…4b36`) sigue vigente para comparaciones de compresion del carril E.
+
+## Instancia 015 - INT-003-A: reserva ampliada a 32 entradas (224..255)
+
+Diseño cerrado con el operador (D1..D6) en `DISENO-PARCHES-GENERICOS.md`.
+`RESERVED_RGB_32` conserva bit-idénticas las 10 entradas de F7 en 246..255
+(los glifos horneados y el sidecar v1 del panel siguen válidos sobre un clip
+de reserva 32); agrega 22 colores de arte genérico en 224..245. Encoder ya
+genérico en `reserved`; `make_clip --reserved` acepta 0/10/32 y rechaza
+cualquier otro valor antes de tocar el archivo. Commit `7156fd9`, CI verde.
+
+### Costo de calidad de la reserva de 32 (workflow encode, sintético)
+
+Perfil HQ por defecto del workflow (graphic-hq 768, 15 fps, adaptive
+kmeans-oklab, dither auto, v2, zopfli on, tile 16), única diferencia
+`--reserved 32` (que además activa `protect_panel`):
+
+```text
+| referencia | .ascl | .asclv | B/celda | PSNR | Oklab | SHA-256 |
+| sintético reserved=0  | 325.229 | 325.245 | 0,0163 | 31,29 | 0,01239 | a97ef086…b8cb |
+| sintético reserved=32 | 308.491 | 308.507 | 0,0155 | 30,82 | 0,01331 | 26ab1952…3244 |
+```
+
+Runs 33174111941 (base) y 33174113632 (reserved 32). El archivo con reserva
+es ~5% MENOR: la base pasa de 256 a 224 colores y el panel queda excluido del
+dither (menos celdas cambiadas). El costo es −0,47 dB PSNR / +0,00092 Oklab
+sobre el sintético; para el clip HQ real se medirá al cierre de INT-003-F.
