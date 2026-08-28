@@ -46,9 +46,9 @@ Reglas de uso:
 | E-05 | rects protegidos en dither | cerrada | `7879f05` | 2026-08-27 | `rects_mask` + `protected_rects` en `selective_tile_mask` y `apply_selective_dither`; rects fuera de grilla rechazados; sin rects la salida es byte-idéntica (test). CI en verde |
 | E-06 | horneado de glifos | cerrada | `bc57e04`+`b0c2058` | 2026-08-27 | `tools/bake_glyphs.py`: supersample 8×, cobertura normalizada al pico del glifo (entera), cuantización a 246..251, glifo 10 transparente. Dos corridas byte-idénticas verificadas con `cmp` en CI; tabla 8×12 SHA `2ee438f4…042c` (workflow `bake-glyphs`). **Inspección visual aprobada** (dígitos legibles, antialias correcto) y anotada en el registro. CI en verde |
 | E-07 | sidecar `ASCLSLOT` | cerrada | `1d46353` | 2026-08-27 | `make_slots.py` + `slots.js` (espejo ES5); 8 fixtures negativos compartidos con veredicto idéntico en ambos validadores; sin carga parcial; CRC + verificación cruzada `reserved_rgb`. **Cierra F1** (resumen en `ejecutados/`). CI en verde |
-| E-08 | Zopfli en 5 puntos, simultáneo | en curso (falta Δbytes) | `8d4489d` | 2026-08-28 | `backend/deflate_util.best_deflate` compartido por los 5 puntos (encoder ×3, predictor v2, regional v2); simetría de `transcode_ascl_bytes` verificada por test de identidad de función; pata de CI extra `py3.11 + zopfli` (regresión en verde con y sin el paquete); input `zopfli` en el workflow `encode` (default on). Falta registrar el Δbytes del encode HQ (workflow corriendo) |
-| E-09 | `tile_size` parametrizado + barrido provisional | pendiente | | | artefactos ≠16 recién tras S-2 |
-| E-10 | keyframes en cortes de escena | bloqueada (W-02) | | | además: habilitar `need_color_descriptor` |
+| E-08 | Zopfli en 5 puntos, simultáneo | cerrada | `8d4489d` | 2026-08-28 | `backend/deflate_util.best_deflate` compartido por los 5 puntos (encoder ×3, predictor v2, regional v2); simetría de `transcode_ascl_bytes` verificada por test de identidad de función; pata de CI extra `py3.11 + zopfli` (verde con y sin el paquete). **Δbytes HQ: 18.829.899 → 17.482.270 B (−7,2%)**, PSNR/Oklab idénticos, SHA `ebfe2eb4…4b36` (Instancia 012). Encode con Zopfli tarda ~40 min de CI |
+| E-09 | `tile_size` parametrizado + barrido provisional | cerrada | `d639948`+`29b0a40` | 2026-08-28 | transcode acepta 4..32 (mismo rango que W-08), ganador emitido en byte 26, `transcode_ascl_bytes_sweep` determinista (empate → tile menor); `--tile-size`/`--tile-sweep` en CLI y make_clip; input `tile` en workflow `encode`. Round-trip exacto en los 6 tamaños por test. Barrido HQ registrado en Instancia 012. CI en verde |
+| E-10 | keyframes en cortes de escena | cerrada | `1523f4d` | 2026-08-28 | opt-in `--scene-keyframes` (default off = bytes idénticos, verificado por test): `need_color_descriptor` se calcula siempre con el flag, `hard_cut` fuerza keyframe, `--keyint` expuesto también en make_clip para GOPs largos. Test: corte parcial sintético pasa de cadena DELTA 7 a 3, keyframes 1→2, celdas decodificadas idénticas con y sin el flag. **Cierra F2 (E-08..E-10)**. CI en verde |
 | E-11 | flags de audio | opcional | | | |
 | E-12 | refit de paleta a asignación real | pendiente | | | |
 | E-13 | Lloyd en dominio uint8 | pendiente | | | |
@@ -81,7 +81,7 @@ Reglas de uso:
 | W-11 | limpieza de caminos calientes v2 | cerrada | `fbb38db` | 2026-08-28 | los 8 puntos de la tabla del runbook (uvarint con tabla, `_markDirty` guardado, `_markDirtyCell` sin div/mod en camino caliente, packed sin divisiones, predictores sin recomputar, `_markFull` coherente). Bench vs W-09: total 439,5→293,5 ms (**−33%**; acumulado desde pre-W-09 ≈ −40%). CI en verde |
 | W-12 | salto por byte en DELTA_MASK | cerrada | `b8c812d`+`ab96b8c` | 2026-08-28 | ambos readers saltan bytes de máscara en cero. Bench (caso `lmask`, ~5% densidad): 169,4→80,6 µs/frame (**−52%**, sobre el ~29% previsto). CI en verde |
 | W-13 | `markRectDirty` en ambos readers | cerrada | `dcce1e7` | 2026-08-28 | API simétrica; v2 promueve a tile con cobertura total conservando la disyunción celda/tile; `test_reader_dirty_rect.js` cableado en run_all. CI en verde. **Desbloquea F7 (S-5: F1 + W-13 cerradas)** |
-| W-14 | seguridad y robustez del player | en curso (CI) | `c7a3e01` | 2026-08-28 | los 8 puntos: CRC v1 ≠ 0 exigido en TV (+ inventario verificado), par requestFrame/cancelFrame con window como receptor, `webglcontextrestored` vuelve a WebGL, `dispose()` en pickRenderer, loop con try/catch que pausa audio, sin `?src=`, `maxLength` obligatorio en API pública de inflate, árbol Huffman sub-suscripto rechazado (RFC 1951; árbol fijo de distancias corregido a 32 símbolos). **Cierra F4 al quedar en verde** |
+| W-14 | seguridad y robustez del player | cerrada | `c7a3e01`+`eb9f193`+`47a1b60` | 2026-08-28 | los 8 puntos: CRC v1 ≠ 0 exigido en TV (+ inventario verificado), par requestFrame/cancelFrame con window como receptor, `webglcontextrestored` vuelve a WebGL, `dispose()` en pickRenderer, loop con try/catch que pausa audio, sin parámetro de origen por query, `maxLength` obligatorio en API pública de inflate, árbol Huffman sub-suscripto rechazado (RFC 1951; árbol fijo de distancias corregido a 32 símbolos). Cada punto con su test (página, runtime simulado o stream artesanal). **Cierra F4 (W-01..W-14)**. CI en verde |
 | W-15 | camino ASCII de Canvas2D | opcional | | | |
 
 ## Sincronización y fases finales
@@ -90,9 +90,9 @@ Reglas de uso:
 |---|---|---|---|---|
 | S-1 | merge de F0 | cerrada | 2026-08-27 | historial lineal en el snapshot; equivale al merge |
 | S-2 | habilitar artefactos `tile_size` ≠ 16 | cerrada | 2026-08-27 | W-08 en verde: `ReaderV2` abre los seis tamaños; E-09 puede generar artefactos |
-| S-3 | desbloquear E-10 | pendiente | | |
-| S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | pendiente | | |
-| S-5 | runtime del overlay (F7) | pendiente | | |
+| S-3 | desbloquear E-10 | cerrada | 2026-08-28 | W-02 estaba en verde desde la sesión 1; E-10 ejecutada y cerrada |
+| S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | pendiente | | requiere F3 (E-12..E-18) además de F2/F4 ya cerradas |
+| S-5 | runtime del overlay (F7) | **habilitada** | 2026-08-28 | F1 y W-13 cerradas; puede arrancar el runtime real del overlay |
 | S-6 | validación física (F8) | pendiente | | |
 
 ## Bitácora de decisiones de ejecución
@@ -116,12 +116,12 @@ Reglas de uso:
 
 ## Próxima acción
 
-1. Cerrar **E-08**: registrar el Δbytes del workflow `encode` con Zopfli (corriendo) en el
-   registro y en la fila; comparar contra la referencia HQ `f3051baa…1527`.
-2. Cerrar **W-12/W-13** cuando el CI de `ab96b8c` quede en verde (medición de `lmask` en
-   `bench-reader`, baseline `fbb38db`).
-3. Carril W: **W-14** (seguridad y robustez del player — cierra F4).
-4. Carril E: **E-09** (`tile_size` parametrizado; ya desbloqueado por S-2/W-08).
+1. **F7 (runtime del overlay)** — S-5 habilitada: reemplazar la demo de laboratorio por el
+   runtime real (paleta con `reserved=10`, sidecar ASCLSLOT, `markRectDirty` de W-13).
+   Es lo que el operador quiere ver funcionando.
+2. Carril E (F3): **E-12** (refit de paleta a la asignación real) y siguientes E-13..E-18.
+3. Al re-generar el artefacto de producción: encode con `zopfli=on` + `tile=sweep`
+   (la referencia HQ actual con Zopfli es SHA `ebfe2eb4…4b36`, 17.482.270 B).
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.

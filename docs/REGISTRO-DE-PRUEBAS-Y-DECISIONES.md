@@ -665,3 +665,34 @@ lmask   169,4 us/frame -> 80,6 us/frame   (-52%)
 El runbook estimaba ~29%; el perfil sintetico con exactamente 2/3 de bytes en
 cero rinde mas. La equivalencia de salida la garantiza la suite existente
 (dirty exacto y celdas identicas en ambos readers).
+
+## Instancia 012 - E-08 (Zopfli) y E-10 (keyframes por corte)
+
+Fecha: 2026-08-28. Commits: E-08 `8d4489d`, E-10 `1523f4d`.
+
+### E-08 - Referencia HQ con Zopfli (workflow encode, 15 iteraciones)
+
+```text
+                      zlib (referencia)      zopfli            delta
+clip.ascl             18.646.530 B           17.298.901 B      -1.347.629 B
+clip.asclv (bundle)   18.829.899 B           17.482.270 B      -7,16%
+bytes/celda/frame     0,2433                 0,2257
+PSNR RGB / Oklab      34,29 / 0,00793        34,29 / 0,00793   identicos
+tags                  ZLIB:94 DELTA_MASK:136 RDELTA_RAW:1      misma estructura
+SHA-256               f3051baa...1527        ebfe2eb4c8e0148b1ce6730b990abc4f
+                                             6283ed40bf7977b7e7c3f548b3134b36
+```
+
+- La calidad de imagen no cambia: Zopfli recomprime los mismos indices ya
+  decididos. La estructura de tags es identica a la referencia.
+- Costo: el encode HQ pasa de ~10 a ~40 minutos de CI. El input `zopfli` del
+  workflow permite apagarlo para iteraciones rapidas.
+
+### E-10 - Medicion sintetica (test cableado)
+
+Corte parcial (2 filas sobre ruido incompresible, 8 frames): sin el flag la
+cadena DELTA maxima es 7 y hay 1 keyframe; con `--scene-keyframes` el corte
+agrega exactamente 1 keyframe (cadena maxima 3) y el decoder Python reconstruye
+celdas identicas en ambos casos. Default off = salida byte-identica (test).
+En el perfil HQ actual (paleta adaptive) los cortes ya abren bloque/keyframe,
+por eso el flag es opt-in pensado para --palette global/block con keyint largo.

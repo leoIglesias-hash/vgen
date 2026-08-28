@@ -22,3 +22,5 @@ Reglas:
 | 2026-08-27 | F0: base congelada (P-01..P-04, E-01, E-02, S-1) | [`2026-08-27-F0-base-congelada.md`](2026-08-27-F0-base-congelada.md) |
 | 2026-08-27 | Frontend W-01..W-05 (gate ES5, seek v1, scratch, fuzzing) | [`2026-08-27-W01-05-frontend.md`](2026-08-27-W01-05-frontend.md) |
 | 2026-08-27 | F1: paleta reservada + glifos + sidecar (E-03..E-07) | [`2026-08-27-F1-paleta-reservada-glifos-sidecar.md`](2026-08-27-F1-paleta-reservada-glifos-sidecar.md) |
+| 2026-08-28 | F4: frontend W-06..W-14 (reader 40% más rápido, robustez player, markRectDirty) | [`2026-08-28-F4-frontend-w06-14.md`](2026-08-28-F4-frontend-w06-14.md) |
+| 2026-08-28 | F2: compresión E-08..E-10 (Zopfli −7,2%, tile_size 4..32, keyframes por corte) | [`2026-08-28-F2-compresion-e08-10.md`](2026-08-28-F2-compresion-e08-10.md) |
