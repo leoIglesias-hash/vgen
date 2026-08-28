@@ -293,10 +293,17 @@
       log("Carga simulada #"+simSerial+" aplicada ("+digits.substring(0,8)+"...). "+overlayStatus());
     }
   };
+  /* clear() ya restauro cells y dejo marcados los rects: NO se re-seekea
+   * (el seek resetea los dirty sets y perderia esos marks); se dibuja
+   * directo, marcando ademas las cajas de texto para borrar el texto viejo */
   elClear.onclick=function(){
     if(!overlay) return;
     overlay.clear();
-    if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
+    if(reader && lastShown>=0 && !playing){
+      if(textLayer) markTextDirty();
+      renderer.draw(reader);
+      if(textLayer) textLayer.draw(renderer.ctx,cellScale);
+    }
     log("Panel limpio (clear): matriz byte-identica al video base. "+overlayStatus());
   };
 

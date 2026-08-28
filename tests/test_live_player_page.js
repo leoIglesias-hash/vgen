@@ -62,6 +62,8 @@ assert(/overlay\.setValues=function\(payload\)\{\s*var ok=origSet\.call\(overlay
   "el espejo se alimenta de los mismos payloads que la matriz");
 assert(/overlay\.clear=function\(\)\{\s*origClear\.call\(overlay\);\s*clearTexts\(\);/.test(inline[1]),
   "clear limpia matriz y textos juntos");
+assert(/overlay\.clear\(\);\s*if\(reader && lastShown>=0 && !playing\)\{\s*if\(textLayer\) markTextDirty\(\);\s*renderer\.draw\(reader\);\s*if\(textLayer\) textLayer\.draw\(/.test(inline[1]),
+  "limpiar dibuja SIN re-seek: el seek resetearia los rects que clear() dejo marcados");
 
 /* INV-7: sin reserva, sin sidecar o con sidecar ajeno el video sigue */
 assert(page.indexOf("overlay inactivo") >= 0);
