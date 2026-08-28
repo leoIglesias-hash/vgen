@@ -112,13 +112,18 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   representables con aceptación monótona por inercia. Medido sobre
   refit 5 (Instancia 019, `a95d0bbc…`): PSNR igual, Oklab −0,5 %,
   bytes +0,36 % → **no adoptado**; el producto sigue con refit 5 solo.
-- ▶ **Próxima acción: E-14** (paleta sobre todos los píxeles en dos
-  pasadas; elimina el cap de 65.536 muestras y el materializado en RAM;
-  medir RSS con graphic-ultra). Decisión abierta: si el operador retoma
-  el 960, re-medirlo con refit 5 (el viejo 960 sin refit quedó superado
-  por el 768 refit 5).
+- ✅ **E-14 (dos pasadas, 2026-08-28)**: modo global sin materializar
+  (`f324f1e`) — `StreamingColorAggregate` + `sample_aggregate` ajustan la
+  paleta kmeans-oklab sobre TODOS los píxeles (sin cap de 65.536);
+  Pillow/RGB reproducen byte a byte el muestreo histórico. Instancia 020:
+  **RSS 886 → 433 MB (−51 %)**, Oklab −4,5 %, PSNR RGB −0,27 dB (desvío
+  registrado en bitácora; global no es el modo de producto).
+- ▶ **Próxima acción: E-15** (estabilidad temporal para los cuatro
+  algoritmos; kmeans-rgb — el default de make_clip — hoy no tiene
+  ninguna). Decisión abierta: si el operador retoma el 960, re-medirlo
+  con refit 5 (el viejo 960 sin refit quedó superado por el 768 refit 5).
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).
-- Pendiente: F3 (E-14..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
+- Pendiente: F3 (E-15..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8

@@ -987,3 +987,50 @@ Decisión: **el fondo de producto sigue siendo el refit 5 solo**
 puro, se activa agregando `--palette-uint8-refine 3` al `extra` del
 workflow. El barrido definitivo de S-4 (artefactos finales) reevaluará la
 combinación con el trellis de F5.
+
+## Instancia 020 - E-14: paleta sobre todos los píxeles, dos pasadas (RSS)
+
+Implementación en `f324f1e` (CI en verde: 231 pruebas Python + 26 suites
+JS). El modo global ya no materializa el video (`allf = list(...)`):
+kmeans-oklab hace **pasada 1** con `StreamingColorAggregate` (todos los
+píxeles del stream, colapsados por color exacto con la masa anti-banding
+de `smooth_gradient_weights`, compactación acotada) y ajusta la paleta con
+`build_perceptual_palette(sample_aggregate=…)` **sin el límite de 65.536
+muestras**; **pasada 2** re-lee el stream y encodea. Los algoritmos
+Pillow/RGB muestrean sus 12 frames históricos con pasada de conteo +
+pasada de muestreo — selección exactamente igual, **bytes idénticos**
+(verificado por test contra la paleta esperada). `refit_palette` ganó
+`sample_weights` (con `None` el camino E-12 es byte-idéntico).
+
+Tres corridas 960 `graphic-ultra`, `palette=global`, kmeans-oklab, dither
+auto, v2, **sin zopfli** (la compresión no afecta PSNR/RSS), medidas con
+`/usr/bin/time -v` (workflow `86eb5ae`; fuente 15 s — el clip de 90 s del
+runbook no existe en `assets`, desvío anotado):
+
+```text
+baseline (código viejo, run 33211360889):
+| clip.asclv | 20768254 | 20951623 | 0.1734 | 231 | 107 | 29 | ZLIB:107;DELTA_MASK:110;RDELTA_RAW:1;RDELTA_ZLIB:13 | 31.50 | 0.01140 | 17061d273f7b763b9bbaf472383560dacad6a7c790861387d4b1115a4338e093 |
+  RSS máximo 885.996 kB · wall 7:01.91
+dos pasadas (run 33211958336):
+| clip.asclv | 22502003 | 22685372 | 0.1879 | 231 | 103 | 29 | ZLIB:103;DELTA_MASK:113;RDELTA_RAW:1;RDELTA_ZLIB:14 | 31.23 | 0.01089 | d9785bf219e809a56f1d505c5e44adc1d753d982c9566700f0629fdc4e6720e1 |
+  RSS máximo 433.316 kB · wall 8:47.71
+dos pasadas + --palette-refit 5 (run 33212853307): BYTE-IDÉNTICO al
+anterior (mismo SHA d9785bf2…) — el Lloyd del builder ya convergió sobre
+el mismo agregado y la aceptación Oklab del refit no encuentra mejora.
+  RSS máximo 434.124 kB · wall 6:33.61
+```
+
+Resultado: **RSS máximo −51 %** (886 → 433 MB) ✓ y **error Oklab −4,5 %**
+(0,01140 → 0,01089) ✓; **PSNR RGB −0,27 dB** (31,50 → 31,23) ✗ frente al
+criterio «PSNR igual o mejor». Causa entendida: el camino viejo muestreaba
+por cuantiles 65.536 píxeles de solo 12 frames; el agregado usa la masa
+anti-banding del video ENTERO, y kmeans-oklab optimiza ese objetivo
+perceptual ponderado (mejora), no el MSE RGB (cede 0,27 dB). Es el
+trade-off diseñado del anti-banding aplicado por fin a datos completos.
+
+Decisión: **E-14 cierra con el desvío registrado** — el objetivo del
+proyecto es perceptual y el modo global no es el de producto (adaptive).
+Si el operador quiere paridad PSNR en global, el knob natural es exponer
+el `gradient_boost` del agregado (pendiente opcional, no bloquea F3).
+Bytes +8,3 % en global sin zopfli: consecuencia de la paleta más fiel a
+gradientes (más entropía de índices); no afecta al producto.
