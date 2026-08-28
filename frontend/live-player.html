@@ -5,14 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ASCILINE live</title>
 <!--
-  F7: runtime REAL de la intervencion matricial (INT-001), reemplaza a la
-  demo de laboratorio. Requiere un clip encodeado con reserved=10 y su
-  sidecar clip.slots (workflow encode con overlay=on):
-    - los glifos se escriben como indices reservados (246..255) sobre la
+  F7 / INT-003: runtime REAL de la intervencion matricial (INT-001 +
+  DISENO-PARCHES-GENERICOS). Requiere un clip con reserva (10 o 32) y su
+  sidecar clip.slots (workflow encode con overlay=panel o overlay=patches):
+    - los parches se escriben como indices reservados (256-N..255) sobre la
       matriz de celdas del reader: un solo layer, jamas un segundo canvas;
     - el orden por frame es beforeSeek -> seek -> afterSeek (overlay.js);
     - los valores llegan por el canal de datos (outputs/data.txt, XHR con
-      serial monotonico y validacion en 5 pasos) o con el boton de prueba;
+      serial monotonico y validacion en 5 pasos) o con el boton de prueba,
+      que genera un payload valido por campo (digitos y presencia v2);
     - si el clip no tiene reserva o el sidecar no coincide, el video se
       reproduce igual, sin overlay (INV-7).
 -->
@@ -62,7 +63,7 @@
   var elPlay=document.getElementById("play"), elZoom=document.getElementById("zoom");
   var elBadge=document.getElementById("badge"), elStatus=document.getElementById("status");
   var elSim=document.getElementById("simulate"), elClear=document.getElementById("clearOverlay");
-  var reader=null, renderer=null, overlay=null, channel=null;
+  var reader=null, renderer=null, overlay=null, channel=null, overlayMeta=null;
   var playing=false, hasAudio=false, startT=0, raf=0, lastShown=-1, simSerial=0;
   var urlAPI=window.URL || window.webkitURL;
   var perf=window.performance;
@@ -112,13 +113,17 @@
 
   /* ---- sidecar + canal: el fallo de cualquiera deja el video intacto ---- */
   function tryAttachOverlay(bytes){
-    var h=reader.header, tail, i, meta;
+    var h=reader.header, tail, i, meta, palReserved, first;
     if(h.palSize!==256 || reader.paletteEntries!==256){
-      log("Clip sin paleta completa: overlay inactivo (regenerar con overlay=on). El video sigue.");
+      log("Clip sin paleta completa: overlay inactivo (regenerar con overlay=panel o patches). El video sigue.");
       return;
     }
-    tail=new Uint8Array(30);
-    for(i=0;i<30;i++) tail[i]=reader.palette[246*3+i];
+    /* verificacion cruzada parametrica: la cola reservada del bundle valida
+     * el sidecar (v1: 10 entradas en 246..; v2: pal_reserved en 256-N..) */
+    palReserved=(bytes.length>10 && bytes[8]===2)?bytes[10]:10;
+    first=256-palReserved;
+    tail=new Uint8Array(3*palReserved);
+    for(i=0;i<tail.length;i++) tail[i]=reader.palette[first*3+i];
     try{
       meta=window.ASCL_parseSlots(bytes,h.cols,h.rows,h.nFrames,tail);
     }catch(err){
@@ -130,6 +135,7 @@
       log("attach devolvio null (sidecar de otro bundle): video sin overlay.");
       return;
     }
+    overlayMeta=meta;
     channel=window.ASCILINEDataChannel.create(DATA_URL,overlay,{intervalMs:15000});
     if(channel) channel.start();
     elSim.disabled=false;
@@ -137,10 +143,41 @@
     log(overlayStatus()+" - panel de "+overlay.nSlots+" slots; datos: "+DATA_URL+" cada 15 s.");
   }
 
+  /* payload valido por campo: digitos en [min,max] y, en los campos de
+   * eleccion v2, digito de presencia + valor (o ceros canonicos) */
+  function padNumber(value,width){
+    var s=String(value);
+    while(s.length<width) s="0"+s;
+    return s;
+  }
+  function wireWidth(max){
+    var w=1,t=10;
+    while(max>=t && w<10){ w++; t*=10; }
+    return w;
+  }
+  function randomPayload(fields){
+    var out="",i,f,v,w;
+    for(i=0;i<fields.length;i++){
+      f=fields[i];
+      if(f.kind===1){
+        w=wireWidth(f.max);
+        if(Math.random()<0.34){
+          out+="0"+padNumber(0,w);
+        } else {
+          v=f.min+Math.floor(Math.random()*(f.max-f.min+1));
+          out+="1"+padNumber(v,w);
+        }
+      } else {
+        v=f.min+Math.floor(Math.random()*(f.max-f.min+1));
+        out+=padNumber(v,f.slotIds.length);
+      }
+    }
+    return out;
+  }
+
   elSim.onclick=function(){
-    if(!overlay) return;
-    var digits="", i;
-    for(i=0;i<overlay.digitCount;i++) digits+=String(Math.floor(Math.random()*10));
+    if(!overlay || !overlayMeta) return;
+    var digits=randomPayload(overlayMeta.fields);
     simSerial++;
     if(overlay.setValues(digits)){
       if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
@@ -229,7 +266,7 @@
         if(s.status===200 && s.response && s.response.byteLength){
           tryAttachOverlay(new Uint8Array(s.response));
         } else {
-          log("Sin sidecar ("+SLOTS_URL+"): video sin overlay. Generarlo con el workflow encode (overlay=on).");
+          log("Sin sidecar ("+SLOTS_URL+"): video sin overlay. Generarlo con el workflow encode (overlay=panel o patches).");
         }
       };
       s.onerror=function(){ log("Sin sidecar: video sin overlay."); };

@@ -41,10 +41,19 @@ assert(page.indexOf("El video sigue") >= 0);
 assert(page.indexOf("attach devolvio null") >= 0);
 assert(page.indexOf("Sin sidecar") >= 0);
 
-/* verificacion cruzada: reserved_rgb del sidecar contra la paleta del bundle */
-assert(page.indexOf("reader.palette[246*3+i]") >= 0,
+/* verificacion cruzada parametrica: la cola reservada del bundle valida el
+ * sidecar (v1: 10 en 246..; v2: pal_reserved en 256-N..) */
+assert(page.indexOf("palReserved=(bytes.length>10 && bytes[8]===2)?bytes[10]:10") >= 0,
+  "la reserva se toma del byte de version/pal_reserved del sidecar");
+assert(page.indexOf("tail[i]=reader.palette[first*3+i]") >= 0,
   "la cola reservada del bundle valida el sidecar");
 assert(page.indexOf("h.palSize!==256") >= 0);
+
+/* la carga simulada genera payloads validos por campo (presencia v2) */
+assert(page.indexOf("function randomPayload(fields)") >= 0);
+assert(page.indexOf('out+="0"+padNumber(0,w)') >= 0,
+  "presencia 0 con ceros canonicos");
+assert(page.indexOf('out+="1"+padNumber(v,w)') >= 0);
 
 /* canal de datos real con la cadencia de INT-001 §8.2 */
 assert(page.indexOf("ASCILINEDataChannel.create(DATA_URL,overlay,{intervalMs:15000})") >= 0);

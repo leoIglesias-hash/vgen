@@ -45,9 +45,13 @@ on:
         description: "E-09: tile regional v2 (4..32) o 'sweep' para barrer {4,8,12,16,24,32}"
         default: "16"
       overlay:
-        description: "F7: reservar 10 entradas de paleta (246..255) y publicar clip.slots (panel de 20 numeros)"
-        type: boolean
-        default: false
+        description: "off: sin overlay · panel: F7 (reserved 10, panel v1 de 20 numeros) · patches: INT-003 (reserved 32, sidecar v2 con tipografia libre, numeros grandes por tercios y palabra de eleccion)"
+        type: choice
+        options:
+          - "off"
+          - panel
+          - patches
+        default: "off"
 
 permissions:
   contents: read
@@ -87,8 +91,10 @@ jobs:
           else
             TILE_ARGS="--tile-size ${{ inputs.tile }}"
           fi
-          if [ "${{ inputs.overlay }}" = "true" ]; then
+          if [ "${{ inputs.overlay }}" = "panel" ]; then
             OVERLAY_ARGS="--reserved 10"
+          elif [ "${{ inputs.overlay }}" = "patches" ]; then
+            OVERLAY_ARGS="--reserved 32"
           else
             OVERLAY_ARGS=""
           fi
@@ -103,12 +109,17 @@ jobs:
             $OVERLAY_ARGS \
             ${{ inputs.extra }} \
             --out outputs/clip.asclv
-      - name: Sidecar del panel (F7, opcional)
-        if: ${{ inputs.overlay }}
+      - name: Sidecar del overlay (F7 panel v1 / INT-003 parches v2)
+        if: ${{ inputs.overlay != 'off' }}
         run: |
-          python tools/bake_glyphs.py --out outputs/glyphs.bin
-          python tools/make_panel.py outputs/clip.asclv \
-            --glyphs outputs/glyphs.bin --out outputs/clip.slots
+          if [ "${{ inputs.overlay }}" = "panel" ]; then
+            python tools/bake_glyphs.py --out outputs/glyphs.bin
+            python tools/make_panel.py outputs/clip.asclv \
+              --glyphs outputs/glyphs.bin --out outputs/clip.slots
+          else
+            python tools/make_patch_pack.py outputs/clip.asclv \
+              --out outputs/clip.slots --sample-data outputs/data.txt
+          fi
           sha256sum outputs/clip.slots | tee -a sha-slots.txt
       - name: Medición (bench_ref) y SHA-256
         run: |
@@ -139,6 +150,7 @@ jobs:
           path: |
             outputs/clip.asclv
             outputs/clip.slots
+            outputs/data.txt
             bench.md
             sha256.txt
             sha-slots.txt
