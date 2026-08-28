@@ -3,10 +3,12 @@
 Cubre DISENO-PARCHES-GENERICOS §5: parches heterogeneos, reserva parametrica,
 slots con dimensiones propias, campos kind=0/1, presupuestos por frame (5%)
 y de RAM (25%), solape espacial solo con ventanas disjuntas, y canonicidad
-(§5.5). Cada regla tiene su rechazo probado; el corpus se comparte de forma
-espejada con la suite JS de INT-003-C.
+(§5.5). El corpus negativo (una entrada por regla) se construye una sola vez
+y se vuelca a ``tests/fixtures/slots-v2-generated/`` para que la suite JS
+(test_slots_v2.js) verifique los MISMOS bytes con el MISMO veredicto.
 """
 import os
+import struct
 import sys
 import unittest
 
@@ -60,6 +62,192 @@ def build(meta):
     return make_slots.build_v2(meta)
 
 
+def _mut_field(index, **changes):
+    meta = base_meta()
+    meta["fields"][index] = dict(meta["fields"][index], **changes)
+    return build(meta)
+
+
+def _corpus():
+    """name -> (bytes, fragmento del mensaje esperado o None si es valido).
+
+    Cada entrada cubre una regla distinta de §5; los bytes van a fixtures
+    para que la suite JS emita el mismo veredicto sobre el mismo archivo.
+    """
+    corpus = {}
+
+    corpus["valid"] = (build(base_meta()), None)
+
+    meta = base_meta()
+    # pico de area activa exactamente en el 5% (102 de 2048/20): se acepta
+    meta["slots"].append({"x": 2, "y": 20, "w": 1, "h": 2,
+                          "start": 0, "end": 9})
+    corpus["valid-borde-5pc"] = (build(meta), None)
+
+    meta = base_meta()
+    meta["fields"] = meta["fields"][:1]  # slots y parches sin referenciar
+    corpus["valid-sin-referencias"] = (build(meta), None)
+
+    data = bytearray(build(base_meta()))
+    data[8] = 3
+    corpus["bad-version"] = (bytes(data), "version no soportada")
+
+    data = bytearray(build(base_meta()))
+    data[9] = 1
+    corpus["bad-reservado"] = (bytes(data), "byte reservado distinto de 0")
+
+    meta = base_meta()
+    meta["pal_reserved"] = 9
+    meta["reserved_rgb"] = b"\x00" * 27
+    corpus["bad-pal-reserved"] = (build(meta), "pal_reserved fuera de 10..64")
+
+    data = bytearray(build(base_meta()))
+    data[11] = 1
+    corpus["bad-flags"] = (bytes(data), "flags distinto de 0")
+
+    data = bytearray(build(base_meta()))
+    data[-1] ^= 0xff
+    corpus["bad-crc"] = (bytes(data), "CRC32 invalido")
+
+    meta = base_meta()
+    rgb = bytearray(RESERVED_RGB_32)
+    rgb[0] ^= 1
+    meta["reserved_rgb"] = bytes(rgb)
+    corpus["bad-rgb"] = (build(meta), "reserved_rgb no coincide con el bundle")
+
+    meta = base_meta()
+    meta["patches"] = []
+    meta["fields"] = []
+    corpus["bad-sin-parches"] = (build(meta), "sin parches")
+
+    meta = base_meta()
+    meta["patches"][0] = {"w": 65, "h": 64, "data": b"\xff" * (65 * 64)}
+    corpus["bad-parche-dims"] = (build(meta),
+                                 "parche 0 con dimensiones invalidas")
+
+    meta = base_meta()
+    # 65 parches de 64x64 = 266.240 B > 256 KiB
+    meta["patches"] = [{"w": 64, "h": 64, "data": b"\xff" * 4096}
+                       for _ in range(65)]
+    meta["fields"] = []
+    corpus["bad-parche-total"] = (build(meta),
+                                  "datos de parches superan 256 KiB")
+
+    meta = base_meta()
+    bad = bytearray(meta["patches"][11]["data"])
+    bad[7] = 223  # justo debajo de 256-32
+    meta["patches"][11]["data"] = bytes(bad)
+    corpus["bad-parche-byte"] = (build(meta),
+                                 "byte de parche fuera de la reserva")
+
+    meta = base_meta()
+    meta["slots"][4]["w"] = 0
+    corpus["bad-slot-dims"] = (build(meta),
+                               "slot 4 con dimensiones invalidas")
+
+    meta = base_meta()
+    meta["slots"][4]["x"] = COLS - 5
+    corpus["bad-slot-grilla"] = (build(meta), "slot 4 fuera de la grilla")
+
+    meta = base_meta()
+    meta["slots"][4]["start"], meta["slots"][4]["end"] = 6, 2
+    corpus["bad-slot-ventana"] = (build(meta),
+                                  "slot 4 con end_frame < start_frame")
+
+    meta = base_meta()
+    meta["slots"][4]["end"] = FRAMES
+    corpus["bad-slot-frames"] = (build(meta),
+                                 "slot 4 activo mas alla del ultimo frame")
+
+    meta = base_meta()
+    meta["slots"][3]["start"] = 4  # pisa el frame 4 del slot 2
+    corpus["bad-solape"] = (build(meta), "slots 2 y 3 se solapan")
+
+    meta = base_meta()
+    meta["slots"].append({"x": 2, "y": 20, "w": 6, "h": 5,
+                          "start": 0, "end": 4})  # pico 130 > 102
+    corpus["bad-area-frame"] = (build(meta),
+                                "area activa supera el 5% de la grilla")
+
+    meta = base_meta()
+    meta["slots"] = [{"x": 2, "y": 2, "w": 8, "h": 8,
+                      "start": f, "end": f} for f in range(9)]
+    meta["fields"] = []  # 9*64 = 576 > 2048/4, con 64 activas por frame
+    corpus["bad-area-total"] = (
+        build(meta), "area total de slots supera el 25% de la grilla")
+
+    corpus["bad-kind"] = (_mut_field(1, kind=2), "campo 2 con kind invalido")
+
+    meta = base_meta()
+    meta["fields"] = [meta["fields"][0],
+                      dict(meta["fields"][1], slot_ids=[2, 3])]
+    corpus["bad-eleccion-multislot"] = (
+        build(meta), "campo 2 de eleccion debe tener un solo slot")
+
+    corpus["bad-eleccion-pad"] = (
+        _mut_field(1, pad=1), "campo 2 de eleccion con pad distinto de 0")
+
+    corpus["bad-pad"] = (_mut_field(0, pad=2), "campo 1 con pad invalido")
+
+    corpus["bad-max-min"] = (_mut_field(1, min=8, max=7),
+                             "campo 2 con max < min")
+
+    corpus["bad-digitos"] = (
+        _mut_field(0, max=100),
+        "campo 1 no puede representar max con 2 digitos")
+
+    corpus["bad-span"] = (_mut_field(1, min=0, max=512),
+                          "campo 2 de eleccion supera 512 variantes")
+
+    corpus["bad-parche-inexistente"] = (
+        _mut_field(1, patch_base=12),
+        "campo 2 referencia un parche inexistente")
+
+    corpus["bad-parche-dims-slot"] = (
+        _mut_field(1, patch_base=0),
+        "campo 2 con parches de dimensiones distintas al slot")
+
+    corpus["bad-slot-inexistente"] = (
+        _mut_field(1, slot_ids=[9]),
+        "campo 2 referencia un slot inexistente")
+
+    meta = base_meta()
+    meta["fields"][2] = dict(meta["fields"][2], slot_ids=[2])
+    corpus["bad-slot-duplicado"] = (build(meta),
+                                    "slot 2 aparece en dos campos")
+
+    corpus["bad-slots-dims"] = (
+        _mut_field(0, slot_ids=[0, 2]),
+        "campo 1 con slots de dimensiones distintas")
+
+    corpus["bad-digitos-parches"] = (
+        _mut_field(0, patch_base=4),
+        "campo 1 referencia un parche inexistente")
+
+    data = build(base_meta()) + b"\x00"
+    corpus["bad-sobrantes"] = (make_slots.rewrite_crc_v2(data),
+                               "bytes sobrantes al final del sidecar")
+
+    full = build(base_meta())
+    corpus["bad-truncado-campos"] = (
+        make_slots.rewrite_crc_v2(full[:len(full) - 4]),
+        "tabla de campos truncada")
+
+    corpus["bad-truncado-header"] = (full[:15], "sidecar truncado")
+
+    # count=0 en el primer campo (build_v2 lo rechaza; se muta el byte)
+    header_end = make_slots.HEADER_SIZE_V2 + 96
+    dir_end = header_end + 14 * 4
+    data_end = dir_end + sum(p["w"] * p["h"] for p in base_meta()["patches"])
+    slots_end = data_end + 5 * make_slots.SLOT_SIZE_V2
+    data = bytearray(full)
+    data[slots_end + 3] = 0
+    corpus["bad-campo-sin-slots"] = (
+        make_slots.rewrite_crc_v2(bytes(data)), "campo 0 sin slots")
+
+    return corpus
+
+
 class ValidV2Test(unittest.TestCase):
     def test_roundtrip_and_crosscheck(self):
         data = build(base_meta())
@@ -80,201 +268,22 @@ class ValidV2Test(unittest.TestCase):
                           "min": 5, "max": 7, "pad": 0, "patch_base": 11})
 
     def test_validates_without_expected_rgb_and_without_n_frames(self):
-        data = build(base_meta())
-        make_slots.validate(data, COLS, ROWS)
+        meta = base_meta()
+        meta["slots"][4]["end"] = FRAMES  # invalido con n_frames, valido sin
+        data = build(meta)
+        make_slots.validate(data, COLS, ROWS, None)
+        with self.assertRaises(ValueError):
+            make_slots.validate(data, COLS, ROWS, FRAMES)
 
     def test_deterministic_build(self):
         self.assertEqual(build(base_meta()), build(base_meta()))
 
-    def test_unreferenced_slots_and_patches_are_legal(self):
-        meta = base_meta()
-        meta["fields"] = meta["fields"][:1]
-        make_slots.validate(build(meta), COLS, ROWS, FRAMES, RESERVED_RGB_32)
-
-
-def reject(test, meta_or_data, message, cols=COLS, rows=ROWS,
-           n_frames=FRAMES, expected=RESERVED_RGB_32):
-    data = meta_or_data if isinstance(meta_or_data, (bytes, bytearray)) \
-        else build(meta_or_data)
-    with test.assertRaises(ValueError) as context:
-        make_slots.validate(data, cols, rows, n_frames, expected)
-    test.assertIn(message, str(context.exception))
-
-
-class HeaderV2Test(unittest.TestCase):
-    def test_version_dispatch_and_unknown_version(self):
-        data = bytearray(build(base_meta()))
-        data[8] = 3
-        reject(self, bytes(data), "version no soportada")
-
-    def test_reserved_byte_and_flags_are_canonical(self):
-        data = bytearray(build(base_meta()))
-        data[9] = 1
-        reject(self, bytes(data), "byte reservado distinto de 0")
-        data = bytearray(build(base_meta()))
-        data[11] = 1
-        reject(self, bytes(data), "flags distinto de 0")
-
-    def test_pal_reserved_range(self):
-        for bad in (9, 65, 0):
-            meta = base_meta()
-            meta["pal_reserved"] = bad
-            meta["reserved_rgb"] = b"\x00" * (3 * bad)
-            reject(self, meta, "pal_reserved fuera de 10..64",
-                   expected=b"\x00" * (3 * bad))
-
-    def test_crc_is_verified(self):
-        data = bytearray(build(base_meta()))
-        data[-1] ^= 0xff
-        reject(self, bytes(data), "CRC32 invalido")
-
-    def test_reserved_rgb_crosscheck(self):
-        wrong = bytearray(RESERVED_RGB_32)
-        wrong[0] ^= 1
-        reject(self, base_meta(), "reserved_rgb no coincide con el bundle",
-               expected=bytes(wrong))
-
-    def test_truncated(self):
-        data = build(base_meta())
-        reject(self, data[:8], "sidecar truncado")
-        reject(self, data[:21], "sidecar truncado")
-
-
-class PatchTableTest(unittest.TestCase):
-    def test_empty_and_too_many(self):
-        meta = base_meta()
-        meta["patches"] = []
-        meta["fields"] = []
-        reject(self, meta, "sin parches")
-
-    def test_patch_dimensions(self):
-        meta = base_meta()
-        meta["patches"][0] = {"w": 0, "h": 5, "data": b""}
-        reject(self, meta, "parche 0 con dimensiones invalidas")
-        meta = base_meta()
-        meta["patches"][0] = {"w": 65, "h": 64, "data": b"\xff" * (65 * 64)}
-        reject(self, meta, "parche 0 con dimensiones invalidas")
-
-    def test_total_patch_data_cap(self):
-        meta = base_meta()
-        # 65 parches de 64x64 = 266.240 B > 256 KiB (los base no alcanzan)
-        meta["patches"] = [{"w": 64, "h": 64, "data": b"\xff" * 4096}
-                           for _ in range(65)]
-        meta["fields"] = []
-        reject(self, meta, "datos de parches superan 256 KiB")
-
-    def test_patch_bytes_must_live_in_the_reserve(self):
-        meta = base_meta()
-        bad = bytearray(meta["patches"][11]["data"])
-        bad[7] = 223  # justo debajo de 256-32
-        meta["patches"][11]["data"] = bytes(bad)
-        reject(self, meta, "byte de parche fuera de la reserva")
-
-
-class SlotTableV2Test(unittest.TestCase):
-    def test_dimensions_grid_and_window(self):
-        meta = base_meta()
-        meta["slots"][4]["w"] = 0
-        reject(self, meta, "slot 4 con dimensiones invalidas")
-        meta = base_meta()
-        meta["slots"][4]["x"] = COLS - 5
-        reject(self, meta, "slot 4 fuera de la grilla")
-        meta = base_meta()
-        meta["slots"][4]["start"], meta["slots"][4]["end"] = 6, 2
-        reject(self, meta, "slot 4 con end_frame < start_frame")
-        meta = base_meta()
-        meta["slots"][4]["end"] = FRAMES
-        reject(self, meta, "slot 4 activo mas alla del ultimo frame")
-        make_slots.validate(build(meta), COLS, ROWS, None, RESERVED_RGB_32)
-
-    def test_spatial_overlap_needs_disjoint_windows(self):
-        meta = base_meta()
-        meta["slots"][3]["start"] = 4  # pisa el frame 4 del slot 2
-        reject(self, meta, "slots 2 y 3 se solapan")
-
-    def test_per_frame_budget(self):
-        meta = base_meta()
-        # frames 0..4 ya suman 100 celdas; 6x5 mas los lleva a 130 > 102
-        meta["slots"].append({"x": 2, "y": 20, "w": 6, "h": 5,
-                              "start": 0, "end": 4})
-        reject(self, meta, "area activa supera el 5% de la grilla")
-
-    def test_per_frame_budget_counts_only_concurrent_windows(self):
-        meta = base_meta()
-        # cada mitad del clip ya suma 100 celdas activas; 1x2 mas en todo el
-        # clip lleva el pico a 102, exactamente el 5% de 64x32: se acepta
-        meta["slots"].append({"x": 2, "y": 20, "w": 1, "h": 2,
-                              "start": 0, "end": 9})
-        make_slots.validate(build(meta), COLS, ROWS, FRAMES, RESERVED_RGB_32)
-
-    def test_total_ram_budget(self):
-        meta = base_meta()
-        meta["slots"] = [{"x": 2, "y": 2, "w": 8, "h": 8,
-                          "start": f, "end": f} for f in range(9)]
-        meta["fields"] = []
-        # 9 * 64 = 576 > 2048/4 = 512, con 64 celdas activas por frame
-        reject(self, meta, "area total de slots supera el 25% de la grilla")
-
-
-class FieldTableV2Test(unittest.TestCase):
-    def _mutate(self, **changes):
-        meta = base_meta()
-        meta["fields"][1] = dict(meta["fields"][1], **changes)
-        return meta
-
-    def test_kind_must_be_known(self):
-        reject(self, self._mutate(kind=2), "campo 2 con kind invalido")
-
-    def test_choice_needs_single_slot_and_pad_zero(self):
-        meta = base_meta()
-        meta["fields"] = [meta["fields"][0],
-                          dict(meta["fields"][1], slot_ids=[2, 3])]
-        reject(self, meta, "campo 2 de eleccion debe tener un solo slot")
-        reject(self, self._mutate(pad=1),
-               "campo 2 de eleccion con pad distinto de 0")
-
-    def test_digits_pad_is_binary(self):
-        meta = base_meta()
-        meta["fields"][0] = dict(meta["fields"][0], pad=2)
-        reject(self, meta, "campo 1 con pad invalido")
-
-    def test_ranges(self):
-        reject(self, self._mutate(min=8, max=7), "campo 2 con max < min")
-        meta = base_meta()
-        meta["fields"][0] = dict(meta["fields"][0], max=100)
-        reject(self, meta, "campo 1 no puede representar max con 2 digitos")
-        reject(self, self._mutate(min=0, max=512),
-               "campo 2 de eleccion supera 512 variantes")
-
-    def test_patch_references(self):
-        reject(self, self._mutate(patch_base=12, max=7, min=5),
-               "campo 2 referencia un parche inexistente")
-        reject(self, self._mutate(patch_base=0),
-               "campo 2 con parches de dimensiones distintas al slot")
-
-    def test_slot_references(self):
-        reject(self, self._mutate(slot_ids=[9]),
-               "campo 2 referencia un slot inexistente")
-        meta = base_meta()
-        meta["fields"][2] = dict(meta["fields"][2], slot_ids=[2])
-        reject(self, meta, "slot 2 aparece en dos campos")
-        meta = base_meta()
-        meta["fields"][0] = dict(meta["fields"][0], slot_ids=[0, 2])
-        reject(self, meta, "campo 1 con slots de dimensiones distintas")
-
-    def test_digit_field_needs_the_eleven_patches(self):
-        meta = base_meta()
-        meta["fields"] = [dict(meta["fields"][0], patch_base=4)]
-        reject(self, meta, "campo 1 referencia un parche inexistente")
-
-
-class TrailingAndTruncationTest(unittest.TestCase):
-    def test_trailing_bytes(self):
-        data = build(base_meta()) + b"\x00"
-        reject(self, make_slots.rewrite_crc_v2(data), "bytes sobrantes")
-
-    def test_truncated_tables(self):
+    def test_truncated_header_and_tables(self):
         full = build(base_meta())
+        with self.assertRaises(ValueError):
+            make_slots.validate(full[:8], COLS, ROWS)
+        with self.assertRaises(ValueError):
+            make_slots.validate(full[:21], COLS, ROWS)
         parsed = make_slots.validate(full, COLS, ROWS, FRAMES,
                                      RESERVED_RGB_32)
         header_end = make_slots.HEADER_SIZE_V2 + 96
@@ -283,9 +292,46 @@ class TrailingAndTruncationTest(unittest.TestCase):
         slots_end = data_end + len(parsed["slots"]) * make_slots.SLOT_SIZE_V2
         for cut, message in ((dir_end - 2, "tabla de parches truncada"),
                              (data_end - 3, "tabla de parches truncada"),
-                             (slots_end - 5, "tabla de slots truncada"),
-                             (len(full) - 4, "tabla de campos truncada")):
-            reject(self, make_slots.rewrite_crc_v2(full[:cut]), message)
+                             (slots_end - 5, "tabla de slots truncada")):
+            with self.assertRaises(ValueError) as context:
+                make_slots.validate(make_slots.rewrite_crc_v2(full[:cut]),
+                                    COLS, ROWS, FRAMES, RESERVED_RGB_32)
+            self.assertIn(message, str(context.exception))
+
+
+class CorpusTest(unittest.TestCase):
+    def test_every_rule_has_its_rejection(self):
+        for name, (data, message) in sorted(_corpus().items()):
+            if message is None:
+                make_slots.validate(data, COLS, ROWS, FRAMES,
+                                    RESERVED_RGB_32)
+                continue
+            with self.assertRaises(ValueError) as context:
+                make_slots.validate(data, COLS, ROWS, FRAMES,
+                                    RESERVED_RGB_32)
+            self.assertIn(message, str(context.exception),
+                          "%s rechazado por otra regla" % name)
+
+
+class FixtureDumpTest(unittest.TestCase):
+    """Vuelca el corpus para la verificacion cruzada JS (test_slots_v2.js):
+    mismos bytes, mismo veredicto (mecanismo E-07)."""
+
+    def test_dump_corpus_for_js(self):
+        out_dir = os.path.join(ROOT, "tests", "fixtures",
+                               "slots-v2-generated")
+        if not os.path.isdir(out_dir):
+            os.makedirs(out_dir)
+        lines = []
+        for name, (data, message) in sorted(_corpus().items()):
+            with open(os.path.join(out_dir, name + ".slots"), "wb") as stream:
+                stream.write(data)
+            lines.append("%s\t%s" % (name, message or ""))
+        with open(os.path.join(out_dir, "corpus.txt"), "w") as stream:
+            stream.write("\n".join(lines) + "\n")
+        with open(os.path.join(out_dir, "context.bin"), "wb") as stream:
+            stream.write(struct.pack("<HHI", COLS, ROWS, FRAMES) +
+                         RESERVED_RGB_32)
 
 
 class V1StillWorksTest(unittest.TestCase):
