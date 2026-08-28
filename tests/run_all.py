@@ -28,6 +28,7 @@ JS_SUITES = (
     "test_slots_js.js",
     "test_overlay_runtime.js",
     "test_overlay_datachannel.js",
+    "test_overlay_cross.js",
     "test_frontend_compatibility.js",
 )
 
