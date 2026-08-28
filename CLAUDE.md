@@ -72,8 +72,11 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   workflow `encode` con `overlay=on` publica `clip.asclv`+`clip.slots`;
   `live-player.html` lo reproduce) · S-1/S-2/S-3 · P-02 (HQ reproducible;
   con Zopfli: 17.482.270 B, `ebfe2eb4…4b36`)
-- ▶ **INT-003 (parches genéricos de imagen)** es el próximo pedido del operador:
-  leer `docs/DISENO-PARCHES-GENERICOS.md` y resolver D1..D6 con él antes de
-  codear. Carril E sigue en F3 desde **E-12** (el refit debe excluir 246..255).
+- ▶ **INT-003 (parches genéricos) en implementación**: D1..D6 resueltas con el
+  operador el 2026-08-28 (reserva 32 en 224..255, vía corta ahora, ruleta con
+  ASCLVID3, slots candidatos, canal con presencia). Diseño cerrado en
+  `docs/DISENO-PARCHES-GENERICOS.md`; tareas INT-003-A..F en el runbook de
+  implementación §4-INT-003, avance en RUNBOOK-ESTADO (Carril INT-003).
+  Carril E sigue en F3 desde **E-12** (el refit debe excluir la reserva vigente).
 - Pendiente: F3 (E-12..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8

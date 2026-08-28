@@ -608,6 +608,85 @@ a la reproducción sin overlay tras `clear()`, seek hacia atrás y reinicio de l
 | F8-4 | `MEM-001`: memoria por componente, con y sin overlay |
 | F8-5 | Regenerar el artefacto de release **después** del último cambio de codec |
 
+## 4-INT-003. Carril INT-003 — parches genéricos de imagen (vía corta)
+
+Diseño cerrado en [`DISENO-PARCHES-GENERICOS.md`](DISENO-PARCHES-GENERICOS.md)
+(D1..D6 resueltas con el operador el 2026-08-28). Secuencial: cada tarea tiene
+como precondición la anterior. La ruleta NO está en este carril (va con
+`ASCLVID3` en F6/S-4).
+
+### INT-003-A — Reserva ampliada a 32 entradas
+
+- **Archivos:** `backend/overlay_palette.py`, `backend/make_clip.py`.
+- **Acción:** `RESERVED_RGB_32` (§4 del diseño; últimas 10 filas bit-idénticas a
+  `RESERVED_RGB`), `reserved_rgb_bytes(n)` paramétrico; `--reserved` acepta
+  `0|10|32` y con 32 estampa la tabla de 32 y mantiene `protect_panel`.
+- **Cierre:** test Python nuevo (cableado en `run_all.py`): encode real con
+  `reserved=32` → toda época termina en los 96 bytes canónicos (INV-4) y
+  ninguna celda base usa índice ≥224 (INV-3 paramétrico); las tablas de 10 y
+  32 coinciden en la cola. CI en verde. Δbytes: sí — fila de `bench_ref` del
+  sintético con `reserved=32` (costo de calidad de la base de 224).
+
+### INT-003-B — ASCLSLOT v2: escritor y validador Python
+
+- **Archivo:** `tools/make_slots.py` (+ tests).
+- **Acción:** `build` v2 y `validate` que acepta v1 y v2 según el byte de
+  versión: `pal_reserved` variable, `patch_dir`/`patch_data` heterogéneos,
+  slots con `w,h`, campos con `kind` (dígitos/elección) y `patch_base`,
+  presupuestos §5.4 (barrido de eventos + techo de RAM), canonicidad §5.5.
+- **Cierre:** suite Python con corpus positivo y negativo (cada regla de §5
+  tiene su rechazo probado); v1 sigue aceptando/rechazando exactamente lo
+  mismo (regresión intacta). CI en verde.
+
+### INT-003-C — slots.js espejo v2
+
+- **Archivo:** `frontend/slots.js` (+ suite JS nueva en `run_all.py`).
+- **Acción:** `ASCL_parseSlots` acepta v1 y v2 y devuelve meta normalizada
+  (parches + `palReserved`; un sidecar v1 se normaliza a parches uniformes con
+  los campos legados intactos). Espejo exacto del validador Python.
+- **Cierre:** suite JS con el mismo corpus negativo que B (mensajes espejados);
+  fixture v2 generado por Python aceptado byte a byte; gate ES5 en verde.
+
+### INT-003-D — Runtime v2 + referencia Python
+
+- **Archivos:** `frontend/overlay.js`, `backend/overlay_ref.py`,
+  `frontend/datachannel.js` (solo verificación), tests runtime + cruzados.
+- **Acción:** `values` u16 con centinela `NONE=65535`; campos de elección
+  (`setField` para ambos kinds, payload con dígito de presencia en
+  `setValues`); offsets de parche/base por sumas prefijas en `attach`; cola de
+  paleta verificada con `N` del sidecar. Con sidecar v1 el comportamiento es
+  byte-idéntico al de F7 (mismos tests en verde sin tocar).
+- **Cierre:** `test_overlay_runtime.js` intacto y en verde; suite v2 nueva
+  (compose byte-exacto con elección/presencia, solape espacial de ventanas
+  disjuntas, NONE no marca sucio); fixtures cruzados Python/JS byte-idénticos
+  con un clip real `reserved=32`; `datachannel.js` sin cambios (test que fija
+  la longitud de payload v2 vía `digitCount`). CI en verde.
+
+### INT-003-E — Horneado de parches arbitrarios
+
+- **Archivo:** `tools/bake_patches.py` (nuevo; `bake_glyphs.py` queda como está).
+- **Acción:** hornear parches desde (a) texto con **cualquier fuente TrueType**
+  (dígitos u otros caracteres, tamaño libre) y (b) imagen PNG con alpha, a la
+  reserva de 32: color → entrada reservada más cercana en Oklab, alpha<umbral
+  → 255. Determinista (aritmética entera o LUT fija); salida = `patch_dir` +
+  `patch_data` listos para el spec JSON de make_slots.
+- **Cierre:** test Python determinista (dos corridas → bytes idénticos; todo
+  byte en [224..255]; alpha→255) cableado en `run_all.py`. CI en verde.
+
+### INT-003-F — Integración de producto y cierre de etapa
+
+- **Archivos:** `tools/make_panel.py` o herramienta nueva, workflow `encode`,
+  `frontend/live-player.html`.
+- **Acción:** generar un sidecar v2 de demo: panel de 20 números (kind=0) +
+  slots candidatos con números grandes en tipografía libre (kind=1, varias
+  posiciones/ventanas); workflow `encode` gana `overlay=patches`
+  (`--reserved 32` + sidecar v2); `live-player.html` lo reproduce y el botón
+  de simulación genera payloads v2 (presencia aleatoria).
+- **Cierre:** CI en verde; clip HQ `reserved=32` publicado por el workflow con
+  SHA registrado; **player local levantado para el operador** con el clip y
+  números en tipografía libre apareciendo en posiciones/momentos aleatorios;
+  docs al día (estado, registro, ejecutados).
+
 ---
 
 ## 5. Definición de terminado

@@ -94,6 +94,21 @@ Reglas de uso:
 | F7-4 | referencia Python byte-idéntica | cerrada | `35a54b3` | 2026-08-28 | `backend/overlay_ref.py` + fixtures cruzados: clip real del encoder (`reserved=10`, 246..255), 8 frames byte-idénticos Python/JS con cargas en f0 y f3; `clear()` vuelve al video base exacto |
 | F7-int | integración de producto | cerrada | `7954bc8`+`243600b`+`fe055de` | 2026-08-28 | `make_clip --reserved 10` (RGB canónicos de `overlay_palette`), panel de 20 números (`tools/make_panel.py` + `backend/overlay_panel.py`), input `overlay` en workflow `encode` (publica `clip.slots`), `live-player.html` reemplaza la demo de laboratorio, y el dither excluye los rects del panel (`protect_panel`, INT-001 §11) |
 
+## Carril INT-003 — parches genéricos de imagen (vía corta)
+
+Diseño cerrado con el operador (D1..D6, 2026-08-28) en
+[`DISENO-PARCHES-GENERICOS.md`](DISENO-PARCHES-GENERICOS.md); tareas en
+`RUNBOOK-IMPLEMENTACION.md` §4-INT-003. La ruleta va con `ASCLVID3` (F6/S-4).
+
+| ID | Tarea | Estado | Commit | Fecha | Notas |
+|---|---|---|---|---|---|
+| INT-003-A | reserva ampliada a 32 (224..255) | pendiente | | | |
+| INT-003-B | ASCLSLOT v2 Python (parches heterogéneos, kind, presupuestos) | pendiente | | | |
+| INT-003-C | slots.js espejo v2 | pendiente | | | |
+| INT-003-D | runtime v2 + referencia Python (NONE, elección, presencia) | pendiente | | | |
+| INT-003-E | bake_patches.py (fuente libre + PNG → reserva 32) | pendiente | | | |
+| INT-003-F | integración: workflow `overlay=patches`, live-player, cierre de etapa | pendiente | | | |
+
 ## Sincronización y fases finales
 
 | ID | Qué | Estado | Fecha | Notas |
@@ -127,16 +142,14 @@ Reglas de uso:
 | 2026-08-28 | el runtime F7 usa el **sidecar** (fase §7.1); la migración a `ASCLVID3` queda para F6 (S-4) como estaba planificado | permite rediseñar el panel sin re-encodear; los readers actuales rechazan ASCLVID3 limpiamente |
 | 2026-08-28 | `make_clip --reserved 10` activa también la protección del panel en el dither (`protect_panel`); los RGB reservados canónicos viven en `backend/overlay_palette.py` y la geometría del panel en `backend/overlay_panel.py` (única fuente para sidecar y dither) | INT-001 §11: el base bajo el panel no deriva; una sola fuente de verdad evita que sidecar y exclusión se desalineen |
 | 2026-08-28 | El operador pide generalizar el overlay a **parches de imagen arbitrarios** (tipografía libre, random de momento/posición, ruleta que coincide con el resultado). Queda como propuesta INT-003 en `DISENO-PARCHES-GENERICOS.md`, con las decisiones D1..D6 abiertas | pedido posterior al cierre de F7; el runtime por frame no cambia (pinta índices y restaura bytes) — lo que se generaliza es metadata, horneado y canal. No arrancar sin resolver D1..D6 con el operador |
+| 2026-08-28 | **D1..D6 resueltas con el operador**: D1 = ampliar la reserva a 32 (224..255, las 10 actuales conservan índice y RGB); D2/D3/D6 = vía corta ahora con presupuesto 5% **por frame** + techo de RAM 25%, ruleta con `ASCLVID3` (F6); D4 = slots candidatos fijos (solape espacial permitido solo con ventanas disjuntas); D5 = canal todo-numérico con dígito de presencia para campos de elección | respuestas del operador en sesión; el diseño concreto (spec ASCLSLOT v2, colores 224..245, wire) quedó en `DISENO-PARCHES-GENERICOS.md` y las tareas INT-003-A..F en el runbook de implementación |
 
 ## Próxima acción
 
-1. **INT-003 — parches genéricos de imagen** (pedido del operador 2026-08-28):
-   generalizar el overlay de glifos a imágenes horneadas (cualquier tipografía,
-   selección aleatoria de momento/posición, caso ruleta que coincide con el
-   resultado del juego). Leer [`DISENO-PARCHES-GENERICOS.md`](DISENO-PARCHES-GENERICOS.md)
-   y **resolver las decisiones D1..D6 con el operador antes de tocar código**.
-   La vía corta (tipografía libre + números random con slots candidatos) sale
-   casi gratis del mecanismo F7; la ruleta exige decidir paleta/área/formato.
+1. **Ejecutar INT-003-A..F en orden** (`RUNBOOK-IMPLEMENTACION.md` §4-INT-003):
+   A reserva 32 → B ASCLSLOT v2 Python → C slots.js espejo → D runtime v2 →
+   E bake_patches → F integración + cierre de etapa con player para el operador.
+   El diseño cerrado está en [`DISENO-PARCHES-GENERICOS.md`](DISENO-PARCHES-GENERICOS.md).
 2. Carril E (F3): **E-12** (refit de paleta a la asignación real) y siguientes E-13..E-18.
    Con `reserved` ya cableado, E-12 debe excluir los índices 246..255 del refit (§4.2).
 3. La referencia HQ **con overlay** ya está publicada: workflow `encode` run 33138773906
