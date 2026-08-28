@@ -58,6 +58,9 @@ def main(argv=None):
                    help="retencion maxima de la paleta anterior")
     p.add_argument("--perceptual-lut-bits", type=int, default=0,
                    help="0=Oklab exacto; 3..7=LUT de cuantizacion offline")
+    p.add_argument("--palette-refit", type=int, default=0,
+                   help="E-12: iteraciones de refit de paleta a la asignacion "
+                        "real (0=off, 3..5 tipico, max 10)")
     p.add_argument("--threshold", type=int, default=0,
                    help="T perceptual RGB (0=lossless); pixel con paleta global/block")
     p.add_argument("--ramp", default="short")
@@ -117,7 +120,8 @@ def main(argv=None):
                                         dither_budget=args.dither_budget,
                                         dither_min_improvement=args.dither_min_improvement,
                                         dither_window=args.dither_window,
-                                        reserved=args.reserved)
+                                        reserved=args.reserved,
+                                        palette_refit=args.palette_refit)
     except ValueError as exc:
         p.error(str(exc))
     if args.reserved and args.image:
@@ -199,6 +203,7 @@ def main(argv=None):
                                     dither_min_improvement=args.dither_min_improvement,
                                     dither_window=args.dither_window,
                                     scene_keyframes=args.scene_keyframes,
+                                    palette_refit=args.palette_refit,
                                     reserved=args.reserved,
                                     reserved_colors=(
                                         overlay_palette.reserved_table(args.reserved)
@@ -228,6 +233,8 @@ def main(argv=None):
               (info["quality_profile"], info["pal_size"], info["bake_smoothing"],
                info["reconstruction"], info["flags"]))
         print("  algoritmo de paleta: %s" % info["palette_algorithm"])
+        if info.get("palette_refit"):
+            print("  refit de paleta (E-12): %d iteraciones" % info["palette_refit"])
         if v2_stats is not None:
             print("  formato: ASCLVID2 lossless; %d regionales + %d predictores "
                   "de %d frames, "
@@ -280,7 +287,8 @@ def main(argv=None):
                                     perceptual_lut_bits=args.perceptual_lut_bits,
                                     dither_budget=args.dither_budget,
                                     dither_min_improvement=args.dither_min_improvement,
-                                    dither_window=args.dither_window)
+                                    dither_window=args.dither_window,
+                                    palette_refit=args.palette_refit)
         v2_stats = None
         bundle_ascl = tmp_ascl
         if args.format == "v2":
@@ -295,6 +303,8 @@ def main(argv=None):
               (info["quality_profile"], info["pal_size"], info["bake_smoothing"],
                info["reconstruction"], info["flags"]))
         print("  algoritmo de paleta: %s" % info["palette_algorithm"])
+        if info.get("palette_refit"):
+            print("  refit de paleta (E-12): %d iteraciones" % info["palette_refit"])
         if v2_stats is not None:
             print("  formato: ASCLVID2 lossless; %d regionales + %d predictores; "
                   "%d B menos (%.2f%%)" %

@@ -117,7 +117,7 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                             dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                             dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
-                            reserved=0):
+                            reserved=0, palette_refit=0):
     """Valida limites del header v1 y opciones compartidas por todos los entrypoints."""
     if mode_name not in MODE_NAMES:
         raise ValueError("mode desconocido: %s" % mode_name)
@@ -156,6 +156,8 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
         raise ValueError("dither-min-improvement debe ser >= 0")
     if int(dither_window) <= 0:
         raise ValueError("dither-window debe ser > 0")
+    if not (0 <= int(palette_refit) <= 10):
+        raise ValueError("palette-refit debe estar entre 0 (off) y 10")
     if int(reserved) < 0:
         raise ValueError("reserved debe ser >= 0")
     if int(reserved) > 0 and int(pal_size) < int(reserved) + 22:
@@ -430,7 +432,7 @@ def iter_scene_palette_frames(frames_iter, pal_size, palette_mode, block_frames,
                               adaptive_config, max_samples=12,
                               palette_algorithm="median-cut",
                               perceptual_lut_bits=0, reserved=0,
-                              reserved_colors=None):
+                              reserved_colors=None, palette_refit=0):
     """Anota frames de bloques fijos o adaptativos con recursos de cuantizacion.
 
     La salida extiende internamente la tupla historica con cuantizador Oklab y un
@@ -484,6 +486,9 @@ def iter_scene_palette_frames(frames_iter, pal_size, palette_mode, block_frames,
             previous_palette=previous_palette,
             temporal_strength=stability, reserved=reserved,
             reserved_colors=reserved_colors)
+        pal_img, palette = refit_block_palette(
+            pal_img, palette, samples, palette_algorithm, palette_refit,
+            reserved=reserved, perceptual_lut_bits=perceptual_lut_bits)
         # El cuantizador solo ve la parte base: el video nunca elige una
         # entrada reservada (INV-3).
         quantizer = make_perceptual_quantizer(
@@ -537,9 +542,102 @@ def quantize_palette_rgb(pal_img, rgb, quantizer=None):
     return quantize_with(pal_img, rgb)
 
 
+def _refit_assignment(pixels, base_palette, palette_algorithm, perceptual_lut_bits):
+    """Asigna pixeles (N, 3) con la MISMA regla de cuantizacion del encode."""
+    if palette_algorithm == "kmeans-oklab":
+        bits = int(perceptual_lut_bits)
+        quantizer = perceptual_palette.PerceptualQuantizer(
+            base_palette, lut_bits=(None if bits == 0 else bits))
+        return np.asarray(quantizer.quantize(pixels), dtype=np.uint8).reshape(-1)
+    return np.asarray(quantize_with(_palette_image(base_palette),
+                                    pixels.reshape(-1, 1, 3)),
+                      dtype=np.uint8).reshape(-1)
+
+
+def refit_palette(palette, sample_imgs, palette_algorithm="median-cut",
+                  iterations=0, reserved=0, perceptual_lut_bits=0):
+    """E-12: refit de paleta a la asignacion real (Lloyd acotado y monotono).
+
+    Reasigna los pixeles de ``sample_imgs`` con la misma regla de cuantizacion
+    que usara el encode y reemplaza cada entrada base por la media
+    (``np.bincount``) de sus pixeles asignados. Una iteracion se acepta solo si
+    baja el error en la metrica del algoritmo (Oklab para kmeans-oklab, RGB
+    para el resto): el refit nunca degrada la paleta de la que parte. Las
+    entradas reservadas (INV-4) no se tocan y la asignacion solo ve la parte
+    base, asi ninguna media converge hacia una reservada (INV-3).
+    """
+    iterations = int(iterations)
+    if not (0 <= iterations <= 10):
+        raise ValueError("palette-refit debe estar entre 0 (off) y 10")
+    palette = np.asarray(palette, dtype=np.uint8)
+    if iterations == 0:
+        return palette
+    reserved = int(reserved)
+    if reserved:
+        base = palette[:len(palette) - reserved]
+        stamped = palette[len(palette) - reserved:]
+    else:
+        base, stamped = palette, None
+    if not len(base):
+        raise ValueError("refit requiere al menos una entrada base")
+    pixels = np.concatenate([np.asarray(im, dtype=np.uint8).reshape(-1, 3)
+                             for im in sample_imgs], axis=0)
+    if not len(pixels):
+        raise ValueError("no hay pixeles para el refit de paleta")
+    perceptual = palette_algorithm == "kmeans-oklab"
+    metric_pixels = (perceptual_palette.srgb_to_oklab(pixels) if perceptual
+                     else pixels.astype(np.float64))
+
+    def assignment_error(candidate, indices):
+        centers = (perceptual_palette.srgb_to_oklab(candidate) if perceptual
+                   else candidate.astype(np.float64))
+        diff = metric_pixels - centers[indices]
+        return float(np.mean(np.einsum("ij,ij->i", diff, diff)))
+
+    current = base
+    indices = _refit_assignment(pixels, current, palette_algorithm,
+                                perceptual_lut_bits)
+    error = assignment_error(current, indices)
+    for _ in range(iterations):
+        counts = np.bincount(indices, minlength=len(current))
+        used = counts > 0
+        refit = current.astype(np.float64).copy()
+        for channel in range(3):
+            sums = np.bincount(indices, weights=pixels[:, channel],
+                               minlength=len(current))
+            refit[used, channel] = sums[used] / counts[used]
+        candidate = np.clip(np.rint(refit), 0, 255).astype(np.uint8)
+        if np.array_equal(candidate, current):
+            break
+        candidate_indices = _refit_assignment(pixels, candidate,
+                                              palette_algorithm,
+                                              perceptual_lut_bits)
+        candidate_error = assignment_error(candidate, candidate_indices)
+        if candidate_error >= error:
+            break
+        current, indices, error = candidate, candidate_indices, candidate_error
+    if stamped is not None:
+        return np.concatenate([current, stamped], axis=0)
+    return current
+
+
+def refit_block_palette(pal_img, palette, sample_imgs, palette_algorithm,
+                        iterations, reserved=0, perceptual_lut_bits=0):
+    """Aplica el refit E-12 y reconstruye la ``pal_img`` solo-base (INV-3)."""
+    if not int(iterations):
+        return pal_img, palette
+    palette = refit_palette(palette, sample_imgs, palette_algorithm,
+                            iterations, reserved=reserved,
+                            perceptual_lut_bits=perceptual_lut_bits)
+    reserved = int(reserved)
+    base = palette[:len(palette) - reserved] if reserved else palette
+    return _palette_image(base), palette
+
+
 def quantize_per_frame(rgb, pal_size, palette_algorithm="median-cut",
                        perceptual_lut_bits=0, previous_palette=None,
-                       temporal_strength=0.0, reserved=0, reserved_colors=None):
+                       temporal_strength=0.0, reserved=0, reserved_colors=None,
+                       palette_refit=0):
     h, w, _ = rgb.shape
     reserved = int(reserved)
     if palette_algorithm != "median-cut":
@@ -548,6 +646,9 @@ def quantize_per_frame(rgb, pal_size, palette_algorithm="median-cut",
             previous_palette=previous_palette,
             temporal_strength=temporal_strength, reserved=reserved,
             reserved_colors=reserved_colors)
+        pal_img, palette = refit_block_palette(
+            pal_img, palette, [rgb], palette_algorithm, palette_refit,
+            reserved=reserved, perceptual_lut_bits=perceptual_lut_bits)
         quantizer = make_perceptual_quantizer(
             palette[:len(palette) - reserved] if reserved else palette,
             palette_algorithm, perceptual_lut_bits)
@@ -566,6 +667,11 @@ def quantize_per_frame(rgb, pal_size, palette_algorithm="median-cut",
     idx = np.asarray(im, dtype=np.uint8).reshape(h, w)
     pal_count = max(int(idx.max()) + 1, 1)
     palette = np.array(im.getpalette()[: pal_count * 3], dtype=np.uint8).reshape(-1, 3)
+    if int(palette_refit):
+        # El refit no agrega entradas: los indices reasignados siguen < pal_count.
+        palette = refit_palette(palette, [rgb], "median-cut", palette_refit)
+        idx = np.asarray(quantize_with(_palette_image(palette), rgb),
+                         dtype=np.uint8).reshape(h, w)
     if stamped is not None:
         # median-cut per-frame conserva su paleta recortada a los colores
         # usados; las reservadas se estampan siempre como las ultimas entradas
@@ -581,7 +687,8 @@ def gray_to_char_idx(gray, ramp_len):
 def frame_to_cells(rgb, gray, mode, ramp_len, pal_size, palette_mode, pal_img,
                    palette_algorithm="median-cut", quantizer=None,
                    perceptual_lut_bits=0, previous_palette=None,
-                   temporal_strength=0.0, reserved=0, reserved_colors=None):
+                   temporal_strength=0.0, reserved=0, reserved_colors=None,
+                   palette_refit=0):
     h, w = gray.shape
     N = h * w
     if mode == MODE_PIXEL:
@@ -590,7 +697,8 @@ def frame_to_cells(rgb, gray, mode, ramp_len, pal_size, palette_mode, pal_img,
             return idx.reshape(N, 1), None, 0
         idx, pal = quantize_per_frame(
             rgb, pal_size, palette_algorithm, perceptual_lut_bits,
-            previous_palette, temporal_strength, reserved, reserved_colors)
+            previous_palette, temporal_strength, reserved, reserved_colors,
+            palette_refit)
         return idx.reshape(N, 1), pal, pal.shape[0]
     char_idx = gray_to_char_idx(gray, ramp_len).reshape(N, 1)
     if mode == MODE_ASCII_BW:
@@ -601,7 +709,8 @@ def frame_to_cells(rgb, gray, mode, ramp_len, pal_size, palette_mode, pal_img,
             return np.concatenate([char_idx, color], axis=1), None, 0
         color, pal = quantize_per_frame(
             rgb, pal_size, palette_algorithm, perceptual_lut_bits,
-            previous_palette, temporal_strength, reserved, reserved_colors)
+            previous_palette, temporal_strength, reserved, reserved_colors,
+            palette_refit)
         return np.concatenate([char_idx, color.reshape(N, 1)], axis=1), pal, pal.shape[0]
     if mode == MODE_ASCII_RGB:
         return np.concatenate([char_idx, rgb.reshape(N, 3)], axis=1), None, 0
@@ -812,7 +921,8 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
                  palette_algorithm="median-cut", perceptual_lut_bits=0,
                  dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                  dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
-                 dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW):
+                 dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
+                 palette_refit=0):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             dither_mode=dither_mode, dither_matrix=dither_matrix,
@@ -820,7 +930,8 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
                             perceptual_lut_bits=perceptual_lut_bits,
                             dither_budget=dither_budget,
                             dither_min_improvement=dither_min_improvement,
-                            dither_window=dither_window)
+                            dither_window=dither_window,
+                            palette_refit=palette_refit)
     if palette_mode != "per-frame":
         raise ValueError(
             "encode_image solo admite --palette per-frame: una imagen no tiene "
@@ -835,7 +946,8 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
     gray = np.asarray(Image.fromarray(rgb, "RGB").convert("L"), np.uint8)
     cells, palette, pal_count = frame_to_cells(rgb, gray, mode, len(ramp), pal_size,
                                                "per-frame", None, palette_algorithm,
-                                               perceptual_lut_bits=perceptual_lut_bits)
+                                               perceptual_lut_bits=perceptual_lut_bits,
+                                               palette_refit=palette_refit)
     dither_details = None
     if dither_mode != "off":
         image_quantizer = make_perceptual_quantizer(
@@ -858,6 +970,7 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
             "pal_size": pal_size, "quality_profile": quality_profile,
             "bake_smoothing": bake_smoothing, "reconstruction": reconstruction,
             "palette_algorithm": palette_algorithm,
+            "palette_refit": int(palette_refit),
             "perceptual_lut_bits": int(perceptual_lut_bits),
             "dither": dither_mode, "dither_matrix": int(dither_matrix),
             "dither_budget": float(dither_budget),
@@ -883,7 +996,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                  dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                  dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
                  reserved=0, reserved_colors=None, scene_keyframes=False,
-                 protect_panel=False):
+                 protect_panel=False, palette_refit=0):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             palette_block_frames, dither_mode, dither_matrix,
@@ -892,7 +1005,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                             adaptive_hard_cut_threshold,
                             adaptive_stability_max, perceptual_lut_bits,
                             dither_budget, dither_min_improvement,
-                            dither_window, reserved=reserved)
+                            dither_window, reserved=reserved,
+                            palette_refit=palette_refit)
     reserved = int(reserved)
     if reserved:
         reserved_colors = _validate_reserved_colors(reserved, reserved_colors)
@@ -937,6 +1051,9 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         pal_img, palette0 = make_global_palette(sample, pal_size, palette_algorithm,
                                                 reserved=reserved,
                                                 reserved_colors=reserved_colors)
+        pal_img, palette0 = refit_block_palette(
+            pal_img, palette0, sample, palette_algorithm, palette_refit,
+            reserved=reserved, perceptual_lut_bits=perceptual_lut_bits)
         # Solo la parte base cuantiza: el video no puede elegir reservadas (INV-3)
         global_quantizer = make_perceptual_quantizer(
             palette0[:len(palette0) - reserved] if reserved else palette0,
@@ -948,7 +1065,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             source_iter, pal_size, palette_mode, effective_block_frames,
             adaptive_config, palette_algorithm=palette_algorithm,
             perceptual_lut_bits=perceptual_lut_bits, reserved=reserved,
-            reserved_colors=reserved_colors)
+            reserved_colors=reserved_colors, palette_refit=palette_refit)
     else:
         frames_iter = iter_video_frames(in_path, cols, rows, fps, bake_smoothing)
     delta_allowed = (not has_palette) or use_global or use_scene_palette
@@ -1042,7 +1159,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                                                    previous_palette=previous_frame_palette,
                                                    temporal_strength=per_frame_stability,
                                                    reserved=reserved,
-                                                   reserved_colors=reserved_colors)
+                                                   reserved_colors=reserved_colors,
+                                                   palette_refit=palette_refit)
         if dither_mode != "off":
             # La misma paleta base que construyo el PairLUT: el dither no ve
             # ni propone entradas reservadas (INV-3).
@@ -1111,6 +1229,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             "quality_profile": quality_profile, "bake_smoothing": bake_smoothing,
             "reconstruction": reconstruction,
             "palette_algorithm": palette_algorithm,
+            "palette_refit": int(palette_refit),
             "perceptual_lut_bits": int(perceptual_lut_bits),
             "dither": dither_mode, "dither_matrix": int(dither_matrix),
             "dither_budget": float(dither_budget),
@@ -1169,6 +1288,9 @@ def main(argv=None):
                    help="retencion maxima de paleta previa (0..1)")
     p.add_argument("--perceptual-lut-bits", type=int, default=0,
                    help="0=cuantizacion Oklab exacta; 3..7=LUT offline")
+    p.add_argument("--palette-refit", type=int, default=0,
+                   help="E-12: iteraciones de refit de paleta a la asignacion "
+                        "real (0=off, 3..5 tipico, max 10)")
     p.add_argument("--ramp", default="short", help="'short', 'long' o cadena propia")
     p.add_argument("--char-aspect", type=float, default=DEFAULT_CHAR_ASPECT)
     p.add_argument("--compress", choices=["auto", "none", "zlib"], default="auto")
@@ -1215,7 +1337,8 @@ def main(argv=None):
                                 perceptual_lut_bits=args.perceptual_lut_bits,
                                 dither_budget=args.dither_budget,
                                 dither_min_improvement=args.dither_min_improvement,
-                                dither_window=args.dither_window)
+                                dither_window=args.dither_window,
+                                palette_refit=args.palette_refit)
     except ValueError as exc:
         p.error(str(exc))
     ext = os.path.splitext(args.input)[1].lower()
@@ -1242,7 +1365,8 @@ def main(argv=None):
                             dither_budget=args.dither_budget,
                             dither_min_improvement=args.dither_min_improvement,
                             dither_window=args.dither_window,
-                            scene_keyframes=args.scene_keyframes)
+                            scene_keyframes=args.scene_keyframes,
+                            palette_refit=args.palette_refit)
         secs = info["n_frames"] / float(info["fps"]) or 1
         print("OK %s  (video, %s, paleta %s)" % (args.output, info["mode"], info["palette_mode"]))
         print("  fuente   : %dx%d px" % info["src"])
@@ -1289,7 +1413,8 @@ def main(argv=None):
                             perceptual_lut_bits=args.perceptual_lut_bits,
                             dither_budget=args.dither_budget,
                             dither_min_improvement=args.dither_min_improvement,
-                            dither_window=args.dither_window)
+                            dither_window=args.dither_window,
+                            palette_refit=args.palette_refit)
         print("OK %s  (imagen, %s)" % (args.output, info["mode"]))
         print("  grilla   : %dx%d celdas" % (info["cols"], info["rows"]))
         print("  calidad  : perfil %s, hasta %d colores" %
