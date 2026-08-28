@@ -248,7 +248,9 @@ function makeClipV1() {
      * es lo que evita que el delta se aplique sobre glifos */
     maskDelta(N, [[8 * COLS + 10, 10], [8 * COLS + 11, 11], [0, 12], [100, 13]]),
     maskDelta(N, [[5, 50], [6, 51], [200, 52]]),
-    block(TAG_ZLIB, palette256(), zlib.deflateSync(key2)),
+    /* keyframe intermedio SIN paleta: con paleta global el reader rechaza la
+     * reemision, y la cola reservada 246..255 persiste igual (INV-4) */
+    block(TAG_ZLIB, null, zlib.deflateSync(key2)),
     maskDelta(N, [[9 * COLS + 17, 70], [300, 71]])
   ], COLS, ROWS, 256);
 }
