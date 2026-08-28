@@ -21,6 +21,7 @@ outputs/*
 tests/fixtures/slots-generated/
 tests/fixtures/overlay-generated/
 tests/fixtures/slots-v2-generated/
+tests/fixtures/overlay-v2-generated/
 
 # Temporales del sistema y editores
 .DS_Store
