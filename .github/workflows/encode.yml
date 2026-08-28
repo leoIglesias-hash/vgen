@@ -98,7 +98,11 @@ jobs:
           else
             OVERLAY_ARGS=""
           fi
-          python backend/make_clip.py "$SRC" \
+          # E-14: RSS maximo del encode, medible en el log y en el summary
+          if ! command -v /usr/bin/time > /dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq time
+          fi
+          /usr/bin/time -v -o time.txt python backend/make_clip.py "$SRC" \
             --format "${{ inputs.format }}" \
             --profile "${{ inputs.profile }}" \
             --fps "${{ inputs.fps }}" \
@@ -109,6 +113,7 @@ jobs:
             $OVERLAY_ARGS \
             ${{ inputs.extra }} \
             --out outputs/clip.asclv
+          grep -E "Maximum resident|Elapsed" time.txt
       - name: Sidecar del overlay (F7 panel v1 / INT-003 parches v2)
         if: ${{ inputs.overlay != 'off' }}
         run: |
@@ -136,6 +141,8 @@ jobs:
             echo '```'
             cat sha256.txt
             echo '```'
+            echo ""
+            grep -E "Maximum resident|Elapsed" time.txt || true
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Preview MP4 de control (opcional)
         if: ${{ inputs.preview }}
@@ -154,6 +161,7 @@ jobs:
             bench.md
             sha256.txt
             sha-slots.txt
+            time.txt
           retention-days: 14
       - name: Publicar preview.mp4
         if: ${{ inputs.preview }}
