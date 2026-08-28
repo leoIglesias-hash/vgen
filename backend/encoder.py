@@ -322,6 +322,29 @@ def _kmeans_rgb_palette(sample_imgs, pal_size, max_samples=65536, seed=20260811,
         _kmeans_rgb_numpy(samples, pal_size, max_iter=30, tolerance=0.25))
 
 
+def _stabilize_rgb_palette(palette, previous_palette, temporal_strength):
+    """E-15: alineacion 1:1 con la paleta previa + fusion acotada, en RGB.
+
+    Reutiliza la regla generica ``_align_to_previous`` (la misma de
+    kmeans-oklab) sobre los valores RGB: conserva el significado de los
+    indices entre bloques para que las cadenas DELTA no se rompan por
+    permutaciones, y con ``temporal_strength`` interpola hacia la paleta
+    anterior. Sin paleta previa, o con largos distintos (p.ej. per-frame
+    recortado), devuelve la paleta intacta (mismo objeto).
+    """
+    if previous_palette is None:
+        return palette
+    previous = np.asarray(previous_palette, dtype=np.uint8)
+    if previous.shape != palette.shape:
+        return palette
+    aligned = perceptual_palette._align_to_previous(
+        palette.astype(np.float64), previous.astype(np.float64))
+    strength = float(temporal_strength)
+    if strength > 0.0:
+        aligned = (1.0 - strength) * aligned + strength * previous
+    return np.clip(np.rint(aligned), 0, 255).astype(np.uint8)
+
+
 def make_global_palette(sample_imgs, pal_size, palette_algorithm="median-cut",
                         previous_palette=None, temporal_strength=0.0, reserved=0,
                         reserved_colors=None, uint8_refine=0):
@@ -367,6 +390,8 @@ def make_global_palette(sample_imgs, pal_size, palette_algorithm="median-cut",
         raise ValueError("uint8_refine solo aplica a kmeans-oklab (E-13)")
     if palette_algorithm == "kmeans-rgb":
         palette = _kmeans_rgb_palette(sample_imgs, pal_size)
+        palette = _stabilize_rgb_palette(palette, previous_palette,
+                                         temporal_strength)
         return _palette_image(palette), palette
     h = sum(im.shape[0] for im in sample_imgs)
     w = sample_imgs[0].shape[1]
@@ -385,6 +410,13 @@ def make_global_palette(sample_imgs, pal_size, palette_algorithm="median-cut",
         colors=pal_size, method=methods[palette_algorithm], dither=Image.NONE)
     palette = np.array(pal_img.getpalette()[: pal_size * 3],
                        dtype=np.uint8).reshape(-1, 3)
+    stabilized = _stabilize_rgb_palette(palette, previous_palette,
+                                        temporal_strength)
+    if stabilized is not palette:
+        # El orden (y con strength la fusion) cambio: la imagen de
+        # cuantizacion debe mapear a la paleta estabilizada.
+        palette = stabilized
+        pal_img = _palette_image(palette)
     return pal_img, palette
 
 
@@ -723,11 +755,27 @@ def quantize_per_frame(rgb, pal_size, palette_algorithm="median-cut",
     idx = np.asarray(im, dtype=np.uint8).reshape(h, w)
     pal_count = max(int(idx.max()) + 1, 1)
     palette = np.array(im.getpalette()[: pal_count * 3], dtype=np.uint8).reshape(-1, 3)
-    if int(palette_refit):
-        # El refit no agrega entradas: los indices reasignados siguen < pal_count.
-        palette = refit_palette(palette, [rgb], "median-cut", palette_refit)
-        idx = np.asarray(quantize_with(_palette_image(palette), rgb),
-                         dtype=np.uint8).reshape(h, w)
+    if previous_palette is not None or int(palette_refit):
+        # E-15: la paleta previa llega completa; la parte reservada no se
+        # estabiliza (INV-4). Con recortes de distinto largo no hay par y
+        # la estabilizacion es un no-op.
+        base_previous = None
+        if previous_palette is not None:
+            base_previous = np.asarray(previous_palette, dtype=np.uint8)
+            if reserved and len(base_previous) >= reserved:
+                base_previous = base_previous[:len(base_previous) - reserved]
+        stabilized = _stabilize_rgb_palette(palette, base_previous,
+                                            temporal_strength)
+        requantize = stabilized is not palette
+        palette = stabilized
+        if int(palette_refit):
+            # El refit no agrega entradas: los indices siguen < pal_count.
+            palette = refit_palette(palette, [rgb], "median-cut",
+                                    palette_refit)
+            requantize = True
+        if requantize:
+            idx = np.asarray(quantize_with(_palette_image(palette), rgb),
+                             dtype=np.uint8).reshape(h, w)
     if stamped is not None:
         # median-cut per-frame conserva su paleta recortada a los colores
         # usados; las reservadas se estampan siempre como las ultimas entradas
@@ -1227,10 +1275,10 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         # corte cromatico fuerte entre frames consecutivos la reinicia.
         # E-10: con keyframes por corte, el descriptor se calcula siempre;
         # sin esto hard_cut es constante False en --palette global y block.
+        # E-15: la estabilidad per-frame ahora existe en los 4 algoritmos.
         need_color_descriptor = (dither_state is not None or
                                  scene_keyframes or
-                                 (palette_algorithm == "kmeans-oklab" and
-                                  has_palette and palette_mode == "per-frame"))
+                                 (has_palette and palette_mode == "per-frame"))
         current_descriptor = (adaptive_palette.describe_frame_color(
             (rgb, gray), adaptive_config) if need_color_descriptor else None)
         transition_score = 1.0 if previous_color_descriptor is None else 0.0
@@ -1250,8 +1298,10 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         if scene_cut_keyframe and not block_start:
             scene_cut_keyframes += 1
         per_frame_stability = 0.0
-        if (palette_algorithm == "kmeans-oklab" and has_palette and
-                palette_mode == "per-frame" and previous_frame_palette is not None):
+        if (has_palette and palette_mode == "per-frame" and
+                previous_frame_palette is not None):
+            # E-15: los 4 algoritmos estabilizan; kmeans-oklab en su builder,
+            # el resto via _stabilize_rgb_palette (alineacion + fusion).
             per_frame_stability = adaptive_palette.temporal_stability_strength(
                 transition_score, hard_cut=hard_cut, config=adaptive_config)
         cells, palette, pal_count = frame_to_cells(rgb, gray, mode, len(ramp), pal_size,
