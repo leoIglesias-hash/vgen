@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCILINE live</title>
+<!--
+  F7: runtime REAL de la intervencion matricial (INT-001), reemplaza a la
+  demo de laboratorio. Requiere un clip encodeado con reserved=10 y su
+  sidecar clip.slots (workflow encode con overlay=on):
+    - los glifos se escriben como indices reservados (246..255) sobre la
+      matriz de celdas del reader: un solo layer, jamas un segundo canvas;
+    - el orden por frame es beforeSeek -> seek -> afterSeek (overlay.js);
+    - los valores llegan por el canal de datos (outputs/data.txt, XHR con
+      serial monotonico y validacion en 5 pasos) o con el boton de prueba;
+    - si el clip no tiene reserva o el sidecar no coincide, el video se
+      reproduce igual, sin overlay (INV-7).
+-->
+<style>
+  :root{ color-scheme: dark; }
+  body{ margin:0; background:#0d0d10; color:#e7e7ea; font:14px/1.5 system-ui,sans-serif; }
+  header{ padding:10px 16px; border-bottom:1px solid #26262c; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  h1{ font-size:15px; margin:0 12px 0 0; }
+  select,button{ background:#1a1a20; color:#e7e7ea; border:1px solid #33333c; border-radius:6px; padding:6px 9px; font:inherit; cursor:pointer; }
+  button:disabled{ opacity:.45; cursor:default; }
+  #stage{ display:flex; justify-content:center; padding:14px; }
+  canvas{ background:#000; max-width:100%; image-rendering:pixelated; border:1px solid #26262c; }
+  #status{ padding:8px 16px; color:#8a8a92; font-family:ui-monospace,monospace; font-size:12px; }
+  .pill{ padding:2px 8px; border-radius:999px; background:#1a1a20; border:1px solid #33333c; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ASCILINE &middot; live (runtime F7)</h1>
+  <label>zoom <select id="zoom"><option selected>1</option><option>2</option></select></label>
+  <button id="play" disabled>Play</button>
+  <button id="simulate" disabled>Simular carga</button>
+  <button id="clearOverlay" disabled>Limpiar panel</button>
+  <span id="badge" class="pill">cargando...</span>
+</header>
+<div id="stage"><canvas id="cv" width="320" height="180"></canvas></div>
+<div id="status">Cargando clip y sidecar...</div>
+<audio id="audio" style="display:none"></audio>
+
+<script src="inflate.js"></script>
+<script src="reader.js"></script>
+<script src="reader-v2.js"></script>
+<script src="reader-factory.js"></script>
+<script src="render-canvas2d.js"></script>
+<script src="render-webgl.js"></script>
+<script src="slots.js"></script>
+<script src="overlay.js"></script>
+<script src="datachannel.js"></script>
+<script>
+(function(){
+  "use strict";
+  var CLIP_URL="./outputs/clip.asclv";
+  var SLOTS_URL="./outputs/clip.slots";
+  var DATA_URL="./outputs/data.txt";
+
+  var cv=document.getElementById("cv"), audio=document.getElementById("audio");
+  var elPlay=document.getElementById("play"), elZoom=document.getElementById("zoom");
+  var elBadge=document.getElementById("badge"), elStatus=document.getElementById("status");
+  var elSim=document.getElementById("simulate"), elClear=document.getElementById("clearOverlay");
+  var reader=null, renderer=null, overlay=null, channel=null;
+  var playing=false, hasAudio=false, startT=0, raf=0, lastShown=-1, simSerial=0;
+  var urlAPI=window.URL || window.webkitURL;
+  var perf=window.performance;
+  var now=(perf && typeof perf.now==="function")?function(){return perf.now();}:function(){return new Date().getTime();};
+  var nativeRequestFrame=window.requestAnimationFrame, nativeCancelFrame=window.cancelAnimationFrame;
+  var requestFrame, cancelFrame;
+  if(nativeRequestFrame && nativeCancelFrame){
+    requestFrame=function(fn){ return nativeRequestFrame.call(window,fn); };
+    cancelFrame=function(id){ nativeCancelFrame.call(window,id); };
+  } else {
+    requestFrame=function(fn){ return window.setTimeout(function(){fn(now());},16); };
+    cancelFrame=function(id){ window.clearTimeout(id); };
+  }
+  function log(s){ elStatus.textContent=s; }
+
+  /* ---- orden por frame de INT-001 (§9.2): el overlay envuelve al seek ---- */
+  function seekTo(frame){
+    if(overlay) overlay.beforeSeek();
+    reader.seek(frame);
+    if(overlay) overlay.afterSeek();
+  }
+  function drawFrame(frame){
+    seekTo(frame);
+    renderer.draw(reader);
+  }
+
+  function overlayStatus(){
+    if(!overlay) return "overlay inactivo";
+    var s="overlay activo ("+overlay.digitCount+" digitos)";
+    if(channel && channel.lastSerial>=0) s+=" - serial "+channel.lastSerial;
+    if(channel && channel.lastError) s+=" - canal: "+channel.lastError;
+    return s;
+  }
+
+  function pickRenderer(){
+    var old=cv, nc=document.createElement("canvas");
+    nc.id="cv"; old.parentNode.replaceChild(nc,old); cv=nc;
+    var cellPx=parseInt(elZoom.value,10), r=null;
+    if(renderer && renderer.dispose){ try{ renderer.dispose(true); }catch(e1){} }
+    try{
+      var w=new window.WebGLRenderer(cv);
+      if(w.init(reader,cellPx,"nearest")){ r=w; } else if(w.dispose){ w.dispose(true); }
+    }catch(e2){ r=null; }
+    if(!r){ r=new window.Canvas2DRenderer(cv); r.init(reader,cellPx,"nearest"); }
+    renderer=r;
+  }
+
+  /* ---- sidecar + canal: el fallo de cualquiera deja el video intacto ---- */
+  function tryAttachOverlay(bytes){
+    var h=reader.header, tail, i, meta;
+    if(h.palSize!==256 || reader.paletteEntries!==256){
+      log("Clip sin paleta completa: overlay inactivo (regenerar con overlay=on). El video sigue.");
+      return;
+    }
+    tail=new Uint8Array(30);
+    for(i=0;i<30;i++) tail[i]=reader.palette[246*3+i];
+    try{
+      meta=window.ASCL_parseSlots(bytes,h.cols,h.rows,h.nFrames,tail);
+    }catch(err){
+      log("Sidecar rechazado: "+err.message+". El video sigue sin overlay.");
+      return;
+    }
+    overlay=window.ASCILINEOverlay.attach(reader,meta);
+    if(!overlay){
+      log("attach devolvio null (sidecar de otro bundle): video sin overlay.");
+      return;
+    }
+    channel=window.ASCILINEDataChannel.create(DATA_URL,overlay,{intervalMs:15000});
+    if(channel) channel.start();
+    elSim.disabled=false;
+    elClear.disabled=false;
+    log(overlayStatus()+" - panel de "+overlay.nSlots+" slots; datos: "+DATA_URL+" cada 15 s.");
+  }
+
+  elSim.onclick=function(){
+    if(!overlay) return;
+    var digits="", i;
+    for(i=0;i<overlay.digitCount;i++) digits+=String(Math.floor(Math.random()*10));
+    simSerial++;
+    if(overlay.setValues(digits)){
+      if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
+      log("Carga simulada #"+simSerial+" aplicada ("+digits.substring(0,8)+"...). "+overlayStatus());
+    }
+  };
+  elClear.onclick=function(){
+    if(!overlay) return;
+    overlay.clear();
+    if(reader && lastShown>=0 && !playing){ renderer.draw(reader); }
+    log("Panel limpio (clear): matriz byte-identica al video base. "+overlayStatus());
+  };
+
+  function openAscl(buf,off,len){
+    var api=window.ASCILINEReader||window.ASCL;
+    reader=api.parse(buf,off,len);
+    pickRenderer();
+    reader.decodedIndex=-1;
+    seekTo(0); renderer.draw(reader); lastShown=0;
+    elPlay.disabled=false;
+    var h=reader.header;
+    elBadge.textContent="ASCL v"+h.version+" "+h.cols+"x"+h.rows+" @"+h.fps+"fps";
+  }
+  function loadBundle(buf){
+    var bytes=new Uint8Array(buf);
+    if(bytes.length<21){ throw new Error("bundle truncado"); }
+    var s=String.fromCharCode(bytes[0],bytes[1],bytes[2],bytes[3],bytes[4],bytes[5],bytes[6],bytes[7]);
+    if(!(s==="ASCLVID1" || s==="ASCLVID2")){ throw new Error("magic invalido"); }
+    if(!(bytes[7]===49 || bytes[7]===50)){ throw new Error("version de envelope desconocida"); }
+    var dv=new DataView(buf);
+    var asclLen=dv.getUint32(8,true), audioLen=dv.getUint32(12,true);
+    if(asclLen<32||16+asclLen+audioLen!==buf.byteLength){ throw new Error("bundle invalido"); }
+    if(bytes[7]-48!==bytes[20]){ throw new Error("version del envelope no coincide con el ASCL interno"); }
+    if(audioLen>0 && urlAPI && urlAPI.createObjectURL){
+      var blob=new Blob([new Uint8Array(buf,16+asclLen,audioLen)],{type:"audio/mpeg"});
+      audio.src=urlAPI.createObjectURL(blob);
+      audio.onended=function(){ stop(); };
+      hasAudio=true;
+    }
+    openAscl(buf,16,asclLen);
+  }
+  function frameNow(){
+    var t=hasAudio?audio.currentTime:(now()-startT)/1000;
+    return Math.floor(t*reader.header.fps);
+  }
+  function loop(){
+    if(!playing) return;
+    var target=frameNow(), n=reader.header.nFrames;
+    if(target>=n){ if(hasAudio){ target=n-1; } else { stop(); return; } }
+    if(target!==lastShown){
+      try{
+        drawFrame(target);
+      }catch(err){
+        stop();
+        log("Error de reproduccion en el frame "+target+": "+err.message);
+        return;
+      }
+      lastShown=target;
+    }
+    raf=requestFrame(loop);
+  }
+  function start(){
+    playing=true; elPlay.textContent="Pause";
+    startT=now()-(lastShown/reader.header.fps)*1000;
+    if(hasAudio){ audio.play(); }
+    raf=requestFrame(loop);
+  }
+  function stop(){ playing=false; elPlay.textContent="Play"; if(raf) cancelFrame(raf); if(hasAudio) audio.pause(); }
+  elPlay.onclick=function(){ playing?stop():start(); };
+  elZoom.onchange=function(){
+    if(!reader) return;
+    pickRenderer();
+    reader.decodedIndex=-1;
+    var frame=lastShown<0?0:lastShown;
+    drawFrame(frame);
+  };
+
+  var x=new XMLHttpRequest();
+  x.open("GET",CLIP_URL,true); x.responseType="arraybuffer";
+  x.onload=function(){
+    try{
+      loadBundle(x.response);
+      var s=new XMLHttpRequest();
+      s.open("GET",SLOTS_URL,true); s.responseType="arraybuffer";
+      s.onload=function(){
+        if(s.status===200 && s.response && s.response.byteLength){
+          tryAttachOverlay(new Uint8Array(s.response));
+        } else {
+          log("Sin sidecar ("+SLOTS_URL+"): video sin overlay. Generarlo con el workflow encode (overlay=on).");
+        }
+      };
+      s.onerror=function(){ log("Sin sidecar: video sin overlay."); };
+      s.send();
+    }catch(err){ log("Error: "+err.message); }
+  };
+  x.onerror=function(){ log("No se pudo cargar "+CLIP_URL+" (servir por HTTP con tools/serve-local.ps1)."); };
+  x.send();
+})();
+</script>
+</body>
+</html>
