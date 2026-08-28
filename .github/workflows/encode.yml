@@ -44,6 +44,10 @@ on:
       tile:
         description: "E-09: tile regional v2 (4..32) o 'sweep' para barrer {4,8,12,16,24,32}"
         default: "16"
+      overlay:
+        description: "F7: reservar 10 entradas de paleta (246..255) y publicar clip.slots (panel de 20 numeros)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -83,6 +87,11 @@ jobs:
           else
             TILE_ARGS="--tile-size ${{ inputs.tile }}"
           fi
+          if [ "${{ inputs.overlay }}" = "true" ]; then
+            OVERLAY_ARGS="--reserved 10"
+          else
+            OVERLAY_ARGS=""
+          fi
           python backend/make_clip.py "$SRC" \
             --format "${{ inputs.format }}" \
             --profile "${{ inputs.profile }}" \
@@ -91,8 +100,16 @@ jobs:
             --palette-algorithm "${{ inputs.algorithm }}" \
             --dither "${{ inputs.dither }}" \
             $TILE_ARGS \
+            $OVERLAY_ARGS \
             ${{ inputs.extra }} \
             --out outputs/clip.asclv
+      - name: Sidecar del panel (F7, opcional)
+        if: ${{ inputs.overlay }}
+        run: |
+          python tools/bake_glyphs.py --out outputs/glyphs.bin
+          python tools/make_panel.py outputs/clip.asclv \
+            --glyphs outputs/glyphs.bin --out outputs/clip.slots
+          sha256sum outputs/clip.slots | tee -a sha-slots.txt
       - name: Medición (bench_ref) y SHA-256
         run: |
           python tools/bench_ref.py outputs/clip.asclv \
@@ -101,7 +118,7 @@ jobs:
           {
             echo "## Resultado del encode"
             echo ""
-            echo "Fuente: \`${{ inputs.source }}\` · perfil \`${{ inputs.profile }}\` · ${{ inputs.fps }} fps · ${{ inputs.palette }}/${{ inputs.algorithm }} · dither ${{ inputs.dither }} · ${{ inputs.format }} · zopfli ${{ inputs.zopfli }} · tile ${{ inputs.tile }}"
+            echo "Fuente: \`${{ inputs.source }}\` · perfil \`${{ inputs.profile }}\` · ${{ inputs.fps }} fps · ${{ inputs.palette }}/${{ inputs.algorithm }} · dither ${{ inputs.dither }} · ${{ inputs.format }} · zopfli ${{ inputs.zopfli }} · tile ${{ inputs.tile }} · overlay ${{ inputs.overlay }}"
             echo ""
             cat bench.md
             echo ""
@@ -121,8 +138,10 @@ jobs:
           name: clip-asclv
           path: |
             outputs/clip.asclv
+            outputs/clip.slots
             bench.md
             sha256.txt
+            sha-slots.txt
           retention-days: 14
       - name: Publicar preview.mp4
         if: ${{ inputs.preview }}

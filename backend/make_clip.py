@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import encoder
 import ascl_bundle
 import ascl_v2
+import overlay_palette
 
 
 def main(argv=None):
@@ -91,6 +92,9 @@ def main(argv=None):
     p.add_argument("--tile-sweep", action="store_true",
                    help="E-09: barre %s y conserva el archivo menor"
                    % (ascl_v2.SWEEP_TILE_SIZES,))
+    p.add_argument("--reserved", type=int, default=0,
+                   help="F7: entradas de paleta reservadas al overlay (0 o 10); "
+                   "con 10 se estampan los RGB canonicos de overlay_palette")
     p.add_argument("--image", action="store_true", help="forzar modo imagen (sin audio)")
     p.add_argument("--keep", action="store_true",
                    help="conservar .ascl/.mp3; rechaza nombres intermedios existentes")
@@ -112,9 +116,12 @@ def main(argv=None):
                                         perceptual_lut_bits=args.perceptual_lut_bits,
                                         dither_budget=args.dither_budget,
                                         dither_min_improvement=args.dither_min_improvement,
-                                        dither_window=args.dither_window)
+                                        dither_window=args.dither_window,
+                                        reserved=args.reserved)
     except ValueError as exc:
         p.error(str(exc))
+    if args.reserved and args.image:
+        p.error("--reserved es para video (el overlay F7 no cubre imagenes)")
 
     here = os.path.dirname(os.path.abspath(__file__))
     out_dir = os.path.abspath(os.path.join(here, "..", "outputs"))
@@ -189,7 +196,11 @@ def main(argv=None):
                                     dither_budget=args.dither_budget,
                                     dither_min_improvement=args.dither_min_improvement,
                                     dither_window=args.dither_window,
-                                    scene_keyframes=args.scene_keyframes)
+                                    scene_keyframes=args.scene_keyframes,
+                                    reserved=args.reserved,
+                                    reserved_colors=(
+                                        overlay_palette.RESERVED_RGB
+                                        if args.reserved else None))
         mp3 = os.path.splitext(tmp_ascl)[0] + ".mp3"
         mp3 = mp3 if (info.get("audio") and os.path.exists(mp3)) else None
         if mp3 is None:
