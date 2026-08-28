@@ -793,3 +793,25 @@ con dither off; sin proteccion el mismo fixture SI trama dentro del panel
   serial nuevo con un campo invalido no se consume y puede reintentarse.
 - `pad=0` deja los ceros a la izquierda como glifo vacio (10); `pad=1` los
   pinta. Mismo comportamiento en JS y Python, cubierto por ambos tests.
+
+### Referencia HQ con overlay (workflow encode, run 33138773906)
+
+`overlay=on`, `zopfli=on`, `tile=16`, resto perfil HQ de produccion:
+
+```text
+clip.asclv (bundle)   17.197.813 B   231 frames, 94 keyframes, 9 epocas
+                      tags ZLIB:94 DELTA_MASK:136 RDELTA_RAW:1
+PSNR RGB / Oklab      34,14 / 0,00799   (sin reserva: 34,29 / 0,00793 - la
+                      paleta base pasa de 256 a 246 colores; costo esperado
+                      de la reserva, INT-001 §4.1)
+SHA-256 clip          7da584f177025d69485fa5732fbec2404c9e451e2fb3b9d301e295217555a51d
+clip.slots            1.950 B, panel de 20 campos / 40 slots (glifos E-06)
+SHA-256 slots         ec77023cb60826f1bb9b42c00eadb5ea72c49fc5b707c734e5855969f70c7c56
+```
+
+Reproduccion verificada en navegador con `live-player.html` + serve-local:
+attach activo sobre el clip real, los 20 numeros de `data.txt` pintados y
+persistentes a traves de cortes de escena y cadenas DELTA; el canal rechazo en
+vivo una recarga con el mismo serial ("serial repetido o retrocedido") y la
+carga simulada repinto el panel. La referencia HQ **sin** overlay
+(`ebfe2eb4…4b36`) sigue vigente para comparaciones de compresion del carril E.
