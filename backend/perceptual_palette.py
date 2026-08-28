@@ -305,6 +305,64 @@ def _weighted_samples(sample_imgs, max_samples, gradient_boost, min_unique=1):
              "unique_sample_count": int(len(selected_rgb))})
 
 
+class StreamingColorAggregate(object):
+    """E-14: agrega los colores unicos de un stream sin materializar frames.
+
+    Cada frame aporta TODOS sus pixeles con la masa anti-banding de
+    ``smooth_gradient_weights``; los colores identicos se colapsan con
+    ``_aggregate_rgb`` sin perder masa. ``compact_threshold`` acota la RAM del
+    acumulador: al superarlo, la lista pendiente se re-agrega. El resultado
+    alimenta ``build_perceptual_palette(sample_aggregate=...)`` y elimina el
+    limite historico de 65.536 muestras.
+    """
+
+    def __init__(self, gradient_boost=3.0, compact_threshold=(1 << 22)):
+        self.gradient_boost = float(gradient_boost)
+        self.compact_threshold = int(compact_threshold)
+        if self.compact_threshold <= 0:
+            raise ValueError("compact_threshold debe ser > 0")
+        self._colors = []
+        self._weights = []
+        self._pending = 0
+        self.frame_count = 0
+        self.pixel_count = 0
+
+    def add_frame(self, rgb):
+        image = _as_srgb8(rgb)
+        if image.ndim != 3 or image.shape[2] != 3:
+            raise ValueError("cada frame debe tener forma HxWx3")
+        if not image.size:
+            return
+        lab = srgb_to_oklab(image)
+        weights = _smooth_gradient_weights_from_lab(
+            lab, self.gradient_boost, 0.020, 0.080, 0.012)
+        colors, mass = _aggregate_rgb(image.reshape(-1, 3),
+                                      weights.reshape(-1))
+        self._colors.append(colors)
+        self._weights.append(mass)
+        self._pending += len(colors)
+        self.frame_count += 1
+        self.pixel_count += int(image.shape[0]) * int(image.shape[1])
+        if self._pending > self.compact_threshold:
+            self._compact()
+
+    def _compact(self):
+        if len(self._colors) > 1:
+            colors, weights = _aggregate_rgb(
+                np.concatenate(self._colors, axis=0),
+                np.concatenate(self._weights, axis=0))
+            self._colors = [colors]
+            self._weights = [weights]
+            self._pending = len(colors)
+
+    def result(self):
+        """Devuelve (colores unicos Nx3 uint8, masa float64 N)."""
+        if not self.frame_count:
+            raise ValueError("el agregado no recibio ningun frame")
+        self._compact()
+        return self._colors[0], self._weights[0]
+
+
 def _nearest_indices(lab, palette_lab, chunk_size=DEFAULT_CHUNK_SIZE,
                      return_distance=False):
     values = np.asarray(lab, dtype=np.float64).reshape(-1, 3)
@@ -485,8 +543,13 @@ def build_perceptual_palette(sample_imgs, pal_size, previous_palette=None,
                              max_samples=DEFAULT_MAX_SAMPLES,
                              gradient_boost=3.0, max_iter=40, tolerance=1e-5,
                              chunk_size=DEFAULT_CHUNK_SIZE, return_info=False,
-                             reserved=0, uint8_refine=0):
+                             reserved=0, uint8_refine=0, sample_aggregate=None):
     """Construye una paleta K-means en Oklab con muestreo anti-banding.
+
+    ``sample_aggregate`` (E-14) acepta ``(colores Nx3 uint8, masa float64 N)``
+    de ``StreamingColorAggregate``: la paleta se ajusta sobre TODOS los
+    pixeles del stream (colapsados por color exacto, sin el limite de
+    65.536 muestras) y ``sample_imgs`` debe ser None o vacio.
 
     ``previous_palette`` debe tener el mismo largo. Su orden se conserva y
     ``temporal_strength`` (0..1) interpola los centros nuevos con los anteriores.
@@ -520,8 +583,30 @@ def build_perceptual_palette(sample_imgs, pal_size, previous_palette=None,
     uint8_refine = int(uint8_refine)
     if not (0 <= uint8_refine <= 10):
         raise ValueError("uint8_refine debe estar entre 0 (off) y 10")
-    samples, weights, sampling_info = _weighted_samples(
-        sample_imgs, max_samples, gradient_boost, min_unique=pal_size)
+    if sample_aggregate is not None:
+        if sample_imgs:
+            raise ValueError(
+                "sample_aggregate excluye sample_imgs: el agregado ya "
+                "representa todos los pixeles")
+        aggregate_colors, aggregate_mass = sample_aggregate
+        aggregate_colors = _as_srgb8(aggregate_colors)
+        if aggregate_colors.ndim != 2 or aggregate_colors.shape[1] != 3 or \
+                not len(aggregate_colors):
+            raise ValueError("sample_aggregate: colores deben ser Nx3, N >= 1")
+        weights = np.asarray(aggregate_mass, dtype=np.float64).reshape(-1)
+        if len(weights) != len(aggregate_colors):
+            raise ValueError("sample_aggregate: colores y masa desalineados")
+        if not np.all(np.isfinite(weights)) or not np.all(weights > 0.0):
+            raise ValueError("sample_aggregate: la masa debe ser finita y > 0")
+        samples = srgb_to_oklab(aggregate_colors)
+        sampling_info = {
+            "source_pixel_count": int(len(aggregate_colors)),
+            "sample_draw_count": int(len(aggregate_colors)),
+            "unique_sample_count": int(len(aggregate_colors)),
+        }
+    else:
+        samples, weights, sampling_info = _weighted_samples(
+            sample_imgs, max_samples, gradient_boost, min_unique=pal_size)
     if previous_palette is not None:
         previous_rgb = _as_srgb8(previous_palette)
         if previous_rgb.shape != (pal_size, 3):

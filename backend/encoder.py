@@ -563,7 +563,8 @@ def _refit_assignment(pixels, base_palette, palette_algorithm, perceptual_lut_bi
 
 
 def refit_palette(palette, sample_imgs, palette_algorithm="median-cut",
-                  iterations=0, reserved=0, perceptual_lut_bits=0):
+                  iterations=0, reserved=0, perceptual_lut_bits=0,
+                  sample_weights=None):
     """E-12: refit de paleta a la asignacion real (Lloyd acotado y monotono).
 
     Reasigna los pixeles de ``sample_imgs`` con la misma regla de cuantizacion
@@ -592,6 +593,15 @@ def refit_palette(palette, sample_imgs, palette_algorithm="median-cut",
                              for im in sample_imgs], axis=0)
     if not len(pixels):
         raise ValueError("no hay pixeles para el refit de paleta")
+    if sample_weights is not None:
+        # E-14: el refit tambien acepta agregados (color unico, masa) para no
+        # re-expandir el stream; con None el camino historico queda intacto.
+        sample_weights = np.asarray(sample_weights, dtype=np.float64).reshape(-1)
+        if len(sample_weights) != len(pixels):
+            raise ValueError("sample_weights debe alinear con los pixeles")
+        if not np.all(np.isfinite(sample_weights)) or \
+                not np.all(sample_weights > 0.0):
+            raise ValueError("sample_weights debe ser finito y > 0")
     perceptual = palette_algorithm == "kmeans-oklab"
     metric_pixels = (perceptual_palette.srgb_to_oklab(pixels) if perceptual
                      else pixels.astype(np.float64))
@@ -600,18 +610,28 @@ def refit_palette(palette, sample_imgs, palette_algorithm="median-cut",
         centers = (perceptual_palette.srgb_to_oklab(candidate) if perceptual
                    else candidate.astype(np.float64))
         diff = metric_pixels - centers[indices]
-        return float(np.mean(np.einsum("ij,ij->i", diff, diff)))
+        squared = np.einsum("ij,ij->i", diff, diff)
+        if sample_weights is None:
+            return float(np.mean(squared))
+        return float(np.sum(squared * sample_weights) /
+                     np.sum(sample_weights))
 
     current = base
     indices = _refit_assignment(pixels, current, palette_algorithm,
                                 perceptual_lut_bits)
     error = assignment_error(current, indices)
     for _ in range(iterations):
-        counts = np.bincount(indices, minlength=len(current))
+        if sample_weights is None:
+            counts = np.bincount(indices, minlength=len(current))
+        else:
+            counts = np.bincount(indices, weights=sample_weights,
+                                 minlength=len(current))
         used = counts > 0
         refit = current.astype(np.float64).copy()
         for channel in range(3):
-            sums = np.bincount(indices, weights=pixels[:, channel],
+            channel_weights = (pixels[:, channel] if sample_weights is None
+                               else sample_weights * pixels[:, channel])
+            sums = np.bincount(indices, weights=channel_weights,
                                minlength=len(current))
             refit[used, channel] = sums[used] / counts[used]
         candidate = np.clip(np.rint(refit), 0, 255).astype(np.uint8)
@@ -639,6 +659,33 @@ def refit_block_palette(pal_img, palette, sample_imgs, palette_algorithm,
                             perceptual_lut_bits=perceptual_lut_bits)
     reserved = int(reserved)
     base = palette[:len(palette) - reserved] if reserved else palette
+    return _palette_image(base), palette
+
+
+def global_palette_from_aggregate(colors, weights, pal_size,
+                                  reserved=0, reserved_colors=None,
+                                  uint8_refine=0):
+    """E-14: paleta global kmeans-oklab desde el agregado de TODO el video.
+
+    Espejo de ``make_global_palette`` para el camino de dos pasadas: resuelve
+    la reserva igual (base ``pal_size - reserved`` + estampadas al final,
+    INV-4) y la ``pal_img`` devuelta es solo-base (INV-3).
+    """
+    reserved = int(reserved)
+    if reserved:
+        stamped = _validate_reserved_colors(reserved, reserved_colors)
+        base_size = int(pal_size) - reserved
+        if base_size < 22:
+            raise ValueError("palette-size debe ser >= reserved + 22 (INT-001)")
+    else:
+        stamped = None
+        base_size = int(pal_size)
+    base = perceptual_palette.build_perceptual_palette(
+        None, base_size, sample_aggregate=(colors, weights),
+        uint8_refine=uint8_refine)
+    palette = (np.concatenate([np.asarray(base, dtype=np.uint8), stamped],
+                              axis=0)
+               if stamped is not None else base)
     return _palette_image(base), palette
 
 
@@ -1056,23 +1103,65 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     palette0 = None
     global_quantizer = None
     if use_global:
-        allf = list(iter_video_frames(in_path, cols, rows, fps, bake_smoothing))
-        if not allf:
-            raise RuntimeError("video sin frames")
-        stepS = max(1, len(allf) // 12)
-        sample = [allf[k][0] for k in range(0, len(allf), stepS)]
-        pal_img, palette0 = make_global_palette(sample, pal_size, palette_algorithm,
-                                                reserved=reserved,
-                                                reserved_colors=reserved_colors,
-                                                uint8_refine=palette_uint8_refine)
-        pal_img, palette0 = refit_block_palette(
-            pal_img, palette0, sample, palette_algorithm, palette_refit,
-            reserved=reserved, perceptual_lut_bits=perceptual_lut_bits)
+        # E-14: el video completo ya no se materializa en RAM (antes:
+        # allf = list(...)); la paleta global se resuelve en pasadas de
+        # streaming y el encode relee el stream al final.
+        if palette_algorithm == "kmeans-oklab":
+            # Pasada 1: agregado de color de TODOS los pixeles del video,
+            # sin el limite de 65.536 muestras de _weighted_samples.
+            aggregate = perceptual_palette.StreamingColorAggregate()
+            for frame_rgb, _frame_gray in iter_video_frames(
+                    in_path, cols, rows, fps, bake_smoothing):
+                aggregate.add_frame(frame_rgb)
+            if not aggregate.frame_count:
+                raise RuntimeError("video sin frames")
+            aggregate_colors, aggregate_mass = aggregate.result()
+            pal_img, palette0 = global_palette_from_aggregate(
+                aggregate_colors, aggregate_mass, pal_size,
+                reserved=reserved, reserved_colors=reserved_colors,
+                uint8_refine=palette_uint8_refine)
+            if int(palette_refit):
+                # El refit E-12 consume el mismo agregado (color unico, masa):
+                # equivale a refitear contra todos los pixeles del video.
+                palette0 = refit_palette(
+                    palette0, [aggregate_colors.reshape(-1, 1, 3)],
+                    palette_algorithm, palette_refit, reserved=reserved,
+                    perceptual_lut_bits=perceptual_lut_bits,
+                    sample_weights=aggregate_mass)
+                pal_img = _palette_image(
+                    palette0[:len(palette0) - reserved] if reserved
+                    else palette0)
+        else:
+            # Los algoritmos Pillow/RGB muestrean 12 frames como siempre: la
+            # pasada de conteo + la de muestreo reproducen exactamente la
+            # seleccion historica (bytes identicos), sin materializar.
+            total_frames = 0
+            for _frame in iter_video_frames(in_path, cols, rows, fps,
+                                            bake_smoothing):
+                total_frames += 1
+            if not total_frames:
+                raise RuntimeError("video sin frames")
+            stepS = max(1, total_frames // 12)
+            wanted = frozenset(range(0, total_frames, stepS))
+            sample = []
+            for index, (frame_rgb, _frame_gray) in enumerate(
+                    iter_video_frames(in_path, cols, rows, fps,
+                                      bake_smoothing)):
+                if index in wanted:
+                    sample.append(frame_rgb)
+            pal_img, palette0 = make_global_palette(
+                sample, pal_size, palette_algorithm, reserved=reserved,
+                reserved_colors=reserved_colors,
+                uint8_refine=palette_uint8_refine)
+            pal_img, palette0 = refit_block_palette(
+                pal_img, palette0, sample, palette_algorithm, palette_refit,
+                reserved=reserved, perceptual_lut_bits=perceptual_lut_bits)
         # Solo la parte base cuantiza: el video no puede elegir reservadas (INV-3)
         global_quantizer = make_perceptual_quantizer(
             palette0[:len(palette0) - reserved] if reserved else palette0,
             palette_algorithm, perceptual_lut_bits)
-        frames_iter = allf
+        frames_iter = iter_video_frames(in_path, cols, rows, fps,
+                                        bake_smoothing)
     elif use_scene_palette:
         source_iter = iter_video_frames(in_path, cols, rows, fps, bake_smoothing)
         frames_iter = iter_scene_palette_frames(
