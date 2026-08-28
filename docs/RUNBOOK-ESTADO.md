@@ -84,6 +84,16 @@ Reglas de uso:
 | W-14 | seguridad y robustez del player | cerrada | `c7a3e01`+`eb9f193`+`47a1b60` | 2026-08-28 | los 8 puntos: CRC v1 ≠ 0 exigido en TV (+ inventario verificado), par requestFrame/cancelFrame con window como receptor, `webglcontextrestored` vuelve a WebGL, `dispose()` en pickRenderer, loop con try/catch que pausa audio, sin parámetro de origen por query, `maxLength` obligatorio en API pública de inflate, árbol Huffman sub-suscripto rechazado (RFC 1951; árbol fijo de distancias corregido a 32 símbolos). Cada punto con su test (página, runtime simulado o stream artesanal). **Cierra F4 (W-01..W-14)**. CI en verde |
 | W-15 | camino ASCII de Canvas2D | opcional | | | |
 
+## Carril F7 — runtime del overlay (S-5)
+
+| ID | Tarea | Estado | Commit | Fecha | Notas |
+|---|---|---|---|---|---|
+| F7-1 | estado y orden por frame (§9.2) | cerrada | `b5775d0`+`34f72b6` | 2026-08-28 | `frontend/overlay.js`: restaurar → seek → guardar/pintar/marcar; control negativo en test (saltear el paso 1 diverge). CI en verde |
+| F7-2 | API ES5 attach/setField/setValues/clearField/clear/detach | cerrada | `b5775d0`+`34f72b6` | 2026-08-28 | attach devuelve null ante meta o bundle inválido (verifica cola 246..255 de la paleta contra `reserved_rgb`); todo-o-nada; sin allocaciones en el loop estable (identidad de buffers testeada). `test_overlay_runtime.js` sobre ambos readers |
+| F7-3 | canal de datos (5 pasos, serial monotónico, backoff) | cerrada | `df6229a` | 2026-08-28 | `frontend/datachannel.js` + `test_overlay_datachannel.js`: corpus §13 completo; backoff exponencial (techo 5 min) solo ante error de red; el serial solo avanza con carga aceptada |
+| F7-4 | referencia Python byte-idéntica | cerrada | `35a54b3` | 2026-08-28 | `backend/overlay_ref.py` + fixtures cruzados: clip real del encoder (`reserved=10`, 246..255), 8 frames byte-idénticos Python/JS con cargas en f0 y f3; `clear()` vuelve al video base exacto |
+| F7-int | integración de producto | cerrada | `7954bc8`+`243600b`+`fe055de` | 2026-08-28 | `make_clip --reserved 10` (RGB canónicos de `overlay_palette`), panel de 20 números (`tools/make_panel.py` + `backend/overlay_panel.py`), input `overlay` en workflow `encode` (publica `clip.slots`), `live-player.html` reemplaza la demo de laboratorio, y el dither excluye los rects del panel (`protect_panel`, INT-001 §11) |
+
 ## Sincronización y fases finales
 
 | ID | Qué | Estado | Fecha | Notas |
@@ -92,7 +102,7 @@ Reglas de uso:
 | S-2 | habilitar artefactos `tile_size` ≠ 16 | cerrada | 2026-08-27 | W-08 en verde: `ReaderV2` abre los seis tamaños; E-09 puede generar artefactos |
 | S-3 | desbloquear E-10 | cerrada | 2026-08-28 | W-02 estaba en verde desde la sesión 1; E-10 ejecutada y cerrada |
 | S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | pendiente | | requiere F3 (E-12..E-18) además de F2/F4 ya cerradas |
-| S-5 | runtime del overlay (F7) | **habilitada** | 2026-08-28 | F1 y W-13 cerradas; puede arrancar el runtime real del overlay |
+| S-5 | runtime del overlay (F7) | cerrada | 2026-08-28 | F7-1..F7-4 + integración en verde; gates de INT-002 cubiertos por la regresión (Instancia 014). Los dos gates físicos (costo p95 y MEM-001 en TV) se miden en F8-2/F8-4, donde el plan ya los prevé con y sin overlay |
 | S-6 | validación física (F8) | pendiente | | |
 
 ## Bitácora de decisiones de ejecución
@@ -113,18 +123,23 @@ Reglas de uso:
 | 2026-08-27 | la referencia HQ pasa a ser **reproducible**: se regenera con el workflow `encode` desde la rama `assets` (fuente TKN-2443) en lugar de congelar un binario irrecuperable | el `clip.asclv` del release v0.2 quedó en una máquina anterior; P-02 exigía congelar antes de tocar el encoder y esta vía lo cumple con SHA verificable en CI |
 | 2026-08-27 | el `preview.mp4` del workflow `encode` es **opcional y apagado por defecto** | pregunta del operador: el producto es el `.asclv`; el mp4 es solo QA visual decodificada. La verificación real se hace con `frontend/player.html` sobre el `.asclv` |
 | 2026-08-27 | se agrega `frontend/demo-overlay.html`: **demo de laboratorio** del mecanismo INT-001 (glifos E-06 escritos como índices sobre la matriz, celdas restauradas tras cada draw) | pedido del operador de ver números sobre el video ya. NO es el runtime F7 (S-5): usa nearest-index sobre la paleta vigente porque el clip de referencia tiene `reserved=0`. Al implementar F7, esta demo se reemplaza o se recicla como página de prueba |
+| 2026-08-28 | S-5 se cierra con los gates de INT-002 verificables en CI; el costo p95 y MEM-001 (físicos, en TV) se difieren a F8-2/F8-4 | esos dos gates requieren el hardware real; el plan ya prevé medirlos allí con y sin overlay. La RAM auxiliar en CI es la declarada (3.880 B) por construcción y con identidad de buffers testeada |
+| 2026-08-28 | el runtime F7 usa el **sidecar** (fase §7.1); la migración a `ASCLVID3` queda para F6 (S-4) como estaba planificado | permite rediseñar el panel sin re-encodear; los readers actuales rechazan ASCLVID3 limpiamente |
+| 2026-08-28 | `make_clip --reserved 10` activa también la protección del panel en el dither (`protect_panel`); los RGB reservados canónicos viven en `backend/overlay_palette.py` y la geometría del panel en `backend/overlay_panel.py` (única fuente para sidecar y dither) | INT-001 §11: el base bajo el panel no deriva; una sola fuente de verdad evita que sidecar y exclusión se desalineen |
 
 ## Próxima acción
 
-1. **F7 (runtime del overlay)** — S-5 habilitada: reemplazar la demo de laboratorio por el
-   runtime real (paleta con `reserved=10`, sidecar ASCLSLOT, `markRectDirty` de W-13).
-   Es lo que el operador quiere ver funcionando.
-2. Carril E (F3): **E-12** (refit de paleta a la asignación real) y siguientes E-13..E-18.
-3. Al re-generar el artefacto de producción: encode con `zopfli=on` + `tile=sweep`
-   (la referencia HQ actual con Zopfli es SHA `ebfe2eb4…4b36`, 17.482.270 B).
+1. Carril E (F3): **E-12** (refit de paleta a la asignación real) y siguientes E-13..E-18.
+   Con `reserved` ya cableado, E-12 debe excluir los índices 246..255 del refit (§4.2).
+2. La referencia HQ **con overlay** se genera con el workflow `encode` (`overlay=on`,
+   `zopfli=on`, `tile=16`): publica `clip.asclv` + `clip.slots`. La referencia HQ sin
+   overlay sigue siendo SHA `ebfe2eb4…4b36` (17.482.270 B). El barrido definitivo de
+   tile queda en S-4.
+3. F5 (trellis/near-lossless) y F6 (S-4) siguen pendientes; F8 requiere F6 + F7 (F7 ya
+   cerrada). Al implementar trellis: excluir los rects del panel (mecanismo ya plumbeado).
 
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
-Regresión al cierre de esta sesión: **125 pruebas Python y 13 suites JavaScript, en verde**
+Regresión al cierre de esta sesión: **168 pruebas Python y 21 suites JavaScript, en verde**
 (base: 115 y 11).

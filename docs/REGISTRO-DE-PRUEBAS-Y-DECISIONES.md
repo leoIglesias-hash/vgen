@@ -730,3 +730,66 @@ ganador   16 (-2,73% vs v1; 37/60 frames regionales)
   S-4**, cuando el trellis espacial (E-23) cambie la estadistica por tile.
 - Ambas referencias medidas con zlib puro; con Zopfli las magnitudes relativas
   pueden moverse y se re-mediran al regenerar artefactos de produccion.
+
+## Instancia 014 - F7: runtime del overlay (S-5)
+
+Fecha: 2026-08-28. Cuatro patas del runbook (F7-1..F7-4) mas la integracion de
+producto, cada una con CI `regression` en verde sobre su commit.
+
+### Verificacion cruzada Python/JS (gate de cierre de S-5)
+
+`test_overlay_ref.py` encodea un clip REAL con `reserved=10` (pal_size 256,
+reservadas en 246..255, paleta global, keyint 4, corte duro en el frame 4),
+compone frame a frame con `backend/overlay_ref.py` y deja los fixtures;
+`test_overlay_cross.js` reproduce el mismo clip con `reader.js` +
+`overlay.js` (beforeSeek/seek/afterSeek) aplicando la misma linea de tiempo
+de cargas ("0512" en f0, "9934" en f3, cruzando el keyframe):
+
+```text
+frames comparados        8 (64x32, 2048 celdas c/u)
+resultado                byte-identico Python/JS en los 8 frames
+clear()                  byte-identico al video base decodificado
+INV-3 / INV-4            verificados sobre el clip del encoder (cola 246..255
+                         intacta en cada epoca; ninguna celda base >= 246)
+```
+
+### Gates de INT-002 cubiertos por la regresion
+
+- restauracion exacta tras `clear()`, seek hacia atras y reinicio de loop
+  (`test_overlay_runtime.js`, ambos readers, con cambio de valor en vivo);
+- control negativo: saltear el paso 1 del orden §9.2 (restaurar antes de
+  decodificar) hace divergir la matriz -> el orden es obligatorio y el test
+  lo detectaria;
+- union de rects sucios: slots pintados y recien desactivados quedan
+  marcados; celdas lejanas no (v1 bits exactos; v2 disyuncion celda/tile);
+- un `field_id` o digito invalido no escribe nada (todo-o-nada en
+  `setValues`/`setField`, espejo exacto en la referencia Python);
+- canal de datos: corpus completo de §13 (longitud, caracteres, serial
+  repetido/retrocedido, campo fuera de rango, vacia, gigante) con backoff
+  exponencial acotado a 5 min solo ante error de red
+  (`test_overlay_datachannel.js`);
+- sin allocaciones en el loop estable: `overlay.base`/`overlay.values` se
+  reservan una vez en attach (identidad verificada tras la reproduccion).
+
+Los gates fisicos de INT-002 (costo p95 <10% del presupuesto de frame y RAM
+medida en TV) quedan para F8-2/F8-4 (MEM-001 mide con y sin overlay), como ya
+preveia el plan; en CI la RAM auxiliar es 3.840 B + 40 B por construccion.
+
+### Dither y panel (INT-001 §11/§13)
+
+`protected_rects` (E-05) quedo plumbeado hasta `make_clip --reserved`:
+`encode_video(protect_panel=True)` excluye los 40 rects del panel canonico
+(`backend/overlay_panel.py`, misma geometria que el sidecar por construccion).
+Test: con proteccion, las celdas dentro de los rects son identicas al encode
+con dither off; sin proteccion el mismo fixture SI trama dentro del panel
+(control de no-vacuidad), en `selective` via encoder y en `auto` directo.
+
+### Decisiones
+
+- `attach()` devuelve null (no lanza) ante sidecar ajeno o clip sin reserva:
+  el video sigue sin overlay (INV-7). `live-player.html` reemplaza a la demo
+  de laboratorio y degrada con mensaje claro.
+- El serial del canal solo avanza cuando la carga se ACEPTA completa: un
+  serial nuevo con un campo invalido no se consume y puede reintentarse.
+- `pad=0` deja los ceros a la izquierda como glifo vacio (10); `pad=1` los
+  pinta. Mismo comportamiento en JS y Python, cubierto por ambos tests.
