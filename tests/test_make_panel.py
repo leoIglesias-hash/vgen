@@ -156,22 +156,30 @@ class PanelDitherProtectionTest(unittest.TestCase):
                         "deberia tramar dentro del panel")
 
     def test_calibrated_dither_honors_protected_rects(self):
-        rgb = self._frames(1)[0][0]
-        palette = np.array([[r, g, b] for r in (0, 255) for g in (0, 255)
-                            for b in (0, 255)], dtype=np.uint8)
+        # mismo fixture que test_calibrated_dither: gradiente gris continuo
+        # sobre 4 niveles, donde el modo auto SI acepta tiles por proxy
+        gray = np.tile(np.linspace(0, 255, self.D_COLS, dtype=np.uint8),
+                       (self.D_ROWS, 1))
+        rgb = np.repeat(gray[:, :, None], 3, axis=2)
+        palette = np.asarray(((0, 0, 0), (85, 85, 85), (170, 170, 170),
+                              (255, 255, 255)), dtype=np.uint8)
         diff = rgb[:, :, None, :].astype(np.int32) - \
             palette[None, None, :, :].astype(np.int32)
         baseline = np.argmin(np.sum(diff * diff, axis=3),
                              axis=2).astype(np.uint8)
         rects = overlay_panel.panel_rects(self.D_COLS, self.D_ROWS)
-        free = selective_dither.apply_calibrated_dither(rgb, baseline, palette)
+        # presupuesto sin limite: que el ranking de tiles no esconda el panel
+        free = selective_dither.apply_calibrated_dither(
+            rgb, baseline, palette, max_changed_fraction=1.0)
         guarded = selective_dither.apply_calibrated_dither(
-            rgb, baseline, palette, protected_rects=rects)
+            rgb, baseline, palette, max_changed_fraction=1.0,
+            protected_rects=rects)
         mask2d = selective_dither.rects_mask(baseline.shape, rects)
         np.testing.assert_array_equal(guarded[mask2d], baseline[mask2d],
                                       "auto no debe tocar rects protegidos")
-        self.assertTrue(bool((free != baseline).any()),
-                        "fixture vacuo: auto deberia tramar el gradiente")
+        self.assertTrue(bool((free[mask2d] != baseline[mask2d]).any()),
+                        "fixture vacuo: sin proteccion, auto deberia tramar "
+                        "dentro del panel")
 
 
 if __name__ == "__main__":
