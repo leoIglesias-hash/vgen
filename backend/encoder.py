@@ -39,7 +39,7 @@ import dither as selective_dither
 import adaptive_palette
 import overlay_panel
 import perceptual_palette
-from deflate_util import best_deflate
+from deflate_util import best_deflate, zlib_deflate
 
 MAGIC          = b"ASCL"
 VERSION        = 1
@@ -890,10 +890,15 @@ def cells_to_planes_bytes(cells, mode):
     raise ValueError
 
 
-def encode_frame(cells, prev_cells, mode, frame_index, keyframe, compress, delta_allowed):
+def encode_frame(cells, prev_cells, mode, frame_index, keyframe, compress, delta_allowed,
+                 fast_deflate=False):
+    # fast_deflate (E-17): zlib-9 puro para MEDIR candidatos de dither muchas
+    # veces por frame sin pagar Zopfli ni depender de que este instalado.
+    # La emision real del frame sigue usando best_deflate (Zopfli si hay).
+    deflate = zlib_deflate if fast_deflate else best_deflate
     planes = cells_to_planes_bytes(cells, mode)
     candidates = []
-    full_z = best_deflate(planes, 9)
+    full_z = deflate(planes, 9)
     if compress == "none":
         candidates.append((TAG_RAW, planes))
     elif compress == "zlib":
@@ -905,10 +910,10 @@ def encode_frame(cells, prev_cells, mode, frame_index, keyframe, compress, delta
         ci = np.nonzero(changed)[0].astype("<u4")
         if ci.size < cells.shape[0]:
             vals = cells[changed]
-            delta_z = best_deflate(ci.tobytes() + vals.tobytes(), 9)
+            delta_z = deflate(ci.tobytes() + vals.tobytes(), 9)
             candidates.append((TAG_DELTA, delta_z))
             mask = np.packbits(changed.astype(np.uint8), bitorder="little")
-            mask_z = best_deflate(mask.tobytes() + vals.tobytes(), 9)
+            mask_z = deflate(mask.tobytes() + vals.tobytes(), 9)
             candidates.append((TAG_DELTA_MASK, mask_z))
     tag, payload = min(candidates, key=lambda c: len(c[1]))
     if len(planes) < len(payload):
@@ -1099,7 +1104,8 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
                 trial = base_cells.copy()
                 trial[:, 0] = np.asarray(index_map, dtype=np.uint8).reshape(-1)
                 _tag, trial_payload = encode_frame(
-                    trial, None, mode, 0, True, compress, False)
+                    trial, None, mode, 0, True, compress, False,
+                    fast_deflate=True)
                 return len(trial_payload)
         cells, dither_details = apply_dither_mode(
             rgb, cells, palette, dither_mode, dither_matrix,
@@ -1373,9 +1379,12 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         if dither_mode != "off":
             frame_byte_cost = None
             if dither_byte_budget is not None:
-                # E-17: bytes reales del frame tal como lo emite encode_frame,
-                # con el mismo prev_cells/keyframe/compress que usara el emisor.
-                # El threshold corre despues y es identico para ambos candidatos.
+                # E-17: bytes del frame con la MISMA estructura de candidatos
+                # que el emisor (prev_cells/keyframe/compress identicos), pero
+                # medidos con zlib-9 puro: deterministas con o sin Zopfli y sin
+                # pagar sus iteraciones en cada evaluacion (el bench con Zopfli
+                # en el costo excedio el timeout de CI). El threshold corre
+                # despues y es identico para ambos candidatos.
                 base_cells = cells
                 frame_prev = prev_cells
                 frame_keyframe = keyframe
@@ -1387,7 +1396,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                         index_map, dtype=np.uint8).reshape(-1)
                     _tag, trial_payload = encode_frame(
                         trial, frame_prev, mode, frame_idx, frame_keyframe,
-                        compress, delta_allowed)
+                        compress, delta_allowed, fast_deflate=True)
                     return len(trial_payload)
             # La misma paleta base que construyo el PairLUT: el dither no ve
             # ni propone entradas reservadas (INV-3).
@@ -1573,9 +1582,10 @@ def main(argv=None):
                    help="E-16 opt-in: mezcla exacta desde la base real del "
                         "cuantizador (sin gate 555); mas CPU y mas bytes")
     p.add_argument("--dither-byte-budget", type=int, default=None,
-                   help="E-17 opt-in: bytes reales extra permitidos por frame "
-                        "para el dither; se aplica JUNTO al presupuesto de "
-                        "celdas (auto recorta tiles, selective rechaza)")
+                   help="E-17 opt-in: bytes extra permitidos por frame para el "
+                        "dither, medidos con la estructura real del frame y "
+                        "zlib-9 determinista; se aplica JUNTO al presupuesto "
+                        "de celdas (auto recorta tiles, selective rechaza)")
     args = p.parse_args(argv)
     args.cols, args.pal_size = resolve_quality_options(
         args.quality_profile, args.cols, args.pal_size, default_cols=200)

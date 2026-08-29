@@ -9,6 +9,9 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "backend"))
 
+import zlib  # noqa: E402
+
+import deflate_util  # noqa: E402
 import dither  # noqa: E402
 import encoder  # noqa: E402
 
@@ -157,6 +160,23 @@ class ByteBudgetEncoderTest(unittest.TestCase):
         self.assertTrue(np.array_equal(rejected[:, 0], baseline.reshape(-1)))
         self.assertTrue(rejected_details["byte_budget_rejected"])
         self.assertEqual(rejected_details["byte_budget_delta_bytes"], 0)
+
+    def test_encode_frame_fast_deflate_measures_with_pure_zlib(self):
+        # E-17: la medicion del presupuesto usa zlib-9 puro, determinista
+        # con o sin Zopfli instalado; la emision real conserva best_deflate.
+        rgb = gray_gradient()
+        cells = nearest_indices(rgb, PALETTE).reshape(-1, 1)
+        tag, payload = encoder.encode_frame(
+            cells, None, encoder.MODE_PIXEL, 0, True, "zlib", False,
+            fast_deflate=True)
+        self.assertEqual(tag, encoder.TAG_ZLIB)
+        planes = encoder.cells_to_planes_bytes(cells, encoder.MODE_PIXEL)
+        self.assertEqual(payload, zlib.compress(planes, 9))
+        self.assertEqual(zlib.decompress(payload), planes)
+        if not deflate_util.have_zopfli():
+            normal_tag, normal_payload = encoder.encode_frame(
+                cells, None, encoder.MODE_PIXEL, 0, True, "zlib", False)
+            self.assertEqual((tag, payload), (normal_tag, normal_payload))
 
 
 if __name__ == "__main__":

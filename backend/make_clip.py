@@ -92,9 +92,10 @@ def main(argv=None):
                    help="E-16 opt-in: mezcla exacta desde la base real del "
                         "cuantizador (sin gate 555); mas CPU y mas bytes")
     p.add_argument("--dither-byte-budget", type=int, default=None,
-                   help="E-17 opt-in: bytes reales extra permitidos por frame "
-                        "para el dither; se aplica JUNTO al presupuesto de "
-                        "celdas (auto recorta tiles, selective rechaza)")
+                   help="E-17 opt-in: bytes extra permitidos por frame para el "
+                        "dither, medidos con la estructura real del frame y "
+                        "zlib-9 determinista; se aplica JUNTO al presupuesto "
+                        "de celdas (auto recorta tiles, selective rechaza)")
     p.add_argument("--keyint", type=int, default=0,
                    help="E-10: keyframe cada N frames (0 = fps*2, el historico)")
     p.add_argument("--scene-keyframes", action="store_true",

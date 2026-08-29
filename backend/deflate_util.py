@@ -29,6 +29,16 @@ def have_zopfli():
     return _zopfli_zlib is not None
 
 
+def zlib_deflate(data, level=9):
+    """Solo zlib, sin Zopfli: rapido y determinista en TODOS los entornos.
+
+    E-17 lo usa para medir el costo en bytes de cada candidato de dither:
+    la decision no puede depender de que Zopfli este instalado ni pagar sus
+    iteraciones por evaluacion. Zopfli sigue actuando solo en la emision.
+    """
+    return zlib.compress(data, level)
+
+
 def best_deflate(data, level=9, iterations=None):
     """Devuelve el stream zlib mas corto entre zlib.compress y Zopfli.
 
