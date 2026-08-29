@@ -237,3 +237,94 @@ def apply_temporal_trellis(cells, prev_cells, target_metric, palette_metric,
     emitted = cells.copy()
     emitted[accept, 0] = previous[accept]
     return emitted, {"temporal_cells": moved, "protected_cells": protected}
+
+
+# E-23: conteos de valores distintos por tile donde fusionar UNO cruza a un
+# opcode mas barato del codec regional v2 (_dense_candidates):
+#   17 -> 16 baja de PAL8 (1 B/celda) a PAL4 (0,5 B/celda)
+#    5 ->  4 baja de PAL4 a PACK2 (0,25 B/celda)
+#    3 ->  2 baja de PACK2 a PACK1 (0,125 B/celda)
+SPATIAL_CROSSINGS = (3, 5, 17)
+
+
+def apply_spatial_trellis(cells, target_metric, palette_metric, budget,
+                          grid_shape, tile_size, protected_mask=None):
+    """E-23: fusionar el valor mas raro de un tile si eso cruza de opcode.
+
+    El codec regional v2 elige el empaquetado por la cantidad EXACTA de
+    valores distintos del tile; un tile con 17, 5 o 3 valores paga el opcode
+    caro por culpa de uno solo. Esta etapa detecta esos tiles y reemplaza el
+    valor MAS RARO por otro valor ya presente en el tile, eligiendo el
+    reemplazo que minimiza el peor error extra contra los pixeles objetivo
+    (misma metrica E-20 que el resto del trellis). La fusion se acepta solo
+    si ese peor extra por celda no supera `budget`.
+
+    El cruce se fuerza ACA, en el encoder, y no en el transcodificador: el
+    v2 es lossless exacto respecto del v1 por diseno (verify_roundtrip) y
+    eso no se toca. `grid_shape` es (rows, cols) de la grilla de celdas y
+    `tile_size` debe ser el mismo que usara el transcode (`--tile-size`).
+
+    Determinismo: el valor a fusionar es el menos frecuente (empate -> el
+    indice menor) y el reemplazo se recorre en orden ascendente quedandose
+    con la primera mejora estricta. Celdas protegidas (dither, E-18): si
+    alguna celda del valor raro esta protegida, el tile no se fusiona.
+
+    Devuelve `(cells, details)`; nunca muta el argumento (invariante 4).
+    """
+    if budget <= 0 or palette_metric is None:
+        return cells, {"spatial_tiles": 0, "spatial_cells": 0,
+                       "blocked_tiles": 0}
+    rows, cols = int(grid_shape[0]), int(grid_shape[1])
+    if rows * cols != cells.shape[0]:
+        raise ValueError("grid_shape no coincide con la cantidad de celdas")
+    if tile_size < 1:
+        raise ValueError("tile_size invalido para el trellis espacial")
+
+    grid = cells[:, 0].reshape(rows, cols)
+    out = None
+    merged_tiles = 0
+    moved_cells = 0
+    blocked_tiles = 0
+    for ty in range(0, rows, tile_size):
+        y1 = min(ty + tile_size, rows)
+        for tx in range(0, cols, tile_size):
+            x1 = min(tx + tile_size, cols)
+            sub = (out[:, 0].reshape(rows, cols) if out is not None
+                   else grid)[ty:y1, tx:x1]
+            values, counts = np.unique(sub, return_counts=True)
+            if len(values) not in SPATIAL_CROSSINGS:
+                continue
+            # el mas raro; empate -> indice menor (lexsort: ultima clave manda)
+            rare = int(values[np.lexsort((values, counts))[0]])
+            local_y, local_x = np.nonzero(sub == rare)
+            flat = (local_y + ty) * cols + (local_x + tx)
+            if protected_mask is not None and np.any(protected_mask[flat]):
+                blocked_tiles += 1
+                continue
+            targets = target_metric[flat]
+            delta_rare = palette_metric[rare] - targets
+            dist_rare = np.sqrt(np.einsum("ij,ij->i", delta_rare, delta_rare))
+            best_value = None
+            best_worst = None
+            for candidate in values:
+                candidate = int(candidate)
+                if candidate == rare:
+                    continue
+                delta = palette_metric[candidate] - targets
+                worst = float(np.max(
+                    np.sqrt(np.einsum("ij,ij->i", delta, delta)) - dist_rare))
+                if best_worst is None or worst < best_worst:
+                    best_value = candidate
+                    best_worst = worst
+            if best_worst is None or best_worst > budget:
+                continue
+            if out is None:
+                out = cells.copy()
+            out[flat, 0] = best_value
+            merged_tiles += 1
+            moved_cells += int(flat.size)
+    if out is None:
+        return cells, {"spatial_tiles": 0, "spatial_cells": 0,
+                       "blocked_tiles": blocked_tiles}
+    return out, {"spatial_tiles": merged_tiles, "spatial_cells": moved_cells,
+                 "blocked_tiles": blocked_tiles}

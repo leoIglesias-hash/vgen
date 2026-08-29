@@ -1159,6 +1159,7 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
 def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_name,
                  char_aspect, compress, palette_mode, keyint, with_audio, threshold=0,
                  threshold_metric="rgb", trellis_temporal=0.0,
+                 trellis_spatial=0.0, trellis_spatial_tile=16,
                  dump_cells=None, bake_smoothing="none", reconstruction="nearest",
                  quality_profile="custom", palette_block_frames=0,
                  dither_mode="off", dither_matrix=4,
@@ -1196,6 +1197,12 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         raise ValueError("threshold debe ser >= 0")
     if float(trellis_temporal) < 0:
         raise ValueError("trellis-temporal debe ser >= 0")
+    if float(trellis_spatial) < 0:
+        raise ValueError("trellis-spatial debe ser >= 0")
+    if trellis_spatial > 0 and not 4 <= int(trellis_spatial_tile) <= 32:
+        # el mismo rango del tile regional v2 (E-09/W-08): fusionar con una
+        # geometria que el transcode no va a usar seria trabajo ciego
+        raise ValueError("trellis-spatial-tile debe estar entre 4 y 32")
     if threshold_metric not in trellis.THRESHOLD_METRICS:
         # E-20: en Oklab los valores utiles rondan 0,02; en sRGB, 10-40. Elegir
         # mal la metrica y no enterarse cambiaria el video en silencio.
@@ -1302,7 +1309,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     delta_allowed = (not has_palette) or use_global or use_scene_palette
     flags_extra = (FLAG_PAL_GLOBAL if use_global else
                    (FLAG_PAL_PER_SCENE if use_scene_palette else 0))
-    if (mode == MODE_PIXEL and (threshold > 0 or trellis_temporal > 0) and
+    if (mode == MODE_PIXEL and
+            (threshold > 0 or trellis_temporal > 0 or trellis_spatial > 0) and
             (use_global or use_scene_palette)):
         flags_extra |= FLAG_LOSSY
     if reconstruction == "soft":
@@ -1338,6 +1346,10 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     trellis_temporal_cells = 0
     trellis_temporal_frames = 0
     trellis_temporal_protected = 0
+    trellis_spatial_tiles = 0
+    trellis_spatial_cells = 0
+    trellis_spatial_frames = 0
+    trellis_spatial_blocked = 0
     scene_cut_keyframes = 0
     for frame_data in frames_iter:
         block_start = False
@@ -1413,8 +1425,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             # valor previo; sobre una celda tramada eso rompe el patron Bayer de
             # forma distinta en cada frame. Guardamos que celdas movio el dither
             # para excluirlas del revert. Solo se paga cuando ambos estan activos.
-            track_dithered = ((threshold > 0 or trellis_temporal > 0) and
-                              mode == MODE_PIXEL)
+            track_dithered = ((threshold > 0 or trellis_temporal > 0 or
+                               trellis_spatial > 0) and mode == MODE_PIXEL)
             pre_dither_indices = cells[:, 0].copy() if track_dithered else None
             frame_byte_cost = None
             if dither_byte_budget is not None:
@@ -1473,6 +1485,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         # del `--threshold`; E-20..E-23 lo extienden dentro de `trellis.py`, no
         # agregando pasadas nuevas aca. El threshold ya no es una etapa que
         # convive con el trellis: ES el trellis en su forma minima.
+        frame_target_metric = None
         if pal_metric is not None and mode == MODE_PIXEL and not keyframe:
             cells, trellis_details = trellis.apply_threshold_trellis(
                 cells, prev_cells, pal_metric, threshold,
@@ -1487,15 +1500,33 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             # proteccion del dither (E-18). Con presupuesto 0 es un no-op y
             # los bytes son identicos a los historicos.
             if trellis_temporal > 0:
-                target_metric = trellis.build_threshold_palette(
+                frame_target_metric = trellis.build_threshold_palette(
                     np.asarray(rgb).reshape(-1, 3), threshold_metric)
                 cells, temporal_details = trellis.apply_temporal_trellis(
-                    cells, prev_cells, target_metric, pal_metric,
+                    cells, prev_cells, frame_target_metric, pal_metric,
                     trellis_temporal, protected_mask=dither_changed_mask)
                 if temporal_details["temporal_cells"]:
                     trellis_temporal_cells += temporal_details["temporal_cells"]
                     trellis_temporal_frames += 1
                 trellis_temporal_protected += temporal_details["protected_cells"]
+        # E-23: cierre de la etapa trellis — tambien en KEYFRAMES (el
+        # empaquetado por tile del regional v2 importa mas justo ahi): si el
+        # tile tiene 17/5/3 valores distintos, fusionar el mas raro lo cruza
+        # a un opcode mas barato. Con presupuesto 0 es un no-op.
+        if (trellis_spatial > 0 and pal_metric is not None and
+                mode == MODE_PIXEL):
+            if frame_target_metric is None:
+                frame_target_metric = trellis.build_threshold_palette(
+                    np.asarray(rgb).reshape(-1, 3), threshold_metric)
+            cells, spatial_details = trellis.apply_spatial_trellis(
+                cells, frame_target_metric, pal_metric, trellis_spatial,
+                np.asarray(rgb).shape[:2], int(trellis_spatial_tile),
+                protected_mask=dither_changed_mask)
+            if spatial_details["spatial_tiles"]:
+                trellis_spatial_tiles += spatial_details["spatial_tiles"]
+                trellis_spatial_cells += spatial_details["spatial_cells"]
+                trellis_spatial_frames += 1
+            trellis_spatial_blocked += spatial_details["blocked_tiles"]
         # Metadatos de emision: no tocan `cells`, por eso van despues del
         # trellis y no en medio del pipeline.
         if use_global:
@@ -1561,6 +1592,12 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             "trellis_temporal_cells": int(trellis_temporal_cells),
             "trellis_temporal_frames": int(trellis_temporal_frames),
             "trellis_temporal_protected_cells": int(trellis_temporal_protected),
+            "trellis_spatial_budget": float(trellis_spatial),
+            "trellis_spatial_tile": int(trellis_spatial_tile),
+            "trellis_spatial_tiles": int(trellis_spatial_tiles),
+            "trellis_spatial_cells": int(trellis_spatial_cells),
+            "trellis_spatial_frames": int(trellis_spatial_frames),
+            "trellis_spatial_blocked_tiles": int(trellis_spatial_blocked),
             "scene_keyframes": bool(scene_keyframes),
             "scene_cut_keyframes": int(scene_cut_keyframes),
             "dither_proxy_improvement": (
@@ -1753,6 +1790,16 @@ def main(argv=None):
                    info["trellis_temporal_cells"],
                    info["trellis_temporal_frames"],
                    info["trellis_temporal_protected_cells"]))
+        if info.get("trellis_spatial_budget"):
+            print("             trellis espacial (E-23): presupuesto %.4g, "
+                  "tile %d; %d tiles fusionados (%d celdas) en %d frames; "
+                  "%d tiles bloqueados por dither" %
+                  (info["trellis_spatial_budget"],
+                   info["trellis_spatial_tile"],
+                   info["trellis_spatial_tiles"],
+                   info["trellis_spatial_cells"],
+                   info["trellis_spatial_frames"],
+                   info["trellis_spatial_blocked_tiles"]))
         print("  frames   : %d   tags RAW/ZLIB/DELTA = %d/%d/%d" %
               (info["n_frames"], info["tags"][0], info["tags"][1], info["tags"][2]))
         print("  .ascl    : %d B  (%.1f KB, %.1f KB/s)" %

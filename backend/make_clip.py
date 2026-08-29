@@ -80,6 +80,13 @@ def main(argv=None):
                         "~0,005-0,04) para emitir el indice del frame "
                         "anterior cuando eso saca la celda del DELTA. 0=off "
                         "(bytes identicos); pixel con paleta global/block")
+    p.add_argument("--trellis-spatial", type=float, default=0,
+                   help="E-23: presupuesto de error EXTRA por celda para "
+                        "fusionar el valor mas raro de un tile cuando eso "
+                        "cruza 17->16, 5->4 o 3->2 valores distintos (opcode "
+                        "regional v2 mas barato). Usa la geometria de "
+                        "--tile-size (con --tile-sweep, el valor de "
+                        "--tile-size). 0=off (bytes identicos)")
     p.add_argument("--ramp", default="short")
     p.add_argument("--palette-size", type=int, default=None, dest="pal_size",
                    help="1..256; default 256 o valor del perfil")
@@ -216,6 +223,8 @@ def main(argv=None):
                                     threshold=args.threshold,
                                     threshold_metric=args.threshold_metric,
                                     trellis_temporal=args.trellis_temporal,
+                                    trellis_spatial=args.trellis_spatial,
+                                    trellis_spatial_tile=args.tile_size,
                                     bake_smoothing=args.bake_smoothing,
                                     reconstruction=args.reconstruction,
                                     quality_profile=args.quality_profile,
@@ -323,6 +332,16 @@ def main(argv=None):
                    info["trellis_temporal_cells"],
                    info["trellis_temporal_frames"],
                    info["trellis_temporal_protected_cells"]))
+        if info.get("trellis_spatial_budget"):
+            print("  trellis espacial (E-23): presupuesto %.4g, tile %d; "
+                  "%d tiles fusionados (%d celdas) en %d frames; %d tiles "
+                  "bloqueados por dither" %
+                  (info["trellis_spatial_budget"],
+                   info["trellis_spatial_tile"],
+                   info["trellis_spatial_tiles"],
+                   info["trellis_spatial_cells"],
+                   info["trellis_spatial_frames"],
+                   info["trellis_spatial_blocked_tiles"]))
         print("  bundle: %.1f KB  (video %.1f KB + audio %.1f KB)  ~%.1f KB/s" %
               (total/1024.0, la/1024.0, lau/1024.0, total/1024.0/secs))
         if not args.keep:
