@@ -28,6 +28,7 @@ graph TB
         PP[perceptual_palette.py<br/><i>K-means Oklab, gamut, estabilidad</i>]
         AP[adaptive_palette.py<br/><i>cortes de bloque por métricas de color</i>]
         DI[dither.py<br/><i>Bayer selectivo horneado, presupuesto</i>]
+        TR[trellis.py<br/><i>indices finales antes de emitir; threshold degenerado</i>]
         V2[ascl_v2.py<br/><i>transcode exacto v1 a v2; decoder de referencia</i>]
         RC[regional_codec_v2.py<br/><i>tiles: SOLID/SPARSE/MASK/PACK/PAL</i>]
         BU[ascl_bundle.py<br/><i>.ascl + .mp3 a .asclv atómico</i>]
@@ -38,6 +39,7 @@ graph TB
         ENC --> PP
         ENC --> AP
         ENC --> DI
+        ENC --> TR
         MC --> V2
         V2 --> RC
         MC --> BU

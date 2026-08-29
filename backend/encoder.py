@@ -36,6 +36,7 @@ import numpy as np
 from PIL import Image
 
 import dither as selective_dither
+import trellis
 import adaptive_palette
 import overlay_panel
 import perceptual_palette
@@ -1438,6 +1439,20 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                 dither_byte_dropped_tiles += frame_dropped
                 if frame_dropped:
                     dither_byte_limited_frames += 1
+        # E-19: tercera etapa del orden canonico (cuantizar -> ditherear ->
+        # trellis -> emitir). Hoy el trellis solo sabe hacer el caso degenerado
+        # del `--threshold`; E-20..E-23 lo extienden dentro de `trellis.py`, no
+        # agregando pasadas nuevas aca. El threshold ya no es una etapa que
+        # convive con el trellis: ES el trellis en su forma minima.
+        if pal16 is not None and mode == MODE_PIXEL and not keyframe:
+            cells, trellis_details = trellis.apply_threshold_trellis(
+                cells, prev_cells, pal16, threshold,
+                protected_mask=dither_changed_mask)
+            if trellis_details["protected_cells"]:
+                threshold_dither_protected += trellis_details["protected_cells"]
+                threshold_dither_frames += 1
+        # Metadatos de emision: no tocan `cells`, por eso van despues del
+        # trellis y no en medio del pipeline.
         if use_global:
             pal_count = palette0.shape[0] if idx == 0 else 0
             palette = palette0 if idx == 0 else None
@@ -1446,22 +1461,6 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             # alli y necesita conocer la paleta aunque este a mitad de un bloque.
             pal_count = active_palette.shape[0] if keyframe else 0
             palette = active_palette if keyframe else None
-        if (pal16 is not None and mode == MODE_PIXEL and threshold > 0
-                and not keyframe and prev_cells is not None):
-            cur = cells[:, 0]
-            d = pal16[cur].astype(np.int32) - pal16[prev_cells[:, 0]].astype(np.int32)
-            keep = np.einsum("ij,ij->i", d, d) <= threshold * threshold
-            if dither_changed_mask is not None:
-                # E-18: lo que el dither decidio tramar NO se revierte. El
-                # threshold solo congela celdas que el dither no toco.
-                rescued = int(np.count_nonzero(keep & dither_changed_mask))
-                if rescued:
-                    keep &= ~dither_changed_mask
-                    threshold_dither_protected += rescued
-                    threshold_dither_frames += 1
-            emitted = cells.copy()
-            emitted[keep, 0] = prev_cells[keep, 0]
-            cells = emitted
         tag, payload = encode_frame(cells, prev_cells, mode, idx, keyframe,
                                     compress, delta_allowed)
         if use_scene_palette and tag in (TAG_RAW, TAG_ZLIB) and pal_count == 0:
