@@ -1158,7 +1158,7 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
 
 def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_name,
                  char_aspect, compress, palette_mode, keyint, with_audio, threshold=0,
-                 threshold_metric="rgb",
+                 threshold_metric="rgb", trellis_temporal=0.0,
                  dump_cells=None, bake_smoothing="none", reconstruction="nearest",
                  quality_profile="custom", palette_block_frames=0,
                  dither_mode="off", dither_matrix=4,
@@ -1194,6 +1194,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         raise ValueError("keyint debe ser >= 0")
     if float(threshold) < 0:
         raise ValueError("threshold debe ser >= 0")
+    if float(trellis_temporal) < 0:
+        raise ValueError("trellis-temporal debe ser >= 0")
     if threshold_metric not in trellis.THRESHOLD_METRICS:
         # E-20: en Oklab los valores utiles rondan 0,02; en sRGB, 10-40. Elegir
         # mal la metrica y no enterarse cambiaria el video en silencio.
@@ -1300,7 +1302,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     delta_allowed = (not has_palette) or use_global or use_scene_palette
     flags_extra = (FLAG_PAL_GLOBAL if use_global else
                    (FLAG_PAL_PER_SCENE if use_scene_palette else 0))
-    if mode == MODE_PIXEL and threshold > 0 and (use_global or use_scene_palette):
+    if (mode == MODE_PIXEL and (threshold > 0 or trellis_temporal > 0) and
+            (use_global or use_scene_palette)):
         flags_extra |= FLAG_LOSSY
     if reconstruction == "soft":
         flags_extra |= FLAG_RECON_SOFT
@@ -1332,6 +1335,9 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     dither_byte_limited_frames = 0
     threshold_dither_protected = 0
     threshold_dither_frames = 0
+    trellis_temporal_cells = 0
+    trellis_temporal_frames = 0
+    trellis_temporal_protected = 0
     scene_cut_keyframes = 0
     for frame_data in frames_iter:
         block_start = False
@@ -1407,7 +1413,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             # valor previo; sobre una celda tramada eso rompe el patron Bayer de
             # forma distinta en cada frame. Guardamos que celdas movio el dither
             # para excluirlas del revert. Solo se paga cuando ambos estan activos.
-            track_dithered = threshold > 0 and mode == MODE_PIXEL
+            track_dithered = ((threshold > 0 or trellis_temporal > 0) and
+                              mode == MODE_PIXEL)
             pre_dither_indices = cells[:, 0].copy() if track_dithered else None
             frame_byte_cost = None
             if dither_byte_budget is not None:
@@ -1473,6 +1480,22 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             if trellis_details["protected_cells"]:
                 threshold_dither_protected += trellis_details["protected_cells"]
                 threshold_dither_frames += 1
+            # E-22: segunda mitad de la etapa trellis — el indice del frame
+            # anterior como candidato alternativo, aceptado si el error EXTRA
+            # contra el pixel objetivo no supera el presupuesto. Corre despues
+            # del threshold (sobre lo que este dejo) y respeta la misma
+            # proteccion del dither (E-18). Con presupuesto 0 es un no-op y
+            # los bytes son identicos a los historicos.
+            if trellis_temporal > 0:
+                target_metric = trellis.build_threshold_palette(
+                    np.asarray(rgb).reshape(-1, 3), threshold_metric)
+                cells, temporal_details = trellis.apply_temporal_trellis(
+                    cells, prev_cells, target_metric, pal_metric,
+                    trellis_temporal, protected_mask=dither_changed_mask)
+                if temporal_details["temporal_cells"]:
+                    trellis_temporal_cells += temporal_details["temporal_cells"]
+                    trellis_temporal_frames += 1
+                trellis_temporal_protected += temporal_details["protected_cells"]
         # Metadatos de emision: no tocan `cells`, por eso van despues del
         # trellis y no en medio del pipeline.
         if use_global:
@@ -1534,6 +1557,10 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             "dither_temporal_resets": int(dither_temporal_resets),
             "threshold_dither_protected_cells": int(threshold_dither_protected),
             "threshold_dither_protected_frames": int(threshold_dither_frames),
+            "trellis_temporal_budget": float(trellis_temporal),
+            "trellis_temporal_cells": int(trellis_temporal_cells),
+            "trellis_temporal_frames": int(trellis_temporal_frames),
+            "trellis_temporal_protected_cells": int(trellis_temporal_protected),
             "scene_keyframes": bool(scene_keyframes),
             "scene_cut_keyframes": int(scene_cut_keyframes),
             "dither_proxy_improvement": (
@@ -1719,6 +1746,13 @@ def main(argv=None):
                   "protegidas del revert en %d frames" %
                   (info["threshold_dither_protected_cells"],
                    info["threshold_dither_protected_frames"]))
+        if info.get("trellis_temporal_budget"):
+            print("             trellis temporal (E-22): presupuesto %.4g; "
+                  "%d celdas movidas en %d frames; %d tramadas protegidas" %
+                  (info["trellis_temporal_budget"],
+                   info["trellis_temporal_cells"],
+                   info["trellis_temporal_frames"],
+                   info["trellis_temporal_protected_cells"]))
         print("  frames   : %d   tags RAW/ZLIB/DELTA = %d/%d/%d" %
               (info["n_frames"], info["tags"][0], info["tags"][1], info["tags"][2]))
         print("  .ascl    : %d B  (%.1f KB, %.1f KB/s)" %

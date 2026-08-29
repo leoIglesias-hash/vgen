@@ -74,6 +74,12 @@ def main(argv=None):
                         "historico (valores utiles 10-40); oklab = delta-E "
                         "perceptual, misma sensibilidad en sombras y luces "
                         "(valores utiles 0,01-0,05)")
+    p.add_argument("--trellis-temporal", type=float, default=0,
+                   help="E-22: presupuesto de error EXTRA por celda (misma "
+                        "escala que --threshold-metric; rgb ~2-15, oklab "
+                        "~0,005-0,04) para emitir el indice del frame "
+                        "anterior cuando eso saca la celda del DELTA. 0=off "
+                        "(bytes identicos); pixel con paleta global/block")
     p.add_argument("--ramp", default="short")
     p.add_argument("--palette-size", type=int, default=None, dest="pal_size",
                    help="1..256; default 256 o valor del perfil")
@@ -209,6 +215,7 @@ def main(argv=None):
                                     args.palette, keyint, with_audio=True,
                                     threshold=args.threshold,
                                     threshold_metric=args.threshold_metric,
+                                    trellis_temporal=args.trellis_temporal,
                                     bake_smoothing=args.bake_smoothing,
                                     reconstruction=args.reconstruction,
                                     quality_profile=args.quality_profile,
@@ -308,6 +315,14 @@ def main(argv=None):
                   "revert en %d frames" %
                   (info["threshold_dither_protected_cells"],
                    info["threshold_dither_protected_frames"]))
+        if info.get("trellis_temporal_budget"):
+            print("  trellis temporal (E-22): presupuesto %.4g; %d celdas "
+                  "movidas al indice previo en %d frames; %d tramadas "
+                  "protegidas" %
+                  (info["trellis_temporal_budget"],
+                   info["trellis_temporal_cells"],
+                   info["trellis_temporal_frames"],
+                   info["trellis_temporal_protected_cells"]))
         print("  bundle: %.1f KB  (video %.1f KB + audio %.1f KB)  ~%.1f KB/s" %
               (total/1024.0, la/1024.0, lau/1024.0, total/1024.0/secs))
         if not args.keep:

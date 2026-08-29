@@ -174,3 +174,66 @@ def apply_threshold_trellis(cells, prev_cells, palette_metric, threshold,
     emitted = cells.copy()
     emitted[keep, 0] = prev_cells[keep, 0]
     return emitted, {"reverted_cells": reverted, "protected_cells": protected}
+
+
+def apply_temporal_trellis(cells, prev_cells, target_metric, palette_metric,
+                           budget, protected_mask=None):
+    """E-22: segundo candidato de paleta si borra la celda del DELTA.
+
+    Para cada celda cuyo indice difiere del frame anterior, considera emitir
+    el indice ANTERIOR como candidato alternativo: la celda desaparece del
+    DELTA y el frame comprime mejor. El candidato se acepta si el error EXTRA
+    contra el color OBJETIVO de la celda (el pixel real del video, no otra
+    entrada de paleta) no supera `budget`:
+
+        extra = d(objetivo, paleta[prev]) - d(objetivo, paleta[actual])
+
+    `extra` puede ser negativo: el indice del frame anterior esta MAS cerca
+    del objetivo que el elegido por el cuantizador (pasa en los bordes de
+    celda de Voronoi), y ahi la celda sale del DELTA gratis o mejorando.
+
+    Difiere del caso degenerado (`apply_threshold_trellis`) en la pregunta:
+    el threshold mira cuanto se parecen entre si dos entradas de paleta; esto
+    mira cuanto pierde EL PIXEL por emitir la alternativa. Ambos son etapa
+    "trellis" del orden canonico y comparten metrica (E-20): `target_metric`
+    son los objetivos por celda y `palette_metric` la paleta, los dos ya en
+    el espacio de la metrica (`build_threshold_palette` convierte ambos: la
+    cuenta es la misma para una paleta que para un plano de pixeles).
+
+    `protected_mask` (E-18) marca celdas que el dither decidio tramar: nunca
+    se mueven aunque el presupuesto alcance, porque el patron Bayer distinto
+    por frame es la funcion del dither.
+
+    Devuelve `(cells, details)`; nunca muta el argumento (invariante 4).
+    """
+    if budget <= 0 or prev_cells is None or palette_metric is None:
+        return cells, {"temporal_cells": 0, "protected_cells": 0}
+
+    current = cells[:, 0]
+    previous = prev_cells[:, 0]
+    changed = current != previous
+    if not np.any(changed):
+        return cells, {"temporal_cells": 0, "protected_cells": 0}
+
+    idx = np.nonzero(changed)[0]
+    target = target_metric[idx]
+    delta_cur = palette_metric[current[idx]] - target
+    delta_prev = palette_metric[previous[idx]] - target
+    extra = (np.sqrt(np.einsum("ij,ij->i", delta_prev, delta_prev)) -
+             np.sqrt(np.einsum("ij,ij->i", delta_cur, delta_cur)))
+    accept = np.zeros(current.shape[0], dtype=bool)
+    accept[idx] = extra <= budget
+
+    protected = 0
+    if protected_mask is not None:
+        rescued = int(np.count_nonzero(accept & protected_mask))
+        if rescued:
+            accept &= ~protected_mask
+            protected = rescued
+
+    moved = int(np.count_nonzero(accept))
+    if not moved:
+        return cells, {"temporal_cells": 0, "protected_cells": protected}
+    emitted = cells.copy()
+    emitted[accept, 0] = previous[accept]
+    return emitted, {"temporal_cells": moved, "protected_cells": protected}
