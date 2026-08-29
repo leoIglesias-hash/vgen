@@ -145,6 +145,7 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 | S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | pendiente | | requiere F3 (E-12..E-18) además de F2/F4 ya cerradas |
 | S-5 | runtime del overlay (F7) | cerrada | 2026-08-28 | F7-1..F7-4 + integración en verde; gates de INT-002 cubiertos por la regresión (Instancia 014). Los dos gates físicos (costo p95 y MEM-001 en TV) se miden en F8-2/F8-4, donde el plan ya los prevé con y sin overlay |
 | S-6 | validación física (F8) | pendiente | | |
+| S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | pendiente | | **se ejecuta después de F5 (E-19..E-24)**, cuando el trellis ya baje bytes a calidad sostenida, y se co-diseña con S-4 (la densidad variable por zona es un cambio de formato, no un flag). Referencia obligatoria: fuente `TKN-2443` = 38.966.462 B / ~15 s ⇒ **el producto 768 ya pesa 17.379.859 B = 45 % del mp4 original**. Estimación previa del 1920 a la tasa actual (0,2244 B/celda/frame × 2.073.600 celdas × 231 frames) ≈ **107 MB = 2,7× la fuente**; el 1080p histórico dio 107,9 MB lossless pero con el encoder retirado `_encode_opt.py`, sin paleta adaptive/Oklab/refit/Zopfli/keyframes por corte, así que ese número **no es el techo**. Bloqueo operativo: a 6,25× celdas el encode se va a ~5 h y no entra en `timeout-minutes: 120` de `encode.yml`; el barrido arranca por 1280 (2,8× celdas) para medir la curva antes de gastar un runner en 1920 |
 
 ## Bitácora de decisiones de ejecución
 
@@ -183,6 +184,7 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 | 2026-08-28 | **E-15 activa la estabilización por default en los 4 algoritmos** (Δbytes sí, spec): kmeans-rgb y los Pillow ganan índices estables entre bloques (fronteras −31 %/−93 % en sintético; clip real −1,25 % bytes y RDELTA_ZLIB 10→4) al precio estático del blending (PSNR −1,04 dB con el `adaptive_stability_max` default 0,25). Es la MISMA semántica que kmeans-oklab ya tenía; quien quiera fidelidad estática pura usa `--adaptive-stability-max 0` (queda solo la alineación, sin costo) | los valores manuales del operador prevalecen (regla 9); el producto kmeans-oklab no cambia de bytes. Nota: kmeans-rgb adaptive da mejor PSNR RGB (36,74) y peor Oklab (0,00967) que el producto kmeans-oklab refit 5 (35,46 / 0,00732) — cada algoritmo gana su métrica; el fondo sigue kmeans-oklab (perceptual) |
 | 2026-08-28 | **E-16 medido y NO adoptado — la exactitud pasa a opt-in** (`--dither-exact`, default = LUT histórica byte-idéntica): el bench de producto (Instancia 022) dio PSNR −0,21 dB, Oklab +4,1 %, bytes +6,0 % y tiempo +39 %. El gate 555 actuaba de facto como freno del tramado; sin él traman muchos más píxeles y sube la entropía (DELTA_MASK 138→148, RDELTA_ZLIB 4→1). El commit `a87014a` lo había dejado default-on y rompía la reproducibilidad del producto `adef9e53…` desde `main`; el cierre lo corrige y agrega el test de bytes históricos. Criterio del operador confirmado en sesión: se adopta solo lo que mide calidad/eficiencia superior | «una mejora sin fila no existe»: la fila existe y dice que no; regla 5 (referencias reproducibles) manda sobre la pureza conceptual del dither exacto. E-17 (presupuesto en bytes) es el lugar para reevaluarlo |
 | 2026-08-29 | **Desvío en el bench de E-17**: el primer bench de producto (run 33223387847, `--dither-byte-budget 0`) fue **cancelado por el `timeout-minutes: 120`** de `encode.yml` — cada evaluación del presupuesto pasaba por `best_deflate`, que con Zopfli instalado (15 iteraciones) multiplicó ~por 10 el costo por frame. Fix hacia adelante: la MEDICIÓN del presupuesto usa `zlib_deflate` (zlib-9 puro, `encode_frame(..., fast_deflate=True)`) — determinista con o sin Zopfli y barata; la emisión real del frame conserva `best_deflate`/Zopfli intactos. Se re-despacha el bench | además de la velocidad, el cambio hace la decisión del presupuesto independiente del entorno (antes el recorte habría dependido de si Zopfli estaba instalado, contra la regla 5); la estructura medida (candidatos full/delta/mask reales con el mismo prev/keyframe/compress) no cambia |
+| 2026-08-29 | **El 1080p vuelve al plan como S-7, agendado después de F5** (pedido del operador: «no perdemos nada con probar… deberíamos apuntar al menos a un peso similar al del video original mp4 pero con esa misma calidad; si ahora no es posible sigamos mejorando hasta lograrlo»). Se agenda en vez de despacharse ya por dos razones medibles: (a) a 1920 col son 2.073.600 celdas contra 331.776 del 768 — 6,25× — y el encode se iría a ~5 h contra un `timeout-minutes: 120`; (b) el carril que baja bytes a calidad sostenida es F5 (trellis E-19..E-24, con E-24 `--near-lossless` como cierre), todavía sin ejecutar, así que medir 1920 hoy mide el encoder viejo del problema nuevo. El criterio de peso del operador **ya está cumplido en 768**: la fuente pesa 38.966.462 B y el producto 17.379.859 B (45 %); lo que falta demostrar es que se sostiene al subir la densidad | el barrido tiene sentido cuando el stack de eficiencia está completo, no antes; y la intuición del operador (más densidad donde hace falta, ahorro donde no) es un cambio de formato — grilla de celdas uniforme por header hoy — que pertenece a la revisión única de S-4/ASCLVID3, no a un flag del encoder |
 
 ## Próxima acción
 
@@ -192,11 +194,16 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
    celdas se aplican JUNTOS). Luego E-18 cierra F3. La **ruleta** sigue
    siendo INT-005 en F6/S-4. F5 y F8 sin cambios. Opcional no
    bloqueante: knob de `gradient_boost` del agregado E-14.
-2. Decisión abierta para el operador: el fondo ahora es el **768 refit 5**
+2. **S-7 (barrido de resolución 768 → 1280 → 1920)** queda agendado
+   después de F5: el objetivo del operador es subir densidad sin perder
+   el peso ganado (hoy el producto es el 45 % de la fuente mp4). Antes
+   de ejecutarlo hay que subir `timeout-minutes` en `encode.yml` y
+   arrancar por 1280 para medir la curva.
+3. Decisión abierta para el operador: el fondo ahora es el **768 refit 5**
    (35,46 dB), que supera al 960 ultra sin refit (34,40 dB) con 31 %
    menos bytes — si retoma la idea del 960, hay que re-medirlo con
    `--palette-refit 5` antes de comparar.
-3. Referencias HQ vigentes: **producto = 768 refit 5 `adef9e53…c05bb`
+4. Referencias HQ vigentes: **producto = 768 refit 5 `adef9e53…c05bb`
    (17.379.859 B, instalada en `outputs/`, run 33203086375)** · 768
    refit 5 + uint8-refine 3 `a95d0bbc…acbf` (17.442.264 B, Oklab 0,00728,
    run 33207479295, E-13 medido sin adoptar) · 768
