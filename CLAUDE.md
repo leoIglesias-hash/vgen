@@ -145,11 +145,26 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   ya no pisa celdas que el dither movió (`keep &= ~dither_changed_mask`),
   con contadores propios. No toca el producto (`--threshold` default 0).
   **Con E-17 y E-18, F3 (E-12..E-18) queda cerrada.**
-- ▶ **Próxima acción: F5 — E-19** (congelar el orden canónico
-  cuantizar → ditherear → trellis → emitir; `--threshold` se absorbe
-  como caso degenerado del trellis), luego E-20..E-24.
-  Decisiones abiertas del operador: (a) dither on/450/off para el fondo;
-  (b) si retoma el 960, re-medirlo con refit 5.
+- ✅ **E-19 (orden canónico, 2026-08-29)**: `backend/trellis.py` con
+  `CANONICAL_STAGES` como dato importable y el `--threshold` absorbido
+  como caso degenerado del trellis; E-20..E-23 extienden ese módulo, no
+  agregan pasadas al bucle. Refactor puro.
+- ✅ **E-20 (umbral en ΔE-Oklab, 2026-08-29)**: `--threshold-metric
+  {rgb,oklab}` con **default `rgb`** (los valores ya elegidos por el
+  operador no se reinterpretan, regla 9); la paleta se convierte una vez
+  por paleta, así que Oklab no cuesta más por frame. **Sin fila de bench
+  todavía: no cambia ninguna receta.**
+- 🔒 **Byte-identidad del producto verificada 3 veces** (regla 5):
+  `adef9e53…c05bb` reproducido post-E-16, post-E-18 y post-E-19/E-20
+  (run 33235096580 desde `73c67ad`). El refactor no movió un byte.
+- ▶ **Próxima acción: E-21** (jerarquía de costo del trellis: proxy
+  barato para explorar, zlib-9 entre finalistas, Zopfli **solo** sobre
+  el ganador — Zopfli dentro del bucle es inviable, no lento), luego
+  E-22/E-23 (trellis temporal y espacial) y E-24 (`--near-lossless`).
+  Es la primera tarea de F5 que **cambia la salida**, no un refactor.
+  Decisiones abiertas del operador: (a) dither on/450/off para el fondo
+  (los 3 clips están en `outputs/` con SHA verificado y hay preview.mp4
+  de cada uno); (b) si retoma el 960, re-medirlo con refit 5.
 - 📌 **S-7 agendada**: barrido de resolución 768 → 1280 → 1920 **después
   de F5**, con el objetivo del operador de subir densidad sin perder
   peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el
