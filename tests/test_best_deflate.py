@@ -15,6 +15,7 @@ import ascl_v2  # noqa: E402
 import deflate_util  # noqa: E402
 import encoder  # noqa: E402
 import regional_codec_v2  # noqa: E402
+import trellis  # noqa: E402
 
 
 PAYLOAD = (b"ASCILINE" * 512) + bytes(range(256)) * 8
@@ -78,13 +79,17 @@ class BestDeflateTest(unittest.TestCase):
     def test_simetria_los_cinco_puntos_comparten_el_mismo_compresor(self):
         # La trampa de E-08: transcode_ascl_bytes compara el payload v1 heredado
         # contra los candidatos v2. Si encoder y transcodificador usaran
-        # compresores distintos, la comparacion seria asimetrica. Verificacion
-        # explicita: los tres modulos referencian el MISMO objeto funcion.
-        self.assertIs(encoder.best_deflate, deflate_util.best_deflate)
+        # compresores distintos, la comparacion seria asimetrica. Desde E-21 el
+        # emisor v1 cierra via trellis.champion_deflate, pero el compresor de
+        # fondo sigue siendo el MISMO objeto funcion en todos los puntos.
+        self.assertIs(trellis.best_deflate, deflate_util.best_deflate)
         self.assertIs(ascl_v2.best_deflate, deflate_util.best_deflate)
         self.assertIs(regional_codec_v2.best_deflate, deflate_util.best_deflate)
+        self.assertIs(encoder.trellis, trellis)
 
-    def test_encode_frame_pasa_por_best_deflate(self):
+    def test_encode_frame_paga_un_solo_best_deflate(self):
+        # E-21: los candidatos compiten en zlib-9 y best_deflate se paga UNA
+        # vez, sobre el ganador (antes: full + delta + mask = tres por frame).
         calls = []
 
         def spy(data, level=9, iterations=None):
@@ -94,17 +99,16 @@ class BestDeflateTest(unittest.TestCase):
         cells = np.arange(64, dtype=np.uint8).reshape(64, 1) % 7
         prev = cells.copy()
         prev[3, 0] = 200
-        original = encoder.best_deflate
-        encoder.best_deflate = spy
+        original = trellis.best_deflate
+        trellis.best_deflate = spy
         try:
             encoder.encode_frame(cells, prev, encoder.MODE_PIXEL, 1,
                                  False, "auto", True)
         finally:
-            encoder.best_deflate = original
-        # full + delta + mask = tres compresiones por frame delta
-        self.assertEqual(len(calls), 3)
+            trellis.best_deflate = original
+        self.assertEqual(len(calls), 1)
 
-    def test_predictor_y_regional_pasan_por_best_deflate(self):
+    def test_predictor_y_regional_pagan_el_campeon_una_vez(self):
         calls = []
 
         def spy(data, level=9, iterations=None):
@@ -114,13 +118,15 @@ class BestDeflateTest(unittest.TestCase):
         matrix = (np.arange(32 * 32, dtype=np.uint16) % 11).astype(np.uint8)
         matrix = matrix.reshape(32, 32)
 
+        # E-21: los tres predictores compiten en zlib-9; best_deflate cierra
+        # solo el residual del ganador (antes: LEFT + TOP + GRADIENT = tres).
         original = ascl_v2.best_deflate
         ascl_v2.best_deflate = spy
         try:
             ascl_v2.encode_predictor_payload(matrix, True, zlib_level=9)
         finally:
             ascl_v2.best_deflate = original
-        self.assertEqual(len(calls), 3)  # LEFT, TOP, GRADIENT
+        self.assertEqual(len(calls), 1)
 
         del calls[:]
         original = regional_codec_v2.best_deflate

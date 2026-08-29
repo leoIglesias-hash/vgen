@@ -20,7 +20,9 @@ import numpy as np
 
 import ascl_bundle
 import regional_codec_v2
-from deflate_util import best_deflate
+import dataclasses
+
+from deflate_util import best_deflate, zlib_deflate
 
 
 MAGIC = b"ASCL"
@@ -336,16 +338,31 @@ def _restore_predictor(residual, predictor, previous=None):
     return result
 
 
-def encode_predictor_payload(matrix, keyframe, previous=None, zlib_level=9):
-    """Elige mecánicamente el predictor exacto de menor payload."""
+def encode_predictor_payload(matrix, keyframe, previous=None, zlib_level=9,
+                             fast_deflate=False):
+    """Elige mecánicamente el predictor exacto de menor payload.
+
+    E-21 (jerarquía de costo): los predictores compiten entre sí en zlib-9
+    puro — barato y determinista con o sin Zopfli, así que la ELECCIÓN del
+    predictor ya no depende del entorno — y Zopfli (best_deflate) se paga una
+    sola vez, sobre el residual del ganador. Antes cada candidato pagaba
+    best_deflate para descartar todos menos uno. ``fast_deflate=True`` omite
+    el cierre del campeón y devuelve el payload zlib-9 del ganador (para
+    comparar candidatos v2 sin emitir todavía).
+    """
     predictor_ids = ((PRED_LEFT, PRED_TOP, PRED_GRADIENT) if keyframe else
                      (PRED_PREVIOUS_SUB, PRED_PREVIOUS_XOR))
     candidates = []
     for predictor in predictor_ids:
         residual = _predict_residual(matrix, predictor, previous)
+        payload = bytes((predictor,)) + zlib_deflate(residual.tobytes(), zlib_level)
+        candidates.append((len(payload), predictor, payload, residual))
+    _length, predictor, payload, residual = min(
+        candidates, key=lambda item: (item[0], item[1]))
+    if not fast_deflate:
+        # best_deflate nunca supera a zlib-9 (toma el mínimo), así que el
+        # campeón jamás empeora al ganador ya elegido.
         payload = bytes((predictor,)) + best_deflate(residual.tobytes(), zlib_level)
-        candidates.append((len(payload), predictor, payload))
-    _length, predictor, payload = min(candidates, key=lambda item: (item[0], item[1]))
     return ((TAG_PREDICT_KEY_ZLIB if keyframe else TAG_PREDICT_DELTA_ZLIB),
             payload, predictor)
 
@@ -494,38 +511,61 @@ def transcode_ascl_bytes(source, tile_size=DEFAULT_TILE_SIZE,
         matrix = frame["cells"].reshape(header["rows"], header["cols"])
         previous_matrix = (None if previous is None else
                            previous.reshape(header["rows"], header["cols"]))
+        # E-21 (jerarquía de costo): regional y predictor se materializan en
+        # zlib-9 (fast_deflate) y compiten entre sí con esos tamaños — la
+        # interna v2 es determinista con o sin Zopfli — y Zopfli se paga UNA
+        # vez, sobre el ganador de esa interna. Antes cada frame pagaba hasta
+        # 4 best_deflate (regional + 3 predictores) para descartar casi todos.
         regional = regional_codec_v2.encode_payload(
             matrix,
             previous=(None if frame["keyframe"] else previous_matrix),
-            tile_size=tile_size, zlib_level=9)
+            tile_size=tile_size, zlib_level=9, fast_deflate=True)
         predictor_tag, predictor_payload, predictor_id = encode_predictor_payload(
-            matrix, frame["keyframe"], previous=previous_matrix, zlib_level=9)
+            matrix, frame["keyframe"], previous=previous_matrix, zlib_level=9,
+            fast_deflate=True)
+        # En empate gana regional, la misma preferencia del orden histórico
+        # (el predictor solo reemplazaba al regional siendo estrictamente menor).
+        winner_kind = "predictor"
+        if (bool(regional.keyframe) == bool(frame["keyframe"]) and
+                len(regional.payload) <= len(predictor_payload)):
+            winner_kind = "regional"
+        if winner_kind == "regional":
+            # El campeón nunca supera a zlib-9 (best_deflate toma el mínimo);
+            # replace() mantiene coherentes payload/compressed/ascl_tag.
+            regional = dataclasses.replace(
+                regional,
+                zlib_payload=best_deflate(regional.raw_payload, 9))
+            candidate_tag = regional.ascl_tag
+            candidate_payload = regional.payload
+        else:
+            residual = _predict_residual(matrix, predictor_id, previous_matrix)
+            candidate_tag = predictor_tag
+            candidate_payload = (bytes((predictor_id,)) +
+                                 best_deflate(residual.tobytes(), 9))
         chosen_tag = frame["tag"]
         chosen_payload = frame["payload"]
         chosen_kind = "v1"
-        # Solo gana si reduce bytes reales. Los empates conservan el bloque v1.
-        if (bool(regional.keyframe) == bool(frame["keyframe"]) and
-                len(regional.payload) < len(chosen_payload)):
+        # La adopción final sigue siendo por bytes reales: solo gana si reduce,
+        # los empates conservan el bloque v1 (y con eso el invariante de que
+        # ASCL v2 nunca crece).
+        if len(candidate_payload) < len(chosen_payload):
             if verify_roundtrip:
-                decoded = regional_codec_v2.decode_payload(
-                    regional.payload, header["rows"], header["cols"], tile_size,
-                    frame["keyframe"], previous=previous_matrix,
-                    compressed=regional.compressed)
-                if not np.array_equal(decoded.matrix, matrix):
-                    _fail("codec regional no reconstruye exactamente frame %d" % frame["index"])
-            chosen_tag = regional.ascl_tag
-            chosen_payload = regional.payload
-            chosen_kind = "regional"
-        if len(predictor_payload) < len(chosen_payload):
-            if verify_roundtrip:
-                decoded = decode_predictor_payload(
-                    predictor_payload, header["rows"], header["cols"],
-                    frame["keyframe"], previous=previous_matrix)
-                if not np.array_equal(decoded, matrix):
-                    _fail("predictor no reconstruye exactamente frame %d" % frame["index"])
-            chosen_tag = predictor_tag
-            chosen_payload = predictor_payload
-            chosen_kind = "predictor"
+                if winner_kind == "regional":
+                    decoded = regional_codec_v2.decode_payload(
+                        regional.payload, header["rows"], header["cols"],
+                        tile_size, frame["keyframe"], previous=previous_matrix,
+                        compressed=regional.compressed)
+                    if not np.array_equal(decoded.matrix, matrix):
+                        _fail("codec regional no reconstruye exactamente frame %d" % frame["index"])
+                else:
+                    decoded = decode_predictor_payload(
+                        candidate_payload, header["rows"], header["cols"],
+                        frame["keyframe"], previous=previous_matrix)
+                    if not np.array_equal(decoded, matrix):
+                        _fail("predictor no reconstruye exactamente frame %d" % frame["index"])
+            chosen_tag = candidate_tag
+            chosen_payload = candidate_payload
+            chosen_kind = winner_kind
         if chosen_kind == "regional":
             regional_frames += 1
             for name, count in regional.command_counts:

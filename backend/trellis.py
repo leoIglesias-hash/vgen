@@ -25,6 +25,21 @@ default) o en delta-E Oklab, donde un mismo numero significa el mismo cambio
 visible en las sombras y en las luces. La paleta se convierte al espacio de la
 metrica UNA vez por paleta, asi que Oklab no cuesta mas por frame que sRGB.
 
+E-21 agrega la jerarquia de costo: cuando una decision del encoder necesita
+saber "cuantos bytes cuesta esto", NO se paga Zopfli por candidato. La
+escalera tiene tres niveles y cada candidato sube solo lo que necesita:
+
+    proxy_cost        - explorar. Cota barata O(n) sin comprimir (entropia de
+                        orden 0). Es el nivel para los espacios de candidatos
+                        grandes del trellis temporal/espacial (E-22/E-23).
+    finalist_deflate  - comparar finalistas. zlib-9 puro: barato y, sobre
+                        todo, DETERMINISTA con o sin Zopfli instalado (regla
+                        5: la decision no puede depender del entorno).
+    champion_deflate  - emitir. best_deflate (Zopfli si hay), UNA vez, solo
+                        sobre el ganador ya elegido. Zopfli dentro de un bucle
+                        de candidatos es inviable, no lento (E-17 ya costo un
+                        timeout de CI por esto).
+
 El decoder no conoce este modulo: la salida sigue siendo una matriz comun de
 indices de paleta ASCL v1.
 """
@@ -32,6 +47,7 @@ indices de paleta ASCL v1.
 import numpy as np
 
 import perceptual_palette
+from deflate_util import best_deflate, zlib_deflate
 
 
 # Orden canonico del pipeline por frame (E-19). Es la fuente de verdad del
@@ -52,6 +68,48 @@ THRESHOLD_METRICS = ("rgb", "oklab")
 def canonical_order_index(stage):
     """Posicion de una etapa en el orden canonico. Lanza si no existe."""
     return CANONICAL_STAGES.index(stage)
+
+
+# E-21: niveles de la escalera de costo, de mas barato a mas caro. Igual que
+# CANONICAL_STAGES, es un dato importable: los tests lo leen de aca.
+COST_LADDER = ("proxy", "zlib9", "zopfli")
+
+
+def proxy_cost(data):
+    """Nivel 0 (explorar): cota barata de los bytes comprimidos, sin comprimir.
+
+    Entropia de orden 0 del stream de bytes, expresada en bytes (n*H/8). No es
+    el tamano zlib real - ignora repeticiones largas y el overhead del stream -
+    pero ORDENA candidatos parecidos con una sola pasada O(n), que es lo que el
+    trellis necesita para descartar la mayoria antes de comprimir nada.
+    Determinista por construccion.
+    """
+    if not data:
+        return 0.0
+    counts = np.bincount(np.frombuffer(data, dtype=np.uint8), minlength=256)
+    n = float(len(data))
+    p = counts[counts > 0] / n
+    return float(n * -(p * np.log2(p)).sum() / 8.0)
+
+
+def finalist_deflate(data):
+    """Nivel 1 (finalistas): zlib-9 puro, identico en TODOS los entornos.
+
+    Es la moneda con la que compiten los candidatos que llegaron a medirse en
+    bytes reales: barata, y sobre todo independiente de que Zopfli este
+    instalado (regla 5) - misma decision en cualquier maquina.
+    """
+    return zlib_deflate(data, 9)
+
+
+def champion_deflate(data):
+    """Nivel 2 (ganador): best_deflate (Zopfli si hay), solo al elegido.
+
+    Se paga UNA vez por frame, sobre la fuente cruda del candidato que ya gano
+    la comparacion en zlib-9. Nunca devuelve mas bytes que zlib-9 (best_deflate
+    toma el minimo), asi que subir de nivel jamas empeora al ganador.
+    """
+    return best_deflate(data, 9)
 
 
 def build_threshold_palette(palette_rgb, metric="rgb"):

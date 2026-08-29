@@ -40,7 +40,8 @@ import trellis
 import adaptive_palette
 import overlay_panel
 import perceptual_palette
-from deflate_util import best_deflate, zlib_deflate
+# E-21: el encoder ya no compara con deflate directo; la jerarquia de costo
+# (finalist/champion) vive en trellis.py y de ahi se importa.
 
 MAGIC          = b"ASCL"
 VERSION        = 1
@@ -893,30 +894,41 @@ def cells_to_planes_bytes(cells, mode):
 
 def encode_frame(cells, prev_cells, mode, frame_index, keyframe, compress, delta_allowed,
                  fast_deflate=False):
-    # fast_deflate (E-17): zlib-9 puro para MEDIR candidatos de dither muchas
-    # veces por frame sin pagar Zopfli ni depender de que este instalado.
-    # La emision real del frame sigue usando best_deflate (Zopfli si hay).
-    deflate = zlib_deflate if fast_deflate else best_deflate
+    # E-21 (jerarquia de costo): los candidatos FULL/DELTA/DELTA_MASK compiten
+    # entre si en zlib-9 (finalist_deflate: barato y determinista con o sin
+    # Zopfli - la ELECCION del tag ya no depende del entorno) y Zopfli se paga
+    # UNA vez, solo sobre la fuente cruda del ganador (champion_deflate).
+    # Antes cada candidato pagaba best_deflate: hasta 3 Zopfli por frame para
+    # descartar dos. fast_deflate (E-17) omite el cierre del campeon: medir y
+    # elegir son exactamente el mismo camino.
     planes = cells_to_planes_bytes(cells, mode)
-    candidates = []
-    full_z = deflate(planes, 9)
+    candidates = []  # (tag, payload_zlib9, fuente_cruda_del_candidato)
+    full_z = trellis.finalist_deflate(planes)
     if compress == "none":
-        candidates.append((TAG_RAW, planes))
+        candidates.append((TAG_RAW, planes, None))
     elif compress == "zlib":
-        candidates.append((TAG_ZLIB, full_z))
+        candidates.append((TAG_ZLIB, full_z, planes))
     else:
-        candidates.append((TAG_ZLIB, full_z) if len(full_z) < len(planes) else (TAG_RAW, planes))
+        candidates.append((TAG_ZLIB, full_z, planes)
+                          if len(full_z) < len(planes)
+                          else (TAG_RAW, planes, None))
     if delta_allowed and (not keyframe) and prev_cells is not None:
         changed = np.any(cells != prev_cells, axis=1)
         ci = np.nonzero(changed)[0].astype("<u4")
         if ci.size < cells.shape[0]:
             vals = cells[changed]
-            delta_z = deflate(ci.tobytes() + vals.tobytes(), 9)
-            candidates.append((TAG_DELTA, delta_z))
+            delta_raw = ci.tobytes() + vals.tobytes()
+            candidates.append(
+                (TAG_DELTA, trellis.finalist_deflate(delta_raw), delta_raw))
             mask = np.packbits(changed.astype(np.uint8), bitorder="little")
-            mask_z = deflate(mask.tobytes() + vals.tobytes(), 9)
-            candidates.append((TAG_DELTA_MASK, mask_z))
-    tag, payload = min(candidates, key=lambda c: len(c[1]))
+            mask_raw = mask.tobytes() + vals.tobytes()
+            candidates.append(
+                (TAG_DELTA_MASK, trellis.finalist_deflate(mask_raw), mask_raw))
+    # min() conserva el PRIMER minimo: los empates siguen prefiriendo
+    # FULL > DELTA > DELTA_MASK como siempre.
+    tag, payload, source = min(candidates, key=lambda c: len(c[1]))
+    if not fast_deflate and source is not None:
+        payload = trellis.champion_deflate(source)
     if len(planes) < len(payload):
         tag, payload = TAG_RAW, planes
     return tag, payload

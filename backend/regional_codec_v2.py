@@ -25,7 +25,7 @@ import zlib
 
 import numpy as np
 
-from deflate_util import best_deflate
+from deflate_util import best_deflate, zlib_deflate
 
 
 OP_SKIP_RUN = 0x00
@@ -263,12 +263,17 @@ def _count_tuple(counts: Dict[str, int], repeat: bool = False
 
 
 def encode_payload(current: np.ndarray, previous: Optional[np.ndarray] = None,
-                   tile_size: int = 16, zlib_level: int = 9) -> RegionalEncoding:
+                   tile_size: int = 16, zlib_level: int = 9,
+                   fast_deflate: bool = False) -> RegionalEncoding:
     """Codifica una transicion exacta y devuelve RAW y ZLIB para comparar afuera.
 
     ``previous is None`` genera keyframe. En delta, ambas matrices deben tener la
     misma forma. Por tile se elige el comando de menor longitud materializada;
     los empates usan ``_CANDIDATE_PRIORITY`` y por tanto son reproducibles.
+
+    E-21: ``fast_deflate=True`` comprime con zlib-9 puro (barato y determinista
+    con o sin Zopfli) para que el transcodificador compare candidatos; la
+    emision del ganador recompone ``zlib_payload`` con best_deflate afuera.
     """
     current = _matrix(current, "current")
     rows, cols = current.shape
@@ -321,7 +326,8 @@ def encode_payload(current: np.ndarray, previous: Optional[np.ndarray] = None,
     # Una matriz no vacia siempre cubre al menos un tile/comando.
     if not raw:
         raise AssertionError("stream regional vacio")
-    compressed = best_deflate(raw, zlib_level)
+    compressed = (zlib_deflate(raw, zlib_level) if fast_deflate
+                  else best_deflate(raw, zlib_level))
     repeat = (not keyframe and not dirty and
               raw == bytes((OP_SKIP_RUN,)) + _uvarint(tile_count))
     return RegionalEncoding(
