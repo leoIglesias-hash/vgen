@@ -91,6 +91,10 @@ def main(argv=None):
     p.add_argument("--dither-exact", action="store_true",
                    help="E-16 opt-in: mezcla exacta desde la base real del "
                         "cuantizador (sin gate 555); mas CPU y mas bytes")
+    p.add_argument("--dither-byte-budget", type=int, default=None,
+                   help="E-17 opt-in: bytes reales extra permitidos por frame "
+                        "para el dither; se aplica JUNTO al presupuesto de "
+                        "celdas (auto recorta tiles, selective rechaza)")
     p.add_argument("--keyint", type=int, default=0,
                    help="E-10: keyframe cada N frames (0 = fps*2, el historico)")
     p.add_argument("--scene-keyframes", action="store_true",
@@ -129,7 +133,8 @@ def main(argv=None):
                                         reserved=args.reserved,
                                         palette_refit=args.palette_refit,
                                         palette_uint8_refine=args.palette_uint8_refine,
-                                        dither_exact=args.dither_exact)
+                                        dither_exact=args.dither_exact,
+                                        dither_byte_budget=args.dither_byte_budget)
     except ValueError as exc:
         p.error(str(exc))
     if args.reserved and args.image:
@@ -214,6 +219,7 @@ def main(argv=None):
                                     palette_refit=args.palette_refit,
                                     palette_uint8_refine=args.palette_uint8_refine,
                                     dither_exact=args.dither_exact,
+                                    dither_byte_budget=args.dither_byte_budget,
                                     reserved=args.reserved,
                                     reserved_colors=(
                                         overlay_palette.reserved_table(args.reserved)
@@ -281,6 +287,12 @@ def main(argv=None):
                   "%d celdas cambiadas" %
                   (info["dither_budget"], info["dither_min_improvement"],
                    info["dither_window"], info["dither_changed_cells"]))
+        if info.get("dither_byte_budget") is not None:
+            print("  presupuesto de dither en bytes (E-17): %d B/frame; "
+                  "%d frames limitados, %d tiles recortados" %
+                  (info["dither_byte_budget"],
+                   info["dither_byte_limited_frames"],
+                   info["dither_byte_dropped_tiles"]))
         print("  bundle: %.1f KB  (video %.1f KB + audio %.1f KB)  ~%.1f KB/s" %
               (total/1024.0, la/1024.0, lau/1024.0, total/1024.0/secs))
         if not args.keep:
@@ -305,7 +317,8 @@ def main(argv=None):
                                     dither_window=args.dither_window,
                                     palette_refit=args.palette_refit,
                                     palette_uint8_refine=args.palette_uint8_refine,
-                                    dither_exact=args.dither_exact)
+                                    dither_exact=args.dither_exact,
+                                    dither_byte_budget=args.dither_byte_budget)
         v2_stats = None
         bundle_ascl = tmp_ascl
         if args.format == "v2":
@@ -327,6 +340,11 @@ def main(argv=None):
                   info["palette_uint8_refine"])
         if info.get("dither_exact"):
             print("  dither exacto (E-16): mezcla desde la base real")
+        if info.get("dither_byte_budget") is not None:
+            print("  presupuesto de dither en bytes (E-17): %d B/frame; "
+                  "%d tiles recortados" %
+                  (info["dither_byte_budget"],
+                   info["dither_byte_dropped_tiles"]))
         if v2_stats is not None:
             print("  formato: ASCLVID2 lossless; %d regionales + %d predictores; "
                   "%d B menos (%.2f%%)" %

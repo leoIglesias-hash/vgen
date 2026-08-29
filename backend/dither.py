@@ -565,12 +565,19 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
                             return_details=False, base_quantizer=None,
                             temporal_context=None, reset_temporal=False,
                             reset_on_palette_change=True,
-                            protected_rects=None, exact_pairs=False):
+                            protected_rects=None, exact_pairs=False,
+                            byte_cost=None, max_extra_bytes=None):
     """Dithering auto calibrado por calidad, bordes, presupuesto e historial.
 
     Primero produce el mismo candidato determinista que ``selective``. Despues
     acepta tiles solo cuando reducen el proxy RGB de baja frecuencia, los ordena
     por ganancia por celda y toma tiles completos hasta agotar el presupuesto.
+
+    E-17: si el llamador provee ``byte_cost`` (callable: mapa de indices HxW ->
+    bytes reales del frame emitido) y ``max_extra_bytes``, el costo en bytes del
+    resultado no puede exceder al del baseline en mas de ese presupuesto. Se
+    recorta el prefijo de tiles en el orden de aceptacion (biseccion
+    determinista); el presupuesto de celdas y el de bytes se aplican JUNTOS.
 
     ``temporal_state`` puede ser un :class:`TemporalDitherState` persistente. Por
     comodidad, un diccionario vacio tambien es valido y guarda internamente el
@@ -599,6 +606,10 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
         raise ValueError("max_texture_rms debe ser >= 0")
     if int(min_gradient_range) < 0:
         raise ValueError("min_gradient_range debe ser >= 0")
+    if (byte_cost is None) != (max_extra_bytes is None):
+        raise ValueError("byte_cost y max_extra_bytes van juntos (E-17)")
+    if max_extra_bytes is not None and int(max_extra_bytes) < 0:
+        raise ValueError("max_extra_bytes debe ser >= 0")
 
     pair_lut = _resolve_pair_lut(palette, pair_lut, base_quantizer)
     # E-05/F7: los rects protegidos entran por el candidato selectivo, que ya
@@ -718,6 +729,54 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
         accepted_tiles[ty, tx] = True
         used += cost
 
+    # E-17: presupuesto en BYTES reales, junto al de celdas (no lo reemplaza).
+    # Los tiles ya aceptados se recortan por prefijo en su orden de aceptacion
+    # (mejor ganancia por celda primero); el prefijo vacio es el baseline, con
+    # delta 0, asi que siempre existe una solucion dentro del presupuesto.
+    dropped_by_bytes = 0
+    byte_budget_delta = 0
+    byte_cost_calls = 0
+    if byte_cost is not None:
+        max_extra = int(max_extra_bytes)
+        accepted_order = [item for item in candidates if accepted_tiles[item]]
+        base_bytes = int(byte_cost(baseline))
+        byte_budget_delta = int(byte_cost(result)) - base_bytes
+        byte_cost_calls = 2
+
+        def rebuild_prefix(prefix):
+            out = baseline.copy()
+            for pty, ptx in accepted_order[:prefix]:
+                py0 = pty * tile_size
+                py1 = min(py0 + tile_size, h)
+                px0 = ptx * tile_size
+                px1 = min(px0 + tile_size, w)
+                out[py0:py1, px0:px1] = candidate[py0:py1, px0:px1]
+            return out
+
+        if byte_budget_delta > max_extra:
+            lo = 0
+            hi = len(accepted_order) - 1
+            best_prefix = 0
+            best_delta = 0
+            while lo <= hi:
+                mid = (lo + hi) // 2
+                delta_mid = int(byte_cost(rebuild_prefix(mid))) - base_bytes
+                byte_cost_calls += 1
+                if delta_mid <= max_extra:
+                    best_prefix = mid
+                    best_delta = delta_mid
+                    lo = mid + 1
+                else:
+                    hi = mid - 1
+            dropped_by_bytes = len(accepted_order) - best_prefix
+            byte_budget_delta = best_delta
+            result = rebuild_prefix(best_prefix)
+            accepted_tiles[:] = False
+            used = 0
+            for kty, ktx in accepted_order[:best_prefix]:
+                accepted_tiles[kty, ktx] = True
+                used += int(changed_counts[kty, ktx])
+
     result_error = low_frequency_error_map(rgb, palette[result], blur_size)
     baseline_total = _exact_nonnegative_sum(baseline_error)
     result_total = _exact_nonnegative_sum(result_error)
@@ -729,6 +788,7 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
         accepted_tiles[:] = False
         used = 0
         result_total = baseline_total
+        byte_budget_delta = 0
 
     if return_details:
         unused_budget = max(0, budget - used)
@@ -751,6 +811,11 @@ def apply_calibrated_dither(rgb, baseline, palette, matrix_size=4, pair_lut=None
             "budget_utilization": ((float(used) / float(budget))
                                    if budget > 0 else 0.0),
             "budget_limited_tiles": skipped_by_budget,
+            "byte_budget": (int(max_extra_bytes)
+                            if byte_cost is not None else None),
+            "byte_budget_delta_bytes": int(byte_budget_delta),
+            "byte_budget_dropped_tiles": int(dropped_by_bytes),
+            "byte_budget_evaluations": int(byte_cost_calls),
             "smallest_selectable_tile": (min(
                 (int(changed_counts[item]) for item in candidates),
                 default=0)),

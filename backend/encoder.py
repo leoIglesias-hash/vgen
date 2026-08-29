@@ -118,7 +118,7 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                             dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
                             reserved=0, palette_refit=0, palette_uint8_refine=0,
-                            dither_exact=False):
+                            dither_exact=False, dither_byte_budget=None):
     """Valida limites del header v1 y opciones compartidas por todos los entrypoints."""
     if mode_name not in MODE_NAMES:
         raise ValueError("mode desconocido: %s" % mode_name)
@@ -165,6 +165,12 @@ def validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
         raise ValueError("palette-uint8-refine solo aplica a kmeans-oklab (E-13)")
     if int(bool(dither_exact)) and dither_mode == "off":
         raise ValueError("dither-exact requiere dither selective o auto (E-16)")
+    if dither_byte_budget is not None:
+        if dither_mode == "off":
+            raise ValueError(
+                "dither-byte-budget requiere dither selective o auto (E-17)")
+        if int(dither_byte_budget) < 0:
+            raise ValueError("dither-byte-budget debe ser >= 0")
     if int(reserved) < 0:
         raise ValueError("reserved debe ser >= 0")
     if int(reserved) > 0 and int(pal_size) < int(reserved) + 22:
@@ -829,16 +835,31 @@ def apply_dither_mode(rgb, cells, palette, dither_mode="off", dither_matrix=4,
                       dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                       dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                       dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
-                      protected_rects=None, dither_exact=False):
+                      protected_rects=None, dither_exact=False,
+                      dither_byte_budget=None, byte_cost=None):
     """Hornea el modo de dithering elegido y conserva el shape de ``cells``."""
     if dither_mode == "off":
         return cells, None
     baseline = cells[:, 0].reshape(rgb.shape[:2])
+    with_byte_budget = dither_byte_budget is not None and byte_cost is not None
     if dither_mode == "selective":
         result = selective_dither.apply_selective_dither(
             rgb, baseline, palette, matrix_size=dither_matrix,
             pair_lut=pair_lut, protected_rects=protected_rects,
             exact_pairs=bool(dither_exact))
+        if with_byte_budget:
+            # E-17: selective no tiene tiles ordenados que recortar; el
+            # presupuesto en bytes es todo-o-nada contra el baseline real.
+            delta = int(byte_cost(result)) - int(byte_cost(baseline))
+            rejected = delta > int(dither_byte_budget)
+            if rejected:
+                result = baseline
+            return result.reshape(-1, 1), {
+                "byte_budget": int(dither_byte_budget),
+                "byte_budget_delta_bytes": (0 if rejected else int(delta)),
+                "byte_budget_rejected": bool(rejected),
+                "byte_budget_evaluations": 2,
+            }
         return result.reshape(-1, 1), None
     if dither_mode == "auto":
         result, details = selective_dither.apply_calibrated_dither(
@@ -848,6 +869,9 @@ def apply_dither_mode(rgb, cells, palette, dither_mode="off", dither_matrix=4,
             temporal_state=temporal_state, temporal_window=dither_window,
             protected_rects=protected_rects,
             exact_pairs=bool(dither_exact),
+            byte_cost=(byte_cost if with_byte_budget else None),
+            max_extra_bytes=(int(dither_byte_budget)
+                             if with_byte_budget else None),
             # La paleta puede renovarse sin que cambie la escena. La evidencia se
             # conserva entre bloques y el encoder resetea el estado solo en hard cut.
             temporal_context="ascl-video", reset_on_palette_change=False,
@@ -1031,7 +1055,8 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
                  dither_budget=selective_dither.DEFAULT_MAX_CHANGED_FRACTION,
                  dither_min_improvement=selective_dither.DEFAULT_MIN_PROXY_IMPROVEMENT,
                  dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
-                 palette_refit=0, palette_uint8_refine=0, dither_exact=False):
+                 palette_refit=0, palette_uint8_refine=0, dither_exact=False,
+                 dither_byte_budget=None):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             dither_mode=dither_mode, dither_matrix=dither_matrix,
@@ -1042,7 +1067,8 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
                             dither_window=dither_window,
                             palette_refit=palette_refit,
                             palette_uint8_refine=palette_uint8_refine,
-                            dither_exact=dither_exact)
+                            dither_exact=dither_exact,
+                            dither_byte_budget=dither_byte_budget)
     if palette_mode != "per-frame":
         raise ValueError(
             "encode_image solo admite --palette per-frame: una imagen no tiene "
@@ -1065,11 +1091,22 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
         image_quantizer = make_perceptual_quantizer(
             palette, palette_algorithm, perceptual_lut_bits)
         pair_lut = make_dither_pair_lut(palette, image_quantizer)
+        image_byte_cost = None
+        if dither_byte_budget is not None:
+            base_cells = cells
+
+            def image_byte_cost(index_map):
+                trial = base_cells.copy()
+                trial[:, 0] = np.asarray(index_map, dtype=np.uint8).reshape(-1)
+                _tag, trial_payload = encode_frame(
+                    trial, None, mode, 0, True, compress, False)
+                return len(trial_payload)
         cells, dither_details = apply_dither_mode(
             rgb, cells, palette, dither_mode, dither_matrix,
             pair_lut=pair_lut, dither_budget=dither_budget,
             dither_min_improvement=dither_min_improvement,
-            dither_window=dither_window, dither_exact=dither_exact)
+            dither_window=dither_window, dither_exact=dither_exact,
+            dither_byte_budget=dither_byte_budget, byte_cost=image_byte_cost)
     tag, payload = encode_frame(cells, None, mode, 0, True, compress, False)
     frames = [{"tag": tag, "pal_count": pal_count, "palette": palette, "payload": payload}]
     if dump_cells:
@@ -1088,10 +1125,15 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
             "dither": dither_mode, "dither_matrix": int(dither_matrix),
             "dither_budget": float(dither_budget),
             "dither_exact": bool(dither_exact),
+            "dither_byte_budget": (int(dither_byte_budget)
+                                   if dither_byte_budget is not None else None),
             "dither_min_improvement": float(dither_min_improvement),
             "dither_window": int(dither_window),
-            "dither_changed_cells": (int(dither_details["changed_cells"])
+            "dither_changed_cells": (int(dither_details.get("changed_cells", 0))
                                      if dither_details is not None else 0),
+            "dither_byte_dropped_tiles": (
+                int(dither_details.get("byte_budget_dropped_tiles", 0))
+                if dither_details is not None else 0),
             "flags": FLAG_HAS_OFFSET_TABLE | flags_extra}
 
 
@@ -1111,7 +1153,7 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                  dither_window=selective_dither.DEFAULT_TEMPORAL_WINDOW,
                  reserved=0, reserved_colors=None, scene_keyframes=False,
                  protect_panel=False, palette_refit=0, palette_uint8_refine=0,
-                 dither_exact=False):
+                 dither_exact=False, dither_byte_budget=None):
     validate_encode_options(mode_name, cols, rows, fps, pal_size, char_aspect,
                             palette_mode, bake_smoothing, reconstruction,
                             palette_block_frames, dither_mode, dither_matrix,
@@ -1123,7 +1165,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                             dither_window, reserved=reserved,
                             palette_refit=palette_refit,
                             palette_uint8_refine=palette_uint8_refine,
-                            dither_exact=dither_exact)
+                            dither_exact=dither_exact,
+                            dither_byte_budget=dither_byte_budget)
     reserved = int(reserved)
     if reserved:
         reserved_colors = _validate_reserved_colors(reserved, reserved_colors)
@@ -1257,6 +1300,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     dither_proxy_before = 0
     dither_proxy_after = 0
     dither_temporal_resets = 0
+    dither_byte_dropped_tiles = 0
+    dither_byte_limited_frames = 0
     scene_cut_keyframes = 0
     for frame_data in frames_iter:
         block_start = False
@@ -1326,6 +1371,24 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                                                    palette_refit=palette_refit,
                                                    palette_uint8_refine=palette_uint8_refine)
         if dither_mode != "off":
+            frame_byte_cost = None
+            if dither_byte_budget is not None:
+                # E-17: bytes reales del frame tal como lo emite encode_frame,
+                # con el mismo prev_cells/keyframe/compress que usara el emisor.
+                # El threshold corre despues y es identico para ambos candidatos.
+                base_cells = cells
+                frame_prev = prev_cells
+                frame_keyframe = keyframe
+                frame_idx = idx
+
+                def frame_byte_cost(index_map):
+                    trial = base_cells.copy()
+                    trial[:, 0] = np.asarray(
+                        index_map, dtype=np.uint8).reshape(-1)
+                    _tag, trial_payload = encode_frame(
+                        trial, frame_prev, mode, frame_idx, frame_keyframe,
+                        compress, delta_allowed)
+                    return len(trial_payload)
             # La misma paleta base que construyo el PairLUT: el dither no ve
             # ni propone entradas reservadas (INV-3).
             cells, dither_details = apply_dither_mode(
@@ -1338,11 +1401,23 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                 dither_min_improvement=dither_min_improvement,
                 dither_window=dither_window,
                 protected_rects=panel_protected,
-                dither_exact=dither_exact)
+                dither_exact=dither_exact,
+                dither_byte_budget=dither_byte_budget,
+                byte_cost=frame_byte_cost)
             if dither_details is not None:
-                dither_changed_cells += int(dither_details["changed_cells"])
-                dither_proxy_before += int(dither_details["baseline_proxy_error"])
-                dither_proxy_after += int(dither_details["result_proxy_error"])
+                dither_changed_cells += int(
+                    dither_details.get("changed_cells", 0))
+                dither_proxy_before += int(
+                    dither_details.get("baseline_proxy_error", 0))
+                dither_proxy_after += int(
+                    dither_details.get("result_proxy_error", 0))
+                frame_dropped = int(
+                    dither_details.get("byte_budget_dropped_tiles", 0))
+                if dither_details.get("byte_budget_rejected"):
+                    frame_dropped = max(frame_dropped, 1)
+                dither_byte_dropped_tiles += frame_dropped
+                if frame_dropped:
+                    dither_byte_limited_frames += 1
         if use_global:
             pal_count = palette0.shape[0] if idx == 0 else 0
             palette = palette0 if idx == 0 else None
@@ -1400,6 +1475,10 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             "dither": dither_mode, "dither_matrix": int(dither_matrix),
             "dither_budget": float(dither_budget),
             "dither_exact": bool(dither_exact),
+            "dither_byte_budget": (int(dither_byte_budget)
+                                   if dither_byte_budget is not None else None),
+            "dither_byte_dropped_tiles": int(dither_byte_dropped_tiles),
+            "dither_byte_limited_frames": int(dither_byte_limited_frames),
             "dither_min_improvement": float(dither_min_improvement),
             "dither_window": int(dither_window),
             "dither_changed_cells": int(dither_changed_cells),
@@ -1493,6 +1572,10 @@ def main(argv=None):
     p.add_argument("--dither-exact", action="store_true",
                    help="E-16 opt-in: mezcla exacta desde la base real del "
                         "cuantizador (sin gate 555); mas CPU y mas bytes")
+    p.add_argument("--dither-byte-budget", type=int, default=None,
+                   help="E-17 opt-in: bytes reales extra permitidos por frame "
+                        "para el dither; se aplica JUNTO al presupuesto de "
+                        "celdas (auto recorta tiles, selective rechaza)")
     args = p.parse_args(argv)
     args.cols, args.pal_size = resolve_quality_options(
         args.quality_profile, args.cols, args.pal_size, default_cols=200)
@@ -1513,7 +1596,8 @@ def main(argv=None):
                                 dither_window=args.dither_window,
                                 palette_refit=args.palette_refit,
                                 palette_uint8_refine=args.palette_uint8_refine,
-                                dither_exact=args.dither_exact)
+                                dither_exact=args.dither_exact,
+                                dither_byte_budget=args.dither_byte_budget)
     except ValueError as exc:
         p.error(str(exc))
     ext = os.path.splitext(args.input)[1].lower()
@@ -1543,7 +1627,8 @@ def main(argv=None):
                             scene_keyframes=args.scene_keyframes,
                             palette_refit=args.palette_refit,
                             palette_uint8_refine=args.palette_uint8_refine,
-                            dither_exact=args.dither_exact)
+                            dither_exact=args.dither_exact,
+                            dither_byte_budget=args.dither_byte_budget)
         secs = info["n_frames"] / float(info["fps"]) or 1
         print("OK %s  (video, %s, paleta %s)" % (args.output, info["mode"], info["palette_mode"]))
         print("  fuente   : %dx%d px" % info["src"])
@@ -1571,6 +1656,12 @@ def main(argv=None):
                   "%d celdas cambiadas" %
                   (info["dither_budget"], info["dither_min_improvement"],
                    info["dither_window"], info["dither_changed_cells"]))
+        if info.get("dither_byte_budget") is not None:
+            print("             presupuesto en bytes (E-17): %d B/frame; "
+                  "%d frames limitados, %d tiles recortados" %
+                  (info["dither_byte_budget"],
+                   info["dither_byte_limited_frames"],
+                   info["dither_byte_dropped_tiles"]))
         print("  frames   : %d   tags RAW/ZLIB/DELTA = %d/%d/%d" %
               (info["n_frames"], info["tags"][0], info["tags"][1], info["tags"][2]))
         print("  .ascl    : %d B  (%.1f KB, %.1f KB/s)" %
@@ -1593,7 +1684,8 @@ def main(argv=None):
                             dither_window=args.dither_window,
                             palette_refit=args.palette_refit,
                             palette_uint8_refine=args.palette_uint8_refine,
-                            dither_exact=args.dither_exact)
+                            dither_exact=args.dither_exact,
+                            dither_byte_budget=args.dither_byte_budget)
         print("OK %s  (imagen, %s)" % (args.output, info["mode"]))
         print("  grilla   : %dx%d celdas" % (info["cols"], info["rows"]))
         print("  calidad  : perfil %s, hasta %d colores" %
