@@ -21,8 +21,11 @@ sys.path.insert(0, os.path.join(ROOT, "backend"))
 import encoder  # noqa: E402
 
 
-WIDTH = 128
-HEIGHT = 32
+# El frame tiene que dar para varios tiles de 16x16 DENTRO del presupuesto de
+# celdas del dither: con 128x32 el 5 % (204 celdas) no llega a cubrir un tile
+# (256) y el calibrado no acepta nada, dejando el test vacio.
+WIDTH = 192
+HEIGHT = 96
 # Umbrales a barrer: la distancia entre grises vecinos depende de la paleta que
 # elija kmeans, asi que el test busca el primero que realmente pise el dither en
 # lugar de fijar un numero magico.
@@ -49,7 +52,11 @@ def encode_synthetic(out_path, dump_path, **options):
         # El threshold solo existe con paleta global (pal16); keyint alto deja
         # un solo keyframe, asi los demas frames pasan por el revert.
         palette_mode="global", keyint=64, with_audio=False,
-        palette_algorithm="kmeans-oklab", dump_cells=dump_path)
+        palette_algorithm="kmeans-oklab", dump_cells=dump_path,
+        # Lo que se prueba aca es la interaccion con el threshold, no los
+        # frenos del calibrado: presupuesto amplio, sin piso de mejora y sin
+        # histeresis temporal para que el dither se active desde el frame 0.
+        dither_budget=0.5, dither_min_improvement=0.0, dither_window=1)
     defaults.update(options)
     with mock.patch.object(encoder, "probe_size",
                            return_value=(WIDTH, HEIGHT)), \
