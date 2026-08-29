@@ -177,13 +177,23 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   **PSNR/Oklab idénticos, +2.040 B (+0,012 %), wall 44:21 → 20:18
   (−54 %)** → producto `41c94170…79d5`; `74be25ef…` queda histórica (el
   emisor cambió). Sin Zopfli la salida es byte-idéntica a la histórica.
-- ▶ **Próxima acción: E-22** (trellis temporal: segundo candidato de
-  paleta si hace que la celda desaparezca del DELTA, explorado con la
-  escalera de E-21), luego E-23 (trellis espacial: cruces 17→16, 5→4,
-  3→2 en `_dense_candidates`) y E-24 (`--near-lossless`). Si el ahorro
-  de F5 no supera un mínimo acordado, la fase se archiva con su
-  evidencia. Decisión abierta del operador: si retoma el 960,
-  re-medirlo con refit 5.
+- ✅ **E-22 (2026-08-29, `9ab95f6`, opt-in `--trellis-temporal`)**: el
+  índice del frame anterior como segundo candidato — se emite si el
+  error EXTRA contra el pixel objetivo no supera el presupuesto (la
+  celda sale del DELTA; extra negativo = sale mejorando). Barrido
+  (Instancia 025): **presupuesto 2 = −16,6 % bytes y PSNR +0,12 dB
+  (`63fb7aae…`, 14,3 MB)**; 4 = −25,2 %, −0,04 dB (`221de28f…`,
+  12,8 MB, determinismo re-verificado); 10 descartado (−0,82 dB).
+  Default 0 = byte-idéntico.
+- ▶ **Próxima acción: E-23** (trellis espacial: cruces 17→16, 5→4,
+  3→2 en `_dense_candidates` de `regional_codec_v2.py`) y E-24
+  (`--near-lossless`, calibra combinando E-22/E-23). Si el ahorro de
+  F5 no supera un mínimo acordado, la fase se archiva con su
+  evidencia. **Decisiones abiertas del operador:** (a) presupuesto del
+  trellis temporal para el fondo — 0 / 2 / 4 — con los previews
+  enviados y los clips en `outputs/` (el bench no ve arrastre
+  temporal: elección visual); (b) si retoma el 960, re-medirlo con
+  refit 5.
 - 📌 **S-7 agendada**: barrido de resolución 768 → 1280 → 1920 **después
   de F5**, con el objetivo del operador de subir densidad sin perder
   peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el

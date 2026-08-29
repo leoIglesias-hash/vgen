@@ -1241,3 +1241,53 @@ inviable — el timeout de E-17 lo probó). El producto pasa a
 referencia `74be25ef…` queda como fila histórica: **ya no es
 reproducible desde `main`** porque E-21 cambió el emisor — mismo motivo
 por el que P-02 congeló su fila en su momento.
+
+## Instancia 025 - E-22: trellis temporal — la curva presupuesto/bytes; presupuesto 2 sube PSNR y ahorra 16,6 %
+
+**Fecha:** 2026-08-29 · **Commit:** `9ab95f6` (CI verde run 33272369191)
+· **Benchs:** runs 33272440621 (presupuesto 4), 33272444235 (10),
+33273449999 (2 + preview), 33273453829 (4 + preview).
+
+**Qué es.** `--trellis-temporal N` (opt-in, default 0 = byte-idéntico,
+verificado por test): para cada celda que difiere del frame anterior, el
+índice PREVIO se considera segundo candidato y se emite si el error
+EXTRA contra el pixel objetivo (misma métrica de E-20) no supera N — la
+celda desaparece del DELTA. `extra` puede ser negativo: en los bordes de
+Voronoi el índice previo está MÁS cerca del objetivo que el elegido, y
+ahí la celda sale del DELTA **mejorando** la fidelidad. Corre en la
+etapa trellis del orden canónico, después del threshold, y respeta la
+protección del dither (E-18).
+
+**Barrido sobre la receta de producto** (768 graphic-hq, adaptive
+kmeans-oklab, tile 16, refit 5, dither off, zopfli; referencia = E-21):
+
+```text
+temporal 0 (run 33270879728): | clip.asclv | 16987304 | 17170673 | 0.2216 | 231 | 95 | 9 | ZLIB:95;DELTA_MASK:135;RDELTA_RAW:1 | 35.63 | 0.00721 | 41c9417008b57d53739db5f19cc36a19373f8dd8b84e1ba58862350cec1e79d5 |
+temporal 2 (run 33273449999): | clip.asclv | 14132053 | 14315422 | 0.1844 | 231 | 39 | 9 | ZLIB:39;DELTA_MASK:190;RDELTA_RAW:2 | 35.75 | 0.00765 | 63fb7aaee60db9dc41b056cb0bf6986948230ffd66fb17bad46f50439176adde |
+temporal 4 (run 33272440621): | clip.asclv | 12663096 | 12846465 | 0.1652 | 231 | 36 | 9 | ZLIB:36;DELTA_MASK:193;RDELTA_RAW:2 | 35.59 | 0.00809 | 221de28f1b6c5252be35368cdeeb736c15298c533956137438d59cdc11d80373 |
+temporal 10 (run 33272444235): | clip.asclv | 10595152 | 10778521 | 0.1382 | 231 | 34 | 9 | ZLIB:34;DELTA:2;DELTA_MASK:193;RDELTA_RAW:2 | 34.81 | 0.00941 | 5db38f9d08af44582f9f12acb50b6bd891d3f5acb06771ffd9e0db92f26bf628 |
+```
+
+- **Presupuesto 2: −16,6 % de bytes y PSNR +0,12 dB** (9,2 M de celdas
+  movidas, ~12 % por frame). La mejora de PSNR viene de las ganancias
+  gratis (extra < 0); el Oklab medio sube +6,1 % porque las celdas
+  congeladas retienen un color levemente viejo.
+- Presupuesto 4: −25,2 %, PSNR −0,04 dB, Oklab +12 % (13,8 M celdas,
+  ~21 % por frame). Presupuesto 10: −37,2 % pero −0,82 dB → descartado.
+- Los keyframes elegidos caen 95 → 36-39: con los DELTA tan chicos, el
+  emisor deja de preferir fulls; `cadena_delta_max` sigue en 9 (los
+  bloques adaptativos acotan las cadenas).
+- **Determinismo verificado** (regla 5): la re-corrida del presupuesto 4
+  con preview reprodujo `221de28f…0373` byte a byte.
+- Wall ~18 min (la jerarquía E-21 es la que hace barato este barrido:
+  cuatro corridas costaron lo que antes una y media).
+
+**Decisión: mecanismo cerrado; la adopción del presupuesto es del
+operador, con los previews.** Igual que el banding con el dither, las
+dos columnas de calidad son promedios por píxel y **no ven arrastre
+temporal** (celdas que quedan pegadas al color del frame anterior); el
+PSNR casi intacto sugiere que a presupuesto 2-4 el efecto es leve, pero
+se confirma a ojo. `preview.mp4` de 2 y 4 enviados al operador;
+`clip-temporal-2.asclv` y `clip-temporal-4.asclv` instalados en
+`outputs/` con SHA verificado. Si adopta 2, el producto pasa a pesar el
+**37 % del mp4 fuente**; si adopta 4, el **33 %**.
