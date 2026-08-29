@@ -215,6 +215,8 @@ Regresión al cierre de esta sesión: **245 pruebas Python y 26 suites JavaScrip
 (base: 115 y 11; el CI del commit de cierre de E-16 valida el conteo). Último
 commit de tarea: cierre de E-16 (opt-in `--dither-exact`); `outputs/clip.asclv` =
 fondo 768 **refit 5** (`adef9e53…c05bb`, SHA verificado) servido por el player
-standalone en `localhost:8123`. Pendiente de verificación: re-encode de
-producto en CI para confirmar byte a byte que `main` reproduce `adef9e53…`
-tras el cierre (despachar workflow `encode` con `extra: --palette-refit 5`).
+standalone en `localhost:8123`. Verificación cumplida (2026-08-29, run
+33220236164): el re-encode de producto desde `main` post-cierre (workflow
+`encode`, `overlay=off`, `extra: --palette-refit 5`) reprodujo **byte a byte**
+`adef9e533b01fdd489ec6dacf1265f07072ecba8d15e88e79b7bd2dd5a5c05bb` con la fila
+de bench idéntica; además el CI de regresión de `6bc2676` quedó en verde.
