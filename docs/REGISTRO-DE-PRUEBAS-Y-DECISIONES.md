@@ -1291,3 +1291,44 @@ se confirma a ojo. `preview.mp4` de 2 y 4 enviados al operador;
 `clip-temporal-2.asclv` y `clip-temporal-4.asclv` instalados en
 `outputs/` con SHA verificado. Si adopta 2, el producto pasa a pesar el
 **37 % del mp4 fuente**; si adopta 4, el **33 %**.
+
+## Instancia 026 - E-23: trellis espacial — cruces de opcode medidos; −0,32 % en solitario
+
+**Fecha:** 2026-08-29 · **Commit:** `626694a` (CI verde run 33274723247)
+· **Benchs:** runs 33274781717 (presupuesto 8) y 33274785794 (16).
+
+**Qué es.** `--trellis-spatial N` (opt-in, default 0 = byte-idéntico,
+verificado por test): en tiles con exactamente 17, 5 o 3 valores
+distintos, el valor más raro se fusiona con el valor del tile que
+minimiza el peor error extra por celda (métrica E-20); el tile cruza a
+un opcode más barato del regional v2 (PAL8→PAL4, PAL4→PACK2,
+PACK2→PACK1). El cruce se fuerza en el ENCODER (etapa trellis, también
+en keyframes); el transcodificador v2 sigue siendo lossless exacto.
+Tiles con celdas tramadas se bloquean (E-18).
+
+**Bench aislado sobre la receta de producto** (referencia = E-21):
+
+```text
+espacial 0 (run 33270879728): | clip.asclv | 16987304 | 17170673 | 0.2216 | 231 | 95 | 9 | ZLIB:95;DELTA_MASK:135;RDELTA_RAW:1 | 35.63 | 0.00721 | 41c9417008b57d53739db5f19cc36a19373f8dd8b84e1ba58862350cec1e79d5 |
+espacial 8 (run 33274781717): | clip.asclv | 16931718 | 17115087 | 0.2209 | 231 | 96 | 9 | ZLIB:96;DELTA_MASK:134;RDELTA_RAW:1 | 35.62 | 0.00724 | 28edb2ad3b3c4669226171a68a8d6298b7a9d19bbbd52949ada1fc12613da6bb |
+espacial 16 (run 33274785794): | clip.asclv | 16926685 | 17110054 | 0.2209 | 231 | 95 | 9 | ZLIB:95;DELTA_MASK:134;RDELTA_RAW:1;RDELTA_ZLIB:1 | 35.62 | 0.00724 | c84dfe9284a6e9991f5aee0bdf5fe736d2a518a86154146b0e195418b1cccbf2 |
+```
+
+- Presupuesto 8: 36.563 tiles fusionados (437.348 celdas en 231 frames)
+  → **−55.586 B (−0,32 %) por −0,01 dB y +0,4 % Oklab**. Presupuesto 16
+  apenas suma (−0,35 %): la curva satura — casi todos los tiles en
+  cruce ya entran con 8.
+- El efecto en solitario es chico porque las fusiones también ensucian
+  el DELTA v1 (celdas que cambian respecto del frame anterior) y porque
+  el candidato regional no gana en todos los frames. Su lugar natural
+  es COMBINADO con el trellis temporal (E-22), que es exactamente lo
+  que calibra E-24.
+
+**Decisión: mecanismo cerrado, sin adopción en solitario** (−0,32 % no
+justifica mover el producto por sí solo); queda como ingrediente de
+`--near-lossless` (E-24). Nota para E-24: su criterio de cierre del
+runbook pide comparar «error temporal y proxy de banding» contra el
+baseline — ninguna de las dos columnas existe todavía en
+`tools/bench_ref.py` (la de banding ya estaba propuesta desde la
+Instancia 023), y la calibración también depende de la decisión visual
+pendiente del operador sobre el presupuesto temporal.

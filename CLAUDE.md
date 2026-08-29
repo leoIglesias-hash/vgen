@@ -185,15 +185,21 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   (`63fb7aae…`, 14,3 MB)**; 4 = −25,2 %, −0,04 dB (`221de28f…`,
   12,8 MB, determinismo re-verificado); 10 descartado (−0,82 dB).
   Default 0 = byte-idéntico.
-- ▶ **Próxima acción: E-23** (trellis espacial: cruces 17→16, 5→4,
-  3→2 en `_dense_candidates` de `regional_codec_v2.py`) y E-24
-  (`--near-lossless`, calibra combinando E-22/E-23). Si el ahorro de
-  F5 no supera un mínimo acordado, la fase se archiva con su
-  evidencia. **Decisiones abiertas del operador:** (a) presupuesto del
-  trellis temporal para el fondo — 0 / 2 / 4 — con los previews
-  enviados y los clips en `outputs/` (el bench no ve arrastre
-  temporal: elección visual); (b) si retoma el 960, re-medirlo con
-  refit 5.
+- ✅ **E-23 (2026-08-29, `626694a`, opt-in `--trellis-spatial`)**: en
+  tiles con 17/5/3 valores distintos, fusionar el más raro cruza a un
+  opcode más barato del regional v2; se fuerza en el ENCODER (el
+  transcode sigue lossless exacto). Aislado (Instancia 026): −0,32 %
+  por −0,01 dB (satura entre 8 y 16) → sin adopción en solitario, es
+  ingrediente de E-24. Default 0 = byte-idéntico.
+- ▶ **Próxima acción: E-24** (`--near-lossless`, combina y calibra
+  temporal+espacial). **Bloqueada por dos cosas que no son código:**
+  (a) la decisión visual del operador sobre el presupuesto temporal
+  (0 / 2 / 4, previews enviados, clips en `outputs/`); (b) agregar a
+  `tools/bench_ref.py` las columnas de error temporal y proxy de
+  banding que el criterio de cierre de E-24 exige comparar contra el
+  baseline. Con E-24 cierra F5; si el ahorro no supera un mínimo
+  acordado, la fase se archiva con su evidencia. Decisión abierta
+  extra: si retoma el 960, re-medirlo con refit 5.
 - 📌 **S-7 agendada**: barrido de resolución 768 → 1280 → 1920 **después
   de F5**, con el objetivo del operador de subir densidad sin perder
   peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el
