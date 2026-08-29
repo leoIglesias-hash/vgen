@@ -27,7 +27,7 @@ el TV nunca cuantiza ni decide, solo ejecuta.
   huérfana **`assets`** del repo (solo insumos de encode). Receta de
   producto vigente (2026-08-29): 768 graphic-hq, adaptive kmeans-oklab,
   tile 16, `--palette-refit 5`, **`--dither off`**, zopfli, overlay=off
-  → `74be25ef…011f9`.
+  → `41c94170…79d5` (17.170.673 B, emisor E-21).
 - **Generar un clip para ver:** workflow `encode` (Actions → encode → Run workflow).
   Encodea desde la rama `assets` con el perfil HQ por defecto y publica `clip.asclv`,
   la fila de `bench_ref`, el SHA-256 y un `preview.mp4` como artifacts descargables.
@@ -164,18 +164,26 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
 - 🔒 **Byte-identidad del producto verificada 3 veces** (regla 5):
   `adef9e53…c05bb` reproducido post-E-16, post-E-18 y post-E-19/E-20
   (run 33235096580 desde `73c67ad`). El refactor no movió un byte.
-- ▶ **Próxima acción: INT-007** (pedido del operador 2026-08-29:
-  (A) tipografía menos común y más llamativa para el texto nativo, con
-  sombra suave con transparencia si se puede sin gran esfuerzo;
-  (B) hacer girar `outputs/logo.png` sobre el mismo canvas para simular
-  una ruleta superpuesta — sigue siendo drawImage con rotate, un solo
-  canvas). Luego **E-21** (jerarquía de costo del trellis: proxy barato
-  para explorar, zlib-9 entre finalistas, Zopfli **solo** sobre el
-  ganador — Zopfli dentro del bucle es inviable, no lento; las celdas
-  decodificadas no cambian, los bytes del contenedor pueden), luego
-  E-22/E-23 (trellis temporal y espacial) y E-24 (`--near-lossless`).
-  Decisión abierta del operador: si retoma el 960, re-medirlo con
-  refit 5.
+- ✅ **INT-007 (2026-08-29, `faf2390`)**: tipografía Palatino bold con
+  sombra translúcida (`weight`/`shadow` en textlayer.js, derrame < 1
+  celda, markDirty expandido) y `outputs/logo.png` girando como ruleta
+  simulada (ángulo determinista por frame, cuadrado circunscripto
+  marcado sucio). Verificado en navegador; la ruleta REAL sigue en F6.
+- ✅ **E-21 (2026-08-29, `7e6fd8e`, ADOPTADA)**: jerarquía de costo en
+  `trellis.py` (`COST_LADDER`: `proxy_cost` entropía orden 0 para
+  E-22/E-23, `finalist_deflate` zlib-9 determinista, `champion_deflate`
+  best_deflate SOLO al ganador); emisor v1, predictores v2 y transcode
+  eligen en zlib-9 y pagan un campeón por frame. Instancia 024:
+  **PSNR/Oklab idénticos, +2.040 B (+0,012 %), wall 44:21 → 20:18
+  (−54 %)** → producto `41c94170…79d5`; `74be25ef…` queda histórica (el
+  emisor cambió). Sin Zopfli la salida es byte-idéntica a la histórica.
+- ▶ **Próxima acción: E-22** (trellis temporal: segundo candidato de
+  paleta si hace que la celda desaparezca del DELTA, explorado con la
+  escalera de E-21), luego E-23 (trellis espacial: cruces 17→16, 5→4,
+  3→2 en `_dense_candidates`) y E-24 (`--near-lossless`). Si el ahorro
+  de F5 no supera un mínimo acordado, la fase se archiva con su
+  evidencia. Decisión abierta del operador: si retoma el 960,
+  re-medirlo con refit 5.
 - 📌 **S-7 agendada**: barrido de resolución 768 → 1280 → 1920 **después
   de F5**, con el objetivo del operador de subir densidad sin perder
   peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el

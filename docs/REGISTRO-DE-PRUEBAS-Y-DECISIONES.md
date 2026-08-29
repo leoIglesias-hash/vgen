@@ -1197,3 +1197,47 @@ verificado; el default del input `dither` del workflow `encode` pasa a
 candidatos descartados se borran de `outputs/` (reproducibles desde el
 workflow con dither=auto). La propuesta 3 (columna de proxy de banding)
 sigue abierta.
+
+## Instancia 024 - E-21: jerarquía de costo — mismo video, −54 % de encode, +0,012 % de bytes
+
+**Fecha:** 2026-08-29 · **Commit:** `7e6fd8e` (CI verde run 33270790064,
+282 pruebas Python — el conteo base previo era 271, no 266 como decía el
+runbook — y 26 suites JS, con y sin Zopfli) · **Bench:** run 33270879728.
+
+**Qué cambió.** Los tres puntos que decidían comprimiendo con
+`best_deflate` por candidato (emisor v1 FULL/DELTA/DELTA_MASK,
+predictores v2, e interna regional/predictor del transcodificador) ahora
+eligen con **zlib-9 puro** (`trellis.finalist_deflate`, determinista con
+o sin Zopfli — la elección ya no depende del entorno, regla 5) y pagan
+`best_deflate` **una sola vez, sobre el ganador**
+(`trellis.champion_deflate`). `trellis.proxy_cost` (entropía de orden 0)
+queda listo como nivel de exploración para E-22/E-23. Sin Zopfli
+instalado la salida es byte-idéntica a la histórica (probado por la pata
+de CI sin zopfli, donde selección y campeón siempre fueron el mismo
+compresor).
+
+**Bench de producto** (768 graphic-hq, adaptive kmeans-oklab, tile 16,
+`--palette-refit 5`, `--dither off`, zopfli, overlay=off):
+
+```text
+referencia (run 33231247505): | clip.asclv | 16985264 | 17168633 | 0.2216 | 231 | 93 | 9 | ZLIB:93;DELTA_MASK:137;RDELTA_RAW:1 | 35.63 | 0.00721 | 74be25ef6ebbcbc3ebf975bd10d348bb10badd8ec4e0800423f15f39c3a011f9 |
+E-21       (run 33270879728): | clip.asclv | 16987304 | 17170673 | 0.2216 | 231 | 95 | 9 | ZLIB:95;DELTA_MASK:135;RDELTA_RAW:1 | 35.63 | 0.00721 | 41c9417008b57d53739db5f19cc36a19373f8dd8b84e1ba58862350cec1e79d5 |
+```
+
+- **PSNR y Oklab idénticos al centésimo/cienmilésimo**: E-21 no toca
+  `cells`, solo la elección del contenedor; el video decodificado es el
+  mismo.
+- **Bytes +2.040 (+0,012 %)**: dos frames pasaron de DELTA_MASK a ZLIB
+  (keyframes 93 → 95) porque en zlib-9 el candidato FULL les ganó,
+  mientras que con la comparación Zopfli-por-candidato ganaba
+  DELTA_MASK. Es el costo exacto de decidir sin Zopfli en el bucle.
+- **Wall 44:21 → 20:18 (−54 %)**; RSS 693.644 → 678.832 kB.
+
+**Decisión: adoptada.** Calidad idéntica, +2 KB sobre 17 MB, y el encode
+a menos de la mitad; sobre todo, es el mecanismo que hace viables E-22 y
+E-23 (explorar candidatos de trellis con Zopfli dentro del bucle era
+inviable — el timeout de E-17 lo probó). El producto pasa a
+`41c94170…79d5` (instalado en `outputs/` con SHA verificado). La
+referencia `74be25ef…` queda como fila histórica: **ya no es
+reproducible desde `main`** porque E-21 cambió el emisor — mismo motivo
+por el que P-02 congeló su fila en su momento.

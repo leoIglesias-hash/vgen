@@ -59,7 +59,7 @@ Reglas de uso:
 | E-18 | interacción dither/threshold | cerrada | commit de E-18 | 2026-08-29 | El threshold corre **después** del dither y revertía celdas al valor previo; sobre una celda tramada eso deshacía la decisión del dither y rompía el patrón Bayer distinto en cada frame (una celda tramada difiere de la anterior por un vecino de paleta, justo la distancia que el threshold considera "sin cambio"). Ahora `encode_video` guarda la máscara de lo que movió el dither (`cells[:,0] != pre_dither_indices`, solo cuando `threshold > 0` y modo pixel) y el revert la excluye: `keep &= ~dither_changed_mask`. Stats nuevas `threshold_dither_protected_cells`/`_frames` (encoder y make_clip las imprimen). **No toca el producto**: `--threshold` es 0 por defecto y el perfil HQ no lo usa, así que `adef9e53…` sigue byte-idéntico (regla 5). Tests: `tests/test_dither_threshold.py` (3, barrido de umbrales para no quedar vacío). **Cierra F3** |
 | E-19 | orden canónico del pipeline | cerrada | commit de E-19 | 2026-08-29 | Nuevo `backend/trellis.py` con `CANONICAL_STAGES = ("quantize", "dither", "trellis", "emit")` como dato importable (los tests lo leen de ahí en vez de repetir la lista) y `apply_threshold_trellis`, que es el `--threshold` **absorbido como caso degenerado del trellis**: E-20..E-23 extienden ese módulo en vez de agregar pasadas nuevas al bucle. En `encoder.py` el bloque del threshold desaparece del loop y los metadatos de emisión (`pal_count`/`palette`, que no tocan `cells`) se mueven **después** del trellis, dejando el pipeline de celdas contiguo. Refactor puro: la regla, los guards (`pal16`, `MODE_PIXEL`, `not keyframe`) y los contadores de E-18 se conservan; `apply_threshold_trellis` nunca muta su argumento (invariante 4). Tests: `tests/test_trellis_order.py` (10), con reimplementación independiente del camino histórico para que un cambio de regla se delate en vez de moverse con el refactor. CI verde en `fa99280` (run 33233634916): **266 pruebas Python** (eran 256) y 26 suites JS |
 | E-20 | threshold en ΔE-Oklab | cerrada | commit de E-20 | 2026-08-29 | `trellis.build_threshold_palette(paleta, metrica)` lleva la paleta al espacio de la métrica **una vez por paleta** (en los dos puntos donde el encoder ya rehacía `pal16`, ahora `pal_metric`), así que Oklab no cuesta más por frame que sRGB: la cuenta del trellis es el mismo `einsum` y lo único que cambia es la escala en que se lee el umbral. `rgb` devuelve **int32 a propósito** (en int16 la distancia al cuadrado desborda: 255²·3 = 195.075). CLI: `--threshold` pasa a `float` y se agrega `--threshold-metric {rgb,oklab}` con **default `rgb`** — un `--threshold 24` que ya existía significa exactamente lo mismo que antes, sin reinterpretación silenciosa (regla 9); en Oklab los valores útiles rondan 0,01-0,05, no 10-40. `encode_video` valida la métrica. **El producto no se toca**: `--threshold` sigue en 0 y el perfil HQ no lo usa. Tests: `tests/test_trellis_order.py` sube a 16 con `ThresholdMetricTest`, que construye dos saltos de **idéntica distancia sRGB** (negro→8 y 247→blanco) y verifica que sRGB no puede distinguirlos con ningún umbral mientras Oklab congela solo el de las luces. **Falta medir**: sin fila de bench, E-20 no cambia ninguna receta. **Byte-identidad verificada, no supuesta** (regla 5): re-encode de producto desde `main` en `73c67ad` (run 33235096580, wall 47:49, RSS 693.644 kB) reprodujo `adef9e533b01fdd489ec6dacf1265f07072ecba8d15e88e79b7bd2dd5a5c05bb` con la fila de bench idéntica — o sea que ni el refactor de E-19 ni la métrica de E-20 movieron un byte del producto |
-| E-21 | jerarquía de costo del trellis | pendiente | | | |
+| E-21 | jerarquía de costo del trellis | cerrada (**adoptada**) | `7e6fd8e` | 2026-08-29 | `trellis.COST_LADDER` (proxy/zlib9/zopfli): `proxy_cost` (entropía orden 0, nivel de exploración para E-22/E-23), `finalist_deflate` (zlib-9 puro, determinista con o sin Zopfli — la ELECCIÓN ya no depende del entorno, regla 5) y `champion_deflate` (best_deflate UNA vez, solo al ganador). Recableados los tres puntos que pagaban Zopfli por candidato: emisor v1 (3→1 por frame), predictores v2 (3→1) e interna regional/predictor del transcode (hasta 4→1, con `fast_deflate` en `encode_payload` y cierre por `dataclasses.replace`); adopción contra v1 sigue por bytes reales (invariante nunca-crece intacto). Sin Zopfli la salida es byte-idéntica (pata de CI sin zopfli). **Bench de producto (Instancia 024, run 33270879728): PSNR/Oklab IDÉNTICOS (35,63 / 0,00721 — no toca `cells`), bytes +2.040 (+0,012 %: 2 frames DELTA_MASK→ZLIB), wall 44:21 → 20:18 (−54 %)** → producto = `41c94170…79d5` (instalado en `outputs/`, SHA verificado); `74be25ef…` queda como fila histórica no reproducible desde main. Tests: `tests/test_cost_ladder.py` (11) + `test_best_deflate.py` actualizado al contrato nuevo. CI verde run 33270790064 (282 Python / 26 JS) |
 | E-22 | trellis temporal | pendiente | | | |
 | E-23 | trellis espacial | pendiente | | | |
 | E-24 | `--near-lossless` ΔE conservador | pendiente | | | si el ahorro no alcanza, F5 se archiva |
@@ -205,6 +205,8 @@ runbook §4-INT-007.
 
 | 2026-08-29 | **Nace INT-007** (pedido del operador junto con la decisión del dither): (A) fuentes menos comunes y más llamativas para el texto nativo, con sombra translúcida («que hasta tenga transparencia como sombra») si sale sin gran esfuerzo; (B) hacer girar `outputs/logo.png` sobre el mismo canvas «a ver si se puede simular como si fuera una ruleta superponiéndose». Se ordena ANTES de E-21 | frontend puro y corto, y es exactamente lo que el operador revisa a ojo en el player; E-21 no lo bloquea (su bench corre en CI). La ruleta real sigue siendo INT-005/ASCLVID3 (F6) — esto es la simulación con la imagen nativa D7=a |
 
+| 2026-08-29 | **E-21 adoptada y el SHA de producto se mueve a propósito**: `74be25ef…` → `41c94170…79d5` (+2.040 B, +0,012 %; PSNR/Oklab idénticos; wall −54 %). La regla 5 se preserva en su forma fuerte — la ELECCIÓN de candidatos ahora es idéntica en todos los entornos (zlib-9), cosa que antes NO pasaba: con Zopfli instalado el tag elegido podía diferir del elegido sin Zopfli. La referencia vieja queda como fila histórica congelada, como P-02 en su momento | el emisor cambió (jerarquía de costo); re-encodear desde main reproduce `41c94170…`, no `74be25ef…`. Es la primera tarea de F5 que cambia la salida, anunciada como tal |
+
 ## Próxima acción
 
 0. **Resuelto 2026-08-29: el fondo de producto es `--dither off`**
@@ -217,11 +219,14 @@ runbook §4-INT-007.
    Palatino bold con sombra translúcida y logo girando como ruleta
    simulada, verificados en navegador local (captura enviada al
    operador; player en `localhost:8123`).
-1. **Carril E: F3 CERRADA (E-12..E-18), E-19/E-20 cerradas.** Sigue
-   **F5 — E-21** (jerarquía de costo: los candidatos compiten en
-   zlib-9 y Zopfli se paga solo sobre el ganador; primera tarea de F5
-   que cambia la salida — las celdas decodificadas no cambian, los
-   bytes del contenedor pueden), luego E-22..E-24. La **ruleta** sigue
+1. **Carril E: F3 CERRADA, E-19/E-20/E-21 cerradas (E-21 adoptada:
+   producto `41c94170…79d5`, encode −54 %).** Sigue **F5 — E-22**
+   (trellis temporal: segundo candidato de paleta si hace que la celda
+   desaparezca del DELTA, explorado con `proxy_cost`/zlib-9 de la
+   escalera E-21), luego E-23 (trellis espacial: cruces 17→16, 5→4 y
+   3→2 en `_dense_candidates` de `regional_codec_v2.py`) y E-24
+   (`--near-lossless`). Si el ahorro de F5 no supera un mínimo
+   acordado, la fase se archiva con su evidencia. La **ruleta** sigue
    siendo INT-005 en F6/S-4. F8 sin cambios. Opcional no bloqueante:
    knob de `gradient_boost` del agregado E-14.
 2. **S-7 (barrido de resolución 768 → 1280 → 1920)** queda agendado
@@ -233,10 +238,12 @@ runbook §4-INT-007.
    (35,46 dB), que supera al 960 ultra sin refit (34,40 dB) con 31 %
    menos bytes — si retoma la idea del 960, hay que re-medirlo con
    `--palette-refit 5` antes de comparar.
-4. Referencias HQ vigentes: **producto = 768 refit 5 SIN dither
-   `74be25ef…011f9` (17.168.633 B, 35,63 dB, Oklab 0,00721, run
-   33231247505, instalado en `outputs/`, decisión del operador
-   2026-08-29)** · tramado refit 5 `adef9e53…c05bb` (17.379.859 B,
+4. Referencias HQ vigentes: **producto = 768 refit 5 SIN dither, emisor
+   E-21 `41c94170…79d5` (17.170.673 B, 35,63 dB, Oklab 0,00721, run
+   33270879728, instalado en `outputs/`, reproducible desde `main`)** ·
+   sin dither pre-E-21 `74be25ef…011f9` (17.168.633 B, mismas métricas,
+   run 33231247505, fila histórica — el emisor cambió y ya no se
+   reproduce desde main) · tramado refit 5 `adef9e53…c05bb` (17.379.859 B,
    35,46 dB, run 33203086375, producto anterior — reproducible con
    dither=auto) · dither con presupuesto 450 `aabd518a…8bf6`
    (17.246.050 B, 35,57 dB, run 33231255094, descartado) · 768
@@ -256,16 +263,16 @@ runbook §4-INT-007.
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
-Regresión al cierre de esta sesión: **266 pruebas Python y 26 suites JavaScript**
-(base: 115 y 11; el CI de `73c67ad` valida el conteo). Último commit de tarea:
-E-20 (`--threshold-metric`). `outputs/clip.asclv` = fondo 768 **refit 5 sin
-dither** (`74be25ef…011f9`, SHA verificado; decisión del operador 2026-08-29 —
-los candidatos descartados se borraron de `outputs/` y siguen reproducibles
-desde el workflow).
+Regresión al cierre de esta sesión: **282 pruebas Python y 26 suites JavaScript**
+(base: 115 y 11; el CI de `7e6fd8e`, run 33270790064, valida el conteo — nota:
+el conteo previo real era 271, no los 266 que decía esta página). Último commit
+de tarea: E-21 (jerarquía de costo, adoptada). `outputs/clip.asclv` = fondo 768
+**refit 5 sin dither, emisor E-21** (`41c94170…79d5`, SHA verificado,
+reproducible desde `main`).
 
-**Byte-identidad del producto verificada tres veces** (regla 5, nunca supuesta):
-run 33220236164 (post-E-16), run 33233492257 (post-E-18, wall 38:06) y run
-33235096580 (post-E-19 y E-20 desde `main` en `73c67ad`, wall 47:49) reprodujeron
-los tres **byte a byte** `adef9e533b01fdd489ec6dacf1265f07072ecba8d15e88e79b7bd2dd5a5c05bb`
-con la fila de bench idéntica. Es la evidencia de que el refactor del trellis
-(E-19) y la métrica nueva (E-20) no tocaron la salida del producto.
+**Byte-identidad, historia** (regla 5, nunca supuesta): los runs 33220236164
+(post-E-16), 33233492257 (post-E-18) y 33235096580 (post-E-19/E-20)
+reprodujeron byte a byte el producto tramado `adef9e53…c05bb` — evidencia de
+que E-19/E-20 no tocaron la salida. Desde E-21 (`7e6fd8e`) el SHA de producto
+se movió **a propósito** a `41c94170…79d5` (Instancia 024): mismas métricas de
+calidad, +0,012 % de bytes, encode −54 %.
