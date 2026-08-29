@@ -1104,3 +1104,85 @@ reevaluará con E-17 (presupuesto de dither en bytes), que es el freno
 correcto para su mayor gasto de bytes. Test nuevo:
 `test_default_path_keeps_historic_lut_gated_bytes` reconstruye el camino
 histórico de forma independiente y exige bytes idénticos.
+
+## Instancia 023 - E-17: el presupuesto de dither funciona; la decisión dither on/off queda del operador
+
+Código en `6bc2676`/`b324446` (CI en verde): `--dither-byte-budget N`
+opt-in mide los bytes reales del frame con la estructura exacta del
+emisor (`encode_frame(..., fast_deflate=True)`, mismo prev/keyframe/
+compress, zlib-9 puro para que la decisión no dependa de si Zopfli está
+instalado) y, en modo `auto`, recorta por bisección determinista el
+prefijo de tiles aceptados. Default `None` = salida histórica byte a
+byte. Presupuesto en bytes y presupuesto del 5 % de celdas se aplican
+JUNTOS.
+
+Barrido completo sobre la config de producto (768 graphic-hq, adaptive,
+kmeans-oklab, tile 16, `--palette-refit 5`, zopfli, `overlay=off`);
+filas textuales de los artefactos:
+
+```text
+producto dither auto (run 33203086375): | clip.asclv | 17196490 | 17379859 | 0.2244 | 231 | 92 | 9 | ZLIB:92;DELTA_MASK:138;RDELTA_RAW:1 | 35.46 | 0.00732 | adef9e533b01fdd489ec6dacf1265f07072ecba8d15e88e79b7bd2dd5a5c05bb |
+  392508 celdas tramadas · wall 45:50
+budget 450          (run 33231255094): | clip.asclv | 17062681 | 17246050 | 0.2226 | 231 | 93 | 9 | ZLIB:93;DELTA_MASK:137;RDELTA_RAW:1 | 35.57 | 0.00725 | aabd518a5e195b477370c6e15c927c58ba69a58cbc40bc51deb9ebf0ae198bf6 |
+  156947 celdas tramadas (40 %) · 99 frames limitados, 5115 tiles recortados · wall 48:41.15 · RSS 705.528 kB
+budget 0            (run 33229100878): | clip.asclv | 16985223 | 17168592 | 0.2216 | 231 | 93 | 9 | ZLIB:93;DELTA_MASK:137;RDELTA_RAW:1 | 35.63 | 0.00721 | 909ba629c3044563d6eb1c012e57128e1d91c2292564de2fda88f66abfaaf68e |
+  2 celdas tramadas · 204 frames limitados, 9232 tiles recortados · wall 49:04.75 · RSS 696.856 kB
+dither off          (run 33231247505): | clip.asclv | 16985264 | 17168633 | 0.2216 | 231 | 93 | 9 | ZLIB:93;DELTA_MASK:137;RDELTA_RAW:1 | 35.63 | 0.00721 | 74be25ef6ebbcbc3ebf975bd10d348bb10badd8ec4e0800423f15f39c3a011f9 |
+  0 celdas tramadas · wall 44:21.52 · RSS 700.320 kB
+```
+
+**El mecanismo de E-17 está validado.** El presupuesto es un knob
+continuo y monótono, no un interruptor: 450 B/frame conserva 156.947 de
+las 392.508 celdas tramadas (40 %) y cae proporcionalmente entre los dos
+extremos en las tres métricas a la vez. Recorta por orden de aceptación,
+o sea que lo que sobrevive es el tramo mejor rankeado por ganancia/costo.
+
+**Hallazgo que corrige la lectura del primer bench:** `budget 0` y
+`dither off` difieren en **41 bytes** y son idénticas en PSNR, Oklab,
+B/celda/frame, keyframes y tags. Presupuesto 0 *es* dither apagado (las
+2 celdas que se cuelan son esos 41 bytes), pero pagando **49:04 contra
+44:21** de encode. Como ajuste de producto el 0 no tiene sentido: si se
+quiere sin dither, la receta honesta es `--dither off`. Por eso el
++0,17 dB del primer bench no medía «E-17 mejora el dither» sino
+«dither auto contra dither off».
+
+**Costo real del dither completo:** 211.226 B sobre el clip sin dither
+(1,23 % del archivo) y −0,17 dB de PSNR, para 392.508 celdas tramadas
+(~0,54 B por celda tramada).
+
+**Por qué NO se decide por número.** Las dos columnas de calidad del
+bench —`psnr_rgb_db` y `err_oklab_medio`— son promedios de fidelidad
+**por píxel**. El dither cambia exactitud por píxel a cambio de romper
+las mesetas de color; por construcción esas dos métricas lo castigan y
+**ninguna de las dos ve banding**, que es lo único que el dither compra.
+El ranking monótono hacia «sin dither» es por lo tanto esperable y no
+constituye evidencia de que la imagen se vea mejor. Con las métricas
+registradas hoy el proyecto **no puede justificar el dither con una
+fila de bench**: falta una columna que mida mesetas/banding.
+
+**Decisiones:**
+
+1. **E-17 queda opt-in** (`--dither-byte-budget`, default `None` =
+   byte-idéntico). El producto sigue siendo `adef9e53…c05bb` con dither
+   auto y sin presupuesto, reproducible desde `main` (regla 5).
+2. **La elección dither on / 450 / off se eleva al operador** con los
+   `preview.mp4` de las dos corridas nuevas, porque es una decisión
+   visual y no la puede tomar el bench. Si elige «off», la receta es
+   `--dither off` (no `budget 0`) y el fondo pasa a `74be25ef…a011f9`
+   (17.168.633 B, 35,63 dB, −1,23 % de bytes y 1:29 menos de encode).
+3. **Propuesta abierta:** agregar a `tools/bench_ref.py` una columna de
+   proxy de banding, para que la regla «una mejora sin fila registrada
+   no existe» pueda aplicarse también a lo que el dither mejora.
+
+**E-18** (`b324446` + fix de fixture `a1fef56`, CI verde con 256
+pruebas): el threshold corría después del dither y revertía celdas al
+valor del frame anterior; sobre una celda tramada eso deshacía la
+decisión del dither y rompía el patrón Bayer distinto en cada frame. El
+revert ahora excluye las celdas que el dither movió, con contadores
+`threshold_dither_protected_cells/_frames` reportados por encoder y
+make_clip. No toca el producto: `--threshold` es 0 por default y el
+perfil HQ nunca lo pasa. Test nuevo `tests/test_dither_threshold.py`
+(3 pruebas), que se autocalibra barriendo umbrales en vez de fijar un
+número mágico.
+
+**Con E-17 y E-18 cerradas, F3 (E-12..E-18) queda completa.**

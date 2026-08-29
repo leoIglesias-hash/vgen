@@ -131,12 +131,34 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   `--dither-exact`** y el default vuelve a la LUT histórica
   byte-idéntica (el producto `adef9e53…` sigue reproducible desde main).
   Se reevalúa con E-17.
-- ▶ **Próxima acción: E-17** (presupuesto de dither en bytes, V1-OPT-02;
-  bytes y 5 % de celdas se aplican juntos); luego E-18 cierra F3.
-  Decisión abierta: si el operador retoma el 960, re-medirlo con
-  refit 5.
+- ✅ **E-17 (presupuesto de dither en bytes, 2026-08-29)**: opt-in
+  `--dither-byte-budget N` (default `None` = byte-idéntico); mide los
+  bytes reales del frame con la estructura del emisor y recorta por
+  bisección. **Mecanismo validado** (Instancia 023): 450 B/frame
+  conserva el 40 % de las celdas tramadas y cae proporcionalmente entre
+  los extremos. `budget 0` = dither off pero 4:43 más lento y 41 B más
+  grande → descartado como receta. **No se adoptó nada**: el bench
+  ordena hacia «sin dither», pero `psnr_rgb_db` y `err_oklab_medio` son
+  promedios por píxel ciegos al banding, así que la elección
+  on/450/off es visual y está en manos del operador.
+- ✅ **E-18 (dither vs threshold, 2026-08-29)**: el revert del threshold
+  ya no pisa celdas que el dither movió (`keep &= ~dither_changed_mask`),
+  con contadores propios. No toca el producto (`--threshold` default 0).
+  **Con E-17 y E-18, F3 (E-12..E-18) queda cerrada.**
+- ▶ **Próxima acción: F5 — E-19** (congelar el orden canónico
+  cuantizar → ditherear → trellis → emitir; `--threshold` se absorbe
+  como caso degenerado del trellis), luego E-20..E-24.
+  Decisiones abiertas del operador: (a) dither on/450/off para el fondo;
+  (b) si retoma el 960, re-medirlo con refit 5.
+- 📌 **S-7 agendada**: barrido de resolución 768 → 1280 → 1920 **después
+  de F5**, con el objetivo del operador de subir densidad sin perder
+  peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el
+  producto 768 pesa 17.379.859 B = **45 % del original**. El 1920
+  estimado a la tasa actual ≈ 107 MB (2,7× la fuente) y no entra en el
+  `timeout-minutes: 120`; se arranca por 1280 para medir la curva.
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).
-- Pendiente: F3 (E-17..E-18), F5, F6 (S-4), F8 (necesita F6; F7 ya está).
+- Pendiente: F5 (E-19..E-24), F6 (S-4), S-7 (resolución, tras F5),
+  F8 (necesita F6; F7 ya está).
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8
