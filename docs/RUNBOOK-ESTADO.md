@@ -146,8 +146,8 @@ runbook §4-INT-007.
 
 | ID | Tarea | Estado | Commit | Fecha | Notas |
 |---|---|---|---|---|---|
-| INT-007-A | `shadow`/`weight` en textlayer + pila de fuentes en live-player | pendiente | | | |
-| INT-007-B | logo rotando por frame (ruleta simulada), caja sucia circunscripta | pendiente | | | |
+| INT-007-A | `shadow`/`weight` en textlayer + pila de fuentes en live-player | cerrada | `faf2390` | 2026-08-29 | items ganan `weight` (prefijo del font shorthand) y `shadow` (color CSS con alpha, la «transparencia como sombra»); la sombra vive solo en la PRIMERA pasada del item (borde si hay, relleno si no — el glifo queda nítido) y se apaga al salir; blur ≤ 0,6·celda y offset ≤ 0,4·celda para que el derrame quepa en el margen de 1 celda que expande `markDirty` (clampeado a grilla); omitidos = salida idéntica (el mock verifica que ni se tocan las props `shadow*`). Live-player: pila `"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif` bold con `rgba(0,0,0,0.55)` en espejo y standalone. CI verde (run 33270406513) |
+| INT-007-B | logo rotando por frame (ruleta simulada), caja sucia circunscripta | cerrada | `faf2390` | 2026-08-29 | `drawImg(frame)`: save → translate al centro de la caja → `rotate((frame%30)*2π/30)` → drawImage centrado → restore; ángulo **determinista por frame mostrado** (sin reloj; los redraws en pausa usan `lastShown`); el rect sucio pasa a ser el cuadrado que circunscribe la rotación (lado = diagonal, clampeado) — sin estela. Verificado en navegador local: reproducción con giro sin errores de consola, captura enviada al operador. CI verde |
 
 ## Sincronización y fases finales
 
@@ -213,10 +213,10 @@ runbook §4-INT-007.
    kmeans-oklab, tile 16, `--palette-refit 5`, `--dither off`, zopfli,
    `overlay=off` — los defaults del workflow `encode` + `extra =
    --palette-refit 5`.
-0b. **INT-007 (pedido del operador 2026-08-29):** tipografía menos común
-   con sombra translúcida (A) y logo girando como ruleta simulada (B).
-   Se ejecuta ANTES de E-21: es corto, frontend puro y es lo que el
-   operador revisa visualmente en el player.
+0b. **INT-007 CERRADO (2026-08-29, `faf2390`, CI verde):** tipografía
+   Palatino bold con sombra translúcida y logo girando como ruleta
+   simulada, verificados en navegador local (captura enviada al
+   operador; player en `localhost:8123`).
 1. **Carril E: F3 CERRADA (E-12..E-18), E-19/E-20 cerradas.** Sigue
    **F5 — E-21** (jerarquía de costo: los candidatos compiten en
    zlib-9 y Zopfli se paga solo sobre el ganador; primera tarea de F5
