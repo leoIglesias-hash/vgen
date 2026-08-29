@@ -55,7 +55,7 @@ Reglas de uso:
 | E-14 | paleta sobre todos los píxeles, dos pasadas | cerrada | `86eb5ae`+`f324f1e` | 2026-08-28 | modo global sin materializar (`StreamingColorAggregate` + `sample_aggregate` en el builder, sin el cap de 65.536; Pillow/RGB reproducen byte a byte el muestreo histórico con conteo+muestreo; `refit_palette` gana `sample_weights`). Instancia 020 (960 global, 15 s, `/usr/bin/time -v`): **RSS 886 → 433 MB (−51 %)**, Oklab −4,5 %, PSNR RGB −0,27 dB (**desvío registrado**: el criterio pedía PSNR ≥; kmeans-oklab optimiza el objetivo perceptual y el global no es producto). Refit sobre el agregado = no-op verificado (mismo SHA). CI en verde |
 | E-15 | estabilidad temporal, 4 algoritmos | cerrada | `91a0e68` | 2026-08-28 | `_stabilize_rgb_palette`: alineación 1:1 con la paleta previa (`_align_to_previous` genérico sobre RGB exacto, permutación sin pérdida) + fusión por `temporal_strength`; en `make_global_palette` (kmeans-rgb/median-cut/fast-octree) y en el per-frame de median-cut; estabilidad per-frame para los 4 algoritmos. Frontera de bloque (Instancia 021): fast-octree −93 %, kmeans-rgb −31 %; clip real kmeans-rgb: bytes −1,25 %, RDELTA_ZLIB 10→4; costo estático del blending PSNR −1,04 dB (knob `--adaptive-stability-max 0` = solo alineación). Producto kmeans-oklab sin cambios. CI en verde |
 | E-16 | `PairLUT` exacto | cerrada (opt-in `--dither-exact`) | `a87014a` + cierre | 2026-08-28 | `exact_pairs`: base/partner/level exactos por píxel desde la base REAL del cuantizador (baseline), sin el gate `lut_base == baseline`; misma matemática que la LUT (`_pairs_for` compartido). **Bench de producto (Instancia 022, run 33215511572, `0ed4cbbe…92f5`): PSNR −0,21 dB, Oklab +4,1 %, bytes +6,0 %, tiempo +39 % vs `adef9e53…`** → NO adoptado: la exactitud queda **opt-in** (`--dither-exact`; `exact_pairs=` en las APIs) con default = camino LUT histórico byte-idéntico (test `test_default_path_keeps_historic_lut_gated_bytes`). El producto sigue reproducible desde `main`. Reevaluar con E-17 (el presupuesto en bytes es el freno correcto de su gasto extra) |
-| E-17 | presupuesto de dither en bytes | cerrada (opt-in; decisión de producto elevada al operador) | commit de E-17 | 2026-08-29 | **Mecanismo validado y medido** (Instancia 023, barrido de 4 filas): el presupuesto es un knob continuo y monótono — 450 B/frame conserva 156.947 de 392.508 celdas tramadas (40 %, `aabd518a…8bf6`, 17.246.050 B, 35,57 dB) y cae proporcionalmente entre los extremos. Hallazgo: `budget 0` (`909ba629…f68e`) y `--dither off` (`74be25ef…011f9`) difieren en **41 B** y son idénticas en las tres métricas, pero el 0 tarda 49:04 contra 44:21 → **presupuesto 0 no es un ajuste de producto**, la receta sin dither es `--dither off`. Costo del dither completo: 211.226 B (1,23 %) y −0,17 dB por 392.508 celdas. **No se adopta nada por número**: `psnr_rgb_db` y `err_oklab_medio` son promedios por píxel que castigan el tramado por construcción y **no ven banding**, que es lo único que el dither compra; la elección on/450/off es visual y queda del operador con los dos `preview.mp4`. El producto sigue `adef9e53…` con dither auto sin presupuesto. Opt-in `--dither-byte-budget N` (default None = bytes históricos idénticos): bytes del frame con la estructura REAL del emisor (`encode_frame`, mismo prev/keyframe/compress; medición con zlib-9 determinista, ver bitácora 2026-08-29) con dither vs baseline; en `auto` recorta el prefijo de tiles en orden de aceptación (bisección determinista, el prefijo vacío siempre cumple), en `selective` es todo-o-nada. El presupuesto de celdas (5 %) y el de bytes rigen JUNTOS (V1-OPT-02). `byte_cost`/`max_extra_bytes` en `apply_calibrated_dither`; detalles `byte_budget*`; stats `dither_byte_limited_frames`/`dither_byte_dropped_tiles`. Tests: `tests/test_dither_byte_budget.py` (8) |
+| E-17 | presupuesto de dither en bytes | cerrada (opt-in; **decisión del operador 2026-08-29: producto = `--dither off`**, `74be25ef…011f9`) | commit de E-17 | 2026-08-29 | **Mecanismo validado y medido** (Instancia 023, barrido de 4 filas): el presupuesto es un knob continuo y monótono — 450 B/frame conserva 156.947 de 392.508 celdas tramadas (40 %, `aabd518a…8bf6`, 17.246.050 B, 35,57 dB) y cae proporcionalmente entre los extremos. Hallazgo: `budget 0` (`909ba629…f68e`) y `--dither off` (`74be25ef…011f9`) difieren en **41 B** y son idénticas en las tres métricas, pero el 0 tarda 49:04 contra 44:21 → **presupuesto 0 no es un ajuste de producto**, la receta sin dither es `--dither off`. Costo del dither completo: 211.226 B (1,23 %) y −0,17 dB por 392.508 celdas. **No se adopta nada por número**: `psnr_rgb_db` y `err_oklab_medio` son promedios por píxel que castigan el tramado por construcción y **no ven banding**, que es lo único que el dither compra; la elección on/450/off es visual y queda del operador con los dos `preview.mp4`. El producto sigue `adef9e53…` con dither auto sin presupuesto. Opt-in `--dither-byte-budget N` (default None = bytes históricos idénticos): bytes del frame con la estructura REAL del emisor (`encode_frame`, mismo prev/keyframe/compress; medición con zlib-9 determinista, ver bitácora 2026-08-29) con dither vs baseline; en `auto` recorta el prefijo de tiles en orden de aceptación (bisección determinista, el prefijo vacío siempre cumple), en `selective` es todo-o-nada. El presupuesto de celdas (5 %) y el de bytes rigen JUNTOS (V1-OPT-02). `byte_cost`/`max_extra_bytes` en `apply_calibrated_dither`; detalles `byte_budget*`; stats `dither_byte_limited_frames`/`dither_byte_dropped_tiles`. Tests: `tests/test_dither_byte_budget.py` (8) |
 | E-18 | interacción dither/threshold | cerrada | commit de E-18 | 2026-08-29 | El threshold corre **después** del dither y revertía celdas al valor previo; sobre una celda tramada eso deshacía la decisión del dither y rompía el patrón Bayer distinto en cada frame (una celda tramada difiere de la anterior por un vecino de paleta, justo la distancia que el threshold considera "sin cambio"). Ahora `encode_video` guarda la máscara de lo que movió el dither (`cells[:,0] != pre_dither_indices`, solo cuando `threshold > 0` y modo pixel) y el revert la excluye: `keep &= ~dither_changed_mask`. Stats nuevas `threshold_dither_protected_cells`/`_frames` (encoder y make_clip las imprimen). **No toca el producto**: `--threshold` es 0 por defecto y el perfil HQ no lo usa, así que `adef9e53…` sigue byte-idéntico (regla 5). Tests: `tests/test_dither_threshold.py` (3, barrido de umbrales para no quedar vacío). **Cierra F3** |
 | E-19 | orden canónico del pipeline | cerrada | commit de E-19 | 2026-08-29 | Nuevo `backend/trellis.py` con `CANONICAL_STAGES = ("quantize", "dither", "trellis", "emit")` como dato importable (los tests lo leen de ahí en vez de repetir la lista) y `apply_threshold_trellis`, que es el `--threshold` **absorbido como caso degenerado del trellis**: E-20..E-23 extienden ese módulo en vez de agregar pasadas nuevas al bucle. En `encoder.py` el bloque del threshold desaparece del loop y los metadatos de emisión (`pal_count`/`palette`, que no tocan `cells`) se mueven **después** del trellis, dejando el pipeline de celdas contiguo. Refactor puro: la regla, los guards (`pal16`, `MODE_PIXEL`, `not keyframe`) y los contadores de E-18 se conservan; `apply_threshold_trellis` nunca muta su argumento (invariante 4). Tests: `tests/test_trellis_order.py` (10), con reimplementación independiente del camino histórico para que un cambio de regla se delate en vez de moverse con el refactor. CI verde en `fa99280` (run 33233634916): **266 pruebas Python** (eran 256) y 26 suites JS |
 | E-20 | threshold en ΔE-Oklab | cerrada | commit de E-20 | 2026-08-29 | `trellis.build_threshold_palette(paleta, metrica)` lleva la paleta al espacio de la métrica **una vez por paleta** (en los dos puntos donde el encoder ya rehacía `pal16`, ahora `pal_metric`), así que Oklab no cuesta más por frame que sRGB: la cuenta del trellis es el mismo `einsum` y lo único que cambia es la escala en que se lee el umbral. `rgb` devuelve **int32 a propósito** (en int16 la distancia al cuadrado desborda: 255²·3 = 195.075). CLI: `--threshold` pasa a `float` y se agrega `--threshold-metric {rgb,oklab}` con **default `rgb`** — un `--threshold 24` que ya existía significa exactamente lo mismo que antes, sin reinterpretación silenciosa (regla 9); en Oklab los valores útiles rondan 0,01-0,05, no 10-40. `encode_video` valida la métrica. **El producto no se toca**: `--threshold` sigue en 0 y el perfil HQ no lo usa. Tests: `tests/test_trellis_order.py` sube a 16 con `ThresholdMetricTest`, que construye dos saltos de **idéntica distancia sRGB** (negro→8 y 247→blanco) y verifica que sRGB no puede distinguirlos con ningún umbral mientras Oklab congela solo el de las luces. **Falta medir**: sin fila de bench, E-20 no cambia ninguna receta. **Byte-identidad verificada, no supuesta** (regla 5): re-encode de producto desde `main` en `73c67ad` (run 33235096580, wall 47:49, RSS 693.644 kB) reprodujo `adef9e533b01fdd489ec6dacf1265f07072ecba8d15e88e79b7bd2dd5a5c05bb` con la fila de bench idéntica — o sea que ni el refactor de E-19 ni la métrica de E-20 movieron un byte del producto |
@@ -135,6 +135,20 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 | INT-006-B | `textfeed.js` + live-player standalone (texto sin sidecar, sim + canal) | cerrada | `49e2b4a` + fix `2c81856` | 2026-08-28 | `ASCILINETextFeed.create(capa,campos)` → `digitCount`/`setValues` todo-o-nada (misma interfaz que consume `datachannel.js`, sin cambios); sin overlay de matriz el player declara 3 campos de 2 dígitos por tercios (dimensionados por cols/rows) y botón+canal los alimentan; suite `test_textfeed.js` cableada; el fix quita un backtick de comentario que volteó el gate ES5 del test de página (CI rojo → verde en el siguiente push) |
 | INT-006-C | intervención de la imagen del operador (decisión D7) | cerrada | `3e51ce8` | 2026-08-28 | el operador entregó `inputs/logonuevo150.png` (logo TeleKino) y **D7 se resuelve en (a) nativa**: `drawImage` del PNG (`outputs/logo.png`, opcional) sobre el MISMO canvas después del texto, caja en celdas (cols/4, aspecto preservado, esquina sup. der.) marcada sucia por frame; solo activa con texto declarado (renderer ya Canvas2D); 404 = nada cambia (INV-7); verificado en navegador sobre el clip de parches (play/sim/zoom/clear sin errores de consola); (c) INT-005/época sigue como definitivo para la ruleta |
 
+## Carril INT-007 — tipografía llamativa + logo giratorio
+
+Pedido del operador (2026-08-29, tras elegir el fondo sin dither): probar
+fuentes menos comunes y más llamativas para el texto nativo, con sombra
+translúcida si se puede sin gran esfuerzo; y hacer girar la imagen ya
+superpuesta (`outputs/logo.png`) para simular una ruleta. Frontend puro,
+mismo canvas; la ruleta REAL sigue siendo INT-005 (F6). Tareas en el
+runbook §4-INT-007.
+
+| ID | Tarea | Estado | Commit | Fecha | Notas |
+|---|---|---|---|---|---|
+| INT-007-A | `shadow`/`weight` en textlayer + pila de fuentes en live-player | pendiente | | | |
+| INT-007-B | logo rotando por frame (ruleta simulada), caja sucia circunscripta | pendiente | | | |
+
 ## Sincronización y fases finales
 
 | ID | Qué | Estado | Fecha | Notas |
@@ -186,19 +200,28 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 | 2026-08-29 | **Desvío en el bench de E-17**: el primer bench de producto (run 33223387847, `--dither-byte-budget 0`) fue **cancelado por el `timeout-minutes: 120`** de `encode.yml` — cada evaluación del presupuesto pasaba por `best_deflate`, que con Zopfli instalado (15 iteraciones) multiplicó ~por 10 el costo por frame. Fix hacia adelante: la MEDICIÓN del presupuesto usa `zlib_deflate` (zlib-9 puro, `encode_frame(..., fast_deflate=True)`) — determinista con o sin Zopfli y barata; la emisión real del frame conserva `best_deflate`/Zopfli intactos. Se re-despacha el bench | además de la velocidad, el cambio hace la decisión del presupuesto independiente del entorno (antes el recorte habría dependido de si Zopfli estaba instalado, contra la regla 5); la estructura medida (candidatos full/delta/mask reales con el mismo prev/keyframe/compress) no cambia |
 | 2026-08-29 | **F3 (E-12..E-18) cerrada.** E-17 se cierra con el mecanismo validado pero **sin decidir el producto**: el barrido de 4 filas ordena monótonamente hacia «sin dither», y esa conclusión no se adopta porque las dos únicas columnas de calidad registradas (`psnr_rgb_db`, `err_oklab_medio`) son promedios de fidelidad **por píxel**, ciegos al banding — exactamente lo que el dither compra. La elección dither on / 450 / off se eleva al operador con los `preview.mp4` | la regla «una mejora sin fila registrada no existe» hoy no puede aplicarse a lo que el dither mejora: falta una columna de proxy de banding en `tools/bench_ref.py`. Adoptar «off» por las métricas actuales sería apagar una función en silencio y llamarlo mejora de calidad |
 | 2026-08-29 | **`--dither-byte-budget 0` queda descartado como receta**: produce un clip 41 B más grande que `--dither off` y funcionalmente idéntico (mismas tres métricas, mismos keyframes y tags), pagando 49:04 de encode contra 44:21 | el presupuesto recorre y evalúa todos los tiles para terminar rechazándolos; si el objetivo es no tramar, apagar el dither es más barato y más honesto de leer |
+| 2026-08-29 | **Decisión del operador: el fondo de producto pasa a `--dither off`** («SIN dither se ve igual que el con dither para mí, así que nos quedamos con ese ahorrando»): `74be25ef…011f9`, 17.168.633 B, 35,63 dB, Oklab 0,00721 — −211.226 B (−1,23 %) y 1:29 menos de encode que el tramado. Instalado como `outputs/clip.asclv` (SHA verificado); los candidatos descartados (`aabd518a…` 450 B/frame y el tramado `adef9e53…`) se borran de `outputs/` — siguen reproducibles desde el workflow con dither=auto (+ `--dither-byte-budget 450` el primero). El default del input `dither` del workflow `encode` pasa de `auto` a `off` para que los defaults sigan siendo la receta de producto | comparó los `preview.mp4` a la vista: la diferencia no se percibe en este material (gráfico, degradados ya protegidos por la paleta de 256 + refit). La elección era visual y del operador porque el bench no ve banding; queda pendiente la columna de proxy de banding para que decisiones futuras de dither tengan número |
 | 2026-08-29 | **El 1080p vuelve al plan como S-7, agendado después de F5** (pedido del operador: «no perdemos nada con probar… deberíamos apuntar al menos a un peso similar al del video original mp4 pero con esa misma calidad; si ahora no es posible sigamos mejorando hasta lograrlo»). Se agenda en vez de despacharse ya por dos razones medibles: (a) a 1920 col son 2.073.600 celdas contra 331.776 del 768 — 6,25× — y el encode se iría a ~5 h contra un `timeout-minutes: 120`; (b) el carril que baja bytes a calidad sostenida es F5 (trellis E-19..E-24, con E-24 `--near-lossless` como cierre), todavía sin ejecutar, así que medir 1920 hoy mide el encoder viejo del problema nuevo. El criterio de peso del operador **ya está cumplido en 768**: la fuente pesa 38.966.462 B y el producto 17.379.859 B (45 %); lo que falta demostrar es que se sostiene al subir la densidad | el barrido tiene sentido cuando el stack de eficiencia está completo, no antes; y la intuición del operador (más densidad donde hace falta, ahorro donde no) es un cambio de formato — grilla de celdas uniforme por header hoy — que pertenece a la revisión única de S-4/ASCLVID3, no a un flag del encoder |
+
+| 2026-08-29 | **Nace INT-007** (pedido del operador junto con la decisión del dither): (A) fuentes menos comunes y más llamativas para el texto nativo, con sombra translúcida («que hasta tenga transparencia como sombra») si sale sin gran esfuerzo; (B) hacer girar `outputs/logo.png` sobre el mismo canvas «a ver si se puede simular como si fuera una ruleta superponiéndose». Se ordena ANTES de E-21 | frontend puro y corto, y es exactamente lo que el operador revisa a ojo en el player; E-21 no lo bloquea (su bench corre en CI). La ruleta real sigue siendo INT-005/ASCLVID3 (F6) — esto es la simulación con la imagen nativa D7=a |
 
 ## Próxima acción
 
-0. **Decisión del operador pendiente (bloquea el fondo, no el código):**
-   elegir dither **on** (producto actual `adef9e53…`), **450**
-   (`aabd518a…`) u **off** (`74be25ef…`) mirando los `preview.mp4` de
-   las corridas 33231255094 y 33231247505. El bench ordena hacia «off»
-   pero no ve banding; por eso no se adopta solo.
-1. **Carril E: F3 CERRADA (E-12..E-18).** Sigue **F5 — E-19**
-   (congelar el orden canónico cuantizar → ditherear → trellis →
-   emitir; `--threshold` se absorbe como caso degenerado del trellis en
-   vez de convivir con él), luego E-20..E-24. La **ruleta** sigue
+0. **Resuelto 2026-08-29: el fondo de producto es `--dither off`**
+   (`74be25ef…011f9`, decisión visual del operador sobre los
+   `preview.mp4`). Receta de producto vigente: 768 graphic-hq, adaptive
+   kmeans-oklab, tile 16, `--palette-refit 5`, `--dither off`, zopfli,
+   `overlay=off` — los defaults del workflow `encode` + `extra =
+   --palette-refit 5`.
+0b. **INT-007 (pedido del operador 2026-08-29):** tipografía menos común
+   con sombra translúcida (A) y logo girando como ruleta simulada (B).
+   Se ejecuta ANTES de E-21: es corto, frontend puro y es lo que el
+   operador revisa visualmente en el player.
+1. **Carril E: F3 CERRADA (E-12..E-18), E-19/E-20 cerradas.** Sigue
+   **F5 — E-21** (jerarquía de costo: los candidatos compiten en
+   zlib-9 y Zopfli se paga solo sobre el ganador; primera tarea de F5
+   que cambia la salida — las celdas decodificadas no cambian, los
+   bytes del contenedor pueden), luego E-22..E-24. La **ruleta** sigue
    siendo INT-005 en F6/S-4. F8 sin cambios. Opcional no bloqueante:
    knob de `gradient_boost` del agregado E-14.
 2. **S-7 (barrido de resolución 768 → 1280 → 1920)** queda agendado
@@ -210,16 +233,18 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
    (35,46 dB), que supera al 960 ultra sin refit (34,40 dB) con 31 %
    menos bytes — si retoma la idea del 960, hay que re-medirlo con
    `--palette-refit 5` antes de comparar.
-4. Referencias HQ vigentes: **producto = 768 refit 5 `adef9e53…c05bb`
-   (17.379.859 B, instalada en `outputs/`, run 33203086375)** · 768
+4. Referencias HQ vigentes: **producto = 768 refit 5 SIN dither
+   `74be25ef…011f9` (17.168.633 B, 35,63 dB, Oklab 0,00721, run
+   33231247505, instalado en `outputs/`, decisión del operador
+   2026-08-29)** · tramado refit 5 `adef9e53…c05bb` (17.379.859 B,
+   35,46 dB, run 33203086375, producto anterior — reproducible con
+   dither=auto) · dither con presupuesto 450 `aabd518a…8bf6`
+   (17.246.050 B, 35,57 dB, run 33231255094, descartado) · 768
    refit 5 + uint8-refine 3 `a95d0bbc…acbf` (17.442.264 B, Oklab 0,00728,
    run 33207479295, E-13 medido sin adoptar) · 768
    refit 3 `514be81e…a01aff` (17.425.768 B, run 33203084602) · dither
    exacto E-16 `0ed4cbbe…92f5` (18.602.412 B, 35,25 dB, run 33215511572,
-   medido sin adoptar) · **sin dither `74be25ef…011f9` (17.168.633 B,
-   35,63 dB, Oklab 0,00721, run 33231247505, candidato a fondo si el
-   operador elige off)** · dither con presupuesto 450 `aabd518a…8bf6`
-   (17.246.050 B, 35,57 dB, run 33231255094) · dither budget 0
+   medido sin adoptar) · dither budget 0
    `909ba629…f68e` (17.168.592 B, run 33229100878, descartado: 41 B más
    que `off` y 4:43 más lento) · sin refit
    determinista P-02 `ebfe2eb4…4b36` (17.482.270 B, sigue reproducible
@@ -233,11 +258,10 @@ intervención gráfica. Tareas en el runbook §4-INT-006.
 
 Regresión al cierre de esta sesión: **266 pruebas Python y 26 suites JavaScript**
 (base: 115 y 11; el CI de `73c67ad` valida el conteo). Último commit de tarea:
-E-20 (`--threshold-metric`). `outputs/clip.asclv` = fondo 768 **refit 5**
-(`adef9e53…c05bb`, SHA verificado), con los dos candidatos de la decisión del
-dither instalados al lado (`clip-dither-450.asclv` = `aabd518a…8bf6`,
-`clip-sin-dither.asclv` = `74be25ef…011f9`, ambos con SHA verificado) para el
-player standalone en `localhost:8123`.
+E-20 (`--threshold-metric`). `outputs/clip.asclv` = fondo 768 **refit 5 sin
+dither** (`74be25ef…011f9`, SHA verificado; decisión del operador 2026-08-29 —
+los candidatos descartados se borraron de `outputs/` y siguen reproducibles
+desde el workflow).
 
 **Byte-identidad del producto verificada tres veces** (regla 5, nunca supuesta):
 run 33220236164 (post-E-16), run 33233492257 (post-E-18, wall 38:06) y run

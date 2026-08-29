@@ -792,6 +792,51 @@ Después el operador pasa una imagen para probar la intervención gráfica
 - **Cierre:** decisión D7 registrada + prueba con la imagen real en el
   player local.
 
+## 4-INT-007. Carril INT-007 — tipografía llamativa + logo giratorio
+
+Pedido del operador (2026-08-29): «que pruebes fuentes menos comunes, algo
+más lindo, con alguna sombra si se puede ponerle (…) que hasta tenga
+transparencia como sombra y sea más llamativa; y además, que la imagen que
+ya subimos para que se superponga, hacela girar, a ver si se puede simular
+como si fuera una ruleta superponiéndose». Frontend puro, mismo canvas,
+sin tocar el encoder ni el formato. La ruleta REAL sigue siendo INT-005
+(F6); esto es la simulación visual con la imagen nativa de INT-006-C.
+
+### INT-007-A — Tipografía menos común con sombra translúcida
+
+- **Archivos:** `frontend/textlayer.js`, `frontend/live-player.html`,
+  `tests/test_textlayer.js`.
+- **Acción:**
+  1. `textlayer.js`: items ganan `shadow` (color CSS, típicamente `rgba`
+     con alpha — la «transparencia como sombra») y `weight` (prefijo CSS
+     del font shorthand, p. ej. `bold`), ambos opcionales y validados como
+     `outline`/`font`; omitidos = salida idéntica a hoy. En `draw`, la
+     sombra se activa por item (blur y offset cacheados por `cellPx`,
+     **acotados a ≤ una celda** para que el derrame quede dentro del
+     margen sucio) y se apaga al terminar el item.
+  2. `live-player.html`: las cajas de texto (espejo INT-004 y standalone
+     INT-006) pasan a una pila de fuentes menos común con fallback serif y
+     sombra suave translúcida; `markTextDirty` marca las cajas con sombra
+     expandidas 1 celda (clampeado a grilla) para repintar el derrame.
+- **Cierre:** suite `test_textlayer.js` extendida (validación de
+  `shadow`/`weight`, sombra activada y apagada por item, default sin
+  sombra byte-idéntico en el mock); gate ES5 verde; CI verde; player local.
+
+### INT-007-B — Logo girando como ruleta simulada
+
+- **Precondición:** INT-006-C (imagen nativa) cerrada — ya.
+- **Archivos:** `frontend/live-player.html`, `tests/test_live_player_page.js`.
+- **Acción:** `drawImg` rota la imagen alrededor del centro de su caja
+  (`save → translate → rotate → drawImage centrado → restore`), con ángulo
+  **determinista en función del frame mostrado** (sin reloj: mismo frame →
+  mismo ángulo). La caja sucia de la imagen pasa a ser el cuadrado que
+  circunscribe la rotación (lado = diagonal de la caja, clampeado a
+  grilla) para que el giro no deje estela. Un solo canvas, cero buffers
+  nuevos por frame.
+- **Cierre:** `test_live_player_page.js` cubre el camino de rotación
+  (ángulo por frame y save/restore); gate ES5 verde; CI verde; **player
+  local levantado** para que el operador vea la ruleta simulada.
+
 ---
 
 ## 5. Definición de terminado

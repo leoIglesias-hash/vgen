@@ -24,7 +24,10 @@ el TV nunca cuantiza ni decide, solo ejecuta.
 - Todo test nuevo se cablea en `tests/run_all.py` **en el mismo commit** (regla 7).
 - Los videos de producto **no se commitean a `main`** (`.gitignore` ya lo impone). El
   clip HQ fuente vive local en `inputs/TKN-2443-GANADOR- 15seg-.mp4` y en la rama
-  huérfana **`assets`** del repo (solo insumos de encode).
+  huérfana **`assets`** del repo (solo insumos de encode). Receta de
+  producto vigente (2026-08-29): 768 graphic-hq, adaptive kmeans-oklab,
+  tile 16, `--palette-refit 5`, **`--dither off`**, zopfli, overlay=off
+  → `74be25ef…011f9`.
 - **Generar un clip para ver:** workflow `encode` (Actions → encode → Run workflow).
   Encodea desde la rama `assets` con el perfil HQ por defecto y publica `clip.asclv`,
   la fila de `bench_ref`, el SHA-256 y un `preview.mp4` como artifacts descargables.
@@ -140,7 +143,11 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   grande → descartado como receta. **No se adoptó nada**: el bench
   ordena hacia «sin dither», pero `psnr_rgb_db` y `err_oklab_medio` son
   promedios por píxel ciegos al banding, así que la elección
-  on/450/off es visual y está en manos del operador.
+  on/450/off es visual y está en manos del operador. **Resuelta 2026-08-29:
+  el operador eligió OFF** — el fondo de producto pasa a `74be25ef…011f9`
+  (17.168.633 B, 35,63 dB, Oklab 0,00721, instalado en `outputs/`); el
+  default `dither` del workflow `encode` pasa a `off` (la receta de
+  producto es defaults + `extra=--palette-refit 5`).
 - ✅ **E-18 (dither vs threshold, 2026-08-29)**: el revert del threshold
   ya no pisa celdas que el dither movió (`keep &= ~dither_changed_mask`),
   con contadores propios. No toca el producto (`--threshold` default 0).
@@ -157,18 +164,22 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
 - 🔒 **Byte-identidad del producto verificada 3 veces** (regla 5):
   `adef9e53…c05bb` reproducido post-E-16, post-E-18 y post-E-19/E-20
   (run 33235096580 desde `73c67ad`). El refactor no movió un byte.
-- ▶ **Próxima acción: E-21** (jerarquía de costo del trellis: proxy
-  barato para explorar, zlib-9 entre finalistas, Zopfli **solo** sobre
-  el ganador — Zopfli dentro del bucle es inviable, no lento), luego
+- ▶ **Próxima acción: INT-007** (pedido del operador 2026-08-29:
+  (A) tipografía menos común y más llamativa para el texto nativo, con
+  sombra suave con transparencia si se puede sin gran esfuerzo;
+  (B) hacer girar `outputs/logo.png` sobre el mismo canvas para simular
+  una ruleta superpuesta — sigue siendo drawImage con rotate, un solo
+  canvas). Luego **E-21** (jerarquía de costo del trellis: proxy barato
+  para explorar, zlib-9 entre finalistas, Zopfli **solo** sobre el
+  ganador — Zopfli dentro del bucle es inviable, no lento; las celdas
+  decodificadas no cambian, los bytes del contenedor pueden), luego
   E-22/E-23 (trellis temporal y espacial) y E-24 (`--near-lossless`).
-  Es la primera tarea de F5 que **cambia la salida**, no un refactor.
-  Decisiones abiertas del operador: (a) dither on/450/off para el fondo
-  (los 3 clips están en `outputs/` con SHA verificado y hay preview.mp4
-  de cada uno); (b) si retoma el 960, re-medirlo con refit 5.
+  Decisión abierta del operador: si retoma el 960, re-medirlo con
+  refit 5.
 - 📌 **S-7 agendada**: barrido de resolución 768 → 1280 → 1920 **después
   de F5**, con el objetivo del operador de subir densidad sin perder
   peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el
-  producto 768 pesa 17.379.859 B = **45 % del original**. El 1920
+  producto 768 pesa 17.168.633 B = **44 % del original**. El 1920
   estimado a la tasa actual ≈ 107 MB (2,7× la fuente) y no entra en el
   `timeout-minutes: 120`; se arranca por 1280 para medir la curva.
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005

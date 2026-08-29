@@ -5,7 +5,10 @@ name: encode
 #
 # El video fuente NO vive en main (política de .gitignore): se lee de la rama
 # huérfana `assets`, carpeta inputs/. Defaults = perfil HQ de producción
-# (graphic-hq 768, adaptive kmeans-oklab, dither auto, v2).
+# (graphic-hq 768, adaptive kmeans-oklab, dither off, v2). El refit E-12 sigue
+# yendo por `extra` (--palette-refit 5 en la receta de producto). Para
+# reproducir referencias históricas con tramado (P-02, adef9e53…) hay que
+# pasar dither=auto a mano — decisión del operador 2026-08-29.
 
 on:
   workflow_dispatch:
@@ -26,7 +29,8 @@ on:
         description: "median-cut / fast-octree / kmeans-rgb / kmeans-oklab"
         default: "kmeans-oklab"
       dither:
-        default: "auto"
+        description: "off = receta de producto desde 2026-08-29; auto = tramado calibrado (referencias historicas)"
+        default: "off"
       format:
         description: "v1 / v2"
         default: "v2"

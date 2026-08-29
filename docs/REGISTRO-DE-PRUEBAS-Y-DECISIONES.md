@@ -1186,3 +1186,14 @@ perfil HQ nunca lo pasa. Test nuevo `tests/test_dither_threshold.py`
 número mágico.
 
 **Con E-17 y E-18 cerradas, F3 (E-12..E-18) queda completa.**
+
+**Resolución del punto 2 (2026-08-29, decisión del operador):** comparó
+los `preview.mp4` y eligió **off** — «SIN dither se ve igual que el con
+dither para mí, así que nos quedamos con ese ahorrando porque la
+diferencia es mínima». El fondo de producto pasa a `74be25ef…a011f9`
+(17.168.633 B, 35,63 dB, Oklab 0,00721), instalado en `outputs/` con SHA
+verificado; el default del input `dither` del workflow `encode` pasa a
+`off` para que los defaults sigan siendo la receta de producto. Los
+candidatos descartados se borran de `outputs/` (reproducibles desde el
+workflow con dither=auto). La propuesta 3 (columna de proxy de banding)
+sigue abierta.
