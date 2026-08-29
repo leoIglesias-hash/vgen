@@ -1308,6 +1308,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
     dither_temporal_resets = 0
     dither_byte_dropped_tiles = 0
     dither_byte_limited_frames = 0
+    threshold_dither_protected = 0
+    threshold_dither_frames = 0
     scene_cut_keyframes = 0
     for frame_data in frames_iter:
         block_start = False
@@ -1376,7 +1378,14 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                                                    reserved_colors=reserved_colors,
                                                    palette_refit=palette_refit,
                                                    palette_uint8_refine=palette_uint8_refine)
+        dither_changed_mask = None
         if dither_mode != "off":
+            # E-18: el threshold corre despues del dither y revierte celdas al
+            # valor previo; sobre una celda tramada eso rompe el patron Bayer de
+            # forma distinta en cada frame. Guardamos que celdas movio el dither
+            # para excluirlas del revert. Solo se paga cuando ambos estan activos.
+            track_dithered = threshold > 0 and mode == MODE_PIXEL
+            pre_dither_indices = cells[:, 0].copy() if track_dithered else None
             frame_byte_cost = None
             if dither_byte_budget is not None:
                 # E-17: bytes del frame con la MISMA estructura de candidatos
@@ -1413,6 +1422,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
                 dither_exact=dither_exact,
                 dither_byte_budget=dither_byte_budget,
                 byte_cost=frame_byte_cost)
+            if track_dithered:
+                dither_changed_mask = cells[:, 0] != pre_dither_indices
             if dither_details is not None:
                 dither_changed_cells += int(
                     dither_details.get("changed_cells", 0))
@@ -1440,6 +1451,14 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             cur = cells[:, 0]
             d = pal16[cur].astype(np.int32) - pal16[prev_cells[:, 0]].astype(np.int32)
             keep = np.einsum("ij,ij->i", d, d) <= threshold * threshold
+            if dither_changed_mask is not None:
+                # E-18: lo que el dither decidio tramar NO se revierte. El
+                # threshold solo congela celdas que el dither no toco.
+                rescued = int(np.count_nonzero(keep & dither_changed_mask))
+                if rescued:
+                    keep &= ~dither_changed_mask
+                    threshold_dither_protected += rescued
+                    threshold_dither_frames += 1
             emitted = cells.copy()
             emitted[keep, 0] = prev_cells[keep, 0]
             cells = emitted
@@ -1492,6 +1511,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             "dither_window": int(dither_window),
             "dither_changed_cells": int(dither_changed_cells),
             "dither_temporal_resets": int(dither_temporal_resets),
+            "threshold_dither_protected_cells": int(threshold_dither_protected),
+            "threshold_dither_protected_frames": int(threshold_dither_frames),
             "scene_keyframes": bool(scene_keyframes),
             "scene_cut_keyframes": int(scene_cut_keyframes),
             "dither_proxy_improvement": (
@@ -1672,6 +1693,11 @@ def main(argv=None):
                   (info["dither_byte_budget"],
                    info["dither_byte_limited_frames"],
                    info["dither_byte_dropped_tiles"]))
+        if info.get("threshold_dither_protected_frames"):
+            print("             threshold (E-18): %d celdas tramadas "
+                  "protegidas del revert en %d frames" %
+                  (info["threshold_dither_protected_cells"],
+                   info["threshold_dither_protected_frames"]))
         print("  frames   : %d   tags RAW/ZLIB/DELTA = %d/%d/%d" %
               (info["n_frames"], info["tags"][0], info["tags"][1], info["tags"][2]))
         print("  .ascl    : %d B  (%.1f KB, %.1f KB/s)" %

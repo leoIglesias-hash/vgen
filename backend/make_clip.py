@@ -294,6 +294,11 @@ def main(argv=None):
                   (info["dither_byte_budget"],
                    info["dither_byte_limited_frames"],
                    info["dither_byte_dropped_tiles"]))
+        if info.get("threshold_dither_protected_frames"):
+            print("  threshold (E-18): %d celdas tramadas protegidas del "
+                  "revert en %d frames" %
+                  (info["threshold_dither_protected_cells"],
+                   info["threshold_dither_protected_frames"]))
         print("  bundle: %.1f KB  (video %.1f KB + audio %.1f KB)  ~%.1f KB/s" %
               (total/1024.0, la/1024.0, lau/1024.0, total/1024.0/secs))
         if not args.keep:
