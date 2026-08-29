@@ -43,8 +43,12 @@ assert(/seekTo\(frame\);\s*if\(textLayer\) markTextDirty\(\);\s*renderer\.draw\(
   "el texto se marca sucio tras el seek y se dibuja despues del frame");
 assert(inline[1].indexOf("textLayer.markDirty(reader)") >= 0,
   "markTextDirty usa la API de la capa");
-assert(/markTextDirty[\s\S]{0,400}reader\.markRectDirty\(it\.x,it\.y,it\.w,it\.h\)/.test(inline[1]),
+assert(/markTextDirty[\s\S]{0,700}reader\.markRectDirty\(x,y,w,h\)/.test(inline[1]),
   "todas las cajas declaradas se marcan para que borrar texto no deje fantasma");
+/* INT-007-A: las cajas con sombra se marcan expandidas 1 celda (el derrame
+ * de la sombra esta acotado a < 1 celda en textlayer.js) */
+assert(/if\(it\.shadow\)\{\s*if\(x>0\)\{x--;w\+\+;\}/.test(inline[1]),
+  "la caja con sombra se expande para que cambiar texto no deje halo");
 
 /* INT-004 / regla 6: con texto declarado el renderer ES Canvas2D y su
  * backing store escala (pixelScale) para texto nitido */
@@ -94,14 +98,36 @@ assert(page.indexOf('IMG_URL="./outputs/logo.png"') >= 0);
 assert(inline[1].indexOf("function tryAttachImage()") >= 0);
 assert(/if\(!textLayer \|\| imgEl \|\| !window\.Image\) return;/.test(inline[1]),
   "la imagen solo se activa con texto declarado (renderer ya Canvas2D)");
-assert(/renderer\.draw\(reader\);\s*if\(textLayer\) textLayer\.draw\(renderer\.ctx,cellScale\);\s*if\(imgBox\) drawImg\(\);/.test(inline[1]),
+assert(/renderer\.draw\(reader\);\s*if\(textLayer\) textLayer\.draw\(renderer\.ctx,cellScale\);\s*if\(imgBox\) drawImg\(frame\);/.test(inline[1]),
   "la imagen se dibuja despues del frame y del texto");
-assert(/if\(imgBox\)\{\s*reader\.markRectDirty\(imgBox\.x,imgBox\.y,imgBox\.w,imgBox\.h\);/.test(inline[1]),
-  "la caja de la imagen se repinta debajo cada frame");
+assert(/if\(imgSpin\)\{\s*reader\.markRectDirty\(imgSpin\.x,imgSpin\.y,imgSpin\.w,imgSpin\.h\);/.test(inline[1]),
+  "debajo de la imagen se repinta el cuadrado que circunscribe el giro");
 assert(inline[1].indexOf("im.onerror=function(){") >= 0,
   "sin imagen nada cambia (INV-7)");
-assert(/imgBox\.x\*cellScale,imgBox\.y\*cellScale/.test(inline[1]),
+assert(/imgBox\.w\*cellScale,imgBox\.h\*cellScale/.test(inline[1]),
   "la imagen escala con cellScale como el texto");
+
+/* INT-007-A: tipografia menos comun con fallback serif + sombra translucida
+ * en las cajas de texto (espejo INT-004 y standalone INT-006) */
+assert(/TEXT_FONT='"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif'/.test(inline[1]),
+  "pila de fuentes menos comun con fallback serif");
+assert(/TEXT_SHADOW="rgba\(0,0,0,0\.\d+\)"/.test(inline[1]),
+  "la sombra es translucida (rgba con alpha)");
+assert.strictEqual(
+  inline[1].match(/font:TEXT_FONT,\s*weight:TEXT_WEIGHT,shadow:TEXT_SHADOW/g).length, 2,
+  "espejo y standalone comparten fuente, peso y sombra");
+
+/* INT-007-B: el logo gira como ruleta simulada — angulo determinista por
+ * frame (sin reloj), save/translate/rotate/restore acotados al draw, y el
+ * area sucia es el cuadrado circunscripto (lado = diagonal de la caja) */
+assert(/ctx\.save\(\);\s*ctx\.translate\(cx,cy\);\s*ctx\.rotate\(\(frame%IMG_TURN\)\*IMG_STEP\);[\s\S]{0,220}ctx\.restore\(\);/.test(inline[1]),
+  "rotacion alrededor del centro, determinista por frame, sin estado colgado");
+assert(inline[1].indexOf("IMG_STEP=2*Math.PI/IMG_TURN") >= 0,
+  "vuelta completa cada IMG_TURN frames");
+assert(inline[1].indexOf("d=Math.ceil(Math.sqrt(w*w+h*h))") >= 0,
+  "el cuadrado sucio circunscribe la rotacion (diagonal de la caja)");
+assert(/drawImg\(lastShown\)/.test(inline[1]),
+  "los redraws en pausa usan el frame mostrado: mismo frame, mismo angulo");
 
 /* INV-7: sin reserva, sin sidecar o con sidecar ajeno el video sigue */
 assert(page.indexOf("overlay inactivo") >= 0);

@@ -79,6 +79,15 @@
   var SLOTS_URL="./outputs/clip.slots";
   var DATA_URL="./outputs/data.txt";
   var IMG_URL="./outputs/logo.png";
+  /* INT-007-A: pila de fuentes menos comun (fallback serif garantizado) +
+   * sombra translucida (rgba con alpha) para el texto nativo */
+  var TEXT_FONT='"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif';
+  var TEXT_WEIGHT="bold";
+  var TEXT_SHADOW="rgba(0,0,0,0.55)";
+  /* INT-007-B: el logo gira como ruleta simulada - vuelta completa cada
+   * IMG_TURN frames mostrados (2 s a 15 fps); el angulo es funcion del
+   * frame, determinista: mismo frame -> mismo angulo, sin reloj */
+  var IMG_TURN=30, IMG_STEP=2*Math.PI/IMG_TURN;
 
   var cv=document.getElementById("cv"), audio=document.getElementById("audio");
   var elPlay=document.getElementById("play"), elZoom=document.getElementById("zoom");
@@ -87,7 +96,7 @@
   var reader=null, renderer=null, overlay=null, channel=null, overlayMeta=null;
   var textLayer=null, textFields=null, textItems=null, cellScale=1;
   var textFeed=null, feedFields=null;
-  var imgEl=null, imgBox=null;
+  var imgEl=null, imgBox=null, imgSpin=null;
   var playing=false, hasAudio=false, startT=0, raf=0, lastShown=-1, simSerial=0;
   var urlAPI=window.URL || window.webkitURL;
   var perf=window.performance;
@@ -114,32 +123,52 @@
    * debajo del texto viejo; se marcan TODAS las cajas declaradas (no solo
    * las que tienen texto) para que borrar un texto no deje fantasma. */
   function markTextDirty(){
-    var i,it;
+    var i,it,x,y,w,h,cols=reader.header.cols,rows=reader.header.rows;
     textLayer.markDirty(reader);
     for(i=0;i<textItems.length;i++){
       it=textItems[i];
-      if(it.x+it.w<=reader.header.cols && it.y+it.h<=reader.header.rows){
-        reader.markRectDirty(it.x,it.y,it.w,it.h);
+      x=it.x; y=it.y; w=it.w; h=it.h;
+      if(x+w>cols || y+h>rows) continue;
+      /* INT-007-A: la sombra derrama menos de una celda; su caja se marca
+       * expandida 1 celda (clampeada) para que cambiar texto no deje halo */
+      if(it.shadow){
+        if(x>0){x--;w++;}
+        if(y>0){y--;h++;}
+        if(x+w<cols) w++;
+        if(y+h<rows) h++;
       }
+      reader.markRectDirty(x,y,w,h);
     }
-    /* INT-006-C: la caja de la imagen nativa tambien se repinta debajo */
-    if(imgBox){
-      reader.markRectDirty(imgBox.x,imgBox.y,imgBox.w,imgBox.h);
+    /* INT-006-C/INT-007-B: debajo de la imagen se repinta el cuadrado que
+     * circunscribe su rotacion, no solo su caja, para que el giro no deje
+     * estela */
+    if(imgSpin){
+      reader.markRectDirty(imgSpin.x,imgSpin.y,imgSpin.w,imgSpin.h);
     }
   }
   /* INT-006-C (D7=a): la imagen se dibuja DESPUES del texto, escalada por
-   * cellScale como el, sobre el mismo canvas (un solo layer) */
-  function drawImg(){
-    renderer.ctx.drawImage(imgEl,
-      imgBox.x*cellScale,imgBox.y*cellScale,
+   * cellScale como el, sobre el mismo canvas (un solo layer).
+   * INT-007-B: gira alrededor del centro de su caja con angulo funcion del
+   * frame mostrado (ruleta simulada); save/restore acota la transformacion
+   * a este draw y no queda estado colgado en el contexto */
+  function drawImg(frame){
+    var ctx=renderer.ctx,
+        cx=(imgBox.x+imgBox.w/2)*cellScale,
+        cy=(imgBox.y+imgBox.h/2)*cellScale;
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate((frame%IMG_TURN)*IMG_STEP);
+    ctx.drawImage(imgEl,
+      -imgBox.w*cellScale/2,-imgBox.h*cellScale/2,
       imgBox.w*cellScale,imgBox.h*cellScale);
+    ctx.restore();
   }
   function drawFrame(frame){
     seekTo(frame);
     if(textLayer) markTextDirty();
     renderer.draw(reader);
     if(textLayer) textLayer.draw(renderer.ctx,cellScale);
-    if(imgBox) drawImg();
+    if(imgBox) drawImg(frame);
   }
 
   function overlayStatus(){
@@ -191,7 +220,8 @@
       if(tx<0) continue;
       items.push({id:f.fieldId,x:tx,y:s0.y,w:wTot,h:s0.h,
         size:Math.max(1,s0.h-6),color:"#ffd700",outline:"#000000",
-        font:"serif",align:"center"});
+        font:TEXT_FONT,weight:TEXT_WEIGHT,shadow:TEXT_SHADOW,
+        align:"center"});
       fields.push(f);
     }
     return {items:items,fields:fields};
@@ -261,7 +291,8 @@
       x=Math.floor(cols*(2*k+1)/6-w/2);
       if(x<0 || x+w>cols) continue;
       items.push({id:k+1,x:x,y:y,w:w,h:h,size:Math.max(1,h-4),
-        color:"#ffd700",outline:"#000000",font:"serif",align:"center"});
+        color:"#ffd700",outline:"#000000",font:TEXT_FONT,
+        weight:TEXT_WEIGHT,shadow:TEXT_SHADOW,align:"center"});
       fields.push({id:k+1,width:2});
     }
     return {items:items,fields:fields};
@@ -304,12 +335,22 @@
       var cols=reader.header.cols, rows=reader.header.rows;
       var w=Math.floor(cols/4);
       var h=Math.round(w*im.naturalHeight/im.naturalWidth);
+      var d,sx,sy;
       if(w<1 || h<1 || cols-w-2<0 || h+4>rows) return;
       imgEl=im;
       imgBox={x:cols-w-2,y:2,w:w,h:h};
+      /* INT-007-B: cuadrado que circunscribe la rotacion (lado = diagonal
+       * de la caja), clampeado a la grilla; es lo que se marca sucio */
+      d=Math.ceil(Math.sqrt(w*w+h*h));
+      sx=Math.max(0,Math.floor(imgBox.x+(w-d)/2));
+      sy=Math.max(0,Math.floor(imgBox.y+(h-d)/2));
+      imgSpin={x:sx,y:sy,
+        w:Math.min(cols,Math.ceil(imgBox.x+(w+d)/2))-sx,
+        h:Math.min(rows,Math.ceil(imgBox.y+(h+d)/2))-sy};
       if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
-      log("Imagen nativa activa (INT-006-C, D7=a): "+IMG_URL+
-        " en "+imgBox.w+"x"+imgBox.h+" celdas, esquina superior derecha.");
+      log("Imagen nativa activa (INT-006-C + giro INT-007-B): "+IMG_URL+
+        " en "+imgBox.w+"x"+imgBox.h+" celdas, esquina superior derecha, "+
+        "una vuelta cada "+IMG_TURN+" frames (ruleta simulada).");
     };
     im.onerror=function(){ /* sin imagen: nada cambia (INV-7) */ };
     im.src=IMG_URL;
@@ -418,7 +459,7 @@
         if(textLayer) markTextDirty();
         renderer.draw(reader);
         if(textLayer) textLayer.draw(renderer.ctx,cellScale);
-        if(imgBox) drawImg();
+        if(imgBox) drawImg(lastShown);
       }
       log("Panel limpio (clear): matriz byte-identica al video base. "+overlayStatus());
     } else if(textFeed && textLayer){
@@ -431,7 +472,7 @@
         markTextDirty();
         renderer.draw(reader);
         textLayer.draw(renderer.ctx,cellScale);
-        if(imgBox) drawImg();
+        if(imgBox) drawImg(lastShown);
       }
       log("Textos limpios: fondo intacto (texto standalone, INT-006).");
     }

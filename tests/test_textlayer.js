@@ -36,6 +36,11 @@ function MockCtx() {
   this.strokeStyle = "";
   this.lineWidth = 0;
   this.lineJoin = "";
+  /* INT-007-A: estado de sombra; un item sin sombra no debe tocarlo */
+  this.shadowColor = "SIN-TOCAR";
+  this.shadowBlur = -1;
+  this.shadowOffsetX = -1;
+  this.shadowOffsetY = -1;
   this.ops = [];
 }
 MockCtx.prototype._snap = function (op, text, x, y, maxW) {
@@ -43,7 +48,9 @@ MockCtx.prototype._snap = function (op, text, x, y, maxW) {
     op: op, text: text, x: x, y: y, maxW: maxW,
     font: this.font, align: this.textAlign, baseline: this.textBaseline,
     style: op === "stroke" ? this.strokeStyle : this.fillStyle,
-    lineWidth: this.lineWidth, lineJoin: this.lineJoin
+    lineWidth: this.lineWidth, lineJoin: this.lineJoin,
+    shadowColor: this.shadowColor, shadowBlur: this.shadowBlur,
+    shadowOffsetX: this.shadowOffsetX, shadowOffsetY: this.shadowOffsetY
   });
 };
 MockCtx.prototype.strokeText = function (t, x, y, m) {
@@ -212,6 +219,92 @@ MockReader.prototype.markRectDirty = function (x, y, w, h) {
   ctx = new MockCtx();
   thin.draw(ctx, 4);   /* 4px de texto -> 0.5 -> clamp a 1 */
   assert.strictEqual(ctx.ops[0].lineWidth, 1);
+})();
+
+/* ---- INT-007-A: weight y shadow ---- */
+(function () {
+  var bad = [
+    [item({ weight: 7 })], [item({ weight: "" })],
+    [item({ weight: new Array(34).join("x") })],  /* 33 > MAX_WEIGHT */
+    [item({ weight: "a\u0007b" })],    /* control char */
+    [item({ shadow: 7 })], [item({ shadow: "" })],
+    [item({ shadow: "a\nb" })],
+    [item({ shadow: new Array(66).join("x") })]   /* 65 > MAX_STYLE */
+  ], i;
+  for (i = 0; i < bad.length; i++) {
+    assert.strictEqual(TL.create(bad[i]), null,
+      "create debio rechazar weight/shadow invalido, caso " + i);
+  }
+  /* null explicito = omitido */
+  assert.notStrictEqual(TL.create([item({ weight: null, shadow: null })]),
+    null);
+
+  /* sin sombra: las propiedades shadow* del contexto NO se tocan (la salida
+   * es identica a la historica) */
+  var plain = TL.create([item({})]);
+  var ctx = new MockCtx();
+  plain.draw(ctx, 10);
+  assert.strictEqual(ctx.ops.length, 2);
+  assert.strictEqual(ctx.shadowColor, "SIN-TOCAR");
+  assert.strictEqual(ctx.shadowBlur, -1);
+
+  /* weight se antepone al font shorthand; sin weight el string es el
+   * historico (cubierto por los tests previos) */
+  var bold = TL.create([item({ weight: "bold" })]);
+  ctx = new MockCtx();
+  bold.draw(ctx, 10);
+  assert.strictEqual(ctx.ops[0].font, "bold 20px serif");
+
+  /* con sombra y borde: la sombra vive SOLO en la primera pasada (stroke)
+   * y el relleno queda nitido; al terminar el item la sombra esta apagada */
+  var sh = TL.create([item({ shadow: "rgba(0,0,0,0.5)" })]);
+  ctx = new MockCtx();
+  sh.draw(ctx, 10);
+  assert.strictEqual(ctx.ops[0].op, "stroke");
+  assert.strictEqual(ctx.ops[0].shadowColor, "rgba(0,0,0,0.5)");
+  assert.strictEqual(ctx.ops[0].shadowBlur > 0, true);
+  assert.strictEqual(ctx.ops[0].shadowOffsetX, ctx.ops[0].shadowOffsetY);
+  assert.strictEqual(ctx.ops[1].op, "fill");
+  assert.strictEqual(ctx.ops[1].shadowColor, "rgba(0,0,0,0)");
+  assert.strictEqual(ctx.ops[1].shadowBlur, 0);
+  assert.strictEqual(ctx.shadowColor, "rgba(0,0,0,0)");
+  assert.strictEqual(ctx.shadowBlur, 0);
+
+  /* sin borde: la sombra va en el relleno y se apaga al salir */
+  var shNoOutline = TL.create([{ id: 0, x: 2, y: 3, w: 8, h: 4, size: 2,
+    color: "#fff", shadow: "rgba(0,0,0,0.5)", text: "77" }]);
+  ctx = new MockCtx();
+  shNoOutline.draw(ctx, 10);
+  assert.strictEqual(ctx.ops.length, 1);
+  assert.strictEqual(ctx.ops[0].op, "fill");
+  assert.strictEqual(ctx.ops[0].shadowColor, "rgba(0,0,0,0.5)");
+  assert.strictEqual(ctx.shadowColor, "rgba(0,0,0,0)");
+
+  /* derrame acotado a < 1 celda: blur <= 0.6*cellPx y offset <= 0.4*cellPx
+   * aun con texto enorme */
+  var huge = TL.create([{ id: 0, x: 0, y: 0, w: 40, h: 20, size: 20,
+    color: "#fff", shadow: "#000", text: "9" }]);
+  ctx = new MockCtx();
+  huge.draw(ctx, 10);
+  assert.strictEqual(ctx.ops[0].shadowBlur <= 6, true);
+  assert.strictEqual(ctx.ops[0].shadowOffsetX <= 4, true);
+
+  /* markDirty: la caja con sombra se marca expandida 1 celda, clampeada a
+   * la grilla; sin sombra queda exacta (cubierto por los tests previos) */
+  var layer = TL.create([
+    item({ id: 1, x: 2, y: 3, w: 8, h: 4, text: "UNO",
+           shadow: "rgba(0,0,0,0.5)" }),
+    item({ id: 2, x: 0, y: 0, w: 5, h: 2, text: "BORDE",
+           shadow: "rgba(0,0,0,0.5)" }),
+    item({ id: 3, x: 30, y: 15, w: 10, h: 5, text: "ESQ",
+           shadow: "rgba(0,0,0,0.5)" })
+  ]);
+  var reader = new MockReader(40, 20);
+  assert.strictEqual(layer.markDirty(reader), 3);
+  assert.deepStrictEqual(reader.rects,
+    ["1,2,10,6",    /* expandida en las 4 direcciones */
+     "0,0,6,3",     /* clamp en el origen */
+     "29,14,11,6"]); /* clamp contra cols/rows */
 })();
 
 console.log("textlayer tests: OK");
