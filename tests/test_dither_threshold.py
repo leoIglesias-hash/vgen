@@ -49,7 +49,7 @@ def encode_synthetic(out_path, dump_path, **options):
     defaults = dict(
         mode_name="pixel", cols=WIDTH, rows=HEIGHT, fps=15, pal_size=4,
         ramp_name="short", char_aspect=0.5, compress="auto",
-        # El threshold solo existe con paleta global (pal16); keyint alto deja
+        # El threshold solo existe con paleta global (pal_metric); keyint alto deja
         # un solo keyframe, asi los demas frames pasan por el revert.
         palette_mode="global", keyint=64, with_audio=False,
         palette_algorithm="kmeans-oklab", dump_cells=dump_path,

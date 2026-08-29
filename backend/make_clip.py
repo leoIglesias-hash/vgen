@@ -20,6 +20,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import encoder
+import trellis
 import ascl_bundle
 import ascl_v2
 import overlay_palette
@@ -64,8 +65,15 @@ def main(argv=None):
     p.add_argument("--palette-uint8-refine", type=int, default=0,
                    help="E-13: iteraciones del cierre de Lloyd en dominio "
                         "uint8, solo kmeans-oklab (0=off, 2..5 tipico, max 10)")
-    p.add_argument("--threshold", type=int, default=0,
-                   help="T perceptual RGB (0=lossless); pixel con paleta global/block")
+    p.add_argument("--threshold", type=float, default=0,
+                   help="umbral del trellis (0=lossless); pixel con paleta "
+                        "global/block. La escala depende de --threshold-metric")
+    p.add_argument("--threshold-metric", choices=trellis.THRESHOLD_METRICS,
+                   default="rgb",
+                   help="espacio del umbral (E-20): rgb = euclidea sRGB, el "
+                        "historico (valores utiles 10-40); oklab = delta-E "
+                        "perceptual, misma sensibilidad en sombras y luces "
+                        "(valores utiles 0,01-0,05)")
     p.add_argument("--ramp", default="short")
     p.add_argument("--palette-size", type=int, default=None, dest="pal_size",
                    help="1..256; default 256 o valor del perfil")
@@ -200,6 +208,7 @@ def main(argv=None):
                                     args.fps, args.pal_size, args.ramp, 0.5, "auto",
                                     args.palette, keyint, with_audio=True,
                                     threshold=args.threshold,
+                                    threshold_metric=args.threshold_metric,
                                     bake_smoothing=args.bake_smoothing,
                                     reconstruction=args.reconstruction,
                                     quality_profile=args.quality_profile,

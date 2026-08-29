@@ -1146,6 +1146,7 @@ def encode_image(in_path, out_path, mode_name, cols, rows, fps, pal_size,
 
 def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_name,
                  char_aspect, compress, palette_mode, keyint, with_audio, threshold=0,
+                 threshold_metric="rgb",
                  dump_cells=None, bake_smoothing="none", reconstruction="nearest",
                  quality_profile="custom", palette_block_frames=0,
                  dither_mode="off", dither_matrix=4,
@@ -1179,8 +1180,13 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         reserved_colors = _validate_reserved_colors(reserved, reserved_colors)
     if int(keyint) < 0:
         raise ValueError("keyint debe ser >= 0")
-    if int(threshold) < 0:
+    if float(threshold) < 0:
         raise ValueError("threshold debe ser >= 0")
+    if threshold_metric not in trellis.THRESHOLD_METRICS:
+        # E-20: en Oklab los valores utiles rondan 0,02; en sRGB, 10-40. Elegir
+        # mal la metrica y no enterarse cambiaria el video en silencio.
+        raise ValueError("threshold-metric debe ser uno de %s" %
+                         (trellis.THRESHOLD_METRICS,))
     if dither_mode in ("selective", "auto") and palette_mode == "per-frame":
         raise ValueError("dither %s en video requiere palette global o block; "
                          "tambien admite adaptive" %
@@ -1286,7 +1292,10 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         flags_extra |= FLAG_LOSSY
     if reconstruction == "soft":
         flags_extra |= FLAG_RECON_SOFT
-    pal16 = palette0.astype(np.int16) if (use_global and palette0 is not None) else None
+    # E-20: la paleta del trellis vive en el espacio de la metrica elegida y se
+    # reconstruye solo cuando cambia la paleta activa, no por frame.
+    pal_metric = (trellis.build_threshold_palette(palette0, threshold_metric)
+             if (use_global and palette0 is not None) else None)
     # El dither tampoco puede introducir indices reservados: su LUT de pares se
     # construye solo con la parte base de la paleta.
     dither_lut = (make_dither_pair_lut(
@@ -1323,7 +1332,8 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
             if block_start:
                 # Los indices de dos paletas distintas nunca comparten una cadena DELTA.
                 prev_cells = None
-                pal16 = active_palette.astype(np.int16)
+                pal_metric = trellis.build_threshold_palette(active_palette,
+                                                        threshold_metric)
                 if dither_mode != "off":
                     dither_lut = make_dither_pair_lut(
                         (active_palette[:len(active_palette) - reserved]
@@ -1444,9 +1454,9 @@ def encode_video(in_path, out_path, mode_name, cols, rows, fps, pal_size, ramp_n
         # del `--threshold`; E-20..E-23 lo extienden dentro de `trellis.py`, no
         # agregando pasadas nuevas aca. El threshold ya no es una etapa que
         # convive con el trellis: ES el trellis en su forma minima.
-        if pal16 is not None and mode == MODE_PIXEL and not keyframe:
+        if pal_metric is not None and mode == MODE_PIXEL and not keyframe:
             cells, trellis_details = trellis.apply_threshold_trellis(
-                cells, prev_cells, pal16, threshold,
+                cells, prev_cells, pal_metric, threshold,
                 protected_mask=dither_changed_mask)
             if trellis_details["protected_cells"]:
                 threshold_dither_protected += trellis_details["protected_cells"]
