@@ -29,3 +29,4 @@ Reglas:
 | 2026-08-28 | INT-004: texto nativo en el mismo canvas — textlayer.js + live-player (Canvas2D con backing escalado, demo lado a lado) | [`2026-08-28-INT-004-texto-nativo.md`](2026-08-28-INT-004-texto-nativo.md) |
 | 2026-08-28 | INT-006: fondo sin reserva (768 byte-idéntico a P-02, 960 medido) + textfeed standalone + imagen nativa D7=a | [`2026-08-28-INT-006-fondo-sin-reserva.md`](2026-08-28-INT-006-fondo-sin-reserva.md) |
 | 2026-08-29 | F3: carril de calidad E-12..E-18 (solo E-12 adoptado; E-17 validado pero la decisión del dither es visual, no numérica; E-18 corrige el revert del threshold) | [`2026-08-29-F3-carril-calidad.md`](2026-08-29-F3-carril-calidad.md) |
+| 2026-08-30 | F5: trellis E-19..E-24 + INT-007 — producto 11,3 MB = 29 % del mp4 fuente (near-lossless 8 adoptado por el operador); tipografía con sombra y ruleta simulada | [`2026-08-30-F5-trellis-near-lossless.md`](2026-08-30-F5-trellis-near-lossless.md) |

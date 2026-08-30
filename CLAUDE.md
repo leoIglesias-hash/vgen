@@ -70,177 +70,47 @@ el TV nunca cuantiza ni decide, solo ejecuta.
 Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
 `docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md`.
 
-## Estado de fases (resumen grueso — el detalle vive en RUNBOOK-ESTADO)
+## Estado (resumen grueso — el detalle vive en RUNBOOK-ESTADO)
 
-- ✅ F0 · **F1** (paleta reservada, glifos, sidecar) · **F2** (E-08 Zopfli −7,2%,
-  E-09 tile_size 4..32 + barrido, E-10 keyframes por corte) · **F4** (W-01..14:
-  inflate 2,3×, walk regional ≈−40%, markRectDirty, robustez player) ·
-  **F7/S-5** (runtime del overlay: overlay.js + datachannel.js + referencia
-  Python byte-idéntica; `make_clip --reserved 10`, panel de 20 números,
-  workflow `encode` con `overlay=on` publica `clip.asclv`+`clip.slots`;
-  `live-player.html` lo reproduce) · S-1/S-2/S-3 · P-02 (HQ reproducible;
-  con Zopfli: 17.482.270 B, `ebfe2eb4…4b36`)
-- ✅ **INT-003 (vía corta)**: reserva de 32 (224..255, cola F7 intacta),
-  ASCLSLOT v2 (parches heterogéneos, kind dígitos/elección, presupuestos por
-  frame), runtime v2 con NONE y presencia (v1 byte-idéntico), `bake_patches`
-  (cualquier TTF/PNG → Oklab), `make_patch_pack` demo, workflow
-  `overlay=off/panel/patches`. La **ruleta** va con ASCLVID3 (F6/S-4).
-  Evidencia: `docs/ejecutados/2026-08-28-INT-003-parches-genericos.md`.
-- ✅ **INT-004 (texto nativo)**: `textlayer.js` (`21df177`) + integración en
-  live-player (`76ffe45`) — campos grandes del sidecar v2 espejados como
-  texto serif nítido al costado de la matriz, mismos payloads para ambos;
-  con texto el renderer es Canvas2D con `pixelScale=zoom` (backing real,
-  put chico + drawImage del canvas sobre sí mismo, sin segundo canvas).
-  Evidencia: `docs/ejecutados/2026-08-28-INT-004-texto-nativo.md`.
-- ✅ **INT-006 (carril completo, 2026-08-28)**: (A) fondo re-encodeado
-  `overlay=off` — el **768 reproduce byte a byte la referencia P-02**
-  (`ebfe2eb4…4b36`, 17.482.270 B, instalado en `outputs/`; PSNR 34,29) y
-  el **960** quedó medido (`31348a83…5688`, 25,0 MB, 34,40) por si el
-  operador lo prefiere; `clip.slots`/`data.txt` borrados. (B) texto
-  standalone: `textfeed.js` (`49e2b4a`+fix `2c81856`) — sin sidecar el
-  player declara 3 campos de 2 dígitos por tercios; botón+canal los
-  alimentan (`datachannel.js` intacto). (C) **D7=a imagen nativa**
-  (`3e51ce8`): `outputs/logo.png` opcional con drawImage sobre el MISMO
-  canvas tras el texto; (c) INT-005/época sigue definitivo para la
-  ruleta. Evidencia: `docs/ejecutados/2026-08-28-INT-006-…` +
-  Instancia 017.
-- ✅ **E-12 (refit de paleta, 2026-08-28)**: `--palette-refit 0..10`
-  opt-in (`09c4261`) — Lloyd acotado tras cada paleta con la regla de
-  asignación real del encode y aceptación monótona (nunca degrada);
-  reservadas intactas. Bench 768 `overlay=off` (Instancia 018):
-  **refit 5 = 35,46 dB / Oklab 0,00732 / 17.379.859 B**
-  (`adef9e53…c05bb`) vs 34,29 / 0,00793 de P-02 → **+1,17 dB con menos
-  bytes**; instalado en `outputs/` como fondo de producto. P-02 sigue
-  reproducible con el flag en 0.
-- ✅ **E-13 (Lloyd uint8, 2026-08-28)**: `--palette-uint8-refine 0..10`
-  opt-in (`a64c7ce`) — cierra el Lloyd restringido a paletas sRGB
-  representables con aceptación monótona por inercia. Medido sobre
-  refit 5 (Instancia 019, `a95d0bbc…`): PSNR igual, Oklab −0,5 %,
-  bytes +0,36 % → **no adoptado**; el producto sigue con refit 5 solo.
-- ✅ **E-14 (dos pasadas, 2026-08-28)**: modo global sin materializar
-  (`f324f1e`) — `StreamingColorAggregate` + `sample_aggregate` ajustan la
-  paleta kmeans-oklab sobre TODOS los píxeles (sin cap de 65.536);
-  Pillow/RGB reproducen byte a byte el muestreo histórico. Instancia 020:
-  **RSS 886 → 433 MB (−51 %)**, Oklab −4,5 %, PSNR RGB −0,27 dB (desvío
-  registrado en bitácora; global no es el modo de producto).
-- ✅ **E-15 (estabilidad temporal ×4, 2026-08-28)**: `_stabilize_rgb_palette`
-  (`91a0e68`) — alineación 1:1 + fusión por `temporal_strength` en
-  kmeans-rgb/median-cut/fast-octree (block, adaptive y per-frame).
-  Instancia 021: fronteras −31 %/−93 % en sintético; clip real kmeans-rgb
-  −1,25 % bytes, PSNR −1,04 dB por el blending (knob
-  `--adaptive-stability-max 0` = solo alineación). Producto sin cambios.
-- ✅ **E-16 (PairLUT exacto, 2026-08-28)**: `exact_pairs` trama desde la
-  base real del cuantizador (muere el gate 555). Bench de producto
-  (Instancia 022, `0ed4cbbe…`): **−0,21 dB, +4,1 % Oklab, +6 % bytes,
-  +39 % tiempo → NO adoptado**; la exactitud quedó **opt-in
-  `--dither-exact`** y el default vuelve a la LUT histórica
-  byte-idéntica (el producto `adef9e53…` sigue reproducible desde main).
-  Se reevalúa con E-17.
-- ✅ **E-17 (presupuesto de dither en bytes, 2026-08-29)**: opt-in
-  `--dither-byte-budget N` (default `None` = byte-idéntico); mide los
-  bytes reales del frame con la estructura del emisor y recorta por
-  bisección. **Mecanismo validado** (Instancia 023): 450 B/frame
-  conserva el 40 % de las celdas tramadas y cae proporcionalmente entre
-  los extremos. `budget 0` = dither off pero 4:43 más lento y 41 B más
-  grande → descartado como receta. **No se adoptó nada**: el bench
-  ordena hacia «sin dither», pero `psnr_rgb_db` y `err_oklab_medio` son
-  promedios por píxel ciegos al banding, así que la elección
-  on/450/off es visual y está en manos del operador. **Resuelta 2026-08-29:
-  el operador eligió OFF** — el fondo de producto pasa a `74be25ef…011f9`
-  (17.168.633 B, 35,63 dB, Oklab 0,00721, instalado en `outputs/`); el
-  default `dither` del workflow `encode` pasa a `off` (la receta de
-  producto es defaults + `extra=--palette-refit 5`).
-- ✅ **E-18 (dither vs threshold, 2026-08-29)**: el revert del threshold
-  ya no pisa celdas que el dither movió (`keep &= ~dither_changed_mask`),
-  con contadores propios. No toca el producto (`--threshold` default 0).
-  **Con E-17 y E-18, F3 (E-12..E-18) queda cerrada.**
-- ✅ **E-19 (orden canónico, 2026-08-29)**: `backend/trellis.py` con
-  `CANONICAL_STAGES` como dato importable y el `--threshold` absorbido
-  como caso degenerado del trellis; E-20..E-23 extienden ese módulo, no
-  agregan pasadas al bucle. Refactor puro.
-- ✅ **E-20 (umbral en ΔE-Oklab, 2026-08-29)**: `--threshold-metric
-  {rgb,oklab}` con **default `rgb`** (los valores ya elegidos por el
-  operador no se reinterpretan, regla 9); la paleta se convierte una vez
-  por paleta, así que Oklab no cuesta más por frame. **Sin fila de bench
-  todavía: no cambia ninguna receta.**
-- 🔒 **Byte-identidad del producto verificada 3 veces** (regla 5):
-  `adef9e53…c05bb` reproducido post-E-16, post-E-18 y post-E-19/E-20
-  (run 33235096580 desde `73c67ad`). El refactor no movió un byte.
-- ✅ **INT-007 (2026-08-29, `faf2390`)**: tipografía Palatino bold con
-  sombra translúcida (`weight`/`shadow` en textlayer.js, derrame < 1
-  celda, markDirty expandido) y `outputs/logo.png` girando como ruleta
-  simulada (ángulo determinista por frame, cuadrado circunscripto
-  marcado sucio). Verificado en navegador; la ruleta REAL sigue en F6.
-- ✅ **E-21 (2026-08-29, `7e6fd8e`, ADOPTADA)**: jerarquía de costo en
-  `trellis.py` (`COST_LADDER`: `proxy_cost` entropía orden 0 para
-  E-22/E-23, `finalist_deflate` zlib-9 determinista, `champion_deflate`
-  best_deflate SOLO al ganador); emisor v1, predictores v2 y transcode
-  eligen en zlib-9 y pagan un campeón por frame. Instancia 024:
-  **PSNR/Oklab idénticos, +2.040 B (+0,012 %), wall 44:21 → 20:18
-  (−54 %)** → producto `41c94170…79d5`; `74be25ef…` queda histórica (el
-  emisor cambió). Sin Zopfli la salida es byte-idéntica a la histórica.
-- ✅ **E-22 (2026-08-29, `9ab95f6`, ADOPTADA con presupuesto 4)**: el
-  índice del frame anterior como segundo candidato — se emite si el
-  error EXTRA contra el pixel objetivo no supera el presupuesto (la
-  celda sale del DELTA; extra negativo = sale mejorando). Barrido
-  (Instancia 025) y decisión visual del operador en dos pasos el mismo
-  día (aprobó el 2 y luego el 4: «el más agresivo se ve perfecto, no
-  noto la diferencia»): **producto = presupuesto 4 → `221de28f…0373`,
-  −25,2 % de bytes por −0,04 dB** (determinismo re-verificado); el 2
-  (`63fb7aae…`, +0,12 dB) quedó aprobado y superado; 10 descartado
-  (−0,82 dB). Pidió barrer presupuestos más agresivos (5/6/8) en E-24.
-  Default CLI 0 = byte-idéntico; el workflow lo pasa por `extra`.
-- ✅ **E-23 (2026-08-29, `626694a`, opt-in `--trellis-spatial`)**: en
-  tiles con 17/5/3 valores distintos, fusionar el más raro cruza a un
-  opcode más barato del regional v2; se fuerza en el ENCODER (el
-  transcode sigue lossless exacto). Aislado (Instancia 026): −0,32 %
-  por −0,01 dB (satura entre 8 y 16) → sin adopción en solitario, es
-  ingrediente de E-24. Default 0 = byte-idéntico.
-- ✅ **E-24 (2026-08-30, `29ad7f8`+`271dd19`, ADOPTADA — F5 COMPLETA)**:
-  `bench_ref.py` ganó `err_temporal` y `proxy_banding` (por fin ven
-  arrastre y banding; el proxy NO castiga al dither) y `make_clip`
-  ganó `--near-lossless N` (temporal+espacial al mismo presupuesto,
-  0 = byte-idéntico, no se mezcla con los flags explícitos). Barrido
-  (Instancia 027): baseline y producto reproducidos byte a byte con
-  las columnas nuevas; nl4 ≈ producto (el espacial no suma a ese
-  presupuesto); nl5 −3,9 %, nl6 −7,0 %, nl8 −12,0 %. **El operador
-  comparó los previews y adoptó el 8** («el 3 se nota una mínima
-  pérdida pero es aceptable» — primera vez que acepta una diferencia
-  visible a conciencia): producto = `b081f4ba…f6a05e`, workflow
-  default `extra = --palette-refit 5 --near-lossless 8`. El carril
-  trellis deja el producto 34 % más liviano que el baseline sin
-  trellis por −0,53 dB (aún +0,81 dB sobre P-02). Decisión abierta
-  extra: si retoma el 960, re-medirlo con refit 5.
-- ▶ **S-7 EN CURSO (2026-08-30, Instancia 028 ABIERTA)** — barrido
-  768 → 1280 → 1920 con la receta de producto + `--cols N` en `extra`
-  (el `--cols` manual pisa al perfil, regla 9). Hecho: timeout de
-  `encode.yml` 120 → 350 (`2260d21`, CI verde) y el 1280 medido en
-  DOS variantes: **@15 fps `2a9201bf…b778` = 24.530.460 B = 63,0 %
-  de la fuente** (35,02 dB, run 33325334610) y **@12 fps
-  `27ae0019…e828` = 21.196.032 B = 54,4 %** (34,95 dB, err_temporal
-  0,00766, run 33326623591; los 12 fps fueron propuesta del operador
-  — pagan en movimiento, no en imagen: −13,6 % de bytes). Hallazgo:
-  la tasa por celda CAE 21 % al subir resolución (0,1451 → 0,1144
-  B/celda/frame). **Veredicto parcial del operador: el 1280 está
-  APROBADO** («quedó perfecto»; el 12 fps «casi ni se nota»). A su
-  pedido se midió el **1920 @ 10 fps**: `87160987…8d4e` =
-  **32.838.265 B = 84,3 % de la fuente** (34,81 dB, err_temporal
-  0,00803, tasa 0,1023 — cayó OTRO escalón pese a los 10 fps; run
-  33333170964, wall 1:02, preview enviado). **Faltan: veredicto
-  visual del 1920@10 y definiciones finales de S-7.** Nada instalado
-  en `outputs/` ni cambiado en los defaults del workflow.
-- ⏳ **Deploy del player a Cloudflare (pedido 2026-08-30, para sesión
-  NUEVA):** los preview.mp4 validan calidad pero no el pipeline JS;
-  el player real (768 + 1280@15 + 1280@12) quedó empaquetado en
-  `outputs/deploy-player/` (+ zip, gitignored) para hostearlo en
-  iargen.com. El conector Cloudflare vive en la cuenta claude.ai del
-  operador y esta sesión no lo recibió (se fijan al inicio) —
-  ejecutarlo desde una sesión nueva; detalle y planes B en la memoria
-  `proximo-deploy-player-cloudflare`. Límite ~25 MB/archivo en
-  Pages/KV (el 1280@15 entra justo; un 1920 pedirá R2).
-- La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
-  (parches por época)**: el gráfico se declara antes del encode con su
-  ventana y se cuantiza contra las paletas de esas épocas (sin reserva).
-- Pendiente: **S-7 (EN CURSO — decisión del operador abierta)**, F6 (S-4),
-  F8 (necesita F6; F7 ya está). F5 quedó COMPLETA el 2026-08-30.
-  Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8
+**Cerrado y verificado** (no re-implementar; resumen en `docs/ejecutados/`, porqué en el
+REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
+
+- **F0-F5 y F7 completas.** Encoder: paleta reservada/glifos/sidecar (F1), Zopfli +
+  tile_size 4..32 + keyframes por corte (F2), refit de paleta (F3, solo E-12 adoptado),
+  carril trellis completo (F5: orden canónico, métrica Oklab, jerarquía de costo,
+  temporal, espacial, `--near-lossless`). Frontend: W-01..14 (inflate 2,3×, walk −40%,
+  robustez player, F4). Overlay: runtime F7 (overlay.js + datachannel.js + referencia
+  Python byte-idéntica), INT-003 (parches, reserva 32), INT-004 (texto NATIVO Canvas2D
+  sobre el mismo canvas), INT-006 (fondo sin reserva + textfeed standalone + imagen
+  nativa D7=a), INT-007 (Palatino bold + sombra translúcida + logo girando como ruleta
+  simulada).
+- **Producto vigente:** `b081f4ba…f6a05e` = 11.304.137 B = **29,0 % del mp4 fuente**
+  (35,10 dB) — defaults del workflow `encode` (`extra = --palette-refit 5
+  --near-lossless 8`). El operador adoptó cada escalón de pérdida a ojo (dither off →
+  temporal 4 → near-lossless 8); su criterio: «pérdida mínima aceptable si el ahorro
+  lo vale».
+- **Byte-identidad re-verificada 4 veces** (regla 5); desde E-21 el SHA se movió a
+  propósito (elección de candidatos determinista en todos los entornos).
+
+**En curso / pendiente** (detalle operativo en `RUNBOOK-ESTADO.md` §Próxima acción):
+
+- ▶ **S-7 (Instancia 028 ABIERTA):** 1280 **APROBADO** por el operador (@15 fps
+  `2a9201bf…` 24,5 MB = 63 % de la fuente; @12 fps `27ae0019…` 21,2 MB = 54 %,
+  «casi ni se nota»). 1920@10 **medido** (`87160987…8d4e` = 32,8 MB = 84,3 %,
+  34,81 dB, run 33333170964, preview enviado). **Falta su veredicto del 1920 y las
+  definiciones finales** (qué resolución/fps queda de producto). La tasa por celda cae
+  al subir resolución: 0,1451 → 0,1144 → 0,1023 B/celda/frame.
+- ⏳ **Deploy del player a Cloudflare/iargen.com (sesión NUEVA):** paquete en
+  `outputs/deploy-player/` + zip (768 + 1280@15 + 1280@12, SHAs verificados). El
+  conector Cloudflare vive en la cuenta claude.ai del operador y se fija al inicio de
+  sesión. Plan completo en la memoria `proximo-deploy-player-cloudflare`. Límite
+  ~25 MB/archivo en Pages/KV (el 1280@15 entra justo; un 1920 pedirá R2).
+- **Después:** F6 (S-4: ASCLVID3, SPARSE diferencial, barrido definitivo de tile,
+  CACHE-001; **INT-005 por época quedó CONDICIONADO** a que los gates físicos de F8
+  fallen para el overlay nativo — dirección del operador 2026-08-30) → F8 (S-6: TV
+  físico, p95, MEM-001). Opcionales: E-11, W-15. Menor: si se retoma el 960,
+  re-medirlo con refit 5.
+
+> Docs podados el 2026-08-30: el runbook de implementación solo contiene lo pendiente;
+> los benchmarks/estados históricos se retiraron al historial Git (lista en
+> `docs/README.md`). La evidencia canónica es REGISTRO + ejecutados/.

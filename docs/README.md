@@ -1,53 +1,45 @@
 # Índice de documentación
 
-Este índice separa el estado vigente de la evidencia histórica. Si dos documentos se
-contradicen, prevalecen en este orden: especificación de formato, estado actual, roadmap
-activo y registro de decisiones. Para la intervención matricial, el documento de diseño
-prevalece sobre el resumen del §12 del roadmap. Los documentos históricos explican cómo se llegó a una
-decisión, pero no definen el backlog ni los valores actuales.
+Podado el 2026-08-30: lo que no está acá se retiró del árbol y vive en el historial Git
+(`git log --diff-filter=D -- docs/` lo lista). Si dos documentos se contradicen,
+prevalecen en este orden: spec de formato → estado de ejecución → diseño vigente →
+registro de decisiones.
 
-## Vigentes
+## Para trabajar (en este orden)
 
 | Documento | Función |
 |---|---|
-| [`ESTADO-ACTUAL.md`](ESTADO-ACTUAL.md) | foto técnica de la versión candidata, objetivos cumplidos y límites |
-| [`ASCL-format-spec.md`](ASCL-format-spec.md) | contrato binario normativo de ASCL/ASCLV v1 y v2 |
-| [`HOJA-DE-RUTA-TECNICA-V2.md`](HOJA-DE-RUTA-TECNICA-V2.md) | backlog priorizado, dependencias y gates de aceptación |
-| [`PLAN-IMPLEMENTACION-OPTIMIZACION.md`](PLAN-IMPLEMENTACION-OPTIMIZACION.md) | principios e invariantes de compatibilidad y eficiencia |
-| [`PLAN-UNIFICADO-TIERS-E-INTERVENCION.md`](PLAN-UNIFICADO-TIERS-E-INTERVENCION.md) | cola de optimización por fases, colisiones resueltas y protocolo de medición |
-| [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | ejecución tarea por tarea: archivos, líneas, verificación y criterio de cierre |
-| [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) | estado vivo de la ejecución: qué está cerrado, en curso y bloqueado, y sobre qué código |
-| [`../CLAUDE.md`](../CLAUDE.md) | guía de arranque de sesión: orden de lectura post-compact, modelo de trabajo y ayuda-memoria de invariantes |
-| [`ejecutados/`](ejecutados/README.md) | archivo de lotes cerrados con su evidencia; lo terminado sale del estado vivo y queda acá |
-| [`MAPA-DEL-PROYECTO.md`](MAPA-DEL-PROYECTO.md) | grafo de composición, flujo, contratos e invariantes: el punto de entrada de una sesión nueva |
-| [`DISENO-INTERVENCION-MATRICIAL.md`](DISENO-INTERVENCION-MATRICIAL.md) | diseño de INT-001: paleta reservada, glifos, slots, canal en vivo y runtime |
-| [`REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md) | bitácora append-only: contexto, medición, conclusión y alcance por instancia |
-| [`DESPLIEGUE.md`](DESPLIEGUE.md) | layout PHP/hosting, caché y archivos necesarios en el TV |
-| [`PUBLICACION-GITHUB.md`](PUBLICACION-GITHUB.md) | qué entra al repositorio/release y decisiones pendientes antes del push |
+| [`../CLAUDE.md`](../CLAUDE.md) | arranque de sesión: orden de lectura, modelo de trabajo, invariantes, estado grueso |
+| [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) | **el archivo vivo**: próxima acción arriba, una fila por tarea cerrada, referencias de clips por SHA, bitácora histórica al final |
+| [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | reglas de ejecución + SOLO las tareas pendientes (F6/S-4, F8/S-6, opcionales E-11/W-15) |
+| [`ejecutados/`](ejecutados/README.md) | resumen por fase cerrada con su evidencia; se consulta, no se relee |
+| [`REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md) | bitácora append-only por Instancia: el porqué de cada decisión y cada medición |
 
-## Diseño y evidencia de la versión actual
+## Referencia técnica
 
-| Documento | Estado |
+| Documento | Función |
 |---|---|
+| [`ASCL-format-spec.md`](ASCL-format-spec.md) | contrato binario normativo de ASCL/ASCLV v1 y v2 |
+| [`MAPA-DEL-PROYECTO.md`](MAPA-DEL-PROYECTO.md) | grafo de composición, flujo, contratos e invariantes |
 | [`DISENO-ASCL-V2-TILES.md`](DISENO-ASCL-V2-TILES.md) | diseño implementado de ASCLV2 exacto regional/predictivo |
-| [`BENCHMARK-V2-HQ-768.md`](BENCHMARK-V2-HQ-768.md) | igualdad de 231/231 frames, audio exacto y tamaño final |
-| [`BENCHMARK-V1-ADAPTATIVO-OKLAB.md`](BENCHMARK-V1-ADAPTATIVO-OKLAB.md) | origen de la matriz HQ 768 y decisiones de calidad offline |
-| [`DISENO-PLANIFICADOR-REGIONAL-V2.md`](DISENO-PLANIFICADOR-REGIONAL-V2.md) | parte exacta implementada y parte near-lossless futura, claramente separadas |
+| [`DISENO-PLANIFICADOR-REGIONAL-V2.md`](DISENO-PLANIFICADOR-REGIONAL-V2.md) | selección píxel/máscara/bloque del regional v2 |
+| [`DISENO-INTERVENCION-MATRICIAL.md`](DISENO-INTERVENCION-MATRICIAL.md) | diseño de la intervención: paleta reservada, slots, canal en vivo, runtime |
+| [`DISENO-PARCHES-GENERICOS.md`](DISENO-PARCHES-GENERICOS.md) | ASCLSLOT v2, parches, texto nativo (INT-003/004) e INT-005 por época |
+| [`DESPLIEGUE.md`](DESPLIEGUE.md) | layout de hosting estático, cabeceras y caché para el TV |
 
-## Históricos
+## Roadmap y principios (consultados, mayormente consumidos)
 
-- [`ASCILINE-contexto.md`](ASCILINE-contexto.md): contexto y alternativas iniciales.
-- [`ESTADO-Y-CONTINUACION.md`](ESTADO-Y-CONTINUACION.md): handoff de sesiones tempranas;
-  sus pendientes no son el estado actual.
-- [`GENERAR-1080-Y-VARIANTES.md`](GENERAR-1080-Y-VARIANTES.md): receta de una campaña
-  anterior, no el proceso de release vigente.
-- [`BENCHMARK-CALIDAD-INICIAL.md`](BENCHMARK-CALIDAD-INICIAL.md),
-  [`BENCHMARK-TKN-COLORES.md`](BENCHMARK-TKN-COLORES.md) y
-  [`DISENO-DITHERING-SELECTIVO.md`](DISENO-DITHERING-SELECTIVO.md): evidencia que se
-  conserva para trazabilidad.
+| Documento | Función |
+|---|---|
+| [`HOJA-DE-RUTA-TECNICA-V2.md`](HOJA-DE-RUTA-TECNICA-V2.md) | backlog priorizado original y gates; F0-F5/F7 ya ejecutadas — el estado real está en el runbook de estado |
+| [`PLAN-IMPLEMENTACION-OPTIMIZACION.md`](PLAN-IMPLEMENTACION-OPTIMIZACION.md) | principios e invariantes de compatibilidad y eficiencia |
+| [`PLAN-UNIFICADO-TIERS-E-INTERVENCION.md`](PLAN-UNIFICADO-TIERS-E-INTERVENCION.md) | cola de optimización por fases y protocolo de medición |
 
-Las herramientas offline activas y los helpers históricos están separados en
-[`../backend/README.md`](../backend/README.md).
+Las herramientas offline y helpers están en [`../backend/README.md`](../backend/README.md);
+el resumen por versión en [`../CHANGELOG.md`](../CHANGELOG.md).
 
-El resumen legible por versión está en [`../CHANGELOG.md`](../CHANGELOG.md). El detalle
-de por qué una conclusión fue aceptada o descartada permanece en el registro append-only.
+Retirados el 2026-08-30 (recuperables del historial Git): `ESTADO-ACTUAL`,
+`ESTADO-Y-CONTINUACION`, `ASCILINE-contexto`, `GENERAR-1080-Y-VARIANTES`,
+`BENCHMARK-CALIDAD-INICIAL`, `BENCHMARK-TKN-COLORES`, `BENCHMARK-V1-ADAPTATIVO-OKLAB`,
+`BENCHMARK-V2-HQ-768`, `DISENO-DITHERING-SELECTIVO`, `PUBLICACION-GITHUB`. Sus menciones
+en el REGISTRO son históricas y se conservan tal cual (append-only).

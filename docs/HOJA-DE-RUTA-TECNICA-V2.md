@@ -11,12 +11,11 @@ tablas. Las fuentes de verdad son:
 
 | Tema | Documento |
 |---|---|
-| estado canónico de la versión | `ESTADO-ACTUAL.md` |
+| estado canónico de la versión | `RUNBOOK-ESTADO.md` |
 | principios y arquitectura | `PLAN-IMPLEMENTACION-OPTIMIZACION.md` |
 | formato v1/v2 | `ASCL-format-spec.md` |
 | revisión v2 implementada | `DISENO-ASCL-V2-TILES.md` |
-| matriz/calidad HQ v1 | `BENCHMARK-V1-ADAPTATIVO-OKLAB.md` |
-| codec exacto HQ v2 | `BENCHMARK-V2-HQ-768.md` |
+| matriz/calidad HQ | `REGISTRO-DE-PRUEBAS-Y-DECISIONES.md` y `RUNBOOK-ESTADO.md` §Referencias de clips (los benchmarks históricos se retiraron al historial Git el 2026-08-30) |
 | decisiones por instancia | `REGISTRO-DE-PRUEBAS-Y-DECISIONES.md` |
 | intervención matricial | `DISENO-INTERVENCION-MATRICIAL.md` |
 | plan unificado de ejecución | `PLAN-UNIFICADO-TIERS-E-INTERVENCION.md` |
@@ -515,7 +514,7 @@ IndexedDB puede ser opcional tras detección. HTTP cache sigue siendo el piso un
 | FMT-LIMIT-001 | parcial | validar artefactos reales <4 GiB | §13 |
 | RANGE-001 | diferido | prototipo solo con evidencia MEM-001 | §13 |
 | DOC-001 | completado | índice, estado, changelog y registro coherentes | enlaces vigentes |
-| PUB-001 | parcial | decidir licencia, derechos de videos e historial público | `PUBLICACION-GITHUB.md` |
+| PUB-001 | parcial | decidir licencia, derechos de videos e historial público | sección Licencia del `README.md` raíz (el doc `PUBLICACION-GITHUB.md` se retiró al historial Git: el push ya ocurrió; la decisión de licencia sigue abierta) |
 
 ### Cola de optimización — auditoría 2026-08-27
 

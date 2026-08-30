@@ -6,19 +6,20 @@ no calcula nada, solo sirve archivos estáticos.
 
 ## Estado de esta versión
 
-El candidato local `asclv2-exact-hq-v0.2` está listo para pruebas físicas y para un
-repositorio privado. Una publicación pública sigue condicionada por licencia, procedencia
-y derechos de los videos históricos. ASCLV1 continúa siendo el default; ASCLV2 exacto es
-opt-in y ya abre en el mismo frontend. La regresión automática cubre 115 pruebas Python y
-11 suites JavaScript.
+Al 2026-08-30: el clip de producto (768 columnas, paleta adaptive kmeans-oklab, refit,
+trellis near-lossless, Zopfli) pesa **11,3 MB = 29 % del mp4 fuente** con 35,10 dB.
+Las fases F0-F5 y F7 están cerradas; quedan la revisión única de formato (F6/ASCLVID3)
+y la validación física en Smart TV (F8). La regresión automática cubre 319 pruebas
+Python y 26 suites JavaScript, y corre en GitHub Actions en cada push. Una publicación
+pública sigue condicionada por licencia, procedencia y derechos de los videos.
 
 La compatibilidad legacy es un objetivo verificado por sintaxis/API y fallbacks: frontend
 ES5, XHR, Canvas2D como piso y WebGL1 opcional. La matriz física de Smart TV/WebViews sigue
 pendiente, por lo que no se afirma compatibilidad universal con cualquier modelo.
 
-El estado técnico, lo cumplido y los límites están en
-[`docs/ESTADO-ACTUAL.md`](docs/ESTADO-ACTUAL.md). El índice que separa documentación
-vigente e histórica está en [`docs/README.md`](docs/README.md).
+El estado vivo (próxima acción, tareas cerradas, SHAs de referencia) está en
+[`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md). El índice de documentación está en
+[`docs/README.md`](docs/README.md).
 
 ## Estructura
 
@@ -159,29 +160,22 @@ debe validarse nuevamente.
 
 ### Documentación activa
 
-- [`docs/ESTADO-ACTUAL.md`](docs/ESTADO-ACTUAL.md): foto canónica de la versión.
-- [`docs/HOJA-DE-RUTA-TECNICA-V2.md`](docs/HOJA-DE-RUTA-TECNICA-V2.md): backlog vigente,
-  dependencias y gates.
-- [`docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md`](docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md):
-  principios e invariantes.
-- [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md): formato v1 y primera revisión v2.
-- [`docs/DISENO-ASCL-V2-TILES.md`](docs/DISENO-ASCL-V2-TILES.md): contrato v2
-  implementado, límites y pendientes.
-- [`docs/BENCHMARK-V2-HQ-768.md`](docs/BENCHMARK-V2-HQ-768.md): evidencia exacta del
-  primer HQ v2; su regeneración requiere conservar un V1 autorizado.
-- [`docs/DISENO-PLANIFICADOR-REGIONAL-V2.md`](docs/DISENO-PLANIFICADOR-REGIONAL-V2.md):
-  selección píxel/máscara/bloque y
-  near-lossless temporal propuesto para v2.
+- [`CLAUDE.md`](CLAUDE.md): guía de arranque de sesión, modelo de trabajo e invariantes.
+- [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md): estado vivo — próxima acción, una
+  fila por tarea cerrada, SHAs de referencia.
+- [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md): reglas de ejecución
+  y tareas pendientes (F6, F8, opcionales).
 - [`docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md):
-  decisiones append-only.
-- [`docs/BENCHMARK-V1-ADAPTATIVO-OKLAB.md`](docs/BENCHMARK-V1-ADAPTATIVO-OKLAB.md):
-  evidencia de la matriz HQ.
+  decisiones append-only, por Instancia.
+- [`docs/ejecutados/`](docs/ejecutados/README.md): resumen por fase cerrada.
+- [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md): formato v1 y revisión v2.
+- [`docs/DISENO-ASCL-V2-TILES.md`](docs/DISENO-ASCL-V2-TILES.md) y
+  [`docs/DISENO-PLANIFICADOR-REGIONAL-V2.md`](docs/DISENO-PLANIFICADOR-REGIONAL-V2.md):
+  contrato v2 implementado.
 - [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md): hosting y caché.
-- [`docs/PUBLICACION-GITHUB.md`](docs/PUBLICACION-GITHUB.md): artefactos, historial y
-  gates previos al push.
 
-`ESTADO-Y-CONTINUACION.md`, `GENERAR-1080-Y-VARIANTES.md` y los diseños preliminares
-quedan como evidencia histórica; no constituyen el backlog actual.
+El índice completo (incluida la lista de docs retirados al historial Git) está en
+[`docs/README.md`](docs/README.md).
 
 ## Reproducir
 
@@ -257,7 +251,7 @@ la ruta fija de `tv-player.html` en un clon limpio, cambie solo `--out` por
 HQ local que usa la misma ruta estable.
 
 El HQ exacto se distribuye como asset de release solo después de confirmar los derechos
-del video; su hash y tamaño están en `docs/ESTADO-ACTUAL.md`.
+del video; su hash y tamaño están en `docs/RUNBOOK-ESTADO.md` (Referencias de clips).
 
 ## Verificar / preview sin navegador
 
@@ -285,8 +279,9 @@ python tests/run_all.py
 python tests/run_all.py --require-release-artifact
 ```
 
-El workflow de CI queda configurado para la misma regresión sin descargar videos de
-producto ni iniciar servidores; la primera corrida remota se registra después del push.
+El workflow de CI (`regression`) corre la misma regresión en cada push, sin descargar
+videos de producto ni iniciar servidores. El workflow `encode` (dispatch manual) genera
+el clip de producto desde la rama `assets` y publica artifacts con SHA y preview.
 
 ## Licencia
 
@@ -294,5 +289,4 @@ La licencia de publicación todavía no está definida. El proyecto declara una 
 conceptual con [`YusufB5/ASCILINE`](https://github.com/YusufB5/ASCILINE), cuyo
 [`LICENSE`](https://github.com/YusufB5/ASCILINE/blob/main/LICENSE) agrega una restricción
 de publicidad a MIT. No debe agregarse una licencia genérica ni hacerse un release público
-hasta resolver procedencia, atribución y compatibilidad de uso. Ver
-[`docs/PUBLICACION-GITHUB.md`](docs/PUBLICACION-GITHUB.md).
+hasta resolver procedencia, atribución y compatibilidad de uso (PUB-001, abierta).

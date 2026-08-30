@@ -13,6 +13,50 @@ Reglas de uso:
 4. Toda decisión que desvíe del runbook se anota en la bitácora de abajo con fecha y
    motivo. El runbook no se edita en silencio.
 
+## Próxima acción (actualizado 2026-08-30)
+
+Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en el
+[`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
+
+1. **S-7 — falta el veredicto del operador (Instancia 028 ABIERTA).** El 1280 está
+   **APROBADO** («quedó perfecto»; del 12 fps «casi ni se nota»): @15 fps
+   `2a9201bf…b778` = 24.530.460 B = 63,0 % de la fuente (35,02 dB); @12 fps
+   `27ae0019…e828` = 21.196.032 B = 54,4 % (34,95 dB). El **1920@10 está MEDIDO**
+   (`87160987…8d4e` = 32.838.265 B = **84,3 %** de la fuente, 34,81 dB, err_temporal
+   0,00803, run 33333170964; preview enviado). Faltan: su veredicto visual del 1920@10
+   y las definiciones finales (qué resolución/fps queda de producto, si alguna).
+   Nada instalado en `outputs/` ni cambiado en los defaults del workflow.
+   Hallazgo que guía la decisión: la tasa por celda CAE al subir resolución
+   (0,1451 → 0,1144 → 0,1023 B/celda/frame).
+2. **Deploy del player a Cloudflare (pedido 2026-08-30, para sesión NUEVA).** Paquete
+   listo en `outputs/deploy-player/` + `outputs/asciline-player.zip` (57 MB, gitignored):
+   tres players ES5 autocontenidos — `/` = 768 producto, `/1280-15/`, `/1280-12/` (SHAs
+   verificados al bajar del CI). Destino: iargen.com/{algo} con los conectores Cloudflare
+   de la cuenta claude.ai del operador (la sesión del 2026-08-30 no los recibió: se fijan
+   al inicio). Detalle y planes B en la memoria `proximo-deploy-player-cloudflare`.
+   Límite ~25 MB/archivo en Pages/KV: el 1280@15 entra justo; un 1920 requerirá R2.
+3. **Después: F6 (S-4)** — revisión única de formato (runbook §3): SPARSE diferencial,
+   barrido definitivo de `tile_size` sobre la salida del trellis, `ASCLVID3` con el
+   sidecar adentro, nombre versionado/CACHE-001. **INT-005 (parches por época) quedó
+   CONDICIONADO** a que los gates físicos de F8 fallen para el overlay nativo (dirección
+   del operador 2026-08-30). **Luego F8 (S-6)** — validación física en TV (p95, MEM-001).
+   Opcionales: E-11, W-15. Decisión menor abierta: si el operador retoma el 960,
+   re-medirlo con `--palette-refit 5` antes de comparar.
+
+**Receta de producto vigente (2026-08-30):** defaults del workflow `encode` —
+768 graphic-hq, adaptive kmeans-oklab, tile 16, dither off, zopfli, overlay=off,
+`extra = --palette-refit 5 --near-lossless 8` → **`b081f4ba…f6a05e`**
+(11.304.137 B, 35,10 dB, **29,0 % del mp4 fuente**, instalado en `outputs/`).
+
+## Cómo ver lo ya implementado (para no pisarse)
+
+- **Las tablas de abajo:** una fila por tarea con estado, commit y evidencia. Si la fila
+  dice `cerrada`, no se re-implementa: se extiende.
+- [`ejecutados/`](ejecutados/README.md): resumen operativo por fase o lote cerrado.
+- [`REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md): el porqué
+  de cada decisión, por Instancia (append-only).
+- Los SHA de todos los clips medidos: sección «Referencias de clips» al final.
+
 ## Procedencia del código
 
 | Sesión | Fecha | Base de trabajo | Notas |
@@ -161,14 +205,58 @@ runbook §4-INT-007.
 | S-6 | validación física (F8) | pendiente | | |
 | S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | pendiente | | **se ejecuta después de F5 (E-19..E-24)**, cuando el trellis ya baje bytes a calidad sostenida, y se co-diseña con S-4 (la densidad variable por zona es un cambio de formato, no un flag). Referencia obligatoria: fuente `TKN-2443` = 38.966.462 B / ~15 s ⇒ **el producto 768 ya pesa 17.379.859 B = 45 % del mp4 original**. Estimación previa del 1920 a la tasa actual (0,2244 B/celda/frame × 2.073.600 celdas × 231 frames) ≈ **107 MB = 2,7× la fuente**; el 1080p histórico dio 107,9 MB lossless pero con el encoder retirado `_encode_opt.py`, sin paleta adaptive/Oklab/refit/Zopfli/keyframes por corte, así que ese número **no es el techo**. Bloqueo operativo: a 6,25× celdas el encode se va a ~5 h y no entra en `timeout-minutes: 120` de `encode.yml`; el barrido arranca por 1280 (2,8× celdas) para medir la curva antes de gastar un runner en 1920 |
 
-## Bitácora de decisiones de ejecución
+## Referencias de clips (SHA-256)
+
+Todos los clips medidos, del vigente al histórico. «Reproducible» = re-encodear desde
+`main` con esos flags devuelve ese SHA byte a byte (regla 5, verificada — nunca supuesta).
+
+**Producto vigente: 768 refit 5, dither off, near-lossless 8 =
+`b081f4ba…f6a05e`** (11.304.137 B, 35,10 dB, Oklab 0,00897, err_temporal 0,00705,
+proxy_banding 0,001587, run 33321490398, instalado en `outputs/` con SHA verificado,
+reproducible con los defaults del workflow).
+
+Barrido S-7 (Instancia 028, decisión abierta): 1280@15 `2a9201bf…b778` (24.530.460 B,
+35,02 dB, run 33325334610) · 1280@12 `27ae0019…e828` (21.196.032 B, 34,95 dB,
+run 33326623591) · 1920@10 `87160987…8d4e` (32.838.265 B, 34,81 dB, run 33333170964).
+
+Candidatos y filas históricas: near-lossless 6 `db32e8c4…2157` (11.951.807 B, 35,37 dB)
+y 5 `157bccf0…4c44` (12.339.798 B, 35,48 dB), no elegidos · near-lossless 4
+`5a45592b…92d0` (12.840.889 B, ≈ producto temporal 4) · temporal 4 `221de28f…0373`
+(12.846.465 B, 35,59 dB, tres runs byte-idénticos, producto anterior — reproducible con
+`extra = --palette-refit 5 --trellis-temporal 4`) · temporal 2 `63fb7aae…adde`
+(14.315.422 B, 35,75 dB, aprobado y superado el mismo día) · temporal 10 `5db38f9d…`
+(10.778.521 B, 34,81 dB, descartado) · espacial 8/16 `28edb2ad…`/`c84dfe92…`
+(Instancia 026, sin adopción en solitario) · base E-21 sin trellis `41c94170…79d5`
+(17.170.673 B, 35,63 dB, dos runs byte-idénticos, reproducible con
+`extra = --palette-refit 5`) · sin dither pre-E-21 `74be25ef…011f9` (17.168.633 B, fila
+histórica: el emisor cambió con E-21 y ya no se reproduce desde main) · tramado refit 5
+`adef9e53…c05bb` (17.379.859 B, 35,46 dB, reproducible con dither=auto) · dither budget
+450 `aabd518a…8bf6` (17.246.050 B, descartado) · budget 0 `909ba629…f68e` (descartado:
+41 B más que `off` y 4:43 más lento) · refit 5 + uint8-refine 3 `a95d0bbc…acbf`
+(E-13 medido sin adoptar) · refit 3 `514be81e…a01aff` · dither exacto E-16
+`0ed4cbbe…92f5` (medido sin adoptar) · P-02 sin refit `ebfe2eb4…4b36` (17.482.270 B,
+reproducible con el flag en 0) · ultra 960 sin refit `31348a83…5688` (25.003.004 B,
+superado; re-medir con refit 5 si se retoma) · panel v1 `7da584f1…5a51d` · parches v2
+`c315a13a…8e63` + sidecar `678b392d…2c56` (demo INT-003/004). Los detalles de cada fila
+están en el REGISTRO, por Instancia.
+
+**Byte-identidad, historia** (regla 5): los runs 33220236164 (post-E-16), 33233492257
+(post-E-18) y 33235096580 (post-E-19/E-20) reprodujeron byte a byte `adef9e53…c05bb`;
+la Instancia 027 reprodujo `41c94170…` y `221de28f…` con el emisor post-E-24. Desde
+E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión vigente:
+**319 pruebas Python y 26 suites JavaScript** (CI de `271dd19`, run 33320618751).
+
+## Bitácora de decisiones de ejecución (historial append-only)
+
+> Esta sección es historial: se agrega al pie, nunca se relee entera. El estado vivo
+> está arriba, en «Próxima acción».
 
 | Fecha | Decisión | Motivo |
+|---|---|---|
 | 2026-08-27 | Trabajo sobre snapshot con git local y un commit por tarea (IDs E-/W- en el mensaje); los dos carriles comparten historial lineal | no hay acceso al repo privado desde el entorno de trabajo; la bisección por carril se conserva por ID de commit. Al decidirse el mecanismo de continuidad, aplicar `patches/` con `git am` |
 | 2026-08-27 | W-04 se implementó como «primer desborde → una pasada dinámica con tamaño real», no como «reservar `_scratchMax`» | el test de `test_reader_safety.js` protege el contrato adaptativo y la evidencia §8 del roadmap (331 KB reales vs 1,6 MB defensivo) muestra que es una decisión deliberada del proyecto; el runbook queda corregido por esta vía |
 | 2026-08-27 | E-01 cambia el SHA de artefactos `kmeans-rgb` generados con OpenCV (la paleta ahora sale ordenada); el RGB reconstruido es idéntico | es el efecto buscado del fix de reproducibilidad; el nuevo SHA canónico del sintético queda registrado en P-02 |
 | 2026-08-27 | El fixture de `test_benchmark_quality_v1` pasó de flags per-frame a per-scene | declaraba paleta per-frame junto a un DELTA_MASK sin paleta, combinación que la spec no admite (DELTA solo existe con paleta temporal o global) y que el decoder endurecido rechaza |
-|---|---|---|
 | 2026-08-27 | E-11 y W-15 pasan a opcionales, fuera de los gates de F2 y F4 | E-11: el audio es el 1% del bundle HQ. W-15: los modos `ascii-*` no están en el camino de producción |
 | 2026-08-27 | el barrido de `tile_size` de E-09 es provisional; el definitivo va en S-4 | el trellis espacial (E-23) cambia la estadística de colores por tile |
 | 2026-08-27 | todo test nuevo se cablea en `tests/run_all.py` y CI en el mismo commit (regla 7) | un test que no corre en la regresión no protege nada |
@@ -202,9 +290,7 @@ runbook §4-INT-007.
 | 2026-08-29 | **`--dither-byte-budget 0` queda descartado como receta**: produce un clip 41 B más grande que `--dither off` y funcionalmente idéntico (mismas tres métricas, mismos keyframes y tags), pagando 49:04 de encode contra 44:21 | el presupuesto recorre y evalúa todos los tiles para terminar rechazándolos; si el objetivo es no tramar, apagar el dither es más barato y más honesto de leer |
 | 2026-08-29 | **Decisión del operador: el fondo de producto pasa a `--dither off`** («SIN dither se ve igual que el con dither para mí, así que nos quedamos con ese ahorrando»): `74be25ef…011f9`, 17.168.633 B, 35,63 dB, Oklab 0,00721 — −211.226 B (−1,23 %) y 1:29 menos de encode que el tramado. Instalado como `outputs/clip.asclv` (SHA verificado); los candidatos descartados (`aabd518a…` 450 B/frame y el tramado `adef9e53…`) se borran de `outputs/` — siguen reproducibles desde el workflow con dither=auto (+ `--dither-byte-budget 450` el primero). El default del input `dither` del workflow `encode` pasa de `auto` a `off` para que los defaults sigan siendo la receta de producto | comparó los `preview.mp4` a la vista: la diferencia no se percibe en este material (gráfico, degradados ya protegidos por la paleta de 256 + refit). La elección era visual y del operador porque el bench no ve banding; queda pendiente la columna de proxy de banding para que decisiones futuras de dither tengan número |
 | 2026-08-29 | **El 1080p vuelve al plan como S-7, agendado después de F5** (pedido del operador: «no perdemos nada con probar… deberíamos apuntar al menos a un peso similar al del video original mp4 pero con esa misma calidad; si ahora no es posible sigamos mejorando hasta lograrlo»). Se agenda en vez de despacharse ya por dos razones medibles: (a) a 1920 col son 2.073.600 celdas contra 331.776 del 768 — 6,25× — y el encode se iría a ~5 h contra un `timeout-minutes: 120`; (b) el carril que baja bytes a calidad sostenida es F5 (trellis E-19..E-24, con E-24 `--near-lossless` como cierre), todavía sin ejecutar, así que medir 1920 hoy mide el encoder viejo del problema nuevo. El criterio de peso del operador **ya está cumplido en 768**: la fuente pesa 38.966.462 B y el producto 17.379.859 B (45 %); lo que falta demostrar es que se sostiene al subir la densidad | el barrido tiene sentido cuando el stack de eficiencia está completo, no antes; y la intuición del operador (más densidad donde hace falta, ahorro donde no) es un cambio de formato — grilla de celdas uniforme por header hoy — que pertenece a la revisión única de S-4/ASCLVID3, no a un flag del encoder |
-
 | 2026-08-29 | **Nace INT-007** (pedido del operador junto con la decisión del dither): (A) fuentes menos comunes y más llamativas para el texto nativo, con sombra translúcida («que hasta tenga transparencia como sombra») si sale sin gran esfuerzo; (B) hacer girar `outputs/logo.png` sobre el mismo canvas «a ver si se puede simular como si fuera una ruleta superponiéndose». Se ordena ANTES de E-21 | frontend puro y corto, y es exactamente lo que el operador revisa a ojo en el player; E-21 no lo bloquea (su bench corre en CI). La ruleta real sigue siendo INT-005/ASCLVID3 (F6) — esto es la simulación con la imagen nativa D7=a |
-
 | 2026-08-29 | **E-22 se cierra como opt-in y la elección del presupuesto se eleva al operador** (mismo patrón que el dither en E-17): el barrido da −16,6 % de bytes CON +0,12 dB de PSNR en presupuesto 2 y −25,2 % con −0,04 dB en 4, pero `psnr_rgb_db`/`err_oklab_medio` son promedios por píxel que **no ven arrastre temporal** — celdas congeladas en el color del frame anterior — que es exactamente el artefacto que este trellis puede introducir. Previews de 2 y 4 enviados; 10 descartado por número (−0,82 dB) | «una mejora sin fila no existe» está cumplido (Instancia 025); lo que la fila no puede decir es si el arrastre se nota, y esa es la misma clase de decisión visual que el operador ya tomó con el dither. E-23 no depende de esta elección |
 | 2026-08-29 | **Segunda decisión del mismo día: el producto sube al presupuesto temporal 4** («el más agresivo se ve perfecto, no noto la diferencia»): `221de28f…0373`, 12.846.465 B, 35,59 dB — **−25,2 % sobre el E-21 solo; el clip queda en 33,0 % del mp4 fuente**. Default de `extra` del workflow → `--trellis-temporal 4`. Pedido del operador: probar presupuestos aún más agresivos para comparar — el barrido de E-24 debe incluir 5/6/8 (el 10 ya está descartado por −0,82 dB) | mismo criterio que sostuvo con el dither y con el 2: sin diferencia visible, gana el ahorro. La adopción del 2 duró horas y queda como fila intermedia de la Instancia 025 |
 | 2026-08-29 | **Decisión del operador: se adopta el trellis temporal con presupuesto 2** («el primer video se ve bien, no se ven arrastres casi… preferible por el ahorro»; dejó abierta la puerta a un presupuesto más agresivo luego). El fondo pasa a `63fb7aae…adde` (14.315.422 B, 35,75 dB, Oklab 0,00765): **−16,6 % de bytes y +0,12 dB sobre el producto E-21; el clip queda en 36,7 % del mp4 fuente**. El default del input `extra` del workflow `encode` pasa a `--palette-refit 5 --trellis-temporal 2` (defaults = receta completa); `clip-temporal-4.asclv` se borra de `outputs/` (reproducible; su SHA `221de28f…` quedó en la Instancia 025) | el preview de presupuesto 2 no muestra arrastre a ojo del operador; el 4 queda como candidato natural cuando E-24 calibre con las columnas nuevas de bench. Con esto la decisión (a) que bloqueaba E-24 está resuelta: solo falta (b), las columnas de error temporal y proxy de banding |
@@ -215,122 +301,3 @@ runbook §4-INT-007.
 | 2026-08-30 | **Veredicto parcial de S-7 y segundo escalón medido**: el operador aprobó el 1280 («quedó perfecto», y del 12 fps «casi ni se nota la diferencia de frames») y pidió el **1920 @ 10 fps solo para probar** → run 33333170964: **`87160987…8d4e` = 32.838.265 B = 84,3 % de la fuente** (34,81 dB, err_temporal 0,00803, wall 1:02:07, RSS 3,35 GB). La tasa por celda cayó OTRO escalón (0,1144 → 0,1023) a pesar de los 10 fps. En paralelo, a su pedido, el player real quedó empaquetado en `outputs/deploy-player/` (768 + 1280@15 + 1280@12, SHAs verificados) para hostearlo en Cloudflare/iargen.com desde una sesión nueva con su conector (esta no lo recibió: los conectores se fijan al inicio de sesión) | los preview.mp4 validan la CALIDAD (decodificación exacta) pero no el pipeline de reproducción JS — el hosting cubre eso y deja la base para el TV físico de F8. Falta el veredicto visual del 1920@10 y las definiciones finales de S-7; la Instancia 028 sigue ABIERTA |
 | 2026-08-29 | **E-21 adoptada y el SHA de producto se mueve a propósito**: `74be25ef…` → `41c94170…79d5` (+2.040 B, +0,012 %; PSNR/Oklab idénticos; wall −54 %). La regla 5 se preserva en su forma fuerte — la ELECCIÓN de candidatos ahora es idéntica en todos los entornos (zlib-9), cosa que antes NO pasaba: con Zopfli instalado el tag elegido podía diferir del elegido sin Zopfli. La referencia vieja queda como fila histórica congelada, como P-02 en su momento | el emisor cambió (jerarquía de costo); re-encodear desde main reproduce `41c94170…`, no `74be25ef…`. Es la primera tarea de F5 que cambia la salida, anunciada como tal |
 
-## Próxima acción
-
-0. **Resuelto 2026-08-29: el fondo de producto es `--dither off`**
-   (`74be25ef…011f9`, decisión visual del operador sobre los
-   `preview.mp4`). Receta de producto vigente: 768 graphic-hq, adaptive
-   kmeans-oklab, tile 16, `--palette-refit 5`, `--dither off`, zopfli,
-   `overlay=off` — los defaults del workflow `encode` + `extra =
-   --palette-refit 5`.
-0b. **INT-007 CERRADO (2026-08-29, `faf2390`, CI verde):** tipografía
-   Palatino bold con sombra translúcida y logo girando como ruleta
-   simulada, verificados en navegador local (captura enviada al
-   operador; player en `localhost:8123`).
-0c. **Resuelto 2026-08-29 (dos pasos el mismo día): el operador adoptó
-   el presupuesto temporal 4** — aprobó primero el 2 y, al ver que el
-   preview del 4 «se ve perfecto», subió a 4 con su criterio de que
-   sin diferencia visible gana el ahorro. Pidió barrer presupuestos
-   aún más agresivos en E-24 (5/6/8; el 10 está descartado). Receta de
-   producto vigente: 768 graphic-hq, adaptive kmeans-oklab, tile 16,
-   `--palette-refit 5`, `--dither off`, **`--trellis-temporal 4`**,
-   zopfli, overlay=off — exactamente los defaults del workflow
-   `encode` (incluido el default de `extra`).
-1. **Carril E: F3 y F5 CERRADAS (2026-08-30).** E-24 ADOPTADA con
-   `--near-lossless 8` por decisión visual del operador (Instancia 027
-   y su resolución): producto = `b081f4ba…f6a05e`, 11.304.137 B,
-   35,10 dB, **29,0 % del mp4 fuente**; receta = defaults del workflow
-   `encode` (`extra = --palette-refit 5 --near-lossless 8`). La
-   **ruleta** sigue siendo INT-005 en F6/S-4. F8 sin cambios.
-   Opcional no bloqueante: knob de `gradient_boost` del agregado E-14.
-2. **S-7 EN CURSO — el 1280 está medido y la decisión quedó ABIERTA
-   (Instancia 028).** Hecho: timeout 350 (`2260d21`) y dos encodes 1280
-   receta de producto + `--cols 1280`: **@15 fps = 24,5 MB = 63,0 % de
-   la fuente** (`2a9201bf…b778`, run 33325334610, 35,02 dB) y **@12 fps
-   = 21,2 MB = 54,4 %** (`27ae0019…e828`, run 33326623591, 34,95 dB,
-   err_temporal 0,00766 — 12 fps paga en movimiento, no en imagen).
-   La tasa por celda cayó a 0,1144 (−21 % vs 768). **Veredicto parcial
-   (2026-08-30): el 1280 está APROBADO** («quedó perfecto»; el 12 fps
-   «casi ni se nota»). El **1920 @ 10 fps** ya está medido a su pedido:
-   `87160987…8d4e` = **32,8 MB = 84,3 % de la fuente** (34,81 dB,
-   err_temporal 0,00803, tasa 0,1023 — cayó otro escalón), run
-   33333170964, preview enviado. **Faltan: veredicto visual del 1920@10
-   y definiciones finales de S-7** (qué resolución/fps queda de
-   producto). La densidad variable por zona sigue siendo de
-   S-4/ASCLVID3 (F6), no un flag.
-2b. **Deploy del player a Cloudflare (pedido del operador 2026-08-30,
-   PENDIENTE para sesión nueva):** paquete listo en
-   `outputs/deploy-player/` + `outputs/asciline-player.zip` (57 MB,
-   gitignored) — tres players ES5 autocontenidos: `/` = 768 producto,
-   `/1280-15/` y `/1280-12/` (SHAs verificados al bajar del CI).
-   Destino deseado: iargen.com/{algo}. El conector Cloudflare está en
-   la cuenta claude.ai del operador pero la sesión del 2026-08-30 no lo
-   recibió (se fijan al inicio); hacerlo desde una sesión nueva
-   (memoria `proximo-deploy-player-cloudflare` tiene el detalle y los
-   planes B: API token REST o drag & drop del zip). Ojo: límite ~25 MB
-   por archivo en Pages/KV — el 1280@15 entra justo; un 1920 requerirá
-   R2.
-3. Decisión abierta para el operador: el fondo ahora es el **768 refit 5**
-   (35,46 dB), que supera al 960 ultra sin refit (34,40 dB) con 31 %
-   menos bytes — si retoma la idea del 960, hay que re-medirlo con
-   `--palette-refit 5` antes de comparar.
-4. Referencias HQ vigentes: **producto = 768 refit 5, dither off,
-   near-lossless 8 `b081f4ba…f6a05e` (11.304.137 B, 35,10 dB, Oklab
-   0,00897, err_temporal 0,00705, proxy_banding 0,001587, run
-   33321490398, instalado en `outputs/` con SHA verificado,
-   reproducible desde `main` con los defaults del workflow)** ·
-   near-lossless 6 `db32e8c4…2157` (11.951.807 B, 35,37 dB, run
-   33321484319) y 5 `157bccf0…4c44` (12.339.798 B, 35,48 dB, run
-   33321477382), candidatos del barrido no elegidos · near-lossless 4
-   `5a45592b…92d0` (12.840.889 B, run 33321470296, ≈ producto
-   temporal 4: el espacial no suma a ese presupuesto) · temporal 4
-   `221de28f…0373` (12.846.465 B, 35,59 dB, Oklab 0,00809,
-   err_temporal 0,00652, proxy_banding 0,001345, runs 33272440621,
-   33273453829 y 33321463283 byte-idénticos, producto anterior —
-   reproducible con `extra = --palette-refit 5 --trellis-temporal 4`)
-   · temporal 2 `63fb7aae…adde` (14.315.422 B, 35,75 dB,
-   run 33273449999, aprobado y superado el mismo día) · temporal 10
-   `5db38f9d…` (10.778.521 B, 34,81 dB, descartado) · espacial 8/16
-   `28edb2ad…`/`c84dfe92…` (17.115.087/17.110.054 B, Instancia 026,
-   sin adopción en solitario) · base E-21 sin trellis
-   `41c94170…79d5` (17.170.673 B, 35,63 dB, Oklab 0,00721,
-   err_temporal 0,00623, proxy_banding 0,001034, runs 33270879728 y
-   33321456189 byte-idénticos, reproducible con
-   `extra = --palette-refit 5`) ·
-   sin dither pre-E-21 `74be25ef…011f9` (17.168.633 B, mismas métricas,
-   run 33231247505, fila histórica — el emisor cambió y ya no se
-   reproduce desde main) · tramado refit 5 `adef9e53…c05bb` (17.379.859 B,
-   35,46 dB, run 33203086375, producto anterior — reproducible con
-   dither=auto) · dither con presupuesto 450 `aabd518a…8bf6`
-   (17.246.050 B, 35,57 dB, run 33231255094, descartado) · 768
-   refit 5 + uint8-refine 3 `a95d0bbc…acbf` (17.442.264 B, Oklab 0,00728,
-   run 33207479295, E-13 medido sin adoptar) · 768
-   refit 3 `514be81e…a01aff` (17.425.768 B, run 33203084602) · dither
-   exacto E-16 `0ed4cbbe…92f5` (18.602.412 B, 35,25 dB, run 33215511572,
-   medido sin adoptar) · dither budget 0
-   `909ba629…f68e` (17.168.592 B, run 33229100878, descartado: 41 B más
-   que `off` y 4:43 más lento) · sin refit
-   determinista P-02 `ebfe2eb4…4b36` (17.482.270 B, sigue reproducible
-   con el flag en 0) · ultra 960 sin refit `31348a83…5688` (25.003.004 B,
-   run 33193299286, superado) · panel v1 `7da584f1…5a51d` (17.197.813 B)
-   · parches v2 `c315a13a…8e63` (16.465.367 B) + sidecar `678b392d…2c56`
-   (demo de INT-003/004).
-
-> El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
-> (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
-
-Regresión al cierre de esta sesión: **319 pruebas Python y 26 suites JavaScript**
-(base: 115 y 11; el CI de `271dd19`, run 33320618751, valida el conteo). Último
-commit de tarea: E-24 (`--near-lossless` + columnas de bench). `outputs/clip.asclv`
-= fondo 768 **refit 5, dither off, near-lossless 8** (`b081f4ba…f6a05e`,
-11.304.137 B, SHA verificado; adoptado por el operador 2026-08-30 tras comparar
-los previews nl5/6/8 — «mínima pérdida pero aceptable»; los candidatos no
-elegidos siguen reproducibles desde el workflow). El clip de producto pesa el
-**29,0 % del mp4 fuente**. Con E-24, **F5 (E-19..E-24) queda COMPLETA**.
-
-**Byte-identidad, historia** (regla 5, nunca supuesta): los runs 33220236164
-(post-E-16), 33233492257 (post-E-18) y 33235096580 (post-E-19/E-20)
-reprodujeron byte a byte el producto tramado `adef9e53…c05bb` — evidencia de
-que E-19/E-20 no tocaron la salida. Desde E-21 (`7e6fd8e`) el SHA de producto
-se movió **a propósito** a `41c94170…79d5` (Instancia 024): mismas métricas de
-calidad, +0,012 % de bytes, encode −54 %.

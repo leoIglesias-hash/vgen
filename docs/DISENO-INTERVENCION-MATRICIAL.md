@@ -10,7 +10,7 @@ Fuentes de verdad que este documento respeta y no reemplaza:
 | principios e invariantes | `PLAN-IMPLEMENTACION-OPTIMIZACION.md` |
 | backlog, dependencias y gates | `HOJA-DE-RUTA-TECNICA-V2.md` |
 | formato v1/v2 | `ASCL-format-spec.md` |
-| estado canónico | `ESTADO-ACTUAL.md` |
+| estado canónico | `RUNBOOK-ESTADO.md` |
 
 ## 1. Problema
 
