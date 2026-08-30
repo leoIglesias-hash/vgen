@@ -1346,3 +1346,16 @@ input `extra` del workflow `encode` pasa a `--palette-refit 5
 completa. El operador dejó abierta la puerta a «un presupuesto más
 agresivo luego» — el 4 (−25,2 %, `221de28f…`) ya quedó medido con
 preview y es exactamente el terreno que barre la calibración de E-24.
+
+**Segunda resolución de la Instancia 025 (2026-08-29, mismo día):** el
+operador vio también el preview del presupuesto 4 — «el más agresivo se
+ve perfecto, yo no noto la diferencia» — y sostiene su criterio de que
+sin diferencia visible gana el ahorro. **El producto pasa al presupuesto
+4**: `221de28f…0373` (12.846.465 B, 35,59 dB, Oklab 0,00809 — −25,2 %
+sobre el E-21 solo; **33,0 % del mp4 fuente**), instalado en `outputs/`
+con SHA verificado; el default de `extra` del workflow pasa a
+`--palette-refit 5 --trellis-temporal 4`. Pedido explícito del operador:
+**probar presupuestos aún más agresivos «para comparar luego»** — el
+barrido de calibración de E-24 debe incluir puntos entre 4 y 10 (p. ej.
+5, 6 y 8; el 10 ya está descartado por −0,82 dB), medidos con las
+columnas nuevas de error temporal y proxy de banding.

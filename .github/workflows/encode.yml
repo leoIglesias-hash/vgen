@@ -6,7 +6,7 @@ name: encode
 # El video fuente NO vive en main (política de .gitignore): se lee de la rama
 # huérfana `assets`, carpeta inputs/. Defaults = receta de producto COMPLETA
 # (graphic-hq 768, adaptive kmeans-oklab, dither off, v2, y en `extra` el
-# refit E-12 + trellis temporal E-22 con presupuesto 2 — adoptado por el
+# refit E-12 + trellis temporal E-22 con presupuesto 4 — adoptado por el
 # operador 2026-08-29 tras comparar previews). Para reproducir referencias
 # históricas hay que ajustar a mano: dither=auto para las tramadas (P-02,
 # adef9e53…) y/o vaciar `extra` para las sin trellis (41c94170…).
@@ -37,7 +37,7 @@ on:
         default: "v2"
       extra:
         description: "Flags extra para make_clip.py (default = receta de producto; vaciar para el encoder pelado)"
-        default: "--palette-refit 5 --trellis-temporal 2"
+        default: "--palette-refit 5 --trellis-temporal 4"
       preview:
         description: "Generar preview.mp4 de control (decodificacion del .asclv; el producto es el .asclv)"
         type: boolean
