@@ -1428,3 +1428,22 @@ near-loss 8  (run 33321490398): | clip.asclv | 11120768 | 11304137 | 0.1451 | 23
 `outputs/preview-e24-nl{5,6,8}.mp4` (el 4 no amerita video: es
 métricamente el producto). Por números, 5 y 6 son candidatos firmes;
 8 es el límite donde el bench empieza a distinguirse con claridad.
+
+**Resolución de la Instancia 027 (2026-08-30, decisión del operador):**
+comparó los tres previews — «los 3 se ven muy parecidos, el 3 se nota
+que tiene una mínima pérdida de calidad pero es aceptable, así que
+podríamos tomarlo» — y adoptó **near-lossless 8**, el más agresivo del
+barrido. Es la primera vez que declara ver una diferencia y la acepta a
+conciencia por el ahorro (antes su criterio era «sin diferencia
+visible»). El fondo de producto pasa a `b081f4ba…f6a05e`
+(11.304.137 B, 35,10 dB, Oklab 0,00897, err_temporal 0,00705,
+proxy_banding 0,001587 — **−12,0 % sobre el temporal 4; el clip queda
+en 29,0 % del mp4 fuente**), instalado en `outputs/` con SHA
+verificado; los previews del barrido se borran de `outputs/`
+(reproducibles desde los runs). El default de `extra` del workflow
+`encode` pasa a `--palette-refit 5 --near-lossless 8` (defaults =
+receta completa). **Con esta adopción E-24 queda cerrada y F5
+(E-19..E-24) COMPLETA**: el carril trellis termina con el producto en
+29,0 % de la fuente — un 34 % menos bytes que el baseline sin trellis
+(17.170.673 → 11.304.137 B) por −0,53 dB (35,63 → 35,10), y aun así
++0,81 dB por encima del P-02 con el que arrancó el optimizador.

@@ -25,11 +25,11 @@ el TV nunca cuantiza ni decide, solo ejecuta.
 - Los videos de producto **no se commitean a `main`** (`.gitignore` ya lo impone). El
   clip HQ fuente vive local en `inputs/TKN-2443-GANADOR- 15seg-.mp4` y en la rama
   huérfana **`assets`** del repo (solo insumos de encode). Receta de
-  producto vigente (2026-08-29): 768 graphic-hq, adaptive kmeans-oklab,
+  producto vigente (2026-08-30): 768 graphic-hq, adaptive kmeans-oklab,
   tile 16, `--palette-refit 5`, `--dither off`,
-  **`--trellis-temporal 4`**, zopfli, overlay=off — exactamente los
-  defaults del workflow `encode` — → `221de28f…0373` (12.846.465 B,
-  35,59 dB, **33,0 % del mp4 fuente**).
+  **`--near-lossless 8`**, zopfli, overlay=off — exactamente los
+  defaults del workflow `encode` — → `b081f4ba…f6a05e` (11.304.137 B,
+  35,10 dB, **29,0 % del mp4 fuente**).
 - **Generar un clip para ver:** workflow `encode` (Actions → encode → Run workflow).
   Encodea desde la rama `assets` con el perfil HQ por defecto y publica `clip.asclv`,
   la fila de `bench_ref`, el SHA-256 y un `preview.mp4` como artifacts descargables.
@@ -196,31 +196,38 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   transcode sigue lossless exacto). Aislado (Instancia 026): −0,32 %
   por −0,01 dB (satura entre 8 y 16) → sin adopción en solitario, es
   ingrediente de E-24. Default 0 = byte-idéntico.
-- ▶ **E-24 en curso (2026-08-30, `29ad7f8`+`271dd19`, CI verde):**
+- ✅ **E-24 (2026-08-30, `29ad7f8`+`271dd19`, ADOPTADA — F5 COMPLETA)**:
   `bench_ref.py` ganó `err_temporal` y `proxy_banding` (por fin ven
   arrastre y banding; el proxy NO castiga al dither) y `make_clip`
   ganó `--near-lossless N` (temporal+espacial al mismo presupuesto,
   0 = byte-idéntico, no se mezcla con los flags explícitos). Barrido
-  Instancia 027: baseline `41c94170…` y producto `221de28f…`
-  reproducidos byte a byte con columnas nuevas; nl4 ≈ producto
-  (−0,04 %, el espacial no suma); **nl5 = −3,9 % bytes, nl6 = −7,0 %,
-  nl8 = −12,0 % (−0,49 dB, banding +18 %)**. El salto
-  baseline→producto (+4,7 % err_temporal, +30 % banding) es el que el
-  operador ya juzgó invisible — 5 y 6 agregan mucho menos que eso.
-  **Falta SOLO su decisión visual sobre
-  `outputs/preview-e24-nl{5,6,8}.mp4`**; con ella cierra E-24 y F5
-  (si se queda con temporal 4, F5 se archiva con su evidencia).
-  Decisión abierta extra: si retoma el 960, re-medirlo con refit 5.
-- 📌 **S-7 agendada**: barrido de resolución 768 → 1280 → 1920 **después
-  de F5**, con el objetivo del operador de subir densidad sin perder
+  (Instancia 027): baseline y producto reproducidos byte a byte con
+  las columnas nuevas; nl4 ≈ producto (el espacial no suma a ese
+  presupuesto); nl5 −3,9 %, nl6 −7,0 %, nl8 −12,0 %. **El operador
+  comparó los previews y adoptó el 8** («el 3 se nota una mínima
+  pérdida pero es aceptable» — primera vez que acepta una diferencia
+  visible a conciencia): producto = `b081f4ba…f6a05e`, workflow
+  default `extra = --palette-refit 5 --near-lossless 8`. El carril
+  trellis deja el producto 34 % más liviano que el baseline sin
+  trellis por −0,53 dB (aún +0,81 dB sobre P-02). Decisión abierta
+  extra: si retoma el 960, re-medirlo con refit 5.
+- ▶ **Próxima acción: S-7** (resolución 768 → 1280 → 1920). Primer
+  paso: subir `timeout-minutes` de `encode.yml` (hoy 120) y despachar
+  el 1280 con la receta de producto. A la tasa nueva (0,1451
+  B/celda/frame) el 1280 estima **~31 MB = 79 % de la fuente** (por
+  primera vez un salto de resolución entraría por debajo del mp4) y
+  el 1920 ~69,5 MB (1,8×).
+- 📌 **S-7 es la próxima acción**: barrido de resolución 768 → 1280 →
+  1920, con el objetivo del operador de subir densidad sin perder
   peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el
-  producto 768 pesa 12.846.465 B = **33,0 % del original** (con el
-  trellis temporal 4 adoptado). El 1920
-  estimado a la tasa actual ≈ 107 MB (2,7× la fuente) y no entra en el
-  `timeout-minutes: 120`; se arranca por 1280 para medir la curva.
+  producto 768 pesa 11.304.137 B = **29,0 % del original** (con
+  near-lossless 8 adoptado). A la tasa nueva el 1280 estima ~31 MB
+  (79 % de la fuente) y el 1920 ~69,5 MB (1,8×); un encode 1920 no
+  entra en el `timeout-minutes: 120` — subirlo primero y arrancar por
+  1280 para medir la curva.
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).
-- Pendiente: F5 (E-19..E-24), F6 (S-4), S-7 (resolución, tras F5),
-  F8 (necesita F6; F7 ya está).
+- Pendiente: **S-7 (resolución — próxima acción)**, F6 (S-4),
+  F8 (necesita F6; F7 ya está). F5 quedó COMPLETA el 2026-08-30.
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8

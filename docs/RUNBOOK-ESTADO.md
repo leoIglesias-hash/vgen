@@ -62,7 +62,7 @@ Reglas de uso:
 | E-21 | jerarquía de costo del trellis | cerrada (**adoptada**) | `7e6fd8e` | 2026-08-29 | `trellis.COST_LADDER` (proxy/zlib9/zopfli): `proxy_cost` (entropía orden 0, nivel de exploración para E-22/E-23), `finalist_deflate` (zlib-9 puro, determinista con o sin Zopfli — la ELECCIÓN ya no depende del entorno, regla 5) y `champion_deflate` (best_deflate UNA vez, solo al ganador). Recableados los tres puntos que pagaban Zopfli por candidato: emisor v1 (3→1 por frame), predictores v2 (3→1) e interna regional/predictor del transcode (hasta 4→1, con `fast_deflate` en `encode_payload` y cierre por `dataclasses.replace`); adopción contra v1 sigue por bytes reales (invariante nunca-crece intacto). Sin Zopfli la salida es byte-idéntica (pata de CI sin zopfli). **Bench de producto (Instancia 024, run 33270879728): PSNR/Oklab IDÉNTICOS (35,63 / 0,00721 — no toca `cells`), bytes +2.040 (+0,012 %: 2 frames DELTA_MASK→ZLIB), wall 44:21 → 20:18 (−54 %)** → producto = `41c94170…79d5` (instalado en `outputs/`, SHA verificado); `74be25ef…` queda como fila histórica no reproducible desde main. Tests: `tests/test_cost_ladder.py` (11) + `test_best_deflate.py` actualizado al contrato nuevo. CI verde run 33270790064 (282 Python / 26 JS) |
 | E-22 | trellis temporal | cerrada (**ADOPTADA con presupuesto 4, decisión del operador 2026-08-29** tras aprobar ambos previews: producto = `221de28f…0373`; pidió barrer >4 en E-24) | `9ab95f6` | 2026-08-29 | `trellis.apply_temporal_trellis`: el índice del frame anterior como segundo candidato de paleta — se emite si el error EXTRA contra el pixel objetivo (métrica de E-20, `build_threshold_palette` convierte paleta y objetivos) no supera el presupuesto; extra negativo = la celda sale del DELTA gratis o **mejorando** (bordes de Voronoi). Misma etapa trellis del orden canónico (después del threshold), protección del dither E-18, `FLAG_LOSSY`, stats `trellis_temporal_*`; default 0 = bytes idénticos (test). Barrido de producto (Instancia 025): **presupuesto 2 = −16,6 % bytes y PSNR +0,12 dB** (`63fb7aae…`); 4 = −25,2 %, −0,04 dB (`221de28f…`, determinismo verificado con re-corrida byte-idéntica); 10 = −37,2 % pero −0,82 dB (descartado). El bench no ve arrastre temporal → previews 2 y 4 enviados al operador, clips instalados en `outputs/`. Tests: `tests/test_trellis_temporal.py` (9). CI verde run 33272369191 |
 | E-23 | trellis espacial | cerrada (opt-in `--trellis-spatial`; **sin adopción en solitario** — ingrediente de E-24) | `626694a` | 2026-08-29 | `trellis.apply_spatial_trellis` + `SPATIAL_CROSSINGS` (3, 5, 17): en tiles con exactamente esos conteos de valores distintos, el más raro (empate → menor índice) se fusiona con el valor del tile que minimiza el peor error extra por celda (métrica E-20, aceptado solo si ≤ presupuesto) — el tile cruza a un opcode más barato del regional v2. Se fuerza en el ENCODER (etapa trellis, también en keyframes); el transcode v2 sigue lossless exacto; tiles con celdas tramadas se bloquean (E-18); `--trellis-spatial` usa la geometría de `--tile-size` (validada 4..32); default 0 = bytes idénticos (test). Bench aislado (Instancia 026): presupuesto 8 = 36.563 tiles fusionados, **−0,32 % de bytes por −0,01 dB** (`28edb2ad…`); 16 satura (−0,35 %, `c84dfe92…`). Tests: `tests/test_trellis_spatial.py` (10, cruces con costos exactos y contrato distinct−1). CI verde run 33274723247 |
-| E-24 | `--near-lossless` ΔE conservador | **en curso — mecanismo y bench listos, decisión visual del operador pendiente** | `29ad7f8` + `271dd19` | 2026-08-30 | (a) `tools/bench_ref.py` ganó las columnas `err_temporal` (delta temporal decodificado vs fuente en Oklab; ve arrastre y flicker, un corrimiento estático se cancela) y `proxy_banding` (gradiente L extra sobre zonas suaves de la fuente tras promediar 2×2; el tramado se anula, el contorno de plateau sobrevive — NO castiga al dither); tests `tests/test_bench_ref.py` (11, con integración de barra congelada por el trellis). (b) `--near-lossless N` en make_clip vía `trellis.resolve_near_lossless`: temporal y espacial al MISMO presupuesto, 0 = passthrough byte-idéntico, mezclar con flags explícitos se rechaza (regla 9); tests `tests/test_near_lossless.py` (7). Barrido (Instancia 027): baseline y producto reproducidos **byte a byte** con columnas nuevas; near-lossless 4 ≈ producto (−0,04 %, el espacial no suma a ese presupuesto); 5 = −3,9 % bytes, 6 = −7,0 %, 8 = −12,0 % (−0,49 dB, banding +18 %). Previews nl5/6/8 en `outputs/`. CI verde run 33320618751 |
+| E-24 | `--near-lossless` ΔE conservador | cerrada (**ADOPTADA con presupuesto 8, decisión del operador 2026-08-30**: «el 3 se nota que tiene una mínima pérdida pero es aceptable» — producto = `b081f4ba…f6a05e`, 11.304.137 B, **29,0 % del mp4 fuente**; **F5 COMPLETA**) | `29ad7f8` + `271dd19` | 2026-08-30 | (a) `tools/bench_ref.py` ganó las columnas `err_temporal` (delta temporal decodificado vs fuente en Oklab; ve arrastre y flicker, un corrimiento estático se cancela) y `proxy_banding` (gradiente L extra sobre zonas suaves de la fuente tras promediar 2×2; el tramado se anula, el contorno de plateau sobrevive — NO castiga al dither); tests `tests/test_bench_ref.py` (11, con integración de barra congelada por el trellis). (b) `--near-lossless N` en make_clip vía `trellis.resolve_near_lossless`: temporal y espacial al MISMO presupuesto, 0 = passthrough byte-idéntico, mezclar con flags explícitos se rechaza (regla 9); tests `tests/test_near_lossless.py` (7). Barrido (Instancia 027): baseline y producto reproducidos **byte a byte** con columnas nuevas; near-lossless 4 ≈ producto (−0,04 %, el espacial no suma a ese presupuesto); 5 = −3,9 % bytes, 6 = −7,0 %, 8 = −12,0 % (−0,49 dB, banding +18 %). Previews nl5/6/8 en `outputs/`. CI verde run 33320618751 |
 
 ## Carril W — frontend
 
@@ -209,6 +209,7 @@ runbook §4-INT-007.
 | 2026-08-29 | **Segunda decisión del mismo día: el producto sube al presupuesto temporal 4** («el más agresivo se ve perfecto, no noto la diferencia»): `221de28f…0373`, 12.846.465 B, 35,59 dB — **−25,2 % sobre el E-21 solo; el clip queda en 33,0 % del mp4 fuente**. Default de `extra` del workflow → `--trellis-temporal 4`. Pedido del operador: probar presupuestos aún más agresivos para comparar — el barrido de E-24 debe incluir 5/6/8 (el 10 ya está descartado por −0,82 dB) | mismo criterio que sostuvo con el dither y con el 2: sin diferencia visible, gana el ahorro. La adopción del 2 duró horas y queda como fila intermedia de la Instancia 025 |
 | 2026-08-29 | **Decisión del operador: se adopta el trellis temporal con presupuesto 2** («el primer video se ve bien, no se ven arrastres casi… preferible por el ahorro»; dejó abierta la puerta a un presupuesto más agresivo luego). El fondo pasa a `63fb7aae…adde` (14.315.422 B, 35,75 dB, Oklab 0,00765): **−16,6 % de bytes y +0,12 dB sobre el producto E-21; el clip queda en 36,7 % del mp4 fuente**. El default del input `extra` del workflow `encode` pasa a `--palette-refit 5 --trellis-temporal 2` (defaults = receta completa); `clip-temporal-4.asclv` se borra de `outputs/` (reproducible; su SHA `221de28f…` quedó en la Instancia 025) | el preview de presupuesto 2 no muestra arrastre a ojo del operador; el 4 queda como candidato natural cuando E-24 calibre con las columnas nuevas de bench. Con esto la decisión (a) que bloqueaba E-24 está resuelta: solo falta (b), las columnas de error temporal y proxy de banding |
 | 2026-08-29 | **E-23 se cierra sin adopción en solitario** (−0,32 % no mueve el producto por sí solo) y **E-24 queda explícitamente bloqueada por dos cosas que no son código**: (a) la decisión visual del operador sobre el presupuesto temporal (calibrar `--near-lossless` sobre un mecanismo no validado a ojo sería construir sobre arena) y (b) las columnas de error temporal y proxy de banding en `tools/bench_ref.py` que su criterio de cierre exige comparar contra el baseline — la de banding está propuesta desde la Instancia 023 | el mecanismo espacial queda listo y testeado como ingrediente; la fase F5 tiene sus 5 mecanismos construidos (orden canónico, métrica, jerarquía de costo, temporal, espacial) y solo falta el perfil que los combina |
+| 2026-08-30 | **Decisión del operador: se adopta near-lossless 8 y F5 queda COMPLETA** («los 3 se ven muy parecidos, el 3 se nota que tiene una mínima pérdida de calidad pero es aceptable, así que podríamos tomarlo»). Primera vez que declara ver una diferencia y la acepta a conciencia por el ahorro. El fondo pasa a `b081f4ba…f6a05e` (11.304.137 B, 35,10 dB): **−12,0 % sobre el temporal 4; el clip queda en 29,0 % del mp4 fuente**. Default de `extra` del workflow → `--palette-refit 5 --near-lossless 8`; previews del barrido borrados de `outputs/` (reproducibles) | el carril trellis completo (E-19..E-24) deja el producto 34 % más liviano que el baseline sin trellis por −0,53 dB, todavía +0,81 dB sobre P-02. Próximo carril: S-7 (resolución), donde la tasa nueva de 0,1451 B/celda/frame estima el 1280 en ~31 MB — por primera vez POR DEBAJO de la fuente |
 | 2026-08-30 | **E-24 desbloqueada y barrida el mismo día**: primero las columnas (`err_temporal`/`proxy_banding` en `bench_ref.py`, `29ad7f8`), después el perfil (`--near-lossless`, `271dd19`), después 6 encodes en paralelo (Instancia 027). Dato que calibra todo: el salto baseline→producto temporal 4 (+4,7 % err_temporal, +30 % proxy_banding) es el que el operador ya juzgó invisible — los incrementos de near-lossless 5 y 6 quedan muy por debajo de ese salto; el 8 pierde medio dB. El espacial no aporta a presupuesto 4 (−0,04 %): el perfil rinde solo subiendo presupuesto | la decisión de adopción es visual y del operador (previews nl5/6/8 instalados en `outputs/`); por números 5 y 6 son firmes y 8 es el límite. La reproducción byte a byte de `41c94170…` y `221de28f…` con el emisor post-E-24 re-verifica la regla 5 por cuarta vez |
 | 2026-08-29 | **E-21 adoptada y el SHA de producto se mueve a propósito**: `74be25ef…` → `41c94170…79d5` (+2.040 B, +0,012 %; PSNR/Oklab idénticos; wall −54 %). La regla 5 se preserva en su forma fuerte — la ELECCIÓN de candidatos ahora es idéntica en todos los entornos (zlib-9), cosa que antes NO pasaba: con Zopfli instalado el tag elegido podía diferir del elegido sin Zopfli. La referencia vieja queda como fila histórica congelada, como P-02 en su momento | el emisor cambió (jerarquía de costo); re-encodear desde main reproduce `41c94170…`, no `74be25ef…`. Es la primera tarea de F5 que cambia la salida, anunciada como tal |
 
@@ -233,38 +234,48 @@ runbook §4-INT-007.
    `--palette-refit 5`, `--dither off`, **`--trellis-temporal 4`**,
    zopfli, overlay=off — exactamente los defaults del workflow
    `encode` (incluido el default de `extra`).
-1. **Carril E: F3 CERRADA, E-19..E-23 cerradas; E-24 en curso con el
-   barrido ya medido (Instancia 027).** Las columnas del bench y el
-   perfil `--near-lossless` están en main con CI verde; los 6 encodes
-   del barrido corrieron el 2026-08-30. **Lo único que falta para
-   cerrar E-24 (y con ella F5) es la decisión visual del operador**
-   sobre `outputs/preview-e24-nl{5,6,8}.mp4`: 5 = −3,9 % de bytes
-   sobre el producto, 6 = −7,0 %, 8 = −12,0 % (este último −0,49 dB y
-   +18 % de proxy de banding — el límite según el bench). Si elige
-   quedarse con el temporal 4, F5 se archiva con su evidencia y el
-   producto no se mueve. La **ruleta** sigue siendo INT-005 en F6/S-4.
-   F8 sin cambios. Opcional no bloqueante: knob de `gradient_boost`
-   del agregado E-14.
-2. **S-7 (barrido de resolución 768 → 1280 → 1920)** queda agendado
-   después de F5: el objetivo del operador es subir densidad sin perder
-   el peso ganado (hoy el producto es el 45 % de la fuente mp4). Antes
-   de ejecutarlo hay que subir `timeout-minutes` en `encode.yml` y
-   arrancar por 1280 para medir la curva.
+1. **Carril E: F3 y F5 CERRADAS (2026-08-30).** E-24 ADOPTADA con
+   `--near-lossless 8` por decisión visual del operador (Instancia 027
+   y su resolución): producto = `b081f4ba…f6a05e`, 11.304.137 B,
+   35,10 dB, **29,0 % del mp4 fuente**; receta = defaults del workflow
+   `encode` (`extra = --palette-refit 5 --near-lossless 8`). La
+   **ruleta** sigue siendo INT-005 en F6/S-4. F8 sin cambios.
+   Opcional no bloqueante: knob de `gradient_boost` del agregado E-14.
+2. **PRÓXIMA ACCIÓN: S-7 — barrido de resolución 768 → 1280 → 1920.**
+   Primer paso concreto: subir `timeout-minutes` de `encode.yml`
+   (hoy 120) y despachar el 1280 con la receta de producto. Con la
+   tasa nueva (0,1451 B/celda/frame) el 1280 (921.600 celdas × 231
+   frames) estima **~31 MB = 79 % de la fuente — por primera vez un
+   salto de resolución entraría POR DEBAJO del peso del mp4**; el
+   1920 estima ~69,5 MB (1,8×). La densidad variable por zona sigue
+   siendo de S-4/ASCLVID3 (F6), no un flag.
 3. Decisión abierta para el operador: el fondo ahora es el **768 refit 5**
    (35,46 dB), que supera al 960 ultra sin refit (34,40 dB) con 31 %
    menos bytes — si retoma la idea del 960, hay que re-medirlo con
    `--palette-refit 5` antes de comparar.
 4. Referencias HQ vigentes: **producto = 768 refit 5, dither off,
-   trellis temporal 4 `221de28f…0373` (12.846.465 B, 35,59 dB, Oklab
-   0,00809, runs 33272440621 y 33273453829 byte-idénticos, instalado
-   en `outputs/`, reproducible desde `main` con los defaults del
-   workflow)** · temporal 2 `63fb7aae…adde` (14.315.422 B, 35,75 dB,
+   near-lossless 8 `b081f4ba…f6a05e` (11.304.137 B, 35,10 dB, Oklab
+   0,00897, err_temporal 0,00705, proxy_banding 0,001587, run
+   33321490398, instalado en `outputs/` con SHA verificado,
+   reproducible desde `main` con los defaults del workflow)** ·
+   near-lossless 6 `db32e8c4…2157` (11.951.807 B, 35,37 dB, run
+   33321484319) y 5 `157bccf0…4c44` (12.339.798 B, 35,48 dB, run
+   33321477382), candidatos del barrido no elegidos · near-lossless 4
+   `5a45592b…92d0` (12.840.889 B, run 33321470296, ≈ producto
+   temporal 4: el espacial no suma a ese presupuesto) · temporal 4
+   `221de28f…0373` (12.846.465 B, 35,59 dB, Oklab 0,00809,
+   err_temporal 0,00652, proxy_banding 0,001345, runs 33272440621,
+   33273453829 y 33321463283 byte-idénticos, producto anterior —
+   reproducible con `extra = --palette-refit 5 --trellis-temporal 4`)
+   · temporal 2 `63fb7aae…adde` (14.315.422 B, 35,75 dB,
    run 33273449999, aprobado y superado el mismo día) · temporal 10
    `5db38f9d…` (10.778.521 B, 34,81 dB, descartado) · espacial 8/16
    `28edb2ad…`/`c84dfe92…` (17.115.087/17.110.054 B, Instancia 026,
    sin adopción en solitario) · base E-21 sin trellis
-   `41c94170…79d5` (17.170.673 B, 35,63 dB, Oklab 0,00721, run
-   33270879728, reproducible con `extra` vacío) ·
+   `41c94170…79d5` (17.170.673 B, 35,63 dB, Oklab 0,00721,
+   err_temporal 0,00623, proxy_banding 0,001034, runs 33270879728 y
+   33321456189 byte-idénticos, reproducible con
+   `extra = --palette-refit 5`) ·
    sin dither pre-E-21 `74be25ef…011f9` (17.168.633 B, mismas métricas,
    run 33231247505, fila histórica — el emisor cambió y ya no se
    reproduce desde main) · tramado refit 5 `adef9e53…c05bb` (17.379.859 B,
@@ -287,14 +298,14 @@ runbook §4-INT-007.
 > El mecanismo de continuidad quedó resuelto: el código de la sesión 1 ya está en `main`
 > (`906b010`); los parches de `entrega-2026-08-27/` son solo respaldo histórico.
 
-Regresión al cierre de esta sesión: **301 pruebas Python y 26 suites JavaScript**
-(base: 115 y 11; el CI de `626694a`, run 33274723247, valida el conteo). Último
-commit de tarea: E-23 (trellis espacial, opt-in). `outputs/clip.asclv` = fondo
-768 **refit 5, dither off, trellis temporal 4** (`221de28f…0373`, 12.846.465 B,
-SHA verificado; adoptado por el operador 2026-08-29 tras aprobar ambos
-previews — los candidatos descartados se borraron de `outputs/` y siguen
-reproducibles desde el workflow). El clip de producto pesa el **33,0 % del
-mp4 fuente**.
+Regresión al cierre de esta sesión: **319 pruebas Python y 26 suites JavaScript**
+(base: 115 y 11; el CI de `271dd19`, run 33320618751, valida el conteo). Último
+commit de tarea: E-24 (`--near-lossless` + columnas de bench). `outputs/clip.asclv`
+= fondo 768 **refit 5, dither off, near-lossless 8** (`b081f4ba…f6a05e`,
+11.304.137 B, SHA verificado; adoptado por el operador 2026-08-30 tras comparar
+los previews nl5/6/8 — «mínima pérdida pero aceptable»; los candidatos no
+elegidos siguen reproducibles desde el workflow). El clip de producto pesa el
+**29,0 % del mp4 fuente**. Con E-24, **F5 (E-19..E-24) queda COMPLETA**.
 
 **Byte-identidad, historia** (regla 5, nunca supuesta): los runs 33220236164
 (post-E-16), 33233492257 (post-E-18) y 33235096580 (post-E-19/E-20)
