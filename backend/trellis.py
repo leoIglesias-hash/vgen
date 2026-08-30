@@ -328,3 +328,24 @@ def apply_spatial_trellis(cells, target_metric, palette_metric, budget,
                        "blocked_tiles": blocked_tiles}
     return out, {"spatial_tiles": merged_tiles, "spatial_cells": moved_cells,
                  "blocked_tiles": blocked_tiles}
+
+
+def resolve_near_lossless(near_lossless, trellis_temporal, trellis_spatial):
+    """E-24: un solo presupuesto conservador para las dos etapas del trellis.
+
+    ``--near-lossless N`` es el perfil parametrizado que combina E-22 y E-23:
+    devuelve ``(N, N)`` como presupuestos temporal y espacial (misma escala,
+    la de ``--threshold-metric``). Con 0 es un passthrough exacto de los
+    flags explicitos (bytes identicos). Mezclarlo con un presupuesto
+    explicito se rechaza: el numero del operador no se reinterpreta ni se
+    pisa en silencio (regla 9).
+    """
+    if near_lossless < 0:
+        raise ValueError("near-lossless debe ser >= 0")
+    if not near_lossless:
+        return trellis_temporal, trellis_spatial
+    if trellis_temporal or trellis_spatial:
+        raise ValueError(
+            "no combinar --near-lossless con --trellis-temporal o "
+            "--trellis-spatial: es el perfil que los fija a los dos")
+    return near_lossless, near_lossless

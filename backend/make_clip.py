@@ -87,6 +87,11 @@ def main(argv=None):
                         "regional v2 mas barato). Usa la geometria de "
                         "--tile-size (con --tile-sweep, el valor de "
                         "--tile-size). 0=off (bytes identicos)")
+    p.add_argument("--near-lossless", type=float, default=0,
+                   help="E-24: perfil que fija --trellis-temporal y "
+                        "--trellis-spatial al MISMO presupuesto conservador "
+                        "(misma escala que --threshold-metric). No se "
+                        "combina con esos flags. 0=off (bytes identicos)")
     p.add_argument("--ramp", default="short")
     p.add_argument("--palette-size", type=int, default=None, dest="pal_size",
                    help="1..256; default 256 o valor del perfil")
@@ -197,6 +202,11 @@ def main(argv=None):
     final_ascl = build_stem + ".ascl"
     keyint = args.keyint if args.keyint > 0 else max(1, args.fps * 2)
 
+    # E-24: --near-lossless fija los dos presupuestos del trellis a la vez;
+    # con 0 es passthrough exacto de los flags explicitos.
+    trellis_temporal, trellis_spatial = trellis.resolve_near_lossless(
+        args.near_lossless, args.trellis_temporal, args.trellis_spatial)
+
     ext = os.path.splitext(args.input)[1].lower()
     is_video = (not args.image) and (ext in encoder.VIDEO_EXTS)
     if args.keep:
@@ -222,8 +232,8 @@ def main(argv=None):
                                     args.palette, keyint, with_audio=True,
                                     threshold=args.threshold,
                                     threshold_metric=args.threshold_metric,
-                                    trellis_temporal=args.trellis_temporal,
-                                    trellis_spatial=args.trellis_spatial,
+                                    trellis_temporal=trellis_temporal,
+                                    trellis_spatial=trellis_spatial,
                                     trellis_spatial_tile=args.tile_size,
                                     bake_smoothing=args.bake_smoothing,
                                     reconstruction=args.reconstruction,
