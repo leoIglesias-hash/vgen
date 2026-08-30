@@ -1359,3 +1359,72 @@ con SHA verificado; el default de `extra` del workflow pasa a
 barrido de calibración de E-24 debe incluir puntos entre 4 y 10 (p. ej.
 5, 6 y 8; el 10 ya está descartado por −0,82 dB), medidos con las
 columnas nuevas de error temporal y proxy de banding.
+
+---
+
+## Instancia 027 - E-24: columnas nuevas del bench + barrido near-lossless 4/5/6/8
+
+**Fecha:** 2026-08-30 · **Commits:** `29ad7f8` (bench: `err_temporal` y
+`proxy_banding`) y `271dd19` (perfil `--near-lossless`), CI verde
+run 33320618751 · **Benchs:** runs 33321456189/463283/470296/477382/
+484319/490398.
+
+**Qué se mide ahora.** `tools/bench_ref.py` ganó las dos columnas que el
+criterio de cierre de E-24 exigía (entre `err_oklab_medio` y `sha256`):
+
+- `err_temporal`: magnitud Oklab media de (delta temporal decodificado −
+  delta temporal de la fuente). El arrastre del trellis (celdas que se
+  quedan en el valor viejo mientras la fuente se mueve) y el flicker
+  aparecen acá; un corrimiento estático se cancela. Test de integración:
+  una barra en movimiento congelada por el trellis dispara la columna
+  mientras el encode exacto mide 0.
+- `proxy_banding`: gradiente Oklab-L EXTRA del decodificado sobre zonas
+  donde la fuente es suave (umbral 0,01 L por paso), medido tras
+  promediar bloques 2×2: el tramado del dither se anula en el promedio y
+  el contorno de un plateau sobrevive. A diferencia de
+  `err_oklab_medio`, esta columna NO castiga al dither (test: rampa
+  tramada Bayer mide menos de la mitad que la rampa cuantizada dura).
+
+`--near-lossless N` (make_clip, resuelto en `trellis.py`): fija
+`--trellis-temporal` y `--trellis-spatial` al MISMO presupuesto; 0 =
+passthrough byte-idéntico; mezclarlo con los flags explícitos se
+rechaza (regla 9).
+
+**Barrido sobre la receta de producto** (768 graphic-hq, refit 5,
+dither off; columnas nuevas 11 y 12):
+
+```text
+sin trellis  (run 33321456189): | clip.asclv | 16987304 | 17170673 | 0.2216 | 231 | 95 | 9 | ZLIB:95;DELTA_MASK:135;RDELTA_RAW:1 | 35.63 | 0.00721 | 0.00623 | 0.001034 | 41c9417008b57d53739db5f19cc36a19373f8dd8b84e1ba58862350cec1e79d5 |
+temporal 4   (run 33321463283): | clip.asclv | 12663096 | 12846465 | 0.1652 | 231 | 36 | 9 | ZLIB:36;DELTA_MASK:193;RDELTA_RAW:2 | 35.59 | 0.00809 | 0.00652 | 0.001345 | 221de28f1b6c5252be35368cdeeb736c15298c533956137438d59cdc11d80373 |
+near-loss 4  (run 33321470296): | clip.asclv | 12657520 | 12840889 | 0.1652 | 231 | 36 | 9 | ZLIB:36;DELTA_MASK:192;RDELTA_RAW:2;RDELTA_ZLIB:1 | 35.59 | 0.00810 | 0.00652 | 0.001340 | 5a45592b823d2c2b476b24eff897674849d0f34cc53a1b50cd38753b89f692d0 |
+near-loss 5  (run 33321477382): | clip.asclv | 12156429 | 12339798 | 0.1586 | 231 | 36 | 9 | ZLIB:36;DELTA_MASK:193;RDELTA_RAW:2 | 35.48 | 0.00832 | 0.00664 | 0.001406 | 157bccf087903c64a9282832633f1682ccb65ab2d8a1d2866bda30fc20b04c44 |
+near-loss 6  (run 33321484319): | clip.asclv | 11768438 | 11951807 | 0.1536 | 231 | 36 | 9 | ZLIB:36;DELTA_MASK:191;RDELTA_RAW:2;RDELTA_ZLIB:2 | 35.37 | 0.00853 | 0.00676 | 0.001465 | db32e8c435ecd53cabe4d04d7e22bdebe1023bb179478b912d2a913b81572157 |
+near-loss 8  (run 33321490398): | clip.asclv | 11120768 | 11304137 | 0.1451 | 231 | 35 | 9 | ZLIB:35;DELTA:1;DELTA_MASK:192;RDELTA_RAW:3 | 35.10 | 0.00897 | 0.00705 | 0.001587 | b081f4bab92551569f0aba3d3644746acb643762a662624b0c41042245f6a05e |
+```
+
+**Lecturas.**
+
+1. **Determinismo re-verificado (regla 5):** el baseline reprodujo
+   `41c94170…79d5` y el producto `221de28f…0373` **byte a byte** con el
+   emisor post-E-24 — el perfil con 0 no mueve nada.
+2. **Las columnas ven lo que el PSNR no veía:** ambas suben monótonas
+   con el presupuesto. Punto de referencia clave: el salto baseline →
+   producto temporal 4 (+4,7 % de err_temporal, +30 % de
+   proxy_banding) es exactamente el que el operador ya juzgó
+   **invisible** en pantalla — ese incremento calibra qué significa
+   «no se distingue» en estas unidades.
+3. **El espacial no agrega nada a presupuesto 4:** near-lossless 4 vs
+   temporal 4 = −5.576 B (−0,04 %) con métricas idénticas. Combinado
+   con el temporal, casi todo lo que el espacial fusionaría ya salió
+   del DELTA; el perfil solo rinde subiendo el presupuesto.
+4. **La curva es suave, sin acantilado:** respecto del producto,
+   near-lossless 5 = −3,9 % de bytes (+1,8 % err_temporal, +4,5 %
+   banding); 6 = −7,0 % (+3,7 %, +8,9 %); 8 = −12,0 % (+8,1 %,
+   +18 %, −0,49 dB). Los incrementos de 5 y 6 quedan muy por debajo
+   del salto ya aprobado visualmente; el 8 se acerca a la mitad de ese
+   salto y pierde medio dB.
+
+**Estado: decisión visual del operador pendiente.** Previews en
+`outputs/preview-e24-nl{5,6,8}.mp4` (el 4 no amerita video: es
+métricamente el producto). Por números, 5 y 6 son candidatos firmes;
+8 es el límite donde el bench empieza a distinguirse con claridad.

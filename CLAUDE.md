@@ -196,16 +196,21 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   transcode sigue lossless exacto). Aislado (Instancia 026): −0,32 %
   por −0,01 dB (satura entre 8 y 16) → sin adopción en solitario, es
   ingrediente de E-24. Default 0 = byte-idéntico.
-- ▶ **Próxima acción: E-24** (`--near-lossless`, combina y calibra
-  temporal+espacial). La decisión visual del temporal ya está tomada
-  (presupuesto 4 adoptado; el operador pidió barrer más agresivos —
-  5/6/8, el 10 está descartado); **el único bloqueo restante es
-  agregar a `tools/bench_ref.py` las columnas de error temporal y
-  proxy de banding** que el criterio de cierre de E-24 exige comparar
-  contra el baseline — ese es el primer paso al retomar. Con E-24
-  cierra F5; si el ahorro adicional no supera un mínimo acordado, la
-  fase se archiva con su evidencia. Decisión abierta extra: si retoma
-  el 960, re-medirlo con refit 5.
+- ▶ **E-24 en curso (2026-08-30, `29ad7f8`+`271dd19`, CI verde):**
+  `bench_ref.py` ganó `err_temporal` y `proxy_banding` (por fin ven
+  arrastre y banding; el proxy NO castiga al dither) y `make_clip`
+  ganó `--near-lossless N` (temporal+espacial al mismo presupuesto,
+  0 = byte-idéntico, no se mezcla con los flags explícitos). Barrido
+  Instancia 027: baseline `41c94170…` y producto `221de28f…`
+  reproducidos byte a byte con columnas nuevas; nl4 ≈ producto
+  (−0,04 %, el espacial no suma); **nl5 = −3,9 % bytes, nl6 = −7,0 %,
+  nl8 = −12,0 % (−0,49 dB, banding +18 %)**. El salto
+  baseline→producto (+4,7 % err_temporal, +30 % banding) es el que el
+  operador ya juzgó invisible — 5 y 6 agregan mucho menos que eso.
+  **Falta SOLO su decisión visual sobre
+  `outputs/preview-e24-nl{5,6,8}.mp4`**; con ella cierra E-24 y F5
+  (si se queda con temporal 4, F5 se archiva con su evidencia).
+  Decisión abierta extra: si retoma el 960, re-medirlo con refit 5.
 - 📌 **S-7 agendada**: barrido de resolución 768 → 1280 → 1920 **después
   de F5**, con el objetivo del operador de subir densidad sin perder
   peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el
