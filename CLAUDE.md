@@ -221,13 +221,23 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   0,00766, run 33326623591; los 12 fps fueron propuesta del operador
   — pagan en movimiento, no en imagen: −13,6 % de bytes). Hallazgo:
   la tasa por celda CAE 21 % al subir resolución (0,1451 → 0,1144
-  B/celda/frame); el 1920 re-estima ~52 MB @15 / ~45 @12.
-  **DECISIÓN ABIERTA del operador (pidió trabajar sobre estos
-  resultados antes de fijar definiciones):** (a) veredicto visual
-  15 vs 12 fps y si el 1280 justifica 11,3 → 21–24,5 MB; (b) si se
-  despacha el 1920 y a qué fps. Nada instalado en `outputs/` ni
-  cambiado en los defaults del workflow; previews enviados
-  (artifacts 9736608277 y 9736890219, retención 14 días).
+  B/celda/frame). **Veredicto parcial del operador: el 1280 está
+  APROBADO** («quedó perfecto»; el 12 fps «casi ni se nota»). A su
+  pedido se midió el **1920 @ 10 fps**: `87160987…8d4e` =
+  **32.838.265 B = 84,3 % de la fuente** (34,81 dB, err_temporal
+  0,00803, tasa 0,1023 — cayó OTRO escalón pese a los 10 fps; run
+  33333170964, wall 1:02, preview enviado). **Faltan: veredicto
+  visual del 1920@10 y definiciones finales de S-7.** Nada instalado
+  en `outputs/` ni cambiado en los defaults del workflow.
+- ⏳ **Deploy del player a Cloudflare (pedido 2026-08-30, para sesión
+  NUEVA):** los preview.mp4 validan calidad pero no el pipeline JS;
+  el player real (768 + 1280@15 + 1280@12) quedó empaquetado en
+  `outputs/deploy-player/` (+ zip, gitignored) para hostearlo en
+  iargen.com. El conector Cloudflare vive en la cuenta claude.ai del
+  operador y esta sesión no lo recibió (se fijan al inicio) —
+  ejecutarlo desde una sesión nueva; detalle y planes B en la memoria
+  `proximo-deploy-player-cloudflare`. Límite ~25 MB/archivo en
+  Pages/KV (el 1280@15 entra justo; un 1920 pedirá R2).
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).

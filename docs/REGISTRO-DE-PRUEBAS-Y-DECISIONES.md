@@ -1490,10 +1490,32 @@ Fuente mp4: 38.966.462 B. Filas de `bench_ref` (verbatim):
 4. Encode 1280: wall 41:23 y RSS 1,56 GB (@15) / ~31 min y 1,55 GB
    (@12) — entra holgado en el timeout nuevo y en el runner.
 
-**Estado: ABIERTA — decisión visual y de rumbo del operador pendiente.**
-Previews de ambos 1280 enviados (artifacts 9736608277 y 9736890219,
-14 días de retención; reproducibles desde el workflow). Quedan por
-decidir: (a) veredicto visual 15 vs 12 fps y si la nitidez del 1280
-justifica pasar de 11,3 a 21–24,5 MB; (b) si se despacha el 1920 (y a
-qué fps). El operador pidió explícitamente trabajar sobre estos
-resultados antes de fijar definiciones.
+**Veredicto parcial del operador (2026-08-30, tras los previews):
+«1280 quedó perfecto»**, y del 12 fps «casi ni se nota la diferencia de
+frames» — pidió el **1920 a 10 fps solo para probar**. Despachado el
+mismo día (receta de producto + `--cols 1920`, fps 10) → run
+33333170964, success:
+
+| archivo | bytes_ascl | bytes_asclv | B/celda/frame | frames | keyframes | cad | tags | psnr | oklab | err_temporal | proxy_banding | sha256 | run |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1920@10 | 32.654.896 | 32.838.265 | 0.1023 | 154 | 28 | 9 | ZLIB:26;DELTA_MASK:126;RKEY_ZLIB:2 | 34.81 | 0.00929 | 0.00803 | 0.001553 | `87160987a4a9143ab41a68149c3556a76a0937c8c8d6ae4dfe83817a954e8d4e` | 33333170964 |
+
+Lecturas del 1920@10: (a) **la tasa por celda cayó otro escalón**
+(0,1144 → 0,1023 B/celda/frame) *a pesar* de los 10 fps que la empujan
+hacia arriba — el efecto resolución sigue mandando; por eso pesó
+**32.838.265 B = 84,3 %** de la fuente y no los ~40-45 MB estimados.
+(b) El costo de los 10 fps está donde se esperaba: `err_temporal`
+0,00803 (vs 0,00766 @12 y 0,00713 @15), PSNR −0,14 dB vs el 1280@12.
+(c) Wall 1:02:07 y RSS 3,35 GB — holgado en el timeout 350 y en el
+runner de 7 GB. Preview enviado al operador (artifact 9739091295;
+clip en 9739090827, 14 días).
+
+**Estado: ABIERTA — falta el veredicto visual del 1920@10 y las
+definiciones finales de S-7** (qué resolución/fps queda como producto,
+si alguna). El 1280 ya tiene aprobación visual del operador; nada
+instalado en `outputs/` ni cambiado en los defaults del workflow.
+En paralelo, a pedido del operador, el player real con los clips
+768/1280-15/1280-12 quedó empaquetado en `outputs/deploy-player/`
+(gitignored) para hostearlo en Cloudflare (dominio iargen.com) desde
+una sesión nueva con su conector — los preview.mp4 validan calidad
+(decodificación exacta) pero no el pipeline de reproducción JS.

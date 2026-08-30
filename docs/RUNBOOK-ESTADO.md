@@ -212,6 +212,7 @@ runbook §4-INT-007.
 | 2026-08-30 | **Decisión del operador: se adopta near-lossless 8 y F5 queda COMPLETA** («los 3 se ven muy parecidos, el 3 se nota que tiene una mínima pérdida de calidad pero es aceptable, así que podríamos tomarlo»). Primera vez que declara ver una diferencia y la acepta a conciencia por el ahorro. El fondo pasa a `b081f4ba…f6a05e` (11.304.137 B, 35,10 dB): **−12,0 % sobre el temporal 4; el clip queda en 29,0 % del mp4 fuente**. Default de `extra` del workflow → `--palette-refit 5 --near-lossless 8`; previews del barrido borrados de `outputs/` (reproducibles) | el carril trellis completo (E-19..E-24) deja el producto 34 % más liviano que el baseline sin trellis por −0,53 dB, todavía +0,81 dB sobre P-02. Próximo carril: S-7 (resolución), donde la tasa nueva de 0,1451 B/celda/frame estima el 1280 en ~31 MB — por primera vez POR DEBAJO de la fuente |
 | 2026-08-30 | **E-24 desbloqueada y barrida el mismo día**: primero las columnas (`err_temporal`/`proxy_banding` en `bench_ref.py`, `29ad7f8`), después el perfil (`--near-lossless`, `271dd19`), después 6 encodes en paralelo (Instancia 027). Dato que calibra todo: el salto baseline→producto temporal 4 (+4,7 % err_temporal, +30 % proxy_banding) es el que el operador ya juzgó invisible — los incrementos de near-lossless 5 y 6 quedan muy por debajo de ese salto; el 8 pierde medio dB. El espacial no aporta a presupuesto 4 (−0,04 %): el perfil rinde solo subiendo presupuesto | la decisión de adopción es visual y del operador (previews nl5/6/8 instalados en `outputs/`); por números 5 y 6 son firmes y 8 es el límite. La reproducción byte a byte de `41c94170…` y `221de28f…` con el emisor post-E-24 re-verifica la regla 5 por cuarta vez |
 | 2026-08-30 | **S-7 arranca y el 1280 queda medido el mismo día (Instancia 028, ABIERTA)**: `timeout-minutes` de `encode.yml` 120 → 350 (`2260d21`, CI verde) y dos encodes 1280 con la receta de producto: **@15 fps `2a9201bf…b778` = 24.530.460 B = 63,0 % de la fuente** (35,02 dB, tasa 0,1144 B/celda/frame — CAE 21 % vs 768, la estimación de 79 % era pesimista) y **@12 fps `27ae0019…e828` = 21.196.032 B = 54,4 %** (34,95 dB, err_temporal 0,00766 — el costo de los 12 fps está en el movimiento, no en la imagen; propuesta del operador para abaratar la evaluación). Previews enviados; el 1920 re-estima ~52 MB a 15 fps / ~45 a 12 | decisión ABIERTA del operador (pidió trabajar sobre estos resultados antes de fijar definiciones): (a) veredicto visual 15 vs 12 fps y si la nitidez del 1280 justifica 11,3 → 21–24,5 MB; (b) si se despacha el 1920 y a qué fps. Nada instalado en `outputs/` ni cambiado en defaults del workflow |
+| 2026-08-30 | **Veredicto parcial de S-7 y segundo escalón medido**: el operador aprobó el 1280 («quedó perfecto», y del 12 fps «casi ni se nota la diferencia de frames») y pidió el **1920 @ 10 fps solo para probar** → run 33333170964: **`87160987…8d4e` = 32.838.265 B = 84,3 % de la fuente** (34,81 dB, err_temporal 0,00803, wall 1:02:07, RSS 3,35 GB). La tasa por celda cayó OTRO escalón (0,1144 → 0,1023) a pesar de los 10 fps. En paralelo, a su pedido, el player real quedó empaquetado en `outputs/deploy-player/` (768 + 1280@15 + 1280@12, SHAs verificados) para hostearlo en Cloudflare/iargen.com desde una sesión nueva con su conector (esta no lo recibió: los conectores se fijan al inicio de sesión) | los preview.mp4 validan la CALIDAD (decodificación exacta) pero no el pipeline de reproducción JS — el hosting cubre eso y deja la base para el TV físico de F8. Falta el veredicto visual del 1920@10 y las definiciones finales de S-7; la Instancia 028 sigue ABIERTA |
 | 2026-08-29 | **E-21 adoptada y el SHA de producto se mueve a propósito**: `74be25ef…` → `41c94170…79d5` (+2.040 B, +0,012 %; PSNR/Oklab idénticos; wall −54 %). La regla 5 se preserva en su forma fuerte — la ELECCIÓN de candidatos ahora es idéntica en todos los entornos (zlib-9), cosa que antes NO pasaba: con Zopfli instalado el tag elegido podía diferir del elegido sin Zopfli. La referencia vieja queda como fila histórica congelada, como P-02 en su momento | el emisor cambió (jerarquía de costo); re-encodear desde main reproduce `41c94170…`, no `74be25ef…`. Es la primera tarea de F5 que cambia la salida, anunciada como tal |
 
 ## Próxima acción
@@ -248,12 +249,27 @@ runbook §4-INT-007.
    la fuente** (`2a9201bf…b778`, run 33325334610, 35,02 dB) y **@12 fps
    = 21,2 MB = 54,4 %** (`27ae0019…e828`, run 33326623591, 34,95 dB,
    err_temporal 0,00766 — 12 fps paga en movimiento, no en imagen).
-   La tasa por celda cayó a 0,1144 (−21 % vs 768). **Espera del
-   operador (pidió trabajar sobre estos resultados sin fijar
-   definiciones todavía):** (a) veredicto visual 15 vs 12 fps y si el
-   1280 justifica el peso; (b) si se despacha el 1920 (~52 MB @15 /
-   ~45 @12 con la tasa real). La densidad variable por zona sigue
-   siendo de S-4/ASCLVID3 (F6), no un flag.
+   La tasa por celda cayó a 0,1144 (−21 % vs 768). **Veredicto parcial
+   (2026-08-30): el 1280 está APROBADO** («quedó perfecto»; el 12 fps
+   «casi ni se nota»). El **1920 @ 10 fps** ya está medido a su pedido:
+   `87160987…8d4e` = **32,8 MB = 84,3 % de la fuente** (34,81 dB,
+   err_temporal 0,00803, tasa 0,1023 — cayó otro escalón), run
+   33333170964, preview enviado. **Faltan: veredicto visual del 1920@10
+   y definiciones finales de S-7** (qué resolución/fps queda de
+   producto). La densidad variable por zona sigue siendo de
+   S-4/ASCLVID3 (F6), no un flag.
+2b. **Deploy del player a Cloudflare (pedido del operador 2026-08-30,
+   PENDIENTE para sesión nueva):** paquete listo en
+   `outputs/deploy-player/` + `outputs/asciline-player.zip` (57 MB,
+   gitignored) — tres players ES5 autocontenidos: `/` = 768 producto,
+   `/1280-15/` y `/1280-12/` (SHAs verificados al bajar del CI).
+   Destino deseado: iargen.com/{algo}. El conector Cloudflare está en
+   la cuenta claude.ai del operador pero la sesión del 2026-08-30 no lo
+   recibió (se fijan al inicio); hacerlo desde una sesión nueva
+   (memoria `proximo-deploy-player-cloudflare` tiene el detalle y los
+   planes B: API token REST o drag & drop del zip). Ojo: límite ~25 MB
+   por archivo en Pages/KV — el 1280@15 entra justo; un 1920 requerirá
+   R2.
 3. Decisión abierta para el operador: el fondo ahora es el **768 refit 5**
    (35,46 dB), que supera al 960 ultra sin refit (34,40 dB) con 31 %
    menos bytes — si retoma la idea del 960, hay que re-medirlo con
