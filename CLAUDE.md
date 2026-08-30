@@ -26,8 +26,10 @@ el TV nunca cuantiza ni decide, solo ejecuta.
   clip HQ fuente vive local en `inputs/TKN-2443-GANADOR- 15seg-.mp4` y en la rama
   huérfana **`assets`** del repo (solo insumos de encode). Receta de
   producto vigente (2026-08-29): 768 graphic-hq, adaptive kmeans-oklab,
-  tile 16, `--palette-refit 5`, **`--dither off`**, zopfli, overlay=off
-  → `41c94170…79d5` (17.170.673 B, emisor E-21).
+  tile 16, `--palette-refit 5`, `--dither off`,
+  **`--trellis-temporal 2`**, zopfli, overlay=off — exactamente los
+  defaults del workflow `encode` — → `63fb7aae…adde` (14.315.422 B,
+  35,75 dB, **36,7 % del mp4 fuente**).
 - **Generar un clip para ver:** workflow `encode` (Actions → encode → Run workflow).
   Encodea desde la rama `assets` con el perfil HQ por defecto y publica `clip.asclv`,
   la fila de `bench_ref`, el SHA-256 y un `preview.mp4` como artifacts descargables.
@@ -177,14 +179,16 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   **PSNR/Oklab idénticos, +2.040 B (+0,012 %), wall 44:21 → 20:18
   (−54 %)** → producto `41c94170…79d5`; `74be25ef…` queda histórica (el
   emisor cambió). Sin Zopfli la salida es byte-idéntica a la histórica.
-- ✅ **E-22 (2026-08-29, `9ab95f6`, opt-in `--trellis-temporal`)**: el
+- ✅ **E-22 (2026-08-29, `9ab95f6`, ADOPTADA con presupuesto 2)**: el
   índice del frame anterior como segundo candidato — se emite si el
   error EXTRA contra el pixel objetivo no supera el presupuesto (la
   celda sale del DELTA; extra negativo = sale mejorando). Barrido
-  (Instancia 025): **presupuesto 2 = −16,6 % bytes y PSNR +0,12 dB
-  (`63fb7aae…`, 14,3 MB)**; 4 = −25,2 %, −0,04 dB (`221de28f…`,
-  12,8 MB, determinismo re-verificado); 10 descartado (−0,82 dB).
-  Default 0 = byte-idéntico.
+  (Instancia 025) y decisión visual del operador («no se ven arrastres
+  casi… preferible por el ahorro»): **producto = presupuesto 2 →
+  `63fb7aae…adde`, −16,6 % de bytes y PSNR +0,12 dB**; el 4 (−25,2 %,
+  −0,04 dB, `221de28f…`, determinismo re-verificado) queda como
+  candidato futuro; 10 descartado (−0,82 dB). Default CLI 0 =
+  byte-idéntico; el workflow lo pasa por el default de `extra`.
 - ✅ **E-23 (2026-08-29, `626694a`, opt-in `--trellis-spatial`)**: en
   tiles con 17/5/3 valores distintos, fusionar el más raro cruza a un
   opcode más barato del regional v2; se fuerza en el ENCODER (el
@@ -192,18 +196,19 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   por −0,01 dB (satura entre 8 y 16) → sin adopción en solitario, es
   ingrediente de E-24. Default 0 = byte-idéntico.
 - ▶ **Próxima acción: E-24** (`--near-lossless`, combina y calibra
-  temporal+espacial). **Bloqueada por dos cosas que no son código:**
-  (a) la decisión visual del operador sobre el presupuesto temporal
-  (0 / 2 / 4, previews enviados, clips en `outputs/`); (b) agregar a
-  `tools/bench_ref.py` las columnas de error temporal y proxy de
-  banding que el criterio de cierre de E-24 exige comparar contra el
-  baseline. Con E-24 cierra F5; si el ahorro no supera un mínimo
-  acordado, la fase se archiva con su evidencia. Decisión abierta
-  extra: si retoma el 960, re-medirlo con refit 5.
+  temporal+espacial). La decisión visual del temporal ya está tomada
+  (presupuesto 2 adoptado; el 4 queda como candidato del barrido);
+  **el único bloqueo restante es (b): agregar a `tools/bench_ref.py`
+  las columnas de error temporal y proxy de banding** que el criterio
+  de cierre de E-24 exige comparar contra el baseline — ese es el
+  primer paso al retomar. Con E-24 cierra F5; si el ahorro adicional
+  no supera un mínimo acordado, la fase se archiva con su evidencia.
+  Decisión abierta extra: si retoma el 960, re-medirlo con refit 5.
 - 📌 **S-7 agendada**: barrido de resolución 768 → 1280 → 1920 **después
   de F5**, con el objetivo del operador de subir densidad sin perder
   peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el
-  producto 768 pesa 17.168.633 B = **44 % del original**. El 1920
+  producto 768 pesa 14.315.422 B = **36,7 % del original** (con el
+  trellis temporal adoptado). El 1920
   estimado a la tasa actual ≈ 107 MB (2,7× la fuente) y no entra en el
   `timeout-minutes: 120`; se arranca por 1280 para medir la curva.
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005

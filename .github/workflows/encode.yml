@@ -4,11 +4,12 @@ name: encode
 # artifacts descargables. Se lanza a mano desde la pestaña Actions ("Run workflow").
 #
 # El video fuente NO vive en main (política de .gitignore): se lee de la rama
-# huérfana `assets`, carpeta inputs/. Defaults = perfil HQ de producción
-# (graphic-hq 768, adaptive kmeans-oklab, dither off, v2). El refit E-12 sigue
-# yendo por `extra` (--palette-refit 5 en la receta de producto). Para
-# reproducir referencias históricas con tramado (P-02, adef9e53…) hay que
-# pasar dither=auto a mano — decisión del operador 2026-08-29.
+# huérfana `assets`, carpeta inputs/. Defaults = receta de producto COMPLETA
+# (graphic-hq 768, adaptive kmeans-oklab, dither off, v2, y en `extra` el
+# refit E-12 + trellis temporal E-22 con presupuesto 2 — adoptado por el
+# operador 2026-08-29 tras comparar previews). Para reproducir referencias
+# históricas hay que ajustar a mano: dither=auto para las tramadas (P-02,
+# adef9e53…) y/o vaciar `extra` para las sin trellis (41c94170…).
 
 on:
   workflow_dispatch:
@@ -35,8 +36,8 @@ on:
         description: "v1 / v2"
         default: "v2"
       extra:
-        description: "Flags extra para make_clip.py (opcional)"
-        default: ""
+        description: "Flags extra para make_clip.py (default = receta de producto; vaciar para el encoder pelado)"
+        default: "--palette-refit 5 --trellis-temporal 2"
       preview:
         description: "Generar preview.mp4 de control (decodificacion del .asclv; el producto es el .asclv)"
         type: boolean

@@ -1332,3 +1332,17 @@ baseline — ninguna de las dos columnas existe todavía en
 `tools/bench_ref.py` (la de banding ya estaba propuesta desde la
 Instancia 023), y la calibración también depende de la decisión visual
 pendiente del operador sobre el presupuesto temporal.
+
+**Resolución de la Instancia 025 (2026-08-29, decisión del operador):**
+comparó los previews y eligió **presupuesto 2** — «realmente el primer
+video se ve bien, no se ven arrastres casi, así que es una buena
+aplicación porque no noto diferencia con el presupuesto anterior…
+preferible por el ahorro conseguido». El fondo de producto pasa a
+`63fb7aae…adde` (14.315.422 B, 35,75 dB, Oklab 0,00765 — **−16,6 % de
+bytes y +0,12 dB de PSNR** sobre el producto E-21; **36,7 % del mp4
+fuente**), instalado en `outputs/` con SHA verificado. El default del
+input `extra` del workflow `encode` pasa a `--palette-refit 5
+--trellis-temporal 2`: los defaults vuelven a ser la receta de producto
+completa. El operador dejó abierta la puerta a «un presupuesto más
+agresivo luego» — el 4 (−25,2 %, `221de28f…`) ya quedó medido con
+preview y es exactamente el terreno que barre la calibración de E-24.
