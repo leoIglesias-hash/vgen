@@ -1447,3 +1447,53 @@ receta completa). **Con esta adopción E-24 queda cerrada y F5
 29,0 % de la fuente — un 34 % menos bytes que el baseline sin trellis
 (17.170.673 → 11.304.137 B) por −0,53 dB (35,63 → 35,10), y aun así
 +0,81 dB por encima del P-02 con el que arrancó el optimizador.
+
+## Instancia 028 - S-7: barrido de resolución, primer escalón (1280) — ABIERTA
+
+**Fecha:** 2026-08-30 · **Contexto:** F5 completa; arranca S-7 con la
+receta de producto (graphic-hq, adaptive kmeans-oklab, dither off,
+zopfli, tile 16, `--palette-refit 5 --near-lossless 8`) más `--cols
+1280` en `extra` (el `--cols` manual pisa la resolución del perfil sin
+tocar nada más, regla 9 ya cableada en `resolve_quality_options`).
+Preparación: `timeout-minutes` de `encode.yml` 120 → **350** (tope del
+runner 360; un 1920 estimaba ~5 h) — commit `2260d21`, CI verde.
+A pedido del operador («pasa a 12 frames en vez de 15… tarda
+significativamente menos mientras podemos ver los resultados visuales
+igual») el escalón se midió también a **12 fps**, en paralelo.
+
+Fuente mp4: 38.966.462 B. Filas de `bench_ref` (verbatim):
+
+| archivo | bytes_ascl | bytes_asclv | B/celda/frame | frames | keyframes | cad | tags | psnr | oklab | err_temporal | proxy_banding | sha256 | run |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 768@15 producto | 11.140.754 | 11.304.137 | 0.1451 | 231 | 36 | 9 | — | 35.10 | 0.00897 | 0.00705 | 0.001587 | `b081f4ba…f6a05e` | 33321490398 |
+| 1280@15 | 24.347.091 | 24.530.460 | 0.1144 | 231 | 36 | 9 | ZLIB:36;DELTA:2;DELTA_MASK:191;RDELTA_RAW:1;RDELTA_ZLIB:1 | 35.02 | 0.00901 | 0.00713 | 0.001522 | `2a9201bf77a3ec0a6772e2131e5b9bc1db3e1f0dbdf3d01fae34038cb873b778` | 33325334610 |
+| 1280@12 | 21.012.663 | 21.196.032 | 0.1232 | 185 | 32 | 9 | ZLIB:32;DELTA_MASK:153 | 34.95 | 0.00908 | 0.00766 | 0.001534 | `27ae0019ff0aab7f19ea4c3a56aef3f907fa1c6ad244716654236ad802fbe828` | 33326623591 |
+
+**Lecturas:**
+
+1. **La tasa por celda CAE 21 % al subir la resolución** (0,1451 →
+   0,1144 B/celda/frame): con celdas más chicas los bordes son más
+   suaves y los deltas comprimen mejor. Por eso la estimación previa
+   (~31 MB = 79 % de la fuente) era pesimista: el 1280@15 real pesa
+   **24.530.460 B = 63,0 %** de la fuente, con calidad por píxel casi
+   idéntica al 768 (35,02 vs 35,10 dB; banding incluso mejor) sobre
+   2,8× más celdas.
+2. **12 fps compra −13,6 % de bytes y −25 % de wall** (41:23 → ~31 min)
+   contra el mismo 1280@15. El costo no está en la imagen (PSNR y
+   banding casi iguales) sino en el movimiento: menos frames = saltos
+   más grandes por delta, y `err_temporal` lo ve (0,00713 → 0,00766).
+   La tasa por celda sube (0,1144 → 0,1232) por el mismo motivo — el
+   ahorro real es 13,6 %, no el 20 % lineal de frames.
+3. Con la tasa real del 1280, el **1920 re-estima ~52 MB (1,3× la
+   fuente) a 15 fps / ~45 MB a 12** — mejor que el ~69,5 MB previo pero
+   aún sobre el mp4, salvo que la tasa vuelva a caer otro escalón.
+4. Encode 1280: wall 41:23 y RSS 1,56 GB (@15) / ~31 min y 1,55 GB
+   (@12) — entra holgado en el timeout nuevo y en el runner.
+
+**Estado: ABIERTA — decisión visual y de rumbo del operador pendiente.**
+Previews de ambos 1280 enviados (artifacts 9736608277 y 9736890219,
+14 días de retención; reproducibles desde el workflow). Quedan por
+decidir: (a) veredicto visual 15 vs 12 fps y si la nitidez del 1280
+justifica pasar de 11,3 a 21–24,5 MB; (b) si se despacha el 1920 (y a
+qué fps). El operador pidió explícitamente trabajar sobre estos
+resultados antes de fijar definiciones.

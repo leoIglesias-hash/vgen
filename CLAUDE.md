@@ -211,23 +211,26 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
   trellis deja el producto 34 % más liviano que el baseline sin
   trellis por −0,53 dB (aún +0,81 dB sobre P-02). Decisión abierta
   extra: si retoma el 960, re-medirlo con refit 5.
-- ▶ **Próxima acción: S-7** (resolución 768 → 1280 → 1920). Primer
-  paso: subir `timeout-minutes` de `encode.yml` (hoy 120) y despachar
-  el 1280 con la receta de producto. A la tasa nueva (0,1451
-  B/celda/frame) el 1280 estima **~31 MB = 79 % de la fuente** (por
-  primera vez un salto de resolución entraría por debajo del mp4) y
-  el 1920 ~69,5 MB (1,8×).
-- 📌 **S-7 es la próxima acción**: barrido de resolución 768 → 1280 →
-  1920, con el objetivo del operador de subir densidad sin perder
-  peso. Dato de referencia: la fuente mp4 pesa 38.966.462 B y el
-  producto 768 pesa 11.304.137 B = **29,0 % del original** (con
-  near-lossless 8 adoptado). A la tasa nueva el 1280 estima ~31 MB
-  (79 % de la fuente) y el 1920 ~69,5 MB (1,8×); un encode 1920 no
-  entra en el `timeout-minutes: 120` — subirlo primero y arrancar por
-  1280 para medir la curva.
+- ▶ **S-7 EN CURSO (2026-08-30, Instancia 028 ABIERTA)** — barrido
+  768 → 1280 → 1920 con la receta de producto + `--cols N` en `extra`
+  (el `--cols` manual pisa al perfil, regla 9). Hecho: timeout de
+  `encode.yml` 120 → 350 (`2260d21`, CI verde) y el 1280 medido en
+  DOS variantes: **@15 fps `2a9201bf…b778` = 24.530.460 B = 63,0 %
+  de la fuente** (35,02 dB, run 33325334610) y **@12 fps
+  `27ae0019…e828` = 21.196.032 B = 54,4 %** (34,95 dB, err_temporal
+  0,00766, run 33326623591; los 12 fps fueron propuesta del operador
+  — pagan en movimiento, no en imagen: −13,6 % de bytes). Hallazgo:
+  la tasa por celda CAE 21 % al subir resolución (0,1451 → 0,1144
+  B/celda/frame); el 1920 re-estima ~52 MB @15 / ~45 @12.
+  **DECISIÓN ABIERTA del operador (pidió trabajar sobre estos
+  resultados antes de fijar definiciones):** (a) veredicto visual
+  15 vs 12 fps y si el 1280 justifica 11,3 → 21–24,5 MB; (b) si se
+  despacha el 1920 y a qué fps. Nada instalado en `outputs/` ni
+  cambiado en los defaults del workflow; previews enviados
+  (artifacts 9736608277 y 9736890219, retención 14 días).
 - La caída de calidad de la reserva de 32 se resolverá en F6 con **INT-005
   (parches por época)**: el gráfico se declara antes del encode con su
   ventana y se cuantiza contra las paletas de esas épocas (sin reserva).
-- Pendiente: **S-7 (resolución — próxima acción)**, F6 (S-4),
+- Pendiente: **S-7 (EN CURSO — decisión del operador abierta)**, F6 (S-4),
   F8 (necesita F6; F7 ya está). F5 quedó COMPLETA el 2026-08-30.
   Opcionales: E-11, W-15. Gates físicos de INT-002 (p95, MEM-001) → F8

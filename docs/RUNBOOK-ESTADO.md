@@ -211,6 +211,7 @@ runbook §4-INT-007.
 | 2026-08-29 | **E-23 se cierra sin adopción en solitario** (−0,32 % no mueve el producto por sí solo) y **E-24 queda explícitamente bloqueada por dos cosas que no son código**: (a) la decisión visual del operador sobre el presupuesto temporal (calibrar `--near-lossless` sobre un mecanismo no validado a ojo sería construir sobre arena) y (b) las columnas de error temporal y proxy de banding en `tools/bench_ref.py` que su criterio de cierre exige comparar contra el baseline — la de banding está propuesta desde la Instancia 023 | el mecanismo espacial queda listo y testeado como ingrediente; la fase F5 tiene sus 5 mecanismos construidos (orden canónico, métrica, jerarquía de costo, temporal, espacial) y solo falta el perfil que los combina |
 | 2026-08-30 | **Decisión del operador: se adopta near-lossless 8 y F5 queda COMPLETA** («los 3 se ven muy parecidos, el 3 se nota que tiene una mínima pérdida de calidad pero es aceptable, así que podríamos tomarlo»). Primera vez que declara ver una diferencia y la acepta a conciencia por el ahorro. El fondo pasa a `b081f4ba…f6a05e` (11.304.137 B, 35,10 dB): **−12,0 % sobre el temporal 4; el clip queda en 29,0 % del mp4 fuente**. Default de `extra` del workflow → `--palette-refit 5 --near-lossless 8`; previews del barrido borrados de `outputs/` (reproducibles) | el carril trellis completo (E-19..E-24) deja el producto 34 % más liviano que el baseline sin trellis por −0,53 dB, todavía +0,81 dB sobre P-02. Próximo carril: S-7 (resolución), donde la tasa nueva de 0,1451 B/celda/frame estima el 1280 en ~31 MB — por primera vez POR DEBAJO de la fuente |
 | 2026-08-30 | **E-24 desbloqueada y barrida el mismo día**: primero las columnas (`err_temporal`/`proxy_banding` en `bench_ref.py`, `29ad7f8`), después el perfil (`--near-lossless`, `271dd19`), después 6 encodes en paralelo (Instancia 027). Dato que calibra todo: el salto baseline→producto temporal 4 (+4,7 % err_temporal, +30 % proxy_banding) es el que el operador ya juzgó invisible — los incrementos de near-lossless 5 y 6 quedan muy por debajo de ese salto; el 8 pierde medio dB. El espacial no aporta a presupuesto 4 (−0,04 %): el perfil rinde solo subiendo presupuesto | la decisión de adopción es visual y del operador (previews nl5/6/8 instalados en `outputs/`); por números 5 y 6 son firmes y 8 es el límite. La reproducción byte a byte de `41c94170…` y `221de28f…` con el emisor post-E-24 re-verifica la regla 5 por cuarta vez |
+| 2026-08-30 | **S-7 arranca y el 1280 queda medido el mismo día (Instancia 028, ABIERTA)**: `timeout-minutes` de `encode.yml` 120 → 350 (`2260d21`, CI verde) y dos encodes 1280 con la receta de producto: **@15 fps `2a9201bf…b778` = 24.530.460 B = 63,0 % de la fuente** (35,02 dB, tasa 0,1144 B/celda/frame — CAE 21 % vs 768, la estimación de 79 % era pesimista) y **@12 fps `27ae0019…e828` = 21.196.032 B = 54,4 %** (34,95 dB, err_temporal 0,00766 — el costo de los 12 fps está en el movimiento, no en la imagen; propuesta del operador para abaratar la evaluación). Previews enviados; el 1920 re-estima ~52 MB a 15 fps / ~45 a 12 | decisión ABIERTA del operador (pidió trabajar sobre estos resultados antes de fijar definiciones): (a) veredicto visual 15 vs 12 fps y si la nitidez del 1280 justifica 11,3 → 21–24,5 MB; (b) si se despacha el 1920 y a qué fps. Nada instalado en `outputs/` ni cambiado en defaults del workflow |
 | 2026-08-29 | **E-21 adoptada y el SHA de producto se mueve a propósito**: `74be25ef…` → `41c94170…79d5` (+2.040 B, +0,012 %; PSNR/Oklab idénticos; wall −54 %). La regla 5 se preserva en su forma fuerte — la ELECCIÓN de candidatos ahora es idéntica en todos los entornos (zlib-9), cosa que antes NO pasaba: con Zopfli instalado el tag elegido podía diferir del elegido sin Zopfli. La referencia vieja queda como fila histórica congelada, como P-02 en su momento | el emisor cambió (jerarquía de costo); re-encodear desde main reproduce `41c94170…`, no `74be25ef…`. Es la primera tarea de F5 que cambia la salida, anunciada como tal |
 
 ## Próxima acción
@@ -241,13 +242,17 @@ runbook §4-INT-007.
    `encode` (`extra = --palette-refit 5 --near-lossless 8`). La
    **ruleta** sigue siendo INT-005 en F6/S-4. F8 sin cambios.
    Opcional no bloqueante: knob de `gradient_boost` del agregado E-14.
-2. **PRÓXIMA ACCIÓN: S-7 — barrido de resolución 768 → 1280 → 1920.**
-   Primer paso concreto: subir `timeout-minutes` de `encode.yml`
-   (hoy 120) y despachar el 1280 con la receta de producto. Con la
-   tasa nueva (0,1451 B/celda/frame) el 1280 (921.600 celdas × 231
-   frames) estima **~31 MB = 79 % de la fuente — por primera vez un
-   salto de resolución entraría POR DEBAJO del peso del mp4**; el
-   1920 estima ~69,5 MB (1,8×). La densidad variable por zona sigue
+2. **S-7 EN CURSO — el 1280 está medido y la decisión quedó ABIERTA
+   (Instancia 028).** Hecho: timeout 350 (`2260d21`) y dos encodes 1280
+   receta de producto + `--cols 1280`: **@15 fps = 24,5 MB = 63,0 % de
+   la fuente** (`2a9201bf…b778`, run 33325334610, 35,02 dB) y **@12 fps
+   = 21,2 MB = 54,4 %** (`27ae0019…e828`, run 33326623591, 34,95 dB,
+   err_temporal 0,00766 — 12 fps paga en movimiento, no en imagen).
+   La tasa por celda cayó a 0,1144 (−21 % vs 768). **Espera del
+   operador (pidió trabajar sobre estos resultados sin fijar
+   definiciones todavía):** (a) veredicto visual 15 vs 12 fps y si el
+   1280 justifica el peso; (b) si se despacha el 1920 (~52 MB @15 /
+   ~45 @12 con la tasa real). La densidad variable por zona sigue
    siendo de S-4/ASCLVID3 (F6), no un flag.
 3. Decisión abierta para el operador: el fondo ahora es el **768 refit 5**
    (35,46 dB), que supera al 960 ultra sin refit (34,40 dB) con 31 %
