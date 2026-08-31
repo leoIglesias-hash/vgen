@@ -63,6 +63,13 @@ recalcularlo por consumidor.
 **Cierre:** con `--gradient-boost 3.0` la salida es **byte-idéntica** a la actual
 (regla 5). Δbytes: solo con otros valores.
 
+El mapa tiene **dos consumidores más** fuera de este carril: la selección de tiles LOD
+de E-30 (que lo usa para excluir rampas suaves — ver
+[`DISENO-FORMATO-V4-LOD-Y-ALPHA.md`](DISENO-FORMATO-V4-LOD-Y-ALPHA.md) §3) y el gate de
+la idea de paletas por región (§10 del mismo doc): la corrida con `--gradient-boost`
+alto sobre el clip real es la que responde si las 256 entradas se saturan en la rampa o
+si alcanzan bien repartidas.
+
 ---
 
 ## 4. E-26 — Presupuesto de trellis modulado por suavidad
@@ -83,8 +90,10 @@ Aplica a las tres etapas del trellis, que ya reciben máscaras por celda (el mec
 `protected_mask` de E-18 demuestra que el camino existe y está testeado).
 
 **Cierre:** a **igual o menor** cantidad de bytes que el producto vigente,
-`proxy_banding` baja de forma medible. Fila de registro obligatoria. La comparación es
-contra `dcd6afb6…1632a` (24.458.884 B, 35,02 dB, banding 0,001522).
+`proxy_banding` baja de forma medible. Fila de registro obligatoria. **La línea base es
+el producto post-E-27**, no el vigente: como E-27 va antes y ataca la misma causa, medir
+E-26 contra `dcd6afb6…1632a` le atribuiría mérito doble. La referencia absoluta del
+carril sigue siendo `dcd6afb6…1632a` (24.458.884 B, 35,02 dB, banding 0,001522).
 
 ---
 

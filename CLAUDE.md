@@ -124,7 +124,10 @@ Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
 - **F11 (S-10) — formato v4:** LOD por tile (E-30 horneado **sin** cambio de formato →
   F11-1 opcode `LOD2`) y **transparencia** (F11-2: `cell_fmt 4`, paleta RGBA, `--alpha`;
   feature nueva pedida por el operador para clips de personaje sobre fondo transparente).
-  Depende de F9. Diseño: `docs/DISENO-FORMATO-V4-LOD-Y-ALPHA.md`.
+  Sumado en la Instancia 031: **frames de solo-paleta** (E-31 análisis sin formato →
+  F11-5 condicionada — fundidos como transformada de paleta) e idea anotada sin tarea
+  de **paletas por región** (gate: saturación de las 256 en E-25). Depende de F9.
+  Diseño: `docs/DISENO-FORMATO-V4-LOD-Y-ALPHA.md`.
 - **F8 (S-6)** — TV físico, p95, MEM-001, con F9-F11 adentro (F8-1 se adelanta como
   W-16). **INT-005 por época sigue CONDICIONADO** a que los gates físicos fallen para el
   overlay nativo (dirección del operador 2026-08-30).

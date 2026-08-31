@@ -68,6 +68,14 @@ gradiente y varianza local, el mismo tipo de descriptor que usa
 detalle de alta frecuencia está por debajo de un umbral. **Sin reconocimiento de
 objetos ni segmentación** — compatible con el veto del proyecto.
 
+**Exclusión obligatoria de rampas suaves (interacción con F10):** los tiles de bajo
+detalle de alta frecuencia son *exactamente* donde vive el banding, y promediar 2×2 y
+recuantizar dentro de un degradé puede reintroducir los escalones que F10 acaba de
+sacar. La selección usa el **mapa de suavidad de E-25** para distinguir «plano» (LOD
+sí) de «rampa suave» (LOD no): un tile solo es candidato si es plano de verdad, no si
+es un degradé sin textura. Es la misma distinción que hace el guard de E-27, aplicada
+acá como filtro de candidatos.
+
 **Reducción:** promedio en Oklab del bloque 2×2 de la fuente, cuantizado a la paleta una
 sola vez, y el índice resultante replicado en las 4 celdas. Promediar en Oklab y no en
 sRGB evita el corrimiento de luminancia en los bordes de bloque.
@@ -212,9 +220,10 @@ tipada. Es el mismo contrato que gobierna el resto del formato.
 
 ## 9. Orden de ejecución
 
-**E-30** (horneado, sin formato, medible y aprobable solo) → **F11-1** (opcode) →
-**F11-2** (alpha) → **F11-3** (espejo JS y cross-tests) → **F11-4** (barrido, previews,
-adopción).
+**E-30** (horneado, sin formato, medible y aprobable solo) → **E-31** (análisis de
+candidatos de solo-paleta, sin formato — ver §11) → **F11-1** (opcode) → **F11-5**
+(permiso de paleta en delta, **solo si E-31 lo justifica**) → **F11-2** (alpha) →
+**F11-3** (espejo JS y cross-tests) → **F11-4** (barrido, previews, adopción).
 
 F11 completo depende de F9 cerrada: la LUT `Uint32` (W-17) es lo que hace que el alpha
 sea gratis, y la textura de paleta (W-18) es lo que lo hace gratis también en WebGL.
@@ -260,3 +269,44 @@ frame real **satura** las 256 entradas (error de cuantización alto con la palet
 agotada). Lo medido hasta hoy atribuye el escalonado a trellis espacial (F10) y
 estirado fraccionario (W-19), no a falta de colores; si esas dos vías lo resuelven,
 esta idea queda anotada y no se ejecuta.
+
+## 11. Carril anotado para v4: frames de solo-paleta (E-31 → F11-5)
+
+Fundidos, flashes y cambios globales de luz son hoy el **peor caso simultáneo en bytes
+y en trabajo del front**: cuando toda la imagen se oscurece un poco, todas las celdas
+cambian de color, así que o el delta toca todo, o el detector de cortes dispara y cada
+frame de la transición sale como keyframe (los 28 keyframes en 154 frames del 1920
+medido en S-7 son sospechosos de esto — verificable en E-31). A 1920 eso es la subida
+completa frame tras frame, justo donde más se notan los drops.
+
+Pero un fundido no cambia la *estructura* de la imagen: cambia la **paleta**. Los
+índices podrían quedar idénticos y transformarse solo las 256 entradas.
+
+**Mecanismo:** el encoder detecta cuando el frame N ≈ una transformada global en Oklab
+del frame N−1 (ajuste de una transformada escalar/afín + residuo — dos pasadas
+numéricas, sin IA, compatible con el veto). Si el residuo pasa, emite un frame de
+**solo-paleta**: celdas todas SKIP (unos pocos bytes) + la paleta transformada
+re-emitida (768 B). Entra como un candidato más en la escalera de costos: gana solo
+cuando su error y su longitud real lo justifican, como todo lo demás.
+
+Por frame de fundido a 1920: hoy cientos de KB y 2,07 M de escrituras + subida
+completa; con esto **~800 B** y un rebuild de la LUT de 256 entradas (W-17) o la
+re-subida de la textura de paleta de 1 KB (W-18). Es la aplicación más pura de
+«encoder caro, decoder trivial», y mejora la fluidez percibida exactamente en los
+tramos donde hoy se acumulan los drops.
+
+**Por qué necesita v4:** el formato lo prohíbe explícitamente — «los tags delta no
+pueden emitir paleta» (validado en [`reader-v2.js`](../frontend/reader-v2.js), regla
+heredada de v1 §Paleta). Levantar esa prohibición de forma acotada (un permiso
+gateado por `version >= 4`, o un tag nuevo `PALETTE_ONLY`) es cambio de formato, y
+viaja gratis en la misma revisión v4 que ya se paga por LOD y alpha.
+
+**Des-riesgo antes de tocar el codec, mismo patrón que E-30:**
+
+| Tarea | Qué hace | Cambia formato | Cierre |
+|---|---|---|---|
+| **E-31** | análisis offline: contar los frames del clip real que son candidatos (residuo de transformada bajo umbral) y cuántos bytes cuestan hoy. Δbytes: no (solo reporta) | **no** | tabla de candidatos + techo de ahorro en bytes y en subidas evitadas; fila de registro |
+| **F11-5** | permiso de paleta en frame delta (o tag `PALETTE_ONLY`), gateado por versión ≥ 4; espejo JS + fuzzing en F11-3 | **sí (v4)** | round-trip exacto; solo se ejecuta si E-31 muestra techo real y el operador aprueba |
+
+Si E-31 dice que el clip real casi no tiene candidatos, F11-5 no se hace y v4 sale sin
+este permiso: la canonicidad no se relaja «por si acaso».

@@ -131,6 +131,12 @@ sonda de `getError` marca fallo en la primera subida, el renderer **conserva el 
 RGBA actual completo** (que no se borra). Igual que hoy, cualquier fallo de WebGL cae a
 Canvas2D sin romper la reproducción.
 
+**Expectativa honesta:** los TVs más viejos —los que más necesitan la aceleración— son
+también los más propensos a caer al fallback. Por eso el valor esperado de F9 no
+descansa solo en W-18: **W-17 y W-20 mejoran el piso Canvas2D en todos los
+dispositivos**, y W-18 acelera además donde la GPU lo permite. La frase operativa es
+«W-18 acelera donde puede; W-17 acelera en todos».
+
 **Cierre:** paridad de píxeles con Canvas2D en modo `nearest` (test automatizado sobre
 un frame sintético leído con `readPixels`), más la medición del banco y del diagnostic.
 La imagen no cambia: esto acelera, no agrega función.
@@ -197,11 +203,19 @@ cambia es que deja de decidir el instante exacto de cada cuadro).
 cada cuatro callbacks solo miran el reloj y vuelven a agendar**. Ese tiempo está libre y
 hoy se tira. Con la tabla de offsets el player sabe dónde está el próximo keyframe.
 
-Solución: decodificar por adelantado, en el tiempo muerto, el próximo frame y —sobre
-todo— el próximo keyframe, a un **buffer alterno de `cells`**. Es un buffer fijo
-reservado al abrir el clip, no uno nuevo por cuadro: **no viola el invariante 7**
-(«ningún buffer nuevo proporcional al frame por cuadro»). Cuesta `cols*rows` bytes
-(2 MB a 1920), contra los 8,3 MB de RGBA que W-18 libera.
+Solución: decodificar por adelantado, en el tiempo muerto, el próximo keyframe a un
+**buffer alterno de `cells`**. Es un buffer fijo reservado al abrir el clip, no uno
+nuevo por cuadro: **no viola el invariante 7** («ningún buffer nuevo proporcional al
+frame por cuadro»). Cuesta `cols*rows` bytes (2 MB a 1920), contra los 8,3 MB de RGBA
+que W-18 libera.
+
+**Alcance acotado a keyframes, a propósito:** un keyframe no depende del estado actual,
+así que adelantarlo es seguro por construcción. Adelantar un *delta* exigiría una base
+definida (snapshot de `cells` en un instante exacto) sin comprometer la
+transaccionalidad del invariante 4, y el jank medible está en los keyframes. Si el
+diagnostic mostrara que los deltas densos también pinchan el presupuesto, el pre-decode
+de deltas se diseña aparte, con su propio análisis de base — no se improvisa dentro de
+W-20.
 
 **Cierre:** en el diagnostic, sobre 1920, drops < 0,1 % y p95 del par decode+render bajo
 el presupuesto de frame. Es el gate `TV-02` de F8 aplicado antes de tiempo, a propósito.

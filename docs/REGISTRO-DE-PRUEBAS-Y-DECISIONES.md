@@ -1773,3 +1773,85 @@ Diseños completos en `DISENO-RENDER-INDEXADO.md`,
 todavia: las cifras de esta entrada son del codigo leido y de las filas ya
 registradas, no de runs nuevos. La primera tarea que produce numeros es
 W-16.
+
+---
+
+## Instancia 031 - 2026-08-31 - Revision del plan, pregunta de los 512 colores y dos ideas nuevas anotadas para v4
+
+El operador pidio (a) el parecer sobre los tres disenos de la Instancia 030 y
+(b) una idea mas de gran rendimiento alineada con no ensuciar el front en
+dispositivos viejos. De la conversacion salieron dos ideas anotadas, un
+descarte razonado y tres ajustes de detalle que se cablearon en los disenos.
+
+### Parecer sobre el plan (resumen; el detalle quedo en los disenos)
+
+El plan se sostiene. Cuatro puntos a vigilar detectados en la revision, todos
+cableados en los documentos en esta misma instancia:
+
+1. **Interaccion F10-F11 que no estaba escrita:** los tiles de bajo detalle
+   (candidatos a LOD en E-30) son exactamente donde vive el banding; promediar
+   2x2 y recuantizar dentro de un degrade puede reintroducir los escalones que
+   F10 saca. La seleccion de E-30 ahora exige el mapa de suavidad de E-25 para
+   distinguir "plano" (LOD si) de "rampa suave" (LOD no).
+2. **Linea base de E-26:** medir contra el producto vigente le atribuiria
+   merito doble (E-27 va antes y ataca la misma causa). Ahora E-26 se mide
+   contra el producto post-E-27.
+3. **Alcance de W-20:** pre-decode **solo de keyframes** (no dependen del
+   estado actual, seguros por construccion). Adelantar deltas exigiria una
+   base definida sin comprometer el invariante 4 y se disenaria aparte.
+4. **Expectativa de W-18:** los TVs mas viejos son los mas propensos a caer al
+   fallback; el valor de F9 descansa en que W-17 y W-20 mejoran el piso
+   Canvas2D en TODOS los dispositivos. "W-18 acelera donde puede; W-17
+   acelera en todos."
+
+### Pregunta del operador: paleta de 512 en vez de 256?
+
+Respuesta: encarece archivo y reproduccion por una razon estructural, no de
+ajuste. Todo el formato descansa en que el indice entra en 1 byte: 512 colores
+exige 2 bytes por celda (plano crudo x2; comprimido, +30-70 % estimado) o
+empaquetado a 9 bits (rompe el decode trivial byte-alineado); todos los
+opcodes del regional v2 estan definidos sobre valores de 1 byte; la subida por
+keyframe a 1920 pasaria de 2,07 MB (post-W-18) a 4,1 MB. Ademas los 256 son
+POR FRAME/BLOQUE, no por video, y lo medido atribuye el escalonado del huevo
+al trellis espacial (+18 % proxy_banding, fila del REGISTRO) y al estirado
+fraccionario, no a saturacion de paleta. Verificacion barata pendiente: la
+corrida de E-25 con --gradient-boost alto responde si la rampa satura las 256.
+**El operador evaluo y no siguio por 512; propuso en cambio la idea (b).**
+
+### Idea (a) - frames de solo-paleta (propuesta en esta instancia)
+
+Fundidos/flashes son hoy el peor caso simultaneo de bytes y trabajo del front
+(todas las celdas cambian, o el detector de cortes dispara keyframe tras
+keyframe; los 28 keyframes en 154 frames del 1920 de S-7 son sospechosos).
+Pero un fundido cambia la PALETA, no la estructura: el encoder puede detectar
+frame N ~ transformada global en Oklab del N-1 (ajuste numerico, sin IA) y
+emitir celdas todas SKIP + paleta transformada: ~800 B por frame y un rebuild
+de LUT de 256 entradas en el TV, contra cientos de KB y subida completa.
+Requiere levantar de forma acotada la regla "los tags delta no pueden emitir
+paleta" -> cambio de formato, viaja en v4. Des-riesgo igual que E-30:
+**E-31** (analisis offline de candidatos y techo de ahorro, sin formato,
+Δbytes no) es el gate de **F11-5** (permiso de paleta en delta o tag
+PALETTE_ONLY, condicionada a E-31 + aprobacion del operador). Detalle en
+`DISENO-FORMATO-V4-LOD-Y-ALPHA.md` §11.
+
+### Idea (b) - paletas por region (idea del operador, anotada sin tarea)
+
+Mantener 256 pero multiplicar donde hace falta: N paletas de 256 con selector
+de 1 byte por tile (version espacial del modo `block` temporal). El indice
+sigue pesando 1 byte por celda; la asignacion es clustering numerico por
+similitud de color (sin segmentacion, veto respetado); histeresis para que un
+tile no alterne de paleta. Punto clave del operador, generalizado: los tiles
+se PARTICIONAN entre grupos, nunca se superponen — cuando una region rica en
+colores se separa con su propia paleta, el grupo base no codifica nada debajo
+(queda un hueco) y sus 256 entradas quedan enteras para el resto. Sin capas ni
+doble decode: una matriz, un canvas, invariante 2 intacto. Gate para
+promoverla a tarea: que E-25 muestre saturacion real de las 256. Detalle en
+`DISENO-FORMATO-V4-LOD-Y-ALPHA.md` §10.
+
+### Estado
+
+Documentacion sincronizada en esta instancia: disenos (F9 §4/§6, F10 §3/§4,
+v4 §3/§9/§10/§11), runbook de implementacion (filas E-31/F11-5 + ajustes
+E-26/E-30/W-20 + nota de idea anotada), runbook de estado (proxima accion,
+tabla de tareas abiertas, bitacora) y CLAUDE.md. **Ninguna medicion nueva;
+el plan de ejecucion no cambia: arranca W-16.**
