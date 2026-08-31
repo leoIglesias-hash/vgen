@@ -1519,3 +1519,35 @@ En paralelo, a pedido del operador, el player real con los clips
 (gitignored) para hostearlo en Cloudflare (dominio iargen.com) desde
 una sesión nueva con su conector — los preview.mp4 validan calidad
 (decodificación exacta) pero no el pipeline de reproducción JS.
+
+## Instancia 028 — CIERRE (2026-08-31): S-7 definida por el operador
+
+**Veredicto del 1920@10:** «lo revisé, se ve espectacular, está aprobado».
+Con esto los tres escalones del barrido tienen aprobación visual
+(1280@15 «quedó perfecto» · 1280@12 «casi ni se nota» · 1920@10
+«espectacular»).
+
+**Definición de producto (decisión del operador, regla 9):** el producto
+de ASCILINE pasa de 768 a **1280 @15 fps** — `2a9201bf…b778`,
+24.530.460 B = 63,0 % de la fuente, 35,02 dB (fila verbatim arriba).
+Motivo de no elegir el 1920: «a 10 fps el 1920 se pone un poco trabado»
+— el límite es la FLUIDEZ a 10 fps, no la imagen (que aprobó como
+espectacular). Receta: los defaults del workflow `encode` + `--cols
+1280` en `extra`. Las demás resoluciones (768, 1280@12, 1920@10) quedan
+como **variantes disponibles en el player** (ya hosteadas en
+iargen.com/player/).
+
+**Directiva del operador para el frontend:** «después haremos una prueba
+con 1920, así que el front debe poder procesar cualquier cosa que le
+tiremos» — el player no asume la resolución del producto: cualquier
+cols/rows/fps dentro de los límites operativos del reader (hoy 1920×1080
+= 2,07 M de celdas entra holgado en el tope de 64 MiB y ya reproduce en
+navegador) debe seguir siendo un input válido. El 1920 (a más fps que
+10) entra en la matriz de F8-2 como prueba futura.
+
+**Ejecución diferida a S-4 a propósito:** el re-encode del producto
+1280@15 se hace UNA sola vez, con el formato v3 y el tile ganador del
+barrido definitivo de F6-2 (en medición al momento del cierre), para no
+gastar un runner en un artefacto v2 que quedaría viejo en horas. Hasta
+ese encode, el artefacto instalado en `outputs/` sigue siendo el 768
+`b081f4ba…` (v2). **S-7 CERRADA.**

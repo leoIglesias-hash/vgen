@@ -18,16 +18,18 @@ Reglas de uso:
 Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en el
 [`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
 
-1. **S-7 — falta el veredicto del operador (Instancia 028 ABIERTA).** El 1280 está
-   **APROBADO** («quedó perfecto»; del 12 fps «casi ni se nota»): @15 fps
-   `2a9201bf…b778` = 24.530.460 B = 63,0 % de la fuente (35,02 dB); @12 fps
-   `27ae0019…e828` = 21.196.032 B = 54,4 % (34,95 dB). El **1920@10 está MEDIDO**
-   (`87160987…8d4e` = 32.838.265 B = **84,3 %** de la fuente, 34,81 dB, err_temporal
-   0,00803, run 33333170964; preview enviado). Faltan: su veredicto visual del 1920@10
-   y las definiciones finales (qué resolución/fps queda de producto, si alguna).
-   Nada instalado en `outputs/` ni cambiado en los defaults del workflow.
-   Hallazgo que guía la decisión: la tasa por celda CAE al subir resolución
-   (0,1451 → 0,1144 → 0,1023 B/celda/frame).
+1. **S-7 CERRADA (Instancia 028, 2026-08-31).** Los tres escalones aprobados a ojo
+   («quedó perfecto» el 1280@15, «casi ni se nota» el @12, «espectacular» el 1920@10).
+   **Definición del operador: el PRODUCTO pasa a 1280 @15 fps** (`2a9201bf…b778`,
+   24.530.460 B = 63,0 %, 35,02 dB; receta = defaults del workflow + `--cols 1280` en
+   extra). El 1920 no quedó por FLUIDEZ a 10 fps («se pone un poco trabado»), no por
+   imagen; **vuelve como prueba futura a más fps y el front debe procesar cualquier
+   resolución que se le tire** (directiva del operador — hoy 1920×1080 entra holgado
+   en los límites del reader y reproduce en navegador; el TV real se valida en F8-2).
+   768, 1280@12 y 1920@10 quedan como variantes del player. **El re-encode del
+   producto 1280@15 se difirió a propósito al cierre de S-4** (un solo encode, ya en
+   v3 con el tile ganador de F6-2); hasta entonces `outputs/` conserva el 768
+   `b081f4ba…` (v2).
 2. **Player EN PRODUCCIÓN (deploy cerrado 2026-08-30; 1920 agregado el mismo día).**
    URLs públicas: **`https://iargen.com/player/`** (768 producto `b081f4ba…`),
    **`/player/1280-15/`** (`2a9201bf…`), **`/player/1280-12/`** (`27ae0019…`),
@@ -54,19 +56,33 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en
    (`test_v3_cross.js`) y spec §14. El default de producto sigue emitiendo v2: la
    adopción de v3 es la decisión de cierre de S-4. **F6-4 también CERRADA** (CACHE-001
    verificado en producción: puntero no-cache/304 + clip versionado immutable en
-   iargen.com/player/). **Falta solo F6-2:** el barrido definitivo de `tile_size`
-   está CORRIENDO en Actions (run 33347720448, `tile=sweep` + `format=v3` + receta de
-   producto) — da el tile ganador y el primer Δbytes v3 vs v2 del producto; con su
-   fila se decide la adopción de v3 y cierra S-4. **INT-005 sigue CONDICIONADO** a
+   iargen.com/player/). **Falta solo F6-2**, y el barrido resultó
+   **2D**: el "tile" son dos perillas — la geometría del trellis ESPACIAL (E-23,
+   lossy, en el encoder, acoplada a `--tile-size`) y el tile del codec regional
+   (lossless, en el transcoder). El primer sweep (run 33347720448, espacial 16) dio
+   ganador regional 32: ascl 11.078.613 B (`6f28a459…8784`, bundle 11.261.986 = −0,37 %
+   vs producto 768 v2), con el SPARSE diferencial aportando solo ~95 B a tile 16 —
+   el ahorro real es el tile 32. El run acoplado a 32 (33349725014, `8b5d0f1e…`) dio
+   PEOR (11.092.989; solo 1.750 fusiones espaciales vs 15.109) y destapó que
+   `bench_ref` no aceptaba v3 (fila vacía; arreglado en `294c324` con test).
+   **CORRIENDO al cierre de esta nota:** run A 33350852865 (espacial 16 + sweep
+   regional; debe reproducir `6f28a459…` y entregar su fila) y run B 33350856477
+   (espacial 32 + sweep regional, la diagonal restante, vía `extra --tile-size 32`).
+   Con esas filas se elige el ganador global y **el acto de cierre de S-4 es UN solo
+   encode: el producto nuevo 1280@15 (S-7) en v3 con ese tile**, que luego se
+   instala/publica. **INT-005 sigue CONDICIONADO** a
    los gates físicos de F8 (dirección del operador 2026-08-30).
    **Luego F8 (S-6)** — validación física en TV (p95, MEM-001). Opcionales: E-11,
    W-15. Decisión menor abierta: si el operador retoma el 960, re-medirlo con
    `--palette-refit 5`.
 
-**Receta de producto vigente (2026-08-30):** defaults del workflow `encode` —
-768 graphic-hq, adaptive kmeans-oklab, tile 16, dither off, zopfli, overlay=off,
-`extra = --palette-refit 5 --near-lossless 8` → **`b081f4ba…f6a05e`**
-(11.304.137 B, 35,10 dB, **29,0 % del mp4 fuente**, instalado en `outputs/`).
+**Receta de producto vigente (2026-08-31, S-7 cerrada):** defaults del workflow
+`encode` + **`--cols 1280`** en extra — 1280×720 @15 fps graphic-hq, adaptive
+kmeans-oklab, dither off, zopfli, overlay=off, `--palette-refit 5 --near-lossless 8`
+→ **`2a9201bf…b778`** (24.530.460 B, 35,02 dB, **63,0 % del mp4 fuente**), HOY en v2
+tile 16; el re-encode en v3 con el tile ganador de F6-2 es el acto de cierre de S-4.
+El artefacto instalado en `outputs/` sigue siendo el 768 `b081f4ba…f6a05e`
+(11.304.137 B, 35,10 dB) hasta ese encode.
 
 ## Cómo ver lo ya implementado (para no pisarse)
 
@@ -236,7 +252,7 @@ Orden de ejecución: F6-1 → F6-3 → F6-2 → F6-4. El barrido definitivo de `
 | S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | en curso | 2026-08-30 | F6-1 cerrada; sigue F6-3 (ver Carril F6) |
 | S-5 | runtime del overlay (F7) | cerrada | 2026-08-28 | F7-1..F7-4 + integración en verde; gates de INT-002 cubiertos por la regresión (Instancia 014). Los dos gates físicos (costo p95 y MEM-001 en TV) se miden en F8-2/F8-4, donde el plan ya los prevé con y sin overlay |
 | S-6 | validación física (F8) | pendiente | | |
-| S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | pendiente | | **se ejecuta después de F5 (E-19..E-24)**, cuando el trellis ya baje bytes a calidad sostenida, y se co-diseña con S-4 (la densidad variable por zona es un cambio de formato, no un flag). Referencia obligatoria: fuente `TKN-2443` = 38.966.462 B / ~15 s ⇒ **el producto 768 ya pesa 17.379.859 B = 45 % del mp4 original**. Estimación previa del 1920 a la tasa actual (0,2244 B/celda/frame × 2.073.600 celdas × 231 frames) ≈ **107 MB = 2,7× la fuente**; el 1080p histórico dio 107,9 MB lossless pero con el encoder retirado `_encode_opt.py`, sin paleta adaptive/Oklab/refit/Zopfli/keyframes por corte, así que ese número **no es el techo**. Bloqueo operativo: a 6,25× celdas el encode se va a ~5 h y no entra en `timeout-minutes: 120` de `encode.yml`; el barrido arranca por 1280 (2,8× celdas) para medir la curva antes de gastar un runner en 1920 |
+| S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | cerrada | 2026-08-31 | Instancia 028: tres escalones aprobados a ojo; **producto = 1280 @15 fps** (`2a9201bf…b778`, 63 % de la fuente; el 1920 descartado por fluidez a 10 fps, no por imagen — vuelve a más fps como prueba futura y el front debe procesar cualquier resolución). Hallazgo central: la tasa por celda CAE al subir resolución (0,1451 → 0,1144 → 0,1023 B/celda/frame). Re-encode del producto diferido al cierre de S-4 (v3 + tile ganador) |
 
 ## Referencias de clips (SHA-256)
 

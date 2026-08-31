@@ -25,11 +25,13 @@ el TV nunca cuantiza ni decide, solo ejecuta.
 - Los videos de producto **no se commitean a `main`** (`.gitignore` ya lo impone). El
   clip HQ fuente vive local en `inputs/TKN-2443-GANADOR- 15seg-.mp4` y en la rama
   huérfana **`assets`** del repo (solo insumos de encode). Receta de
-  producto vigente (2026-08-30): 768 graphic-hq, adaptive kmeans-oklab,
-  tile 16, `--palette-refit 5`, `--dither off`,
-  **`--near-lossless 8`**, zopfli, overlay=off — exactamente los
-  defaults del workflow `encode` — → `b081f4ba…f6a05e` (11.304.137 B,
-  35,10 dB, **29,0 % del mp4 fuente**).
+  producto vigente (2026-08-31, S-7 cerrada): **1280 @15 fps** = defaults
+  del workflow `encode` (graphic-hq, adaptive kmeans-oklab, dither off,
+  `--palette-refit 5 --near-lossless 8`, zopfli, overlay=off) **+
+  `--cols 1280` en extra** → `2a9201bf…b778` (24.530.460 B, 35,02 dB,
+  **63,0 % del mp4 fuente**), hoy v2 tile 16; el re-encode en v3 con el
+  tile ganador de F6-2 es el acto de cierre de S-4. En `outputs/` sigue
+  instalado el 768 `b081f4ba…` hasta ese encode.
 - **Generar un clip para ver:** workflow `encode` (Actions → encode → Run workflow).
   Encodea desde la rama `assets` con el perfil HQ por defecto y publica `clip.asclv`,
   la fila de `bench_ref`, el SHA-256 y un `preview.mp4` como artifacts descargables.
@@ -94,12 +96,12 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
 
 **En curso / pendiente** (detalle operativo en `RUNBOOK-ESTADO.md` §Próxima acción):
 
-- ▶ **S-7 (Instancia 028 ABIERTA):** 1280 **APROBADO** por el operador (@15 fps
-  `2a9201bf…` 24,5 MB = 63 % de la fuente; @12 fps `27ae0019…` 21,2 MB = 54 %,
-  «casi ni se nota»). 1920@10 **medido** (`87160987…8d4e` = 32,8 MB = 84,3 %,
-  34,81 dB, run 33333170964, preview enviado). **Falta su veredicto del 1920 y las
-  definiciones finales** (qué resolución/fps queda de producto). La tasa por celda cae
-  al subir resolución: 0,1451 → 0,1144 → 0,1023 B/celda/frame.
+- ✅ **S-7 CERRADA (Instancia 028, 2026-08-31):** tres escalones aprobados a ojo;
+  **producto = 1280 @15 fps** (`2a9201bf…b778`). El 1920@10 se descartó por FLUIDEZ
+  («se pone un poco trabado» a 10 fps), no por imagen («espectacular») — vuelve a más
+  fps como prueba futura y **el front debe procesar cualquier resolución que se le
+  tire** (directiva del operador). 768/1280-12/1920-10 quedan como variantes del
+  player. Tasa por celda: 0,1451 → 0,1144 → 0,1023 B/celda/frame.
 - ✅ **Player EN PRODUCCIÓN (2026-08-30):** `https://iargen.com/player/` (768),
   `/player/1280-15/`, `/player/1280-12/`, `/player/1920-10/` (espejo
   `asciline-player.iargen.workers.dev`). Infra 100 % nueva: bucket R2 `asciline-player`
