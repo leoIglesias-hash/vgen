@@ -1551,3 +1551,54 @@ barrido definitivo de F6-2 (en medición al momento del cierre), para no
 gastar un runner en un artefacto v2 que quedaría viejo en horas. Hasta
 ese encode, el artefacto instalado en `outputs/` sigue siendo el 768
 `b081f4ba…` (v2). **S-7 CERRADA.**
+
+## Instancia 029 — F6-2: barrido 2D de tile, ganador global y adopción de v3 (2026-08-31)
+
+**Contexto.** El "barrido de tile" resultó tener dos ejes independientes:
+la geometría del trellis ESPACIAL E-23 (lossy, vive en el encoder y está
+acoplada a `--tile-size`) y el `tile_size` del codec regional v2
+(lossless, vive en el transcoder y es lo único que `--tile-sweep`
+barre). El run acoplado-32 de la sesión anterior no reprodujo el SHA del
+sweep y eso destapó la matriz completa; se despacharon los dos runs que
+cierran las diagonales. Todos sobre el 768 receta de producto, formato
+v3, con `bench_ref` ya arreglado para v3 (`294c324`).
+
+**Filas (verbatim de bench_ref, workflow `encode`):**
+
+Run A 33350852865 — espacial 16 + sweep regional (ganó regional 32):
+
+| clip.asclv | 11078613 | 11261986 | 0.1446 | 231 | 35 | 9 | ZLIB:8;DELTA_MASK:173;RKEY_ZLIB:27;RDELTA_RAW:3;RDELTA_ZLIB:20 | 35.10 | 0.00897 | 0.00705 | 0.001587 | 6f28a4597bdef682e80951f7454a15d14976e3cc6336092642adc4b07ed83784 |
+
+Run B 33350856477 — espacial 32 (`--tile-size 32` en extra) + sweep regional:
+
+| clip.asclv | 11092989 | 11276362 | 0.1447 | 231 | 35 | 9 | ZLIB:10;DELTA_MASK:172;RKEY_ZLIB:25;RDELTA_RAW:3;RDELTA_ZLIB:21 | 35.10 | 0.00896 | 0.00704 | 0.001593 | 8b5d0f1eddcab317d0223affa05a4912eb49c8c24c8731ece76c03e89132e738 |
+
+**Lecturas.**
+
+- **Regla 5, dos veces:** el run A reprodujo byte a byte el
+  `6f28a459…8784` del sweep original (33347720448) y el run B reprodujo
+  el `8b5d0f1e…` del acoplado-32 (33349725014). El pipeline v3 completo
+  (SPARSE diferencial + envelope + sweep) es determinista entre runners.
+- **Ganador global: espacial 16 + regional 32.** Bundle 11.261.986 B =
+  **−0,37 %** vs el producto 768 v2 (11.304.137 B) con calidad idéntica
+  (35,10 dB y las tres métricas de error iguales al producto). La
+  diagonal espacial-32 es peor (+14.376 B): con tiles espaciales de 32
+  el trellis fusiona 1.750 regiones contra 15.109 a 16 — el eje espacial
+  ya estaba en su óptimo.
+- El SPARSE diferencial de F6-1 aporta ~95 B a tile regional 16 en este
+  artefacto; el ahorro real de v3 en bytes viene de habilitar el tile
+  regional 32. El valor estructural (meta embebida, gate por versión)
+  viene gratis.
+
+**Decisión (cierra F6-2 y decide la adopción):** el producto adopta
+**v3 con espacial 16 + regional 32**. La configuración mixta se pinnea
+usando `tile=sweep` en el workflow — la elección del sweep es
+determinista (regla 5 verificada) y evita agregar un flag nuevo que
+decouple los ejes; si algún día el sweep eligiera otro tile por un
+cambio de estadística, eso es exactamente lo que el barrido debe hacer.
+
+**Acto de cierre de S-4 despachado en el momento:** run 33352859235 =
+encode único del producto **1280@15 (S-7) en v3**, inputs `format=v3` +
+`tile=sweep` + extra `--palette-refit 5 --near-lossless 8 --cols 1280`.
+Con su fila: instalación en `outputs/` (clip versionado + puntero
+CACHE-001) y publicación al player. Instancia ABIERTA hasta esa fila.
