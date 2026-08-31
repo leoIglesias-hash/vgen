@@ -114,8 +114,8 @@ de esta fase cambia el formato ni exige re-encodear.
   navegador no compone y `requestAnimationFrame` no dispara. `?pacing=off` y
   `?predecode=off` apagan cada pieza para comparar.
 
-- `W-22`..`W-25` **escritas, `en curso (CI bloqueado)`** (`3c46d3d`, `2753fd1`,
-  `26b4170`, `1fe95a9`) — la cadencia y el pre-decode salen de las páginas y viven una
+- `W-22`..`W-25` **cerradas** (`3c46d3d`, `2753fd1`, `26b4170`, `1fe95a9`; CI verde en el
+  run de `866f2f1`) — la cadencia y el pre-decode salen de las páginas y viven una
   sola vez en `frontend/playloop.js`; las **cuatro** páginas lo usan. El intercambio de
   readers convive con el overlay porque va entre `beforeSeek` y `afterSeek` con
   `overlay.rebind(reader)` en el medio. Gates nuevos: `tests/test_playloop.js` y, en
@@ -123,12 +123,12 @@ de esta fase cambia el formato ni exige re-encodear.
   `W-25` arregla que el gate ES5 salteaba `player.html` y `diagnostic-player.html`
   enteros por un `src=` dentro del código.
 
-**Para cerrar F9 falta CI y publicación, no código.** En orden: (1) desbloquear Actions
-—ver el aviso al principio de [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md): es facturación de
-GitHub, y el repo privado se le factura a **`tablerosapp-ctrl`**, no a quien empuja—;
-(2) CI en verde; (3) publicar el frontend a las **cuatro** carpetas del bucket (25 keys:
-las 24 de la Instancia 038 más `playloop.js`), con el procedimiento de
-[`deploy/asciline-player/README.md`](../deploy/asciline-player/README.md); (4) resumen en
+**Para cerrar F9 falta solo publicación, no código ni CI.** El CI ya está verde: el repo
+de trabajo se mudó a `leoIglesias-hash` (Instancia 040 — ver el aviso al principio de
+[`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md); `origin` = repo del operador, `ctrl` =
+`tablerosapp-ctrl`). Queda: (1) publicar el frontend a las **cuatro** carpetas del bucket
+(25 keys: las 24 de la Instancia 038 más `playloop.js`), con el procedimiento de
+[`deploy/asciline-player/README.md`](../deploy/asciline-player/README.md); (2) resumen en
 `ejecutados/` y fase cerrada.
 
 ### F10 — Pérdida adaptativa por suavidad (S-9)

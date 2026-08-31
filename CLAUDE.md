@@ -19,6 +19,12 @@ el TV nunca cuantiza ni decide, solo ejecuta.
   Una tarea se cierra **solo con CI en verde**; si CI falla, se corrige hacia adelante.
 - **Commits directos a `main`**, un commit por tarea, mensaje `<ID>: <título>`.
   Push tras cada tarea; el CI de ese push es la regresión de cierre.
+- **Dos remotos desde 2026-08-31** (Instancia 040): `origin` =
+  **`leoIglesias-hash/ASCILINE-video`** (privado) es el **remoto de trabajo** — ahí se
+  empuja y ahí corre el CI, porque los minutos de un repo privado se le facturan al
+  **dueño** del repo y el Pro está en esa cuenta. `ctrl` =
+  `tablerosapp-ctrl/ASCILINE-video` es el **destino final**: se sincroniza en los puntos
+  de guardado (`git push ctrl main`), por pedido del operador.
 - Al cerrar una tarea: actualizar su fila en `RUNBOOK-ESTADO.md`; al cerrar una fase o
   lote, sumar el resumen a `docs/ejecutados/`.
 - Todo test nuevo se cablea en `tests/run_all.py` **en el mismo commit** (regla 7).
@@ -111,7 +117,7 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
 Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
 **F9 → F10 → F11 → F8 → DIAG-001**.
 
-- **F9 (S-8) — CÓDIGO COMPLETO Y MEDIDO; falta CI en verde y publicar.** Aceleración del
+- **F9 (S-8) — CÓDIGO COMPLETO, MEDIDO Y CON CI VERDE; falta publicar.** Aceleración del
   frontend sin tocar bytes ni formato. Medido y aprobado: `W-16` (`f1ccfa3`, banco
   `tools/bench_render.js` + `frontend/diagnostic-player.html`), `W-17` (`8cecc7b`, LUT
   `Uint32`: keyframe a 1920 **11,4 → 5,7 ms**, byte-idéntico), `W-18`+`W-19` (`07a94e2`,
@@ -124,9 +130,10 @@ Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
   copiados en dos páginas y ausentes en la que sirve la raíz; ahora viven una sola vez en
   `frontend/playloop.js` y lo usan **las cuatro** páginas. El intercambio de readers
   convive con el overlay yendo entre `beforeSeek` y `afterSeek` con `overlay.rebind()`.
-  **BLOQUEO: GitHub Actions no ejecuta** (facturación; los minutos del repo privado se le
-  cobran a `tablerosapp-ctrl`, no a quien empuja) → nada se marca `cerrada`. Después:
-  publicar a las 4 carpetas (25 keys) y cerrar F9. Diseño:
+  **W-22..W-25 CERRADAS** con el run verde de `866f2f1`: el bloqueo de Actions era
+  facturación y se resolvió **mudando el repo de trabajo a `leoIglesias-hash`** (Instancia
+  040), donde está el Pro del operador. **Único pendiente de F9:** publicar a las 4
+  carpetas (25 keys) y escribir el resumen en `ejecutados/`. Diseño:
   `docs/DISENO-RENDER-INDEXADO.md`.
 - **F10 (S-9)** — pérdida adaptativa por suavidad (E-25, E-27, E-26, E-28): el banding
   solo se ve en zonas suaves, así que el presupuesto deja de ser plano. Ataca el degradé

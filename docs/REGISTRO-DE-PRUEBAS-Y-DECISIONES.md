@@ -2469,3 +2469,62 @@ Salidas, las dos del operador: (a) Pro + metodo de pago valido + limite de gasto
 token de esta sesion (scopes `gist, repo, workflow`) no puede leer la facturacion de esa
 cuenta, asi que el diagnostico es estructural: se confirma abriendo Billing & plans de
 `tablerosapp-ctrl`.
+
+## Instancia 040 (2026-08-31) - El repo de trabajo se muda a `leoIglesias-hash` y el CI arranca
+
+### Que pidio el operador
+
+> «claro yo me pase a pro con leoIglesias-hash, ya esta hice cagada.. ahora podrias
+> descargar el proyecto y subirlo a mi github? para poder seguirlo desde ahi? luego
+> podriamos sincronizarlo cuando tenemos puntos de guardado.. al terminar dejare todo en
+> tablerosapp-ctrl y listo»
+
+O sea: el Pro esta en la cuenta que empuja, no en la que es dueña del repo. En vez de
+mover la suscripcion, se mueve el repo.
+
+### Que se hizo
+
+La credencial guardada en el Credential Manager de Windows resulto ser de
+**`leoIglesias-hash`** con scopes `gist, repo, workflow` - alcanza para crear el repo y
+para empujar `.github/workflows/`. Con eso:
+
+1. **`leoIglesias-hash/ASCILINE-video` creado privado** por API (`POST /user/repos`,
+   201), sin `auto_init` para que el push entre limpio.
+2. **Espejo completo**, no solo `main`: `main`, `assets` (los insumos de encode, que son
+   lo que el workflow `encode` consume), `feature/quality-optimization` y los **7 tags**.
+   98 MB de historia.
+3. **Remotos renombrados** para que el default sea el repo del operador:
+   `origin` -> `leoIglesias-hash/ASCILINE-video`, `ctrl` -> `tablerosapp-ctrl/ASCILINE-video`.
+   `main` quedo trackeando `origin/main`.
+4. Se **cancelo a mano** el run que `feature/quality-optimization` disparo de arrastre
+   (codigo viejo, minutos gastados al pedo).
+
+### El resultado: CI verde, y el diagnostico confirmado sin leer facturacion
+
+El push de `main` disparo `regression` sobre `866f2f1` -que ya trae **todo** el codigo de
+F9, W-22..W-25 incluidas- y **los tres jobs pasaron**: `test (py3.8)`, `test (py3.11)` y
+`test (py3.11 + zopfli)`, **verde en 52 s**. Contra los 2 segundos sin ejecutar un solo
+paso que venian dando las ultimas cuatro instancias en el repo viejo.
+
+Eso **prueba** lo que la Instancia 039 solo podia inferir: no habia nada roto en el
+codigo ni en los workflows; los minutos de un repo privado se le cobran **al dueño del
+repo**, y el dueño era una cuenta sin Pro. El experimento fue mejor que leer la pagina de
+Billing: cambiar de dueño y ver correr los mismos workflows aisla la variable.
+
+Tambien disparo `publish-player` (el filtro por `paths` matchea en un push inicial,
+donde *todos* los archivos cuentan como cambiados). Termino en **success sin publicar
+nada**: `tools/publish-player-request.json` esta en su estado de reposo con `run_id`
+vacio. Es exactamente el comportamiento que ese estado de reposo existe para dar.
+
+### Consecuencia inmediata
+
+**W-22, W-23, W-24 y W-25 pasan de `en curso (CI bloqueado)` a `cerrada`.** F9 queda con
+un unico pendiente que no es codigo: publicar el frontend a las cuatro carpetas del
+bucket (25 keys) y escribir el resumen en `ejecutados/`.
+
+### Por que mudar el repo y no hacerlo publico
+
+La otra salida (repo publico = minutos ilimitados) tambien destrababa el CI, pero
+expone el codigo. Mudarlo no expone nada -sigue privado-, no depende de arreglar pagos en
+una cuenta ajena, deja el repo original intacto como destino final, y es reversible: el
+dia que el operador quiera consolidar, `git push ctrl main` y listo.
