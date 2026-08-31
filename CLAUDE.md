@@ -112,6 +112,9 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
   para el overlay nativo (dirección del operador 2026-08-30).
 - Opcionales: E-11, W-15. Menor: si se retoma el 960, re-medirlo con refit 5.
 
-> Docs podados el 2026-08-30: el runbook de implementación solo contiene lo pendiente;
-> los benchmarks/estados históricos se retiraron al historial Git (lista en
-> `docs/README.md`). La evidencia canónica es REGISTRO + ejecutados/.
+> Docs podados el 2026-08-30 y limpiados el 2026-08-31 (cierre de F6/S-4 y S-7): los
+> runbooks solo contienen lo pendiente (F8 + opcionales); las tablas completas de
+> tareas cerradas y la bitácora 2026-08-27..30 están archivadas **verbatim** en
+> `docs/ejecutados/2026-08-31-tablas-de-tareas-cerradas.md`; los benchmarks/estados
+> históricos retirados viven en el historial Git (lista en `docs/README.md`). La
+> evidencia canónica es REGISTRO + ejecutados/.

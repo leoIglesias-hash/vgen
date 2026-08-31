@@ -1,18 +1,19 @@
 # Índice de documentación
 
-Podado el 2026-08-30: lo que no está acá se retiró del árbol y vive en el historial Git
-(`git log --diff-filter=D -- docs/` lo lista). Si dos documentos se contradicen,
-prevalecen en este orden: spec de formato → estado de ejecución → diseño vigente →
-registro de decisiones.
+Podado el 2026-08-30 y limpiado el 2026-08-31 (cierre de F6/S-4 y S-7): lo que no está
+acá se retiró del árbol y vive en el historial Git (`git log --diff-filter=D -- docs/`
+lo lista); las tablas de tareas cerradas del runbook de estado se archivaron **verbatim**
+en `ejecutados/` (sin pérdida). Si dos documentos se contradicen, prevalecen en este
+orden: spec de formato → estado de ejecución → diseño vigente → registro de decisiones.
 
 ## Para trabajar (en este orden)
 
 | Documento | Función |
 |---|---|
 | [`../CLAUDE.md`](../CLAUDE.md) | arranque de sesión: orden de lectura, modelo de trabajo, invariantes, estado grueso |
-| [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) | **el archivo vivo**: próxima acción arriba, una fila por tarea cerrada, referencias de clips por SHA, bitácora histórica al final |
-| [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | reglas de ejecución + SOLO las tareas pendientes (F6/S-4, F8/S-6, opcionales E-11/W-15) |
-| [`ejecutados/`](ejecutados/README.md) | resumen por fase cerrada con su evidencia; se consulta, no se relee |
+| [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) | **el archivo vivo**: próxima acción y receta de producto arriba, resumen de carriles cerrados, tabla de fases, referencias de clips por SHA, bitácora vigente al final |
+| [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | reglas de ejecución + SOLO las tareas pendientes (F8/S-6, opcionales E-11/W-15) |
+| [`ejecutados/`](ejecutados/README.md) | resumen por fase cerrada con su evidencia + tablas de tareas y bitácora 2026-08-27..30 archivadas verbatim; se consulta, no se relee |
 | [`REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md) | bitácora append-only por Instancia: el porqué de cada decisión y cada medición |
 
 ## Referencia técnica

@@ -1,12 +1,15 @@
 # Runbook de implementación
 
-Estado: **podado el 2026-08-30**. Este archivo contiene SOLO las reglas de ejecución y
-las tareas que quedan por hacer. Los cuerpos de las tareas ya ejecutadas (P-01..P-04,
-E-01..E-24, W-01..W-14, F7, INT-003/004/006/007) se retiraron: su resumen operativo está
-en [`ejecutados/`](ejecutados/README.md), su fila de cierre en
-[`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) y su evidencia en
+Estado: **podado el 2026-08-30, re-podado el 2026-08-31 (F6/S-4 y S-7 cerradas)**.
+Este archivo contiene SOLO las reglas de ejecución y las tareas que quedan por hacer:
+**F8 (S-6) y las opcionales E-11/W-15**. Los cuerpos de las tareas ya ejecutadas
+(P-01..P-04, E-01..E-24, W-01..W-14, F6, F7, INT-003/004/006/007, S-7, deploy del
+player) se retiraron: su resumen operativo está en
+[`ejecutados/`](ejecutados/README.md), su fila de cierre en las tablas archivadas
+([`ejecutados/2026-08-31-tablas-de-tareas-cerradas.md`](ejecutados/2026-08-31-tablas-de-tareas-cerradas.md))
+y su evidencia en
 [`REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md). El texto
-completo original vive en el historial Git (hasta el commit anterior a esta poda).
+completo original vive en el historial Git (hasta el commit anterior a cada poda).
 
 Este documento no argumenta ni justifica: para eso están
 [`PLAN-UNIFICADO-TIERS-E-INTERVENCION.md`](PLAN-UNIFICADO-TIERS-E-INTERVENCION.md) y
@@ -34,11 +37,8 @@ tocar, cómo verificarlo y cuándo una tarea se considera cerrada.
 
 ## 1. Trabajo en curso (definido fuera de este archivo)
 
-- **S-7 — barrido de resolución (Instancia 028 ABIERTA):** el detalle vivo está en
-  `RUNBOOK-ESTADO.md` §Próxima acción. Falta el veredicto visual del operador sobre el
-  1920@10 y las definiciones finales (qué resolución/fps queda de producto).
-- **Deploy del player a Cloudflare (sesión nueva):** paquete en `outputs/deploy-player/`;
-  plan completo en la memoria `proximo-deploy-player-cloudflare` y en
+- **Del operador:** probar `iargen.com/player/` en celular y Smart TV (antesala de F8);
+  prueba futura del 1920 a más fps. El detalle vivo está en
   `RUNBOOK-ESTADO.md` §Próxima acción.
 
 ## 2. Tareas opcionales (no bloquean nada)
@@ -63,43 +63,27 @@ tocar, cómo verificarlo y cuándo una tarea se considera cerrada.
 
 ## 3. Fases pendientes
 
-### S-4 — Revisión única de formato (F6)
-
-Se agrupa **todo** lo que el TV debe entender distinto, para desplegar una sola versión
-de decoder:
-
-| ID | Tarea |
-|---|---|
-| F6-1 | `SPARSE` con offsets diferenciales (`regional_codec_v2.py`); el decoder ya exige offsets estrictamente crecientes, así que codificar `offset - prior - 1` es gratis semánticamente |
-| F6-2 | `tile_size` flexible declarado y cerrado (E-09 + W-08); **barrido definitivo** por artefacto sobre la salida del trellis, porque E-23 cambia la estadística por tile |
-| F6-3 | Envelope `ASCLVID3` con `meta_len`; migrar el sidecar adentro |
-| F6-4 | Nombre versionado `clip.<sha-corto>.asclv` e invalidación de caché (`CACHE-001`) |
-
-**INT-005 (parches por época)** pertenece a esta revisión, pero quedó **condicionado**
-(dirección del operador, 2026-08-30): el overlay nativo Canvas2D (texto + imagen sobre el
-mismo canvas, INT-004/006/007) es la vía preferida; INT-005 solo se implementa si los
-gates físicos de F8 muestran que el dibujo nativo por frame no rinde en el TV real.
-
-**No entra:** `PAL5`/`PAL6` para el hueco de 17-255 colores por tile — vetado hasta tener
-benchmark neto en TV (candidato de la revisión siguiente, estimación 25-37 % en tiles de
-gradiente).
-
-**Cierre de S-4:** readers viejos rechazan `ASCLVID3` por magic desconocido, limpiamente;
-round-trip Python/JavaScript byte-exacto; corpus de corrupción ampliado a los campos
-nuevos; prueba de caché fría y caliente.
-
 ### S-6 — Validación física (F8)
 
 | ID | Tarea |
 |---|---|
 | F8-1 | `frontend/diagnostic-player.html`, ES5, separado de `tv-player.html` |
-| F8-2 | Matriz física 640 y 768 (y las resoluciones que S-7 defina), Canvas2D y WebGL1, 30 minutos |
-| F8-3 | Go/no-go de v2 (`TV-02`) contra los artefactos **ya optimizados** |
+| F8-2 | Matriz física con las resoluciones de producto: **1280@15 v3** (producto), 768 y 640 de referencia, y el **1920** (directiva del operador: el front procesa cualquier resolución/fps; el 1920 se re-prueba a más fps); Canvas2D y WebGL1, 30 minutos |
+| F8-3 | Go/no-go de v2/**v3** (`TV-02`) contra los artefactos **ya optimizados** |
 | F8-4 | `MEM-001`: memoria por componente, con y sin overlay |
 | F8-5 | Regenerar el artefacto de release **después** del último cambio de codec |
 
 Gates físicos heredados de INT-002: costo p95 por frame del overlay nativo (decide si
 INT-005 se implementa) y MEM-001 con y sin overlay.
+
+**INT-005 (parches por época)** sigue **condicionado** (dirección del operador,
+2026-08-30): el overlay nativo Canvas2D (texto + imagen sobre el mismo canvas,
+INT-004/006/007) es la vía preferida; INT-005 solo se implementa si los gates físicos
+de F8 muestran que el dibujo nativo por frame no rinde en el TV real.
+
+**Sigue vetado hasta tener benchmark neto en TV:** `PAL5`/`PAL6` para el hueco de
+17-255 colores por tile (candidato de una revisión de formato futura, estimación
+25-37 % en tiles de gradiente; quedó fuera de F6 a propósito).
 
 ## 5. Definición de terminado
 
