@@ -10,10 +10,15 @@ var files = fs.readdirSync(frontend).filter(function (name) {
 }).sort();
 
 function scriptsFromHtml(source) {
-  var scripts = [], match;
+  var scripts = [], match, tag;
   var pattern = /<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi;
   while ((match = pattern.exec(source)) !== null) {
-    if (/\bsrc\s*=/.test(match[0])) { continue; }
+    /* El descarte de <script src=...> se decide SOBRE LA ETIQUETA, no sobre la
+     * coincidencia entera: mirar el bloque completo hacía que un `var src=` o
+     * un `.src =` dentro del código saltearan la página entera. player.html y
+     * diagnostic-player.html llevaban tiempo sin pasar por el gate por eso. */
+    tag = /^<script(?:\s[^>]*)?>/i.exec(match[0]);
+    if (tag && /\ssrc\s*=/i.test(tag[0])) { continue; }
     scripts.push(match[1]);
   }
   return scripts;
