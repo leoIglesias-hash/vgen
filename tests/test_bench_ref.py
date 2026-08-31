@@ -179,6 +179,40 @@ class BenchRowIntegrationTest(unittest.TestCase):
                            "el arrastre del trellis temporal debe subir "
                            "err_temporal respecto del encode pelado")
 
+    def test_v3_is_measured_and_matches_v2_quality_columns(self):
+        # F6-2/F6-3: bench_ref debe aceptar ASCL v3 (antes cortaba con
+        # "version ASCL desconocida: 3" y dejaba la fila vacia). v3 es
+        # lossless respecto de v2: solo pueden moverse las columnas de bytes.
+        import ascl_v2
+        out_path = os.path.join(self.directory, "forv3.ascl")
+        with mock.patch.object(encoder, "probe_size",
+                               return_value=(WIDTH, HEIGHT)), \
+                mock.patch.object(encoder, "iter_video_frames",
+                                  side_effect=fake_iter):
+            encoder.encode_video("synthetic.mp4", out_path,
+                                 mode_name="pixel", cols=WIDTH, rows=HEIGHT,
+                                 fps=15, pal_size=4, ramp_name="short",
+                                 char_aspect=0.5, compress="auto",
+                                 palette_mode="global", keyint=64,
+                                 with_audio=False,
+                                 palette_algorithm="kmeans-oklab")
+            with open(out_path, "rb") as stream:
+                v1 = stream.read()
+            rows = {}
+            for version in (2, 3):
+                converted, _ = ascl_v2.transcode_ascl_bytes(
+                    v1, emit_version=version)
+                path = os.path.join(self.directory, "conv%d.ascl" % version)
+                with open(path, "wb") as stream:
+                    stream.write(converted)
+                rows[version] = bench_ref.measure(path, source="synthetic.mp4")
+        self.assertNotEqual(rows[3]["err_temporal"], "-")
+        for column in ("psnr_rgb_db", "err_oklab_medio", "err_temporal",
+                       "proxy_banding", "frames", "keyframes"):
+            self.assertEqual(rows[2][column], rows[3][column],
+                             "v3 es lossless: la columna %s no puede moverse"
+                             % column)
+
     def test_without_source_the_new_columns_stay_dashes(self):
         out_path = os.path.join(self.directory, "nosrc.ascl")
         with mock.patch.object(encoder, "probe_size",

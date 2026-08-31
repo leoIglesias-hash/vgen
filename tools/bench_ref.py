@@ -101,8 +101,10 @@ def banding_stats(l_dec, l_src, smooth_t=BANDING_SMOOTH_T,
 
 def _iter_frames(ascl):
     version = ascl[4]
-    if version == ascl_v2.VERSION_V2:
-        header = ascl_v2._header_fields(ascl, ascl_v2.VERSION_V2)
+    if version in (ascl_v2.VERSION_V2, ascl_v2.VERSION_V3):
+        # F6-3: iter_decoded_v2 despacha el SPARSE diferencial por la version.
+        header = ascl_v2._header_fields(
+            ascl, (ascl_v2.VERSION_V2, ascl_v2.VERSION_V3))
         frames = ascl_v2.iter_decoded_v2(ascl)
     elif version == ascl_v2.VERSION_V1:
         header = ascl_v2._header_fields(ascl, ascl_v2.VERSION_V1)
