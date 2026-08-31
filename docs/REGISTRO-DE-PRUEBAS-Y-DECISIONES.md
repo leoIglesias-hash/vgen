@@ -2663,3 +2663,8 @@ camino que compone.
 
 Mitigacion inmediata sin esperar el resultado, del lado de la app:
 `setBackgroundColor(negro)` en el WebView -> el blanco pasa a negro.
+
+**Mitigacion del fondo negro DESCARTADA por el operador** (2026-08-31): *"tiene mucho
+blanco... asi que si se nota"* -- el clip de Telekino es claro, un parpadeo negro se ve
+igual de mal que uno blanco. No re-proponerla: DIAG-002 se cierra solo con la causa
+real arreglada.
