@@ -25,6 +25,7 @@ JS_SUITES = (
     "test_reader_v2.js",
     "test_reader_v2_tilesize.js",
     "test_reader_factory.js",
+    "test_playloop.js",
     "test_v3_cross.js",
     "test_bench_render.js",
     "test_reader_palette_lut.js",
