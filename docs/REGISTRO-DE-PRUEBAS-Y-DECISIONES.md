@@ -2257,3 +2257,60 @@ F8**, que es la fase de validacion en TV fisico. Mantenerla como bloqueo de F9
 seria pedirle a esta fase un gate que pertenece a la siguiente, y el codigo de F9
 ya esta verificado por otras vias (bench HEAD-vs-baseline, paridad con GL real,
 byte-identidad).
+
+## Instancia 037 - 2026-08-31 - W-20 CERRADA: medicion del operador sobre pantalla real
+
+### La medicion
+
+El operador corrio `diagnostic-player.html` en el navegador de su PC (que sí
+compone, a diferencia del panel de esta maquina) sobre el **clip de produccion**:
+`ASCL v3 · 1280x720 @15 · webgl/nearest · pacing on`, 166 frames y **497
+presentaciones** -el clip dura 15 s y se repitio, asi que la ventana de muestreo
+es de ~33 s-, `pre-key 27/28`.
+
+| etapa | ult | media | p50 | **p95** |
+| --- | --- | --- | --- | --- |
+| inflate | 7,70 | 4,32 | 4,50 | **8,70** |
+| walk | 0,00 | 0,45 | 0,00 | **3,20** |
+| **rgba** | 0,00 | 0,00 | 0,00 | **0,00** |
+| blit | 0,00 | 0,16 | 0,10 | **0,50** |
+| otros | 4,00 | 2,37 | 2,50 | **6,00** |
+| decode | 11,70 | 7,14 | 7,30 | **14,80** |
+| **FRAME** | 11,70 | 7,31 | 7,30 | **14,90** |
+| pre-key | 7,00 | 10,20 | 10,80 | **14,10** |
+
+| grilla@fps | rend | p50 | p95 | presupuesto | drops | tarde |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1280x720@15 | gl | 7,30 | **14,90** (verde) | 66,7 | **0** | **0** |
+
+`paridad GL/2D: OK (delta max 0, camino indexado)`.
+
+### Veredicto
+
+**W-20 cumple su criterio con holgura de 4,5x.** El presupuesto a 15 fps es 66,7
+ms y el p95 de decode+render es 14,90: se usa el **22 %**. Drops **0** y frames
+tarde **0** sobre 497 presentaciones (el criterio era < 0,1 %, o sea < 1 drop en
+esta ventana).
+
+Tres cosas que la tabla confirma y que valen mas que el numero global:
+
+1. **`rgba` en 0,00 ms en produccion.** W-18 no era un efecto de banco: con el
+   clip real, en la maquina real, la conversion indice->RGBA **desaparecio** del
+   presupuesto. La GPU recibe indices y resuelve la paleta en el shader.
+2. **El pre-decode no entra al presupuesto.** `pre-key` marca p95 **14,10 ms**,
+   comparable a un frame entero, y aun asi hay **0 drops**: corre en el tiempo
+   muerto, exactamente como se diseno. Publicarlo en una fila aparte fue lo que
+   permitio verificarlo en vez de suponerlo. 27 de 28 keyframes se adelantaron.
+3. **El cuello de botella se movio a `inflate`** (p95 8,70 de los 14,90 del
+   frame, ~58 %). Despues de W-17 y W-18, lo que queda caro es **descomprimir**,
+   no convertir ni dibujar. Es el dato que ordena cualquier optimizacion futura
+   del frontend: `W-21` (dirty en X) toca `walk`, que ya esta en 3,20; el
+   margen grande esta en el bloque comprimido (ver `bench-inflate`).
+
+### Lo que esta medicion NO dice
+
+Es una GPU de PC a 1280@15, no un TV. **No se midio a 1920** ni sobre hardware de
+television, y un TV viejo es mucho mas lento que esta maquina: la holgura de 4,5x
+es justamente el margen que F8 tiene que confirmar que alcanza. Eso **es** F8, no
+un pendiente de F9. Con esto, F9 queda con todos sus criterios medibles cumplidos
+y lo unico que resta para cerrar la fase es **publicar el frontend acelerado**.

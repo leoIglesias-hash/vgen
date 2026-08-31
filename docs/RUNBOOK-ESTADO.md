@@ -24,24 +24,25 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 **F9 (S-8): código completo; falta pantalla.** Orden acordado
 con el operador (Instancia 030): **F9 → F10 → F11 → F8 → DIAG-001**.
 
-1. **F9 tiene todo su código escrito** (`W-16`..`W-20`; `W-21` sigue opcional) y
-   **`W-19` ya está cerrada** (Instancia 036): el operador no distingue `soft` de
-   `nearest`, así que el default sigue siendo `nearest` —1 tap, bit-idéntico— y `soft`
-   queda disponible por video. El ruido que había reportado eran **dos defectos reales**,
-   arreglados en `af6bfff`: la banda subida a la GPU salía del reader anterior tras un
-   intercambio de W-20, y `soft` se activaba en drivers sin `highp`.
-   **Queda una sola medición, del operador:**
-   - **`W-20` — medición en el diagnostic sobre pantalla real:** drops < 0,1 % y p95 de
-     decode+render bajo el presupuesto de frame. En esta máquina no se puede medir (el
-     panel de navegador no compone y `requestAnimationFrame` no dispara nunca), pero **sí
-     en el navegador de la PC del operador**, donde ya verificó `paridad GL/2D: OK`.
-     `?pacing=off` y `?predecode=off` apagan cada pieza para comparar contra el
-     comportamiento anterior sin recompilar nada.
+1. **F9 tiene TODAS sus tareas cerradas y medidas** (`W-16`..`W-20`; `W-21` sigue
+   opcional). `W-19` cerró con el veredicto del operador —no distingue `soft` de
+   `nearest`, así que el default sigue `nearest`, 1 tap y bit-idéntico— y `W-20` con su
+   medición en pantalla real: **p95 14,90 ms contra 66,7 de presupuesto, drops 0**
+   (Instancias 036 y 037). El ruido que el operador había reportado eran **dos defectos
+   reales**, arreglados en `af6bfff`.
+2. **ÚNICO PENDIENTE DE F9: publicar el frontend acelerado.** Hoy `iargen.com/player/`
+   sirve el anterior. Son **6 archivos** (`f1ccfa3~1..HEAD`): `reader.js`, `reader-v2.js`,
+   `render-webgl.js`, `render-canvas2d.js`, `tv-player.html` y el nuevo
+   `diagnostic-player.html`. **Falta el mecanismo**: `publish-player` sólo sabe publicar
+   un `clip.asclv` desde un artifact de `encode`, y la vía manual necesita las manos del
+   operador en Cloudflare (rotar `UPLOAD_TOKEN`, o cargar un pin por archivo). Decidir
+   entre: (a) extender `publish-player` para publicar también archivos del repo, o
+   (b) implementar el `__pins.json` en el bucket que ya estaba anotado como mejora.
+   Con eso publicado, F9 cierra y se escribe su resumen en `ejecutados/`.
    - La comparación `1280 soft` vs **`1920` nativo en el TV** se **movió a F8**, que es la
-     fase de validación en TV físico; sigue decidiéndose **por video**.
-2. **Después de eso:** publicar el frontend acelerado (hoy `iargen.com/player/` sirve el
-   anterior) y recién ahí dar F9 por cerrada. La publicación se hace **al cerrar la
-   fase**, no por tarea.
+     fase de validación en TV físico; sigue decidiéndose **por video**. La medición de
+     W-20 fue en GPU de PC a 1280@15: la holgura de 4,5× es el margen que F8 tiene que
+     confirmar que le alcanza a un televisor.
 3. **F10 (S-9)** — pérdida adaptativa por suavidad: E-25 → E-27 → E-26 → E-28. Ataca el
    degradé escalonado sin devolver el ahorro del near-lossless 8.
 4. **F11 (S-10)** — formato v4: E-30 (LOD horneado, **sin** cambio de formato, medible
@@ -132,7 +133,7 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §3.
 | W-17 | F9 | LUT `Uint32` de paleta en la conversión RGBA | **cerrada 2026-08-31** (`8cecc7b`) | no |
 | W-18 | F9 | textura de índices + paleta en el shader (WebGL) | **implementada 2026-08-31** (`07a94e2`); paridad GL/2D verificada (delta 0) | no |
 | W-19 | F9 | reconstrucción de 4 taps (modo `soft`) + escalado entero de diagnóstico | **CERRADA 2026-08-31** (`07a94e2` + `af6bfff`): el operador **no distingue `soft` de `nearest`** en PC → **default `nearest`** (1 tap, bit-idéntico); `soft` queda disponible por video. El `1280 soft` vs `1920` en TV se mueve a **F8** (Instancia 036) | no |
-| W-20 | F9 | cadencia de presentación y pre-decode del keyframe | **implementada 2026-08-31** (`798203a`+`1cb0e38`); **falta la medición en pantalla real** — se puede hacer en el navegador de la PC del operador, que sí compone | no |
+| W-20 | F9 | cadencia de presentación y pre-decode del keyframe | **CERRADA 2026-08-31** (`798203a`+`1cb0e38`): medida por el operador en pantalla real sobre el clip de producción — **p95 14,90 ms contra 66,7 de presupuesto (22 %), drops 0 y tarde 0 en 497 presentaciones**; `rgba` en 0,00 y `pre-key` p95 14,10 **fuera** del presupuesto sin causar drops (Instancia 037) | no |
 | W-21 | F9 | dirty rect en X | opcional — **candidata a dejar de serlo**: W-17 mostró que en deltas dispersos el costo dominante es barrer todo `dirtyCellBits`, no escribir | no |
 | E-25 | F10 | `--gradient-boost` + mapa de suavidad reutilizable | pendiente | solo con valores ≠ 3.0 |
 | E-27 | F10 | guard anti-banding del trellis espacial | pendiente | sí |
@@ -256,3 +257,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-31 | **W-18 + W-19 implementadas** (Instancia 034, commit `07a94e2`, CI verde): en PIXEL la GPU recibe los **índices** (`LUMINANCE`) y la paleta como textura 256×1; el lookup y la mezcla de 4 taps viven en el shader. Verificado con **contexto WebGL real**: `paridad GL/2D: OK (delta max 0, camino indexado)` y etapa `rgba` en **0,00 ms** con el clip de producción. Decisión tomada acá, que el diseño no fijaba: en `soft` el **backing store sigue al tamaño de presentación** (si midiera lo mismo que la grilla, la mezcla sería un no-op y el estirado lo seguiría haciendo el compositor) | los tres modos de fallar en silencio quedaron con test: `UNPACK_ALIGNMENT` en 1, medio texel al indexar la paleta y `highp` con caída a `mediump`. La textura de índices **nunca** se filtra con LINEAR. **W-19 no se marca cerrada**: su criterio es el veredicto visual del operador en el TV, y eso no lo puede firmar nadie más |
 | 2026-08-31 | **W-20 implementada, F9 con todo su código escrito** (Instancia 035, `798203a` + `1cb0e38`, CI verde). (a) La fase de presentación avanza con el reloj del **display** y se corrige lento contra el audio, que sigue siendo el maestro; un desvío > 2 cuadros resincroniza de una. (b) El próximo **keyframe** se decodifica en el tiempo muerto y se adopta **intercambiando readers**, no copiando celdas. Las dos piezas se apagan con `?pacing=off` y `?predecode=off` | el «buffer alterno de `cells`» del diseño terminó siendo un segundo reader sobre los mismos bytes: cada uno queda internamente consistente, así que no hubo que abrirle a la maquinaria dirty un modo fuera de línea ni tocar el invariante 4. Cuesta otro `cells` (2 MB a 1920) → **anotado para MEM-001**. El CI falló una vez por una aserción que exigía un bloque de texto **contiguo**: se reescribió por contenido y orden, que es lo que la propiedad realmente dice |
 | 2026-08-31 | **Ruido reportado a ojo por el operador → dos defectos reales, y W-19 cerrada** (Instancia 036, commit `af6bfff`, CI verde). El CI estaba en verde y aun así había ruido en pantalla: (a) `_drawIndexed` cacheaba la vista de la banda sucia **solo por rango de filas**, así que tras un intercambio de readers de W-20 subía a la GPU las celdas del **reader anterior** (franjas con imagen de otro momento, a la cadencia de los keyframes); (b) la mezcla de 4 taps de `soft` necesita la fracción de una coordenada de hasta ~1920 texeles, imposible en `mediump`, y la caída a `mediump` era un fallback de compilación: el shader compilaba y dibujaba basura. Ahora la clave del cache incluye el **origen** del buffer y `soft` exige `highp` real (`getShaderPrecisionFormat`), si no dibuja `nearest` y el HUD lo avisa. Con eso puesto el operador vio «se ve igual» en `nearest` **y** en `?rec=soft`, y `paridad GL/2D: OK` en el navegador de su PC | dos lecciones que valen más que el arreglo: cachear por **rango** una vista sobre un buffer reemplazable es un alias silencioso —la identidad del buffer es parte de la clave—, y una caída de precisión es un fallback válido para **compilar** pero una fuente de basura para **calcular**. Consecuencia de producto: si el operador no distingue 4 taps de 1 tap, no se paga → **default `nearest`**, `soft` disponible por video. El `1280 soft` vs `1920` en TV se mueve a **F8**, que es la fase de TV físico; mantenerlo como bloqueo de F9 sería pedirle a esta fase un gate de la siguiente |
+| 2026-08-31 | **W-20 cerrada con medición del operador en pantalla real** (Instancia 037). Clip de producción, `1280x720@15 · webgl/nearest · pacing on`, 497 presentaciones: **p95 de decode+render 14,90 ms contra 66,7 de presupuesto (22 %), drops 0, tarde 0**, `paridad GL/2D OK delta max 0`. Con W-19 cerrada el día anterior por veredicto visual, **F9 queda con todas sus tareas medidas** y su único pendiente es publicar el frontend | tres confirmaciones que valen más que el total: (a) `rgba` marcó **0,00 ms con el clip real** — W-18 no era efecto de banco, la conversión índice→RGBA desapareció del presupuesto; (b) `pre-key` marcó p95 **14,10 ms**, casi un frame entero, **con 0 drops**: el pre-decode corre en tiempo muerto como se diseñó, y publicarlo en fila aparte fue lo que permitió verificarlo en vez de suponerlo; (c) **el cuello de botella se movió a `inflate`** (8,70 de los 14,90 del frame, ~58 %) — después de W-17/W-18 lo caro es descomprimir, no convertir ni dibujar, y eso ordena cualquier optimización futura (`W-21` toca `walk`, ya en 3,20). Lo que la medición NO dice: es GPU de PC a 1280@15, no un TV; la holgura de 4,5× es justo el margen que **F8** debe confirmar |
