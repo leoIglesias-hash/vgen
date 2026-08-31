@@ -2182,3 +2182,78 @@ contenido y orden dentro del cuerpo de la funcion -y de paso cubre lo nuevo: el
 reader de pre-decode y el `ArrayBuffer` del clip tampoco deben quedar
 retenidos-. Un test que compara texto contiguo no verifica una propiedad: obliga
 a reescribirlo cada vez que algo se inserta al lado.
+
+## Instancia 036 - 2026-08-31 - Ruido reportado por el operador: dos defectos reales, y su veredicto visual de W-19
+
+### Como aparecio
+
+El operador probo el frontend acelerado y reporto, sin numeros: «hay mucho ruido
+al activar algunos parametros, asi que parece que no esta saliendo como
+queremos». No habia test rojo: el CI estaba en verde con W-16..W-20 adentro. El
+reporte a ojo encontro lo que la bateria no miraba.
+
+### Defecto 1 - la banda subida a la GPU salia del reader anterior
+
+`_drawIndexed` cachea una **vista** (`subarray`) de la banda sucia de `cells`
+para no crear un objeto por frame (invariante 7). La clave del cache eran solo
+las filas `y0..y1`. W-20 introdujo el **intercambio de readers**: al adoptar el
+keyframe pre-decodificado, `cells` pasa a ser otro `Uint8Array`, pero si la banda
+sucia media igual, la vista vieja seguia viva y se subia a la textura el
+contenido del **reader anterior**. Se ve como franjas con imagen de otro momento,
+apareciendo cada tantos segundos - exactamente la cadencia de los keyframes.
+
+Arreglo: la clave del cache incluye ahora el **origen** (`_subCellsSource !==
+cells`), y se limpia en `init`, `_downgradeToRgba` y `dispose`. Regresion:
+`tests/test_render_indexed.js` seccion 7 dibuja la misma banda con dos `cells`
+distintos y exige que lo subido sea el segundo.
+
+Lo que esto ensena: cachear por **rango** una vista sobre un buffer que puede ser
+reemplazado es un alias silencioso. La identidad del buffer es parte de la clave,
+no un detalle.
+
+### Defecto 2 - `soft` calculando en `mediump`
+
+La reconstruccion de 4 taps de W-19 necesita la parte fraccionaria de la
+coordenada en texeles. A 1920 esa coordenada llega a ~1920,0: en `mediump` (10
+bits de mantisa) la fraccion **ya no existe**, y `fract()` devuelve basura. El
+codigo tenia caida a `mediump` como fallback de compilacion, asi que en un driver
+sin `highp` el shader compilaba **y dibujaba ruido**.
+
+Arreglo: `soft` solo se activa con `highp` real, consultado con
+`getShaderPrecisionFormat(FRAGMENT_SHADER, HIGH_FLOAT).precision > 0`. Si no lo
+hay, `softBlocked = true`, se dibuja `nearest` y el HUD del diagnostic lo dice
+(«soft NO activo: driver sin highp»). `softActive` -no `reconstruction`- es lo
+que gobierna `_targetSize`, para que el backing store no siga a un modo que no se
+esta dibujando. Regresion: seccion 8, con `HIGH_FLOAT` agregado al mock de GL.
+
+Lo que esto ensena: una caida de precision es un fallback valido para **compilar**
+y una fuente de basura para **calcular**. No son la misma decision.
+
+Commit `af6bfff`, CI verde.
+
+### Veredicto visual del operador (W-19), sobre PC
+
+Con el arreglo puesto, el operador miro tres cosas y respondio:
+
+| Que miro | Respuesta |
+| --- | --- |
+| `tv-player.html` (nearest, como hoy) | «se ve igual» - sin ruido, fluido |
+| `tv-player.html?rec=soft` (4 taps) | «se ve igual» - **no distingue soft de nearest** |
+| `diagnostic-player.html`, linea de paridad | `paridad GL/2D: OK` en el navegador de la PC |
+
+Tres conclusiones:
+
+1. **El ruido era de los dos defectos, no del diseno.** Desaparecio con el
+   arreglo, sin tocar el formato ni los bytes.
+2. **W-19 se cierra con `nearest` como default.** Si el operador no distingue la
+   mezcla de 4 taps, no se paga: `nearest` es 1 tap contra 4 y es bit-identico a
+   lo que habia. `soft` queda disponible por video (`?rec=soft`), que es
+   justamente como el operador quiso que se decidan resolucion y reconstruccion.
+3. **La paridad GL/2D quedo verificada tambien fuera de esta maquina**, en un
+   navegador que si compone.
+
+La comparacion `1280 soft` vs `1920 nativo` **en el TV** no se cae: se **mueve a
+F8**, que es la fase de validacion en TV fisico. Mantenerla como bloqueo de F9
+seria pedirle a esta fase un gate que pertenece a la siguiente, y el codigo de F9
+ya esta verificado por otras vias (bench HEAD-vs-baseline, paridad con GL real,
+byte-identidad).
