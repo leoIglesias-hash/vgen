@@ -1639,3 +1639,11 @@ desplegada con todos los cambios adentro (SPARSE diferencial, envelope
 con meta embebida, tile regional 32, CACHE-001). Los subplayers
 conservan los clips v2 como variantes comparables. Sigue F8 (TV físico);
 queda en el operador probar celular/Smart TV.
+
+**Veredicto visual del operador (2026-08-31, post-publicación):** comparó
+la raíz (producto 1280@15 **v3** `dcd6afb6…`) contra `/player/1280-15/`
+(el mismo contenido en **v2** `2a9201bf…`): «perfecto, se ve igual —
+pasá la mejora». La adopción de v3 —hecha por métricas al cierre de
+S-4— queda además CONFIRMADA A OJO: el cambio de formato es invisible,
+como debía (v3 no toca la imagen decidida por el encoder, solo la
+representación en bytes). Instancia 029 cerrada del todo.
