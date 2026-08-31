@@ -28,13 +28,19 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en
    Nada instalado en `outputs/` ni cambiado en los defaults del workflow.
    Hallazgo que guía la decisión: la tasa por celda CAE al subir resolución
    (0,1451 → 0,1144 → 0,1023 B/celda/frame).
-2. **Deploy del player a Cloudflare (pedido 2026-08-30, para sesión NUEVA).** Paquete
-   listo en `outputs/deploy-player/` + `outputs/asciline-player.zip` (57 MB, gitignored):
-   tres players ES5 autocontenidos — `/` = 768 producto, `/1280-15/`, `/1280-12/` (SHAs
-   verificados al bajar del CI). Destino: iargen.com/{algo} con los conectores Cloudflare
-   de la cuenta claude.ai del operador (la sesión del 2026-08-30 no los recibió: se fijan
-   al inicio). Detalle y planes B en la memoria `proximo-deploy-player-cloudflare`.
-   Límite ~25 MB/archivo en Pages/KV: el 1280@15 entra justo; un 1920 requerirá R2.
+2. **Player EN PRODUCCIÓN (deploy cerrado 2026-08-30).** URLs públicas:
+   **`https://iargen.com/player/`** (768 producto `b081f4ba…`),
+   **`/player/1280-15/`** (`2a9201bf…`), **`/player/1280-12/`** (`27ae0019…`); espejo en
+   `https://asciline-player.iargen.workers.dev/`. Infra (todo NUEVO, nada existente se
+   tocó): bucket R2 `asciline-player` (52 objetos, SHA-256 verificado por R2 en cada
+   `put`) + Worker `asciline-player` (file-server con ETag/304, binding `BUCKET`, strip
+   del prefijo `/player`) + ruta `iargen.com/player*` en la zona. Para subir/actualizar
+   clips (p. ej. un futuro 1920, R2 no tiene el límite de 25 MB): rotar el secret
+   `UPLOAD_TOKEN` del worker vía API y hacer `PUT /__upload/<key>` con headers
+   `x-upload-token` y `x-sha256` (el token de esta sesión no se persistió, a propósito).
+   Reproducción verificada en navegador (frames avanzan, logo INT-007 gira, badge
+   `ASCL v2 1280x720 @15fps`); homepage de iargen.com intacto. Queda pendiente que el
+   operador lo pruebe en el celular y en el Smart TV (antesala de F8).
 3. **Después: F6 (S-4)** — revisión única de formato (runbook §3): SPARSE diferencial,
    barrido definitivo de `tile_size` sobre la salida del trellis, `ASCLVID3` con el
    sidecar adentro, nombre versionado/CACHE-001. **INT-005 (parches por época) quedó
@@ -300,4 +306,5 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-30 | **S-7 arranca y el 1280 queda medido el mismo día (Instancia 028, ABIERTA)**: `timeout-minutes` de `encode.yml` 120 → 350 (`2260d21`, CI verde) y dos encodes 1280 con la receta de producto: **@15 fps `2a9201bf…b778` = 24.530.460 B = 63,0 % de la fuente** (35,02 dB, tasa 0,1144 B/celda/frame — CAE 21 % vs 768, la estimación de 79 % era pesimista) y **@12 fps `27ae0019…e828` = 21.196.032 B = 54,4 %** (34,95 dB, err_temporal 0,00766 — el costo de los 12 fps está en el movimiento, no en la imagen; propuesta del operador para abaratar la evaluación). Previews enviados; el 1920 re-estima ~52 MB a 15 fps / ~45 a 12 | decisión ABIERTA del operador (pidió trabajar sobre estos resultados antes de fijar definiciones): (a) veredicto visual 15 vs 12 fps y si la nitidez del 1280 justifica 11,3 → 21–24,5 MB; (b) si se despacha el 1920 y a qué fps. Nada instalado en `outputs/` ni cambiado en defaults del workflow |
 | 2026-08-30 | **Veredicto parcial de S-7 y segundo escalón medido**: el operador aprobó el 1280 («quedó perfecto», y del 12 fps «casi ni se nota la diferencia de frames») y pidió el **1920 @ 10 fps solo para probar** → run 33333170964: **`87160987…8d4e` = 32.838.265 B = 84,3 % de la fuente** (34,81 dB, err_temporal 0,00803, wall 1:02:07, RSS 3,35 GB). La tasa por celda cayó OTRO escalón (0,1144 → 0,1023) a pesar de los 10 fps. En paralelo, a su pedido, el player real quedó empaquetado en `outputs/deploy-player/` (768 + 1280@15 + 1280@12, SHAs verificados) para hostearlo en Cloudflare/iargen.com desde una sesión nueva con su conector (esta no lo recibió: los conectores se fijan al inicio de sesión) | los preview.mp4 validan la CALIDAD (decodificación exacta) pero no el pipeline de reproducción JS — el hosting cubre eso y deja la base para el TV físico de F8. Falta el veredicto visual del 1920@10 y las definiciones finales de S-7; la Instancia 028 sigue ABIERTA |
 | 2026-08-29 | **E-21 adoptada y el SHA de producto se mueve a propósito**: `74be25ef…` → `41c94170…79d5` (+2.040 B, +0,012 %; PSNR/Oklab idénticos; wall −54 %). La regla 5 se preserva en su forma fuerte — la ELECCIÓN de candidatos ahora es idéntica en todos los entornos (zlib-9), cosa que antes NO pasaba: con Zopfli instalado el tag elegido podía diferir del elegido sin Zopfli. La referencia vieja queda como fila histórica congelada, como P-02 en su momento | el emisor cambió (jerarquía de costo); re-encodear desde main reproduce `41c94170…`, no `74be25ef…`. Es la primera tarea de F5 que cambia la salida, anunciada como tal |
+| 2026-08-30 | **Deploy del player a Cloudflare CERRADO en la sesión nueva** (directiva del operador: «de lo que hay en Cloudflare activo no toques nada, solo es agregar»). El repo GitHub resultó privado y el sandbox del conector API tiene egreso bloqueado, así que la vía elegida fue: bucket R2 nuevo `asciline-player` + Worker nuevo `asciline-player` (file-server ES-modules con binding R2, ETag/304, content-types, strip de `/player`) con endpoint `PUT /__upload/<key>` guardado por secret `UPLOAD_TOKEN` de un solo uso; los 52 archivos (57 MB) se subieron desde la máquina local con `curl` y header `x-sha256` — R2 verifica el digest en el `put` (los 3 clips coinciden con `b081f4ba…`/`2a9201bf…`/`27ae0019…`). Ruta agregada `iargen.com/player*`; reproducción verificada en navegador en `iargen.com/player/`, `/player/1280-15/` y `/player/1280-12/`; homepage Pages de iargen.com intacto | los preview.mp4 validan calidad pero no el pipeline JS real; esto lo hostea con URL pública para el celular y deja la base del TV físico (F8). R2 en vez de Pages/KV por el límite de 25 MB (el futuro 1920 entra sin tocar nada). El token no se persistió: para subir de nuevo se rota el secret vía API |
 
