@@ -114,6 +114,22 @@ paridad, no inspección visual) y mejora medida en `bench_render.js`. Beneficia 
 Canvas2D y a WebGL por igual, y es la que hace barata la transparencia de F11-2 (el
 alpha sale de la LUT, sin costo extra por celda).
 
+**CERRADA el 2026-08-31** (`8cecc7b`, CI verde), en `reader-v2.js` (PIXEL) y `reader.js`
+(PIXEL y PAL). Medido con `bench-render` HEAD vs baseline `f1ccfa3` **en la misma
+corrida**: keyframe a 1920 **11,4 → 5,7 ms** (2,0×), tiles densos 6,2 → 3,3 (1,9×),
+delta disperso 1,14 → 0,85 (1,33×).
+
+Lo que quedó fijado y conviene no re-discutir:
+
+- **El destino es el selector del camino** (vista `Uint32` alineada → palabra; Array
+  plano o desalineado → bytes). Eso hace que la paridad se pueda verificar corriendo los
+  dos caminos sobre el **mismo** reader y el mismo frame: `tests/test_reader_palette_lut.js`.
+- **La LUT se cachea por identidad de paleta**, no por frame: las paletas son subvistas
+  inmutables del archivo. Con paleta global se construye una sola vez por reproducción.
+- El delta disperso apenas mejora, y **no por la LUT**: el costo dominante es barrer todo
+  `dirtyCellBits` (n/8 bytes) aunque cambie el 5 % de las celdas. Es el argumento para
+  que **W-21 deje de ser opcional**.
+
 ---
 
 ## 4. W-18 — Textura de índices y paleta en el shader (la apuesta principal)
@@ -264,7 +280,7 @@ cambios localizados.
 | Paso | Tarea | Depende de | Requiere re-encode |
 |---|---|---|---|
 | 1 | **W-16** medición | — | no (**cerrada** 2026-08-31, `f1ccfa3`) |
-| 2 | **W-17** LUT Uint32 | W-16 | no |
+| 2 | **W-17** LUT Uint32 | W-16 | no (**cerrada** 2026-08-31, `8cecc7b`) |
 | 3 | **W-18** textura de índices | W-16, W-17 | no |
 | 4 | **W-19** reconstrucción | W-18 (acopladas) | no |
 | 5 | **W-20** cadencia y pre-decode | W-16 | no |

@@ -1936,3 +1936,85 @@ Paridad OK en los 9 casos.
 W-16 cerrada. Sigue **W-17** (LUT `Uint32` en `reader.js` y `reader-v2.js`),
 que se cierra con salida byte-identica sobre el corpus mas la fila de
 `bench-render` comparando el reader nuevo contra `f1ccfa3` como baseline.
+
+---
+
+## Instancia 033 - 2026-08-31 - W-17 CERRADA: LUT de paleta en Uint32 (hasta 2,2x en la conversion)
+
+Commit `8cecc7b`, regresion en verde. Segunda tarea de F9, medida con el banco
+que dejo W-16.
+
+### Que cambio
+
+La conversion indice->RGBA pasa de **3 lecturas de paleta + 4 escrituras de
+byte** por celda a **1 lectura de LUT + 1 escritura de palabra**, en
+`frontend/reader-v2.js` (modo PIXEL) y `frontend/reader.js` (PIXEL y PAL). Los
+modos RGB y ASCII de v1 no se tocan.
+
+Tres propiedades del diseno, todas exigidas por el contrato legacy:
+
+1. **La endianness se detecta, no se asume.** Una vez por modulo: se escribe un
+   valor conocido en un `Uint32Array` y se lee por su vista de bytes.
+2. **La LUT se construye por PALETA, no por frame.** Las paletas son subvistas
+   inmutables del archivo y solo se reemplazan por asignacion, asi que la
+   identidad del objeto alcanza como clave de cache. En un clip de paleta
+   global se construye una sola vez en toda la reproduccion; con paleta por
+   frame son 256 empaquetados contra ~1 M de celdas, despreciable.
+3. **El fallback de bytes no es opcional.** Si el destino no admite una vista
+   `Uint32` -Array plano, buffer desalineado, motor sin `Uint32Array`- se
+   conserva el camino viejo intacto. El destino ES el selector, y por eso el
+   test de paridad puede correr los dos caminos sobre el mismo reader y el
+   mismo frame (`tests/test_reader_palette_lut.js`): keyframe, delta de celdas
+   exactas, delta de tiles densos, y las variantes alineada y desalineada.
+
+Detalle que quedo fijado: las entradas de la LUT por encima de la paleta se
+llenan con negro opaco, que es exactamente lo que escribia el camino de bytes
+leyendo fuera de rango. Un indice invalido no llega ahi (lo rechaza la pasada
+de validacion), pero la salida no cambia de significado por las dudas.
+
+### Medicion: HEAD vs baseline en la MISMA corrida
+
+Workflow `bench-render`, 40 repeticiones, baseline `f1ccfa3` (el commit de
+W-16, es decir el reader anterior). Comparar dentro de una sola corrida evita
+el ruido de comparar runners distintos.
+
+| grilla | perfil | baseline ms | W-17 ms | mejora |
+|---|---|---|---|---|
+| 768x432 | key | 1,631 | 0,740 | **2,20x** |
+| 768x432 | sparse | 0,228 | 0,202 | 1,13x |
+| 768x432 | tiles | 0,976 | 0,574 | 1,70x |
+| 1280x720 | key | 5,138 | 3,254 | 1,58x |
+| 1280x720 | sparse | 0,564 | 0,455 | 1,24x |
+| 1280x720 | tiles | 2,772 | 2,028 | 1,37x |
+| 1920x1080 | key | 11,429 | 5,728 | **2,00x** |
+| 1920x1080 | sparse | 1,136 | 0,854 | 1,33x |
+| 1920x1080 | tiles | 6,225 | 3,265 | **1,91x** |
+
+Honestidad sobre el ruido: dentro del bloque HEAD las filas `reader` y `lut32`
+son ya el mismo algoritmo, y aun asi difieren hasta un 1,5x entre si en algun
+caso (1280 key: 3,254 contra 2,184). Eso da la escala del ruido del runner y
+dice que las mejoras de ~1,2x no son concluyentes; las de ~2x si. La corrida de
+la regresion del mismo commit, con menos repeticiones, midio 1920 key en 4,872
+ms, coherente con el mismo orden.
+
+### Lectura
+
+- **El keyframe a 1920 baja de 11,4 a 5,7 ms**, y los tiles densos de 6,2 a
+  3,3. Es la mitad del costo de la etapa mas cara del frame, sin tocar un solo
+  byte del formato ni la imagen: la salida es identica byte a byte.
+- **El perfil disperso gana poco (1,1-1,3x) y no es culpa de la LUT**:
+  `fillRGBAChanged` recorre TODO `dirtyCellBits` (n/8 bytes) aunque cambie el
+  5 % de las celdas, asi que el costo dominante es el barrido del bitset, no la
+  escritura. Es el argumento para dejar de tratar a **W-21** como opcional.
+- La fila `bytes` del banco se renombro a `reader`: desde W-17 ya no describe un
+  camino fijo, y su convergencia con `lut32` es justamente la evidencia de que
+  la LUT entro al reader. La comparacion contra el pasado se hace con
+  `bench-render` y un baseline, no con una fila fija.
+
+### Estado
+
+W-17 cerrada. Siguen **W-18 y W-19 juntas** (textura de indices + paleta en el
+shader, y reconstruccion de 4 taps): la textura de indices rompe el modo `soft`
+actual si la reconstruccion no la acompana. El player desplegado en
+`iargen.com/player/` todavia corre el frontend anterior; la publicacion del
+frontend acelerado se hace al cerrar F9, no por tarea.

@@ -111,12 +111,14 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
 Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
 **F9 → F10 → F11 → F8 → DIAG-001**.
 
-- **F9 (S-8) — EN EJECUCIÓN. `W-16` CERRADA (`f1ccfa3`); sigue `W-17`.** Aceleración del
-  frontend sin tocar bytes ni formato. Ya hay banco: `tools/bench_render.js` (corre en
-  `run_all.py`, publica tabla en cada push; workflow `bench-render` para la corrida larga
-  y HEAD-vs-baseline) y `frontend/diagnostic-player.html` (F8-1 adelantada, desglose por
-  etapa con p50/p95). Medido: keyframe a 1920 = **11,0 ms de pura conversión** en runner
-  de CI, y el prototipo de la LUT rinde **1,3×–3,3×**. Sigue: LUT `Uint32` (W-17),
+- **F9 (S-8) — EN EJECUCIÓN. `W-16` (`f1ccfa3`) y `W-17` (`8cecc7b`) CERRADAS; siguen
+  `W-18`+`W-19` juntas.** Aceleración del frontend sin tocar bytes ni formato. Ya hay
+  banco: `tools/bench_render.js` (corre en `run_all.py`, publica tabla en cada push;
+  workflow `bench-render` para la corrida larga y HEAD-vs-baseline) y
+  `frontend/diagnostic-player.html` (F8-1 adelantada, desglose por etapa con p50/p95).
+  La LUT `Uint32` ya está en los dos readers: keyframe a 1920 **11,4 → 5,7 ms**, salida
+  byte-idéntica. **El frontend desplegado en iargen.com todavía es el anterior: la
+  publicación se hace al cerrar F9, no por tarea.** Siguen:
   **textura de índices + paleta en el shader** (W-18, «probarlo cuanto antes»),
   reconstrucción de 4 taps (W-19, acoplada a W-18), cadencia y pre-decode (W-20).
   Motivo: la conversión índice→RGBA cuesta ~14,5 M accesos y 8,3 MB de subida por

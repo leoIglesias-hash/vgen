@@ -21,18 +21,19 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 [`ejecutados/`](ejecutados/README.md) y en el
 [`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
 
-**F9 (S-8) en ejecución; `W-16` cerrada, sigue `W-17`.** Orden acordado con el operador
-(Instancia 030): **F9 → F10 → F11 → F8 → DIAG-001**.
+**F9 (S-8) en ejecución; `W-16` y `W-17` cerradas, siguen `W-18`+`W-19`.** Orden acordado
+con el operador (Instancia 030): **F9 → F10 → F11 → F8 → DIAG-001**.
 
-1. **`W-17` — LUT `Uint32` de paleta, la próxima.** El banco de medición ya existe
-   (`W-16` cerrada, ver abajo), así que W-17 se cierra con dos evidencias: salida
-   **byte-idéntica** sobre el corpus y la fila de `bench_render.js` comparando el reader
-   nuevo contra el anterior (workflow `bench-render`, entrada `baseline`). Después:
-   `W-18` (textura de índices + paleta en el shader — la apuesta principal, «probarlo
-   cuanto antes»), `W-19` (reconstrucción de 4 taps, acoplada a W-18), `W-20` (cadencia
-   y pre-decode). El prototipo de la LUT ya está escrito y verificado en
-   `tools/bench_render.js` (`makeLut`/`lutFull`/`lutChanged`): W-17 es llevarlo al
-   reader con su fallback byte a byte, no inventarlo.
+1. **`W-18` + `W-19`, juntas y las próximas.** Se implementan en el mismo lote porque la
+   textura de índices rompe el modo `soft` actual si la reconstrucción no la acompaña.
+   W-18 es la apuesta principal («probarlo cuanto antes»): subir `cells` como textura
+   `LUMINANCE` y resolver la paleta en el fragment shader, con el camino RGBA actual
+   **conservado como fallback**; W-19 es la reconstrucción de 4 taps (nunca interpolar
+   índices). Cierre: paridad de píxeles con Canvas2D en `nearest` vía `readPixels`, y la
+   comparación del operador en el TV entre 1280 `nearest`, 1280 `soft` y 1920 nativo.
+   Después: `W-20` (cadencia y pre-decode). **Lo ya cerrado de F9:** `W-16` (banco
+   `bench_render.js` + `diagnostic-player.html`) y `W-17` (LUT `Uint32`: el keyframe a
+   1920 bajó de 11,4 a 5,7 ms, salida byte-idéntica).
 2. **F10 (S-9)** — pérdida adaptativa por suavidad: E-25 → E-27 → E-26 → E-28. Ataca el
    degradé escalonado sin devolver el ahorro del near-lossless 8.
 3. **F11 (S-10)** — formato v4: E-30 (LOD horneado, **sin** cambio de formato, medible
@@ -120,11 +121,11 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §3.
 | ID | Fase | Qué | Estado | Δbytes |
 |---|---|---|---|---|
 | W-16 | F9 | banco `bench_render.js` + `diagnostic-player.html` (F8-1 adelantada) | **cerrada 2026-08-31** (`f1ccfa3`) | no |
-| W-17 | F9 | LUT `Uint32` de paleta en la conversión RGBA | **pendiente — próxima** | no |
-| W-18 | F9 | textura de índices + paleta en el shader (WebGL) | pendiente | no |
-| W-19 | F9 | reconstrucción de 4 taps (modo `soft`) + escalado entero de diagnóstico | pendiente | no |
+| W-17 | F9 | LUT `Uint32` de paleta en la conversión RGBA | **cerrada 2026-08-31** (`8cecc7b`) | no |
+| W-18 | F9 | textura de índices + paleta en el shader (WebGL) | **pendiente — próxima, con W-19** | no |
+| W-19 | F9 | reconstrucción de 4 taps (modo `soft`) + escalado entero de diagnóstico | **pendiente — próxima, con W-18** | no |
 | W-20 | F9 | cadencia de presentación y pre-decode del keyframe | pendiente | no |
-| W-21 | F9 | dirty rect en X | opcional | no |
+| W-21 | F9 | dirty rect en X | opcional — **candidata a dejar de serlo**: W-17 mostró que en deltas dispersos el costo dominante es barrer todo `dirtyCellBits`, no escribir | no |
 | E-25 | F10 | `--gradient-boost` + mapa de suavidad reutilizable | pendiente | solo con valores ≠ 3.0 |
 | E-27 | F10 | guard anti-banding del trellis espacial | pendiente | sí |
 | E-26 | F10 | `--near-lossless-shape`: presupuesto modulado por suavidad | pendiente | sí |
@@ -243,3 +244,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-31 | **Limpieza de documentación post-cierre** (pedido del operador: «ordená y limpiá manteniendo el historial, perdiendo lo mínimo posible»): las tablas completas de tareas cerradas (P/E/W/F7/INT-003..007/F6) y las filas de bitácora 2026-08-27..30 se movieron **verbatim** (extracción por rangos de línea, no transcripción) a `ejecutados/2026-08-31-tablas-de-tareas-cerradas.md`; el estado quedó con lo vivo + resumen por carril + referencias de clips intactas (376 → ~180 líneas). El runbook de implementación perdió S-4/F6 y S-7 (cerradas) y quedó solo con F8 + opcionales; se agregó el ejecutado faltante de S-7 + deploy del player; índices y CLAUDE.md al día | cero pérdida: movido, no borrado — la evidencia canónica sigue siendo REGISTRO + ejecutados/; mismo patrón que la poda del 2026-08-30. Las «Referencias de clips» NO se archivan: son consulta activa (regla 5) |
 | 2026-08-31 | **Revisión del plan + dos ideas nuevas anotadas para v4** (Instancia 031): el operador pidió el parecer sobre los diseños y una idea más. Se anotaron (a) **frames de solo-paleta** (E-31 análisis sin formato → F11-5 condicionada: fundidos/flashes como transformada de paleta, ~800 B por frame en vez de cientos de KB) y (b) **paletas por región** (idea del operador: N paletas de 256 con selector por tile, partición sin superposición — la región rica es dueña exclusiva de sus tiles y el fondo queda hueco debajo; gate: saturación real de las 256 en E-25). Descartado el salto a paleta de 512 (rompe el byte por celda: reescribir todos los opcodes, +30-70 % de bytes, doble subida). Ajustes de detalle cableados: E-30 excluye rampas suaves con el mapa de E-25; E-26 se mide contra el producto post-E-27; W-20 pre-decodifica **solo** keyframes | las dos ideas quedan con gate explícito para no relajar canonicidad ni cambiar formato «por si acaso»; lo medido sigue atribuyendo el escalonado a trellis (F10) y estirado fraccionario (W-19), no a falta de colores. El plan de ejecución no cambia: arranca W-16 |
 | 2026-08-31 | **W-16 cerrada: F9 ya tiene banco** (Instancia 032, commit `f1ccfa3`, CI verde). `tools/bench_render.js` mide la conversión índice→RGBA sobre tres grillas × tres perfiles y compara el camino de bytes vigente contra el prototipo LUT `Uint32`; `frontend/diagnostic-player.html` (**F8-1 adelantada**) desglosa inflate/walk/RGBA/blit por frame con p50/p95, drops y tarde. Medición: keyframe a 1920 = **11,0 ms de pura conversión** en runner de CI; la LUT da **1,3×–3,3×** (≈2,2× en keyframe y tiles densos). Paridad byte a byte verificada en los 9 casos | el banco **publica** la tabla y **no** juzga tiempos (el runner comparte CPU: sería un test intermitente); lo que falla el CI es la paridad. La instrumentación vive entera en la página de diagnóstico, envolviendo métodos de la instancia: ningún archivo de producción se modifica para medir, así que lo medido es lo que corre en el TV. W-17 queda justificada con números antes de escribirse |
+| 2026-08-31 | **W-17 cerrada: LUT `Uint32` en los dos readers** (Instancia 033, commit `8cecc7b`, CI verde). Medido con `bench-render` HEAD vs baseline `f1ccfa3` **en la misma corrida**: keyframe a 1920 **11,4 → 5,7 ms** (2,0×), tiles densos 6,2 → 3,3 (1,9×), disperso 1,14 → 0,85 (1,33×). Salida **byte-idéntica**, verificada corriendo los dos caminos sobre el mismo reader y el mismo frame | el destino es el selector del camino (vista `Uint32` alineada → palabra; Array plano o desalineado → bytes), y eso hace que la paridad sea comprobable sin duplicar corpus. La LUT se cachea por identidad de paleta, no por frame. El disperso gana poco porque el costo dominante es barrer todo `dirtyCellBits`: es el argumento para que **W-21 deje de ser opcional** |

@@ -85,11 +85,16 @@ de esta fase cambia el formato ni exige re-encodear.
 
 | ID | Archivo | Acción | Cierre |
 |---|---|---|---|
-| **W-17** | `frontend/reader.js`, `frontend/reader-v2.js` | LUT `Uint32Array(256)` de paleta con endianness detectada una vez; escritura por palabra sobre vista `Uint32` del destino; fallback byte a byte obligatorio. El prototipo verificado ya vive en `tools/bench_render.js` (`makeLut`/`lutFull`/`lutChanged`) | salida **byte-idéntica** sobre el corpus (test de paridad) + fila de `bench-render` contra el baseline `f1ccfa3` |
 | **W-18** | `frontend/render-webgl.js` | índices como textura `LUMINANCE` (subida directa de `cells`) + paleta como textura 256×1 RGBA + lookup en el fragment shader. `UNPACK_ALIGNMENT 1`, corrección de medio texel, `highp` con fallback a `mediump`. Camino RGBA actual **se conserva** como fallback | paridad de píxeles con Canvas2D en modo `nearest` (`readPixels` sobre frame sintético); conversión en CPU eliminada y upload ×4 menor, medidos |
 | **W-19** | `frontend/render-webgl.js`, `frontend/render-canvas2d.js`, `frontend/tv-player.html` | modo `soft` = 4 taps NEAREST + 4 lookups + mezcla en espacio de color (**nunca interpolar índices**); modo `nearest` idéntico a hoy; `fitCanvas` gana escalado entero por query string como herramienta de comparación | el operador compara en el TV 1280 `nearest` / 1280 `soft` / 1920 nativo sobre el mismo video |
 | **W-20** | `frontend/tv-player.html` | presentación anclada a la cadencia del display con corrección lenta contra el audio; pre-decode **solo del próximo keyframe** en el tiempo muerto, a un buffer alterno **fijo** de `cells` (no viola el invariante 7; adelantar deltas exigiría base definida sin romper el invariante 4 y se diseñaría aparte) | en el diagnostic, a 1920: drops < 0,1 % y p95 de decode+render bajo el presupuesto de frame |
 | **W-21** | `frontend/reader-v2.js`, ambos renderers | dirty rect en X (hoy la subida es banda de ancho completo: `x0/x1` no se calculan en ningún lado) | misma imagen; subida medida menor en corpus con cambios localizados. **Opcional dentro de F9** |
+
+**Ya cerradas de F9** (no re-implementar; evidencia en el REGISTRO, Instancias 032 y 033):
+`W-16` (banco + diagnostic) y `W-17` (LUT `Uint32` en los dos readers, salida
+byte-idéntica; keyframe a 1920 de 11,4 a 5,7 ms medido en una sola corrida de
+`bench-render` contra el baseline `f1ccfa3`). El test de paridad de la LUT vive en
+`tests/test_reader_palette_lut.js` y usa el corpus del banco.
 
 Precondición dura **ya cumplida**: `W-16` cerrada el 2026-08-31 (`f1ccfa3`, CI verde) —
 `tools/bench_render.js` (banco de la conversión índice→RGBA; corre en `run_all.py` y
