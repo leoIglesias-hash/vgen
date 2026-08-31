@@ -13,26 +13,40 @@ Reglas de uso:
 4. Toda decisión que desvíe del runbook se anota en la bitácora de abajo con fecha y
    motivo. El runbook no se edita en silencio.
 
-## Próxima acción (actualizado 2026-08-30)
+## Próxima acción (actualizado 2026-08-31)
 
 Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en el
 [`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
 
-1. **S-7 CERRADA (Instancia 028, 2026-08-31).** Los tres escalones aprobados a ojo
+1. **S-4 CERRADA (2026-08-31, Instancia 029 — F6 COMPLETA).** El acto de cierre se
+   ejecutó: encode único del producto **1280@15 en v3 tile=sweep** (run 33352859235,
+   sweep eligió regional 32 con espacial 16, igual que a 768) →
+   **`dcd6afb6…1632a` = 24.458.884 B = 62,8 % de la fuente** (35,02 dB; −71.576 B
+   vs su antecesor v2 `2a9201bf…`). Instalado en `outputs/` (clip + versionado +
+   puntero) y **publicado en iargen.com/player/** (raíz del player = producto:
+   puntero CACHE-001 → `clip.dcd6afb66907.asclv` immutable; fallback `clip.asclv`
+   también actualizado; token rotado y quemado). Reproducción verificada en
+   navegador: badge `ASCL v3 1280x720 @15fps`, frames avanzando, logo INT-007
+   girando. **Pendiente del operador:** probar el player en celular y Smart TV
+   (antesala de F8). Ver la fila S-4 y el Carril F6 para el detalle.
+2. **Siguiente fase: F8 (S-6)** — validación física en TV (p95, MEM-001); F8-2 debe
+   incluir el 1920 (directiva: el front procesa cualquier resolución/fps). INT-005
+   sigue CONDICIONADO a que los gates físicos de F8 fallen para el overlay nativo.
+   Opcionales: E-11, W-15; menor: si se retoma el 960, re-medirlo con refit 5.
+3. **S-7 CERRADA (Instancia 028, 2026-08-31).** Los tres escalones aprobados a ojo
    («quedó perfecto» el 1280@15, «casi ni se nota» el @12, «espectacular» el 1920@10).
-   **Definición del operador: el PRODUCTO pasa a 1280 @15 fps** (`2a9201bf…b778`,
-   24.530.460 B = 63,0 %, 35,02 dB; receta = defaults del workflow + `--cols 1280` en
-   extra). El 1920 no quedó por FLUIDEZ a 10 fps («se pone un poco trabado»), no por
-   imagen; **vuelve como prueba futura a más fps y el front debe procesar cualquier
-   resolución que se le tire** (directiva del operador — hoy 1920×1080 entra holgado
-   en los límites del reader y reproduce en navegador; el TV real se valida en F8-2).
-   768, 1280@12 y 1920@10 quedan como variantes del player. **El re-encode del
-   producto 1280@15 se difirió a propósito al cierre de S-4** (un solo encode, ya en
-   v3 con el tile ganador de F6-2); hasta entonces `outputs/` conserva el 768
-   `b081f4ba…` (v2).
-2. **Player EN PRODUCCIÓN (deploy cerrado 2026-08-30; 1920 agregado el mismo día).**
-   URLs públicas: **`https://iargen.com/player/`** (768 producto `b081f4ba…`),
-   **`/player/1280-15/`** (`2a9201bf…`), **`/player/1280-12/`** (`27ae0019…`),
+   **Definición del operador: el PRODUCTO pasa a 1280 @15 fps.** El 1920 no quedó por
+   FLUIDEZ a 10 fps («se pone un poco trabado»), no por imagen; **vuelve como prueba
+   futura a más fps y el front debe procesar cualquier resolución que se le tire**
+   (directiva del operador — hoy 1920×1080 entra holgado en los límites del reader y
+   reproduce en navegador; el TV real se valida en F8-2). 768, 1280@12 y 1920@10
+   quedan como variantes del player. El re-encode diferido a S-4 **ya se ejecutó**
+   (punto 1).
+4. **Player EN PRODUCCIÓN (deploy cerrado 2026-08-30; 1920 agregado el mismo día;
+   raíz actualizada al producto 1280@15 v3 el 2026-08-31).**
+   URLs públicas: **`https://iargen.com/player/`** (PRODUCTO `dcd6afb6…` 1280@15 v3,
+   vía puntero CACHE-001), **`/player/1280-15/`** (`2a9201bf…` v2),
+   **`/player/1280-12/`** (`27ae0019…`),
    **`/player/1920-10/`** (`87160987…`); espejo en
    `https://asciline-player.iargen.workers.dev/`. Infra (todo NUEVO, nada existente se
    tocó): bucket R2 `asciline-player` (69 objetos, SHA-256 verificado por R2 en cada
@@ -48,7 +62,7 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en
    Ningún token quedó persistido. Reproducción verificada en navegador en las 4
    resoluciones; homepage de iargen.com intacto. Queda pendiente que el operador lo
    pruebe en el celular y en el Smart TV (antesala de F8).
-3. **F6 (S-4) EN CURSO (arrancada 2026-08-30 con el visto del operador).** Orden:
+5. **F6 (S-4) CERRADA (arrancada 2026-08-30, cerrada 2026-08-31).** Orden:
    F6-1 → F6-3 → F6-2 → F6-4. **F6-1 y F6-3 CERRADAS** (filas en Carril F6): el
    formato v3 está completo de punta a punta — SPARSE diferencial gateado por la
    versión del header, envelope `ASCLVID3` de 20 B con el sidecar embebido, espejo JS
@@ -62,25 +76,17 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en
    `6f28a459…8784` (regla 5 ✓; bundle 11.261.986 B = −0,37 % vs producto 768 v2, misma
    calidad) y la diagonal espacial-32 dio peor. La config mixta se expresa con
    `tile=sweep` (determinista): la receta pinneada usa sweep, sin flag nuevo.
-   **EN CURSO — acto de cierre de S-4:** el encode único del producto **1280@15 en
-   v3 con tile=sweep** (run 33352859235, despachado 2026-08-31 03:08 UTC; inputs:
-   `format=v3`, `tile=sweep`, extra `--palette-refit 5 --near-lossless 8 --cols
-   1280`). Cuando termine: bajar el artifact, registrar la fila (regla 3), instalar
-   en `outputs/` (versionado + puntero CACHE-001), publicar al player
-   (idealmente la raíz de iargen.com/player/ pasa a servir el producto 1280@15 vía
-   puntero) y marcar S-4 cerrada con la adopción de v3. **INT-005 sigue CONDICIONADO** a
-   los gates físicos de F8 (dirección del operador 2026-08-30).
-   **Luego F8 (S-6)** — validación física en TV (p95, MEM-001). Opcionales: E-11,
-   W-15. Decisión menor abierta: si el operador retoma el 960, re-medirlo con
-   `--palette-refit 5`.
+   **El acto de cierre se ejecutó** (ver punto 1): producto 1280@15 v3
+   `dcd6afb6…1632a` instalado y publicado — v3 ADOPTADO. **INT-005 sigue
+   CONDICIONADO** a los gates físicos de F8 (dirección del operador 2026-08-30).
 
-**Receta de producto vigente (2026-08-31, S-7 cerrada):** defaults del workflow
-`encode` + **`--cols 1280`** en extra — 1280×720 @15 fps graphic-hq, adaptive
-kmeans-oklab, dither off, zopfli, overlay=off, `--palette-refit 5 --near-lossless 8`
-→ **`2a9201bf…b778`** (24.530.460 B, 35,02 dB, **63,0 % del mp4 fuente**), HOY en v2
-tile 16; el re-encode en v3 con el tile ganador de F6-2 es el acto de cierre de S-4.
-El artefacto instalado en `outputs/` sigue siendo el 768 `b081f4ba…f6a05e`
-(11.304.137 B, 35,10 dB) hasta ese encode.
+**Receta de producto vigente (2026-08-31, S-4 cerrada):** defaults del workflow
+`encode` + **`format=v3`** + **`tile=sweep`** + **`--cols 1280`** en extra —
+1280×720 @15 fps graphic-hq, adaptive kmeans-oklab, dither off, zopfli, overlay=off,
+`--palette-refit 5 --near-lossless 8 --cols 1280` →
+**`dcd6afb6…1632a`** (24.458.884 B, 35,02 dB, **62,8 % del mp4 fuente**; el sweep
+elige regional 32 con trellis espacial 16). Instalado en `outputs/` y servido como
+raíz de iargen.com/player/ vía puntero CACHE-001.
 
 ## Cómo ver lo ya implementado (para no pisarse)
 
@@ -247,7 +253,7 @@ Orden de ejecución: F6-1 → F6-3 → F6-2 → F6-4. El barrido definitivo de `
 | S-1 | merge de F0 | cerrada | 2026-08-27 | historial lineal en el snapshot; equivale al merge |
 | S-2 | habilitar artefactos `tile_size` ≠ 16 | cerrada | 2026-08-27 | W-08 en verde: `ReaderV2` abre los seis tamaños; E-09 puede generar artefactos |
 | S-3 | desbloquear E-10 | cerrada | 2026-08-28 | W-02 estaba en verde desde la sesión 1; E-10 ejecutada y cerrada |
-| S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | en curso | 2026-08-31 | F6-1/2/3/4 cerradas (ver Carril F6); falta SOLO el acto de cierre: encode del producto 1280@15 en v3 tile=sweep (run 33352859235) + instalación/publicación |
+| S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | cerrada | 2026-08-31 | F6-1/2/3/4 cerradas (Carril F6) y acto de cierre ejecutado: producto **1280@15 v3 tile=sweep** = `dcd6afb6…1632a` (24.458.884 B = 62,8 %, 35,02 dB, run 33352859235; sweep eligió regional 32/espacial 16 también a 1280), instalado en `outputs/` y publicado como raíz de iargen.com/player/ (puntero CACHE-001, reproducción v3 verificada en navegador). v3 ADOPTADO como formato de producto |
 | S-5 | runtime del overlay (F7) | cerrada | 2026-08-28 | F7-1..F7-4 + integración en verde; gates de INT-002 cubiertos por la regresión (Instancia 014). Los dos gates físicos (costo p95 y MEM-001 en TV) se miden en F8-2/F8-4, donde el plan ya los prevé con y sin overlay |
 | S-6 | validación física (F8) | pendiente | | |
 | S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | cerrada | 2026-08-31 | Instancia 028: tres escalones aprobados a ojo; **producto = 1280 @15 fps** (`2a9201bf…b778`, 63 % de la fuente; el 1920 descartado por fluidez a 10 fps, no por imagen — vuelve a más fps como prueba futura y el front debe procesar cualquier resolución). Hallazgo central: la tasa por celda CAE al subir resolución (0,1451 → 0,1144 → 0,1023 B/celda/frame). Re-encode del producto diferido al cierre de S-4 (v3 + tile ganador) |
@@ -257,14 +263,25 @@ Orden de ejecución: F6-1 → F6-3 → F6-2 → F6-4. El barrido definitivo de `
 Todos los clips medidos, del vigente al histórico. «Reproducible» = re-encodear desde
 `main` con esos flags devuelve ese SHA byte a byte (regla 5, verificada — nunca supuesta).
 
-**Producto vigente: 768 refit 5, dither off, near-lossless 8 =
-`b081f4ba…f6a05e`** (11.304.137 B, 35,10 dB, Oklab 0,00897, err_temporal 0,00705,
-proxy_banding 0,001587, run 33321490398, instalado en `outputs/` con SHA verificado,
-reproducible con los defaults del workflow).
+**Producto vigente (S-4/S-7 cerradas, 2026-08-31): 1280 @15 fps, formato v3,
+tile=sweep (espacial 16 + regional 32) = `dcd6afb6…1632a`**
+(`dcd6afb669078a5b0d1bf4e4d42cdd2d8497ea70908a3e283183fe7d2431632a`, 24.458.884 B =
+**62,8 % del mp4 fuente**, 35,02 dB, Oklab 0,00901, err_temporal 0,00713,
+proxy_banding 0,001522, run 33352859235, wall 59:54, RSS 1,6 GB; instalado en
+`outputs/` con SHA verificado y publicado en iargen.com/player/ vía puntero
+CACHE-001; reproducible con los defaults del workflow + `format=v3` + `tile=sweep`
++ extra `--palette-refit 5 --near-lossless 8 --cols 1280`).
 
-Barrido S-7 (Instancia 028, decisión abierta): 1280@15 `2a9201bf…b778` (24.530.460 B,
-35,02 dB, run 33325334610) · 1280@12 `27ae0019…e828` (21.196.032 B, 34,95 dB,
-run 33326623591) · 1920@10 `87160987…8d4e` (32.838.265 B, 34,81 dB, run 33333170964).
+Producto anterior 768 (near-lossless 8, v2 tile 16): `b081f4ba…f6a05e` (11.304.137 B,
+35,10 dB, Oklab 0,00897, err_temporal 0,00705, proxy_banding 0,001587, run
+33321490398, reproducible con los defaults pelados del workflow). Su transcodificación
+v3 tile 32 (F6-2): `6f28a459…8784` (bundle 11.261.986 B, misma calidad, byte-idéntica
+en dos runs) · diagonal espacial-32 `8b5d0f1e…e738` (11.276.362 B, peor, descartada).
+
+Barrido S-7 (Instancia 028, cerrada): 1280@15 v2 `2a9201bf…b778` (24.530.460 B,
+35,02 dB, run 33325334610 — antecesor directo del producto vigente) · 1280@12
+`27ae0019…e828` (21.196.032 B, 34,95 dB, run 33326623591) · 1920@10 `87160987…8d4e`
+(32.838.265 B, 34,81 dB, run 33333170964).
 
 Candidatos y filas históricas: near-lossless 6 `db32e8c4…2157` (11.951.807 B, 35,37 dB)
 y 5 `157bccf0…4c44` (12.339.798 B, 35,48 dB), no elegidos · near-lossless 4
@@ -355,3 +372,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-30 | **F6-4 cerrada con la prueba fría/caliente en producción** y el player hosteado actualizado al frontend CI-green: worker `asciline-player` ganó la regla immutable (solo basenames `clip.<hex>.asclv`; aditiva, nada existente la matcheaba), se subieron `outputs/clip.b081f4bab925.asclv` (copia byte-idéntica del producto, SHA verificado por R2) + `clip.current.txt` al player 768, y los 4 players recibieron index/live-player/cache-refresh/reader-v2/reader-factory nuevos (22 PUTs con x-sha256; secret rotado antes y quemado después, sin registrar). Verificado: puntero no-cache+ETag→304, clip versionado immutable a un año con Content-Length exacto, reproducción en navegador vía puntero; los subplayers sin puntero caen limpio al `clip.asclv` histórico | la invalidación pasa a ser POR NOMBRE (cambiar el puntero), no por purga: el TV puede cachear el clip un año sin que una prueba nueva lo deje viejo. Accept-Ranges no se sirve: sin Range por diseño (spec §13.6). El operador puede probar el player exactamente igual que antes — mismo contenido, misma URL |
 
 | 2026-08-31 | **F6-2 cerrada con los runs A/B del barrido 2D** (Instancia 029): run A (33350852865, espacial 16 + sweep regional) reprodujo **byte a byte** el `6f28a459…8784` del sweep original — regla 5 verificada también para el pipeline v3 completo — y run B (33350856477, espacial 32 + sweep regional) reprodujo el `8b5d0f1e…` del acoplado-32, confirmando que esa diagonal es la misma configuración y que es PEOR (+14.376 B). Ganador global: **espacial 16 + regional 32** (bundle 11.261.986 B = −0,37 % vs producto 768 v2, calidad idéntica). Decisión de receta: la config mixta se pinnea con `tile=sweep` (la elección del sweep es determinista) en vez de agregar un flag que decouple los dos ejes — cero código nuevo y el sweep documenta la elección en el log | con la fila de F6-2 la adopción de v3 quedó decidida y **el acto de cierre de S-4 se despachó en el momento**: run 33352859235 = encode único del producto 1280@15 (S-7) en `format=v3` + `tile=sweep` + extra `--palette-refit 5 --near-lossless 8 --cols 1280`. Al terminar: fila en el REGISTRO, instalación en `outputs/` y publicación al player con puntero CACHE-001 |
+| 2026-08-31 | **S-4 CERRADA — v3 adoptado y el producto pasa a 1280@15 v3** (`dcd6afb6…1632a`, run 33352859235, wall 59:54, RSS 1,6 GB): el sweep a 1280 eligió el MISMO ganador que a 768 (regional 32, espacial 16, 58.456 tiles fusionados), y el v3 le ganó 71.576 B a su antecesor v2 `2a9201bf…` con calidad idéntica (35,02 dB). Instalación y publicación en el mismo acto: `outputs/` (clip + versionado + puntero) y subida al player raíz por la vía manual (token rotado vía API, 3 PUTs con `x-sha256` verificado por R2 — clip immutable + puntero + fallback `clip.asclv` actualizado —, token quemado con un valor aleatorio no registrado). Verificación en producción: puntero → `clip.dcd6afb66907.asclv` (Content-Length 24.458.884, immutable 1 año) y reproducción real en navegador (badge `ASCL v3 1280x720 @15fps`, frames avanzando, logo INT-007 girando) | primer v3 en producción: cierra S-4 con UNA sola versión nueva de decoder desplegada y el criterio del operador cumplido (su 1280@15 elegido en S-7, ahora 62,8 % de la fuente). Los subplayers 1280-15/1280-12/1920-10 conservan sus clips v2 como variantes; el operador puede comparar v2 vs v3 en el mismo dominio. Sigue F8 (TV físico) |

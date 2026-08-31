@@ -25,13 +25,13 @@ el TV nunca cuantiza ni decide, solo ejecuta.
 - Los videos de producto **no se commitean a `main`** (`.gitignore` ya lo impone). El
   clip HQ fuente vive local en `inputs/TKN-2443-GANADOR- 15seg-.mp4` y en la rama
   huérfana **`assets`** del repo (solo insumos de encode). Receta de
-  producto vigente (2026-08-31, S-7 cerrada): **1280 @15 fps** = defaults
-  del workflow `encode` (graphic-hq, adaptive kmeans-oklab, dither off,
-  `--palette-refit 5 --near-lossless 8`, zopfli, overlay=off) **+
-  `--cols 1280` en extra** → `2a9201bf…b778` (24.530.460 B, 35,02 dB,
-  **63,0 % del mp4 fuente**), hoy v2 tile 16; el re-encode en v3 con el
-  tile ganador de F6-2 es el acto de cierre de S-4. En `outputs/` sigue
-  instalado el 768 `b081f4ba…` hasta ese encode.
+  producto vigente (2026-08-31, S-4 cerrada): **1280 @15 fps, formato v3,
+  tile=sweep** = defaults del workflow `encode` (graphic-hq, adaptive
+  kmeans-oklab, dither off, zopfli, overlay=off) **+ `format=v3` +
+  `tile=sweep` + extra `--palette-refit 5 --near-lossless 8 --cols
+  1280`** → `dcd6afb6…1632a` (24.458.884 B, 35,02 dB, **62,8 % del mp4
+  fuente**; el sweep elige regional 32 con trellis espacial 16).
+  Instalado en `outputs/` y servido como raíz de iargen.com/player/.
 - **Generar un clip para ver:** workflow `encode` (Actions → encode → Run workflow).
   Encodea desde la rama `assets` con el perfil HQ por defecto y publica `clip.asclv`,
   la fila de `bench_ref`, el SHA-256 y un `preview.mp4` como artifacts descargables.
@@ -77,51 +77,40 @@ Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
 **Cerrado y verificado** (no re-implementar; resumen en `docs/ejecutados/`, porqué en el
 REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
 
-- **F0-F5 y F7 completas.** Encoder: paleta reservada/glifos/sidecar (F1), Zopfli +
-  tile_size 4..32 + keyframes por corte (F2), refit de paleta (F3, solo E-12 adoptado),
-  carril trellis completo (F5: orden canónico, métrica Oklab, jerarquía de costo,
-  temporal, espacial, `--near-lossless`). Frontend: W-01..14 (inflate 2,3×, walk −40%,
-  robustez player, F4). Overlay: runtime F7 (overlay.js + datachannel.js + referencia
-  Python byte-idéntica), INT-003 (parches, reserva 32), INT-004 (texto NATIVO Canvas2D
-  sobre el mismo canvas), INT-006 (fondo sin reserva + textfeed standalone + imagen
-  nativa D7=a), INT-007 (Palatino bold + sombra translúcida + logo girando como ruleta
-  simulada).
-- **Producto vigente:** `b081f4ba…f6a05e` = 11.304.137 B = **29,0 % del mp4 fuente**
-  (35,10 dB) — defaults del workflow `encode` (`extra = --palette-refit 5
-  --near-lossless 8`). El operador adoptó cada escalón de pérdida a ojo (dither off →
-  temporal 4 → near-lossless 8); su criterio: «pérdida mínima aceptable si el ahorro
-  lo vale».
-- **Byte-identidad re-verificada 4 veces** (regla 5); desde E-21 el SHA se movió a
-  propósito (elección de candidatos determinista en todos los entornos).
+- **F0-F7 completas (todas las fases de encoder/frontend/overlay/formato).**
+  Encoder: paleta reservada/glifos/sidecar (F1), Zopfli + tile_size 4..32 +
+  keyframes por corte (F2), refit de paleta (F3, solo E-12 adoptado), carril
+  trellis completo (F5). Frontend: W-01..14 (F4). Overlay: runtime F7, INT-003,
+  INT-004 (texto nativo), INT-006, INT-007 (logo ruleta). **F6 (S-4) CERRADA
+  2026-08-31: formato v3 ADOPTADO** — SPARSE diferencial gateado por versión,
+  envelope ASCLVID3 (20 B) con sidecar embebido, tile ganador espacial 16 +
+  regional 32 (vía `tile=sweep`, estable entre resoluciones), CACHE-001
+  (puntero `clip.current.txt` no-cache/304 → `clip.<sha12>.asclv` immutable).
+- **S-7 CERRADA (Instancia 028):** producto = 1280@15 elegido a ojo; el 1920@10
+  descartado por FLUIDEZ, no por imagen — vuelve a más fps y **el front debe
+  procesar cualquier resolución que se le tire** (directiva del operador). Tasa
+  por celda CAE con la resolución: 0,1451 → 0,1144 → 0,1023 B/celda/frame.
+- **Producto vigente:** `dcd6afb6…1632a` = 24.458.884 B = **62,8 % del mp4
+  fuente** (35,02 dB, 1280×720 @15, v3) — en `outputs/` y como raíz de
+  iargen.com/player/. El operador adoptó cada escalón de pérdida a ojo; su
+  criterio: «pérdida mínima aceptable si el ahorro lo vale».
+- **Player EN PRODUCCIÓN:** `https://iargen.com/player/` (PRODUCTO 1280@15 v3
+  vía puntero CACHE-001), variantes `/player/1280-15/` (v2), `/player/1280-12/`,
+  `/player/1920-10/` (espejo `asciline-player.iargen.workers.dev`). Bucket R2 +
+  Worker `asciline-player`, nada preexistente tocado. Subidas SIN redeploy:
+  rotar `UPLOAD_TOKEN` vía API y `PUT /__upload/<key>` con `x-sha256`; desde CI,
+  workflow `publish-player` (pin por contenido).
+- **Byte-identidad re-verificada** (regla 5) también para el pipeline v3
+  (dos pares de runs byte-idénticos en F6-2).
 
 **En curso / pendiente** (detalle operativo en `RUNBOOK-ESTADO.md` §Próxima acción):
 
-- ✅ **S-7 CERRADA (Instancia 028, 2026-08-31):** tres escalones aprobados a ojo;
-  **producto = 1280 @15 fps** (`2a9201bf…b778`). El 1920@10 se descartó por FLUIDEZ
-  («se pone un poco trabado» a 10 fps), no por imagen («espectacular») — vuelve a más
-  fps como prueba futura y **el front debe procesar cualquier resolución que se le
-  tire** (directiva del operador). 768/1280-12/1920-10 quedan como variantes del
-  player. Tasa por celda: 0,1451 → 0,1144 → 0,1023 B/celda/frame.
-- ✅ **Player EN PRODUCCIÓN (2026-08-30):** `https://iargen.com/player/` (768),
-  `/player/1280-15/`, `/player/1280-12/`, `/player/1920-10/` (espejo
-  `asciline-player.iargen.workers.dev`). Infra 100 % nueva: bucket R2 `asciline-player`
-  + Worker `asciline-player` + ruta `iargen.com/player*` — nada preexistente se tocó.
-  Subidas futuras SIN redeploy: rotar el secret `UPLOAD_TOKEN` vía API y
-  `PUT /__upload/<key>` con `x-sha256`; desde CI, workflow `publish-player`
-  (pin por contenido en el worker, sin secretos en el repo).
-  Falta que el operador lo pruebe en celular / Smart TV (antesala de F8).
-- ▶ **F6 (S-4) EN CURSO (2026-08-30): F6-1, F6-3 y F6-4 CERRADAS.** Formato v3
-  completo (SPARSE diferencial por versión, ASCLVID3 20 B con sidecar embebido,
-  espejo JS, round-trip Python↔JS byte-exacto, spec §14) + CACHE-001 verificado EN
-  PRODUCCIÓN (puntero `clip.current.txt` no-cache/304 → `clip.<sha12>.asclv`
-  immutable; player 768 ya sirve por esa vía, subplayers por fallback). El default
-  de producto sigue v2. **Falta solo F6-2:** barrido de `tile_size` corriendo en
-  Actions (run 33347720448, sweep+v3+receta de producto); con su fila se decide la
-  adopción de v3 y cierra S-4. **INT-005 por época sigue CONDICIONADO** a que los
-  gates físicos de F8 fallen para el overlay nativo (dirección del operador
-  2026-08-30).
-- **Después:** F8 (S-6: TV físico, p95, MEM-001). Opcionales: E-11, W-15. Menor: si
-  se retoma el 960, re-medirlo con refit 5.
+- **Del operador:** probar iargen.com/player/ en celular y Smart TV (antesala
+  de F8); prueba futura del 1920 a más fps.
+- **Siguiente fase: F8 (S-6)** — TV físico, p95, MEM-001; F8-2 incluye el 1920.
+  **INT-005 por época sigue CONDICIONADO** a que los gates físicos de F8 fallen
+  para el overlay nativo (dirección del operador 2026-08-30).
+- Opcionales: E-11, W-15. Menor: si se retoma el 960, re-medirlo con refit 5.
 
 > Docs podados el 2026-08-30: el runbook de implementación solo contiene lo pendiente;
 > los benchmarks/estados históricos se retiraron al historial Git (lista en

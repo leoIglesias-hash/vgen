@@ -1602,3 +1602,40 @@ encode único del producto **1280@15 (S-7) en v3**, inputs `format=v3` +
 `tile=sweep` + extra `--palette-refit 5 --near-lossless 8 --cols 1280`.
 Con su fila: instalación en `outputs/` (clip versionado + puntero
 CACHE-001) y publicación al player. Instancia ABIERTA hasta esa fila.
+
+### Instancia 029 — CIERRE (2026-08-31): el producto 1280@15 v3 en producción
+
+**Fila del encode de cierre (run 33352859235, verbatim de bench_ref):**
+
+| clip.asclv | 24275511 | 24458884 | 0.1140 | 231 | 36 | 9 | ZLIB:9;DELTA:1;DELTA_MASK:153;RKEY_ZLIB:27;RDELTA_RAW:1;RDELTA_ZLIB:40 | 35.02 | 0.00901 | 0.00713 | 0.001522 | dcd6afb669078a5b0d1bf4e4d42cdd2d8497ea70908a3e283183fe7d2431632a |
+
+Wall 59:54, RSS máx 1,6 GB. Del log: «barrido tile_size: 4:24347063 …
+32:24275511 → ganador 32; trellis espacial: presupuesto 8, tile 16,
+58.456 tiles fusionados (577.581 celdas) en 227 frames».
+
+**Lecturas.**
+
+- El sweep a 1280 eligió el MISMO punto que a 768 (regional 32 +
+  espacial 16): la receta pinneada con `tile=sweep` es estable entre
+  resoluciones.
+- **v3 vs v2 en el producto real:** 24.458.884 B contra los 24.530.460 B
+  del `2a9201bf…` (v2 tile 16) = **−71.576 B (−0,29 %)** con la MISMA
+  calidad visual-métrica (35,02 dB; las diferencias en err_temporal y
+  proxy_banding vienen del trellis con tiles regionales 32, mismas
+  magnitudes). El producto queda en **62,8 % del mp4 fuente**.
+- Instalación y publicación en el mismo acto: `outputs/` local (SHA
+  verificado, copia versionada byte-idéntica + puntero) y player de
+  producción — la raíz de iargen.com/player/ sirve ahora el producto por
+  la vía CACHE-001 (puntero → `clip.dcd6afb66907.asclv` immutable;
+  fallback `clip.asclv` actualizado a los mismos bytes). Token rotado y
+  quemado, nada persistido.
+- **Verificación de reproducción real (primer v3 en producción):** badge
+  `ASCL v3 1280x720 @15fps`, frames avanzando, logo INT-007 girando; los
+  404 de `data.txt` son el poll del datachannel (tolerado, INV-7).
+
+**Decisión: S-4 CERRADA y v3 ADOPTADO como formato de producto.** El
+criterio de la fase se cumplió: UNA sola versión nueva de decoder
+desplegada con todos los cambios adentro (SPARSE diferencial, envelope
+con meta embebida, tile regional 32, CACHE-001). Los subplayers
+conservan los clips v2 como variantes comparables. Sigue F8 (TV físico);
+queda en el operador probar celular/Smart TV.
