@@ -218,3 +218,45 @@ adopción).
 
 F11 completo depende de F9 cerrada: la LUT `Uint32` (W-17) es lo que hace que el alpha
 sea gratis, y la textura de paleta (W-18) es lo que lo hace gratis también en WebGL.
+
+## 10. Idea anotada para probar en v4, sin tarea asignada: paletas por región
+
+Idea del operador (2026-08-31), a evaluar **cuando toque hacer v4** y solo si se
+demuestra el problema que resuelve (ver el gate al final).
+
+**Qué es.** Mantener el índice de 1 byte por celda, pero permitir **N paletas de 256**
+en el mismo frame, con un **selector de paleta por tile**: cada tile de la grilla lleva
+1 byte que dice contra qué paleta se resuelven sus índices. Es la versión espacial del
+modo `block` que ya existe en versión temporal. Multiplica los colores simultáneos del
+frame **solo donde hace falta**, sin tocar el peso del plano de índices ni un solo
+opcode — que es exactamente el costo que hace inviable pasar la paleta a 512.
+
+**El punto clave del ahorro: la región rica es dueña exclusiva de sus tiles.** Los
+tiles se **particionan** entre los grupos de paleta, nunca se superponen. Cuando una
+zona rica en colores se separa con su propia paleta, el grupo base **no codifica nada
+debajo de ella**: ahí queda un hueco, no una segunda versión de esas celdas. El ahorro
+corre en las dos direcciones — el grupo base no gasta bytes en describir esa región, y
+sus 256 entradas de paleta tampoco se gastan en los colores de la zona rica, quedando
+enteras para el resto de la imagen. No hay capas ni doble decode: una sola matriz, un
+solo canvas, cada celda se resuelve una única vez (invariante 2 intacto).
+
+**Por qué el TV casi no se entera.** En Canvas2D es elegir qué LUT de W-17 usar por
+tramo de tile (una decisión por tile, no por celda). En WebGL, la textura de paleta de
+W-18 pasa de 256×1 a 256×N y una mini-textura de selectores (una celda por tile, del
+orden de KB) le dice al shader qué fila mirar: un lookup extra por píxel. El selector
+pesa ~KB por keyframe, contra los MB que costaría cualquier índice más ancho.
+
+**Costos conocidos.** (a) Es cambio de formato: el frame carga N paletas + el mapa de
+selectores — por eso viaja en v4, con el mismo despliegue de decoder que ya se paga.
+(b) Si un tile cambia de paleta entre frames, sus índices cambian de significado y hay
+que re-emitirlo entero: la asignación necesita histéresis temporal, el mismo mecanismo
+de `TemporalDitherState` que ya planea usar E-30. (c) El encoder se encarece (asignar
+tiles a grupos es clustering por similitud de color, **numérico, sin segmentación ni
+reconocimiento de objetos** — compatible con el veto del proyecto); ese costo se paga
+offline, como todo.
+
+**Gate para promoverla a tarea.** Solo si E-25 (`--gradient-boost`) muestra que algún
+frame real **satura** las 256 entradas (error de cuantización alto con la paleta
+agotada). Lo medido hasta hoy atribuye el escalonado a trellis espacial (F10) y
+estirado fraccionario (W-19), no a falta de colores; si esas dos vías lo resuelven,
+esta idea queda anotada y no se ejecuta.
