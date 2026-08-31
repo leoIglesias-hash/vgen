@@ -18,6 +18,7 @@
  *   ASCILINEOverlay.attach(reader, meta) -> instancia o null si meta invalida
  *   overlay.beforeSeek()   paso 1: restaurar overlay.base sobre cells
  *   overlay.afterSeek()    pasos 3-5: guardar base, pintar, marcar sucio
+ *   overlay.rebind(reader)  W-22: reapuntar tras un intercambio de readers
  *   overlay.setField(fieldId, value)  overlay.setValues(payload)
  *   overlay.clearField(fieldId)       overlay.clear()      overlay.detach()
  *
@@ -186,6 +187,21 @@
       }
       this._restored[i] = 0;
     }
+    return this;
+  };
+
+  /* W-22: el pre-decode (playloop.js) adopta un reader que decodifico su
+   * keyframe por su cuenta, o sea que sus celdas nunca vieron un parche. El
+   * intercambio es legal solo si el overlay se reapunta ENTRE beforeSeek y
+   * afterSeek: beforeSeek le devuelve la base al reader que se va -que asi
+   * queda sin glifos pegados- y afterSeek guarda base y pinta sobre el que
+   * llega. Por eso restoreValid se apaga: la base guardada pertenece al reader
+   * anterior y restaurarla sobre el nuevo escribiria celdas de otro cuadro.
+   * Los dos readers son del MISMO clip, asi que la paleta reservada que attach
+   * valido sigue siendo la misma. */
+  Overlay.prototype.rebind = function (reader) {
+    this.reader = reader || null;
+    this.restoreValid = false;
     return this;
   };
 

@@ -32,10 +32,37 @@ assert(page.indexOf('src="textlayer.js"') < page.indexOf('src="textfeed.js"'));
 assert.strictEqual(page.match(/<canvas/g).length, 1,
   "INV-1: un canvas, una matriz");
 
-/* orden por frame de INT-001 §9.2: beforeSeek -> seek -> afterSeek */
-assert(/overlay\.beforeSeek\(\);[\s\S]{0,40}reader\.seek\(frame\);[\s\S]{0,40}overlay\.afterSeek\(\);/.test(inline[1]),
+/* orden por frame de INT-001 §9.2: beforeSeek -> seek -> afterSeek. Desde W-22
+ * el seek puede ser un intercambio de readers, pero sigue ENVUELTO por el
+ * overlay y en ese mismo orden. */
+assert(/overlay\.beforeSeek\(\);[\s\S]{0,400}reader\.seek\(frame\);[\s\S]{0,60}overlay\.afterSeek\(\);/.test(inline[1]),
   "el overlay debe envolver al seek en ese orden exacto");
 assert(inline[1].indexOf("drawFrame") >= 0);
+
+/* W-22: la raíz publicada ES esta página, así que la cadencia de W-20 tiene
+ * que llegar acá o no llega al producto. El intercambio de readers va ENTRE
+ * beforeSeek y afterSeek: beforeSeek le devuelve la base al reader que se va y
+ * afterSeek pinta sobre el que llega, que decodificó su keyframe sin ver un
+ * solo parche. */
+assert(page.indexOf('<script src="playloop.js"></script>') >= 0);
+assert(page.indexOf('src="playloop.js"') < page.indexOf('src="slots.js"'),
+  "el motor se carga con los renderers, antes del overlay");
+assert(inline[1].indexOf("window.ASCILINEPlayLoop.create({") >= 0);
+assert(inline[1].indexOf("engine.target(clockFrames(),reader.header.fps)") >= 0,
+  "el reloj maestro sigue siendo el audio de esta página");
+assert(/adopted=engine\.exchange\(frame,reader\);[\s\S]{0,220}if\(overlay\) overlay\.rebind\(reader\);/.test(inline[1]),
+  "tras el intercambio el overlay tiene que reapuntar al reader adoptado");
+assert(/if\(overlay\) overlay\.rebind\(reader\);[\s\S]{0,120}if\(overlay\) overlay\.afterSeek\(\);/.test(inline[1]),
+  "y el reapunte va ANTES de afterSeek, que es quien pinta");
+assert(inline[1].indexOf("engine.idle(reader,target)") >= 0,
+  "los callbacks que no cambian de cuadro ofrecen su tiempo muerto al motor");
+assert(inline[1].indexOf("engine.attach(api,buf,off,len)") >= 0,
+  "el segundo reader se abre sobre los mismos bytes del clip");
+assert(inline[1].indexOf("engine.resetPacing(lastShown)") >= 0,
+  "al arrancar, la cadencia se engancha donde quedó la presentación");
+assert(inline[1].indexOf('pacing:qs("pacing")!=="off"') >= 0 &&
+  inline[1].indexOf('predecode:qs("predecode")!=="off"') >= 0,
+  "las dos piezas deben poder apagarse desde el TV sin recompilar");
 
 /* INT-004: orden por frame con texto nativo — seekTo (beforeSeek/seek/
  * afterSeek) -> markDirty(texto) -> renderer.draw -> textLayer.draw */

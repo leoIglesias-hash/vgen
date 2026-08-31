@@ -116,11 +116,36 @@
     cancelFrame=function(id){ window.clearTimeout(id); };
   }
   function log(s){ elStatus.textContent=s; }
+  /* Solo interruptores de diagnostico: la fuente del clip NO es parametrizable
+   * por query (esta pagina sirve la raiz publicada). */
+  function qs(name){
+    var m=new RegExp("[?&]"+name+"=([^&]+)").exec(window.location.search);
+    return m?decodeURIComponent(m[1]):null;
+  }
+  /* W-22: el mismo motor que el TV player. La raiz publicada es ESTA pagina,
+   * asi que sin esto la cadencia de W-20 no llegaba al producto. */
+  var engine=window.ASCILINEPlayLoop.create({
+    now:now,
+    pacing:qs("pacing")!=="off",
+    predecode:qs("predecode")!=="off"
+  });
 
-  /* ---- orden por frame de INT-001 (§9.2): el overlay envuelve al seek ---- */
+  /* ---- orden por frame de INT-001 (§9.2): el overlay envuelve al seek ----
+   * W-22: cuando el motor tiene el keyframe adelantado, en vez del seek va el
+   * intercambio de readers. Va ENTRE beforeSeek y afterSeek a proposito:
+   * beforeSeek le devuelve la base al reader que se va y afterSeek pinta sobre
+   * el que llega, que decodifico su keyframe sin ver un solo parche. */
   function seekTo(frame){
+    var adopted;
     if(overlay) overlay.beforeSeek();
-    reader.seek(frame);
+    adopted=engine.exchange(frame,reader);
+    if(adopted){
+      reader=adopted;
+      if(renderer && renderer.reader) renderer.reader=reader;
+      if(overlay) overlay.rebind(reader);
+    } else {
+      reader.seek(frame);
+    }
     if(overlay) overlay.afterSeek();
   }
   /* INT-004: las cajas de texto se marcan sucias DESPUES del seek (el seek
@@ -488,6 +513,9 @@
     reader=api.parse(buf,off,len);
     pickRenderer();
     reader.decodedIndex=-1;
+    /* W-22: segundo reader sobre los MISMOS bytes para adelantar keyframes.
+     * INV-7: si no se puede crear, el player sigue igual que antes. */
+    engine.attach(api,buf,off,len);
     drawFrame(0); lastShown=0;
     elPlay.disabled=false;
     var h=reader.header;
@@ -515,10 +543,13 @@
     bundleMeta=metaLen?new Uint8Array(buf,headerSize+asclLen+audioLen,metaLen):null;
     openAscl(buf,headerSize,asclLen);
   }
-  function frameNow(){
+  /* Posicion segun el reloj maestro (el audio, si hay) en frames fraccionarios;
+   * el motor decide con eso el instante de cada cuadro (W-20 a). */
+  function clockFrames(){
     var t=hasAudio?audio.currentTime:(now()-startT)/1000;
-    return Math.floor(t*reader.header.fps);
+    return t*reader.header.fps;
   }
+  function frameNow(){ return engine.target(clockFrames(),reader.header.fps); }
   function loop(){
     if(!playing) return;
     var target=frameNow(), n=reader.header.nFrames;
@@ -532,12 +563,17 @@
         return;
       }
       lastShown=target;
+    } else {
+      /* Callback que no cambia de cuadro: tiempo muerto para adelantar el
+       * proximo keyframe (W-20 b). */
+      engine.idle(reader,target);
     }
     raf=requestFrame(loop);
   }
   function start(){
     playing=true; elPlay.textContent="Pause";
     startT=now()-(lastShown/reader.header.fps)*1000;
+    engine.resetPacing(lastShown);
     if(hasAudio){ audio.play(); }
     raf=requestFrame(loop);
   }

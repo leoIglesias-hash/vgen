@@ -474,4 +474,62 @@ var META = SLOTS.ASCL_parseSlots(new Uint8Array(sidecar), COLS, ROWS, FRAMES,
   overlay.detach();
 }());
 
+/* W-22: el pre-decode adopta un reader que decodificó su keyframe por su
+ * cuenta, así que sus celdas nunca vieron un parche. El intercambio es legal
+ * sólo si el overlay se reapunta ENTRE beforeSeek y afterSeek. Lo que se exige
+ * acá es que adoptar y no adoptar den exactamente las mismas celdas. */
+(function testRebindTrasIntercambioDeReaders() {
+  var keyA = Buffer.alloc(16), keyB = Buffer.alloc(16), i;
+  for (i = 0; i < 8; i++) { keyA[i * 2] = SOLID; keyA[i * 2 + 1] = 1; }
+  for (i = 0; i < 8; i++) { keyB[i * 2] = SOLID; keyB[i * 2 + 1] = 2; }
+  /* frame 2 es keyframe: es lo único que el pre-decode adelanta. */
+  var clip = makeV2([
+    block(KEY_RAW, palette256(), keyA),
+    block(DELTA_RAW, null, Buffer.from([SKIP, 8])),
+    block(KEY_RAW, null, keyB)
+  ], COLS, ROWS, 256);
+  var shown = ASCLV2.parse(clip.buffer, clip.byteOffset, clip.byteLength);
+  var spare = ASCLV2.parse(clip.buffer, clip.byteOffset, clip.byteLength);
+  var ref = ASCLV2.parse(clip.buffer, clip.byteOffset, clip.byteLength);
+  var previous = ASCLV2.parse(clip.buffer, clip.byteOffset, clip.byteLength);
+  var plain = ASCLV2.parse(clip.buffer, clip.byteOffset, clip.byteLength);
+  var meta = SLOTS.ASCL_parseSlots(new Uint8Array(sidecar), COLS, ROWS, null,
+    RESERVED_RGB);
+  var overlay = OVERLAY.attach(shown, meta);
+  var plainOverlay = OVERLAY.attach(plain, meta);
+  var f;
+  assert.ok(overlay && plainOverlay, "attach sobre los dos ReaderV2");
+  assert.strictEqual(shown._isKey(2), true);
+  overlay.setValues("0512");
+  plainOverlay.setValues("0512");
+
+  step(overlay, shown, 0);
+  step(overlay, shown, 1);
+
+  /* El reader de repuesto adelanta el keyframe sin overlay: video limpio. */
+  spare.seek(2);
+  ref.seek(2);
+  sameCells(spare, Buffer.from(ref.cells), "el adelantado trae el video limpio");
+
+  /* La adopción, en el orden exacto de INT-001 §9.2 con el reapunte en medio. */
+  overlay.beforeSeek();
+  overlay.rebind(spare);
+  overlay.afterSeek();
+  sameCells(spare, composeExpected(ref.cells, 2, [0, 5, 1, 2]),
+    "tras el intercambio el overlay pinta sobre el reader adoptado");
+
+  /* El desplazado queda con su base devuelta: sin glifos pegados. */
+  previous.seek(1);
+  sameCells(shown, Buffer.from(previous.cells),
+    "la restauración corrió antes del cambio: el reader que se va queda limpio");
+
+  /* Y el gate que importa: el camino con pre-decode y el camino sin él tienen
+   * que terminar en las MISMAS celdas. */
+  for (f = 0; f < 3; f++) { step(plainOverlay, plain, f); }
+  sameCells(spare, Buffer.from(plain.cells),
+    "adoptar o no adoptar da exactamente las mismas celdas");
+  overlay.detach();
+  plainOverlay.detach();
+}());
+
 console.log("OK test_overlay_runtime");

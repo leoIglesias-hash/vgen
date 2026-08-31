@@ -35,8 +35,22 @@ assert(page.indexOf("w.dispose(true)") >= 0,
 assert(inline[1].indexOf("qs(\"src\")") < 0 && inline[1].indexOf("?src=") < 0 &&
   /var src=DEFAULT_SRC;/.test(inline[1]),
   "sin ?src= arbitrario: la carga automatica usa solo la ruta estable");
-assert(/try \{\s*reader\.seek\(target\);\s*renderer\.draw\(reader\);\s*\} catch/.test(inline[1]),
+assert(/try \{[\s\S]{0,320}reader\.seek\(target\);[\s\S]{0,40}renderer\.draw\(reader\);\s*\} catch/.test(inline[1]),
   "el loop debe capturar excepciones de seek/draw");
+
+/* W-22: el motor compartido tambien acá. Esta es la página de laboratorio: si
+   midiera con otra cadencia, comparar renderers acá no diría nada del
+   producto. */
+assert(page.indexOf('<script src="playloop.js"></script>') >= 0);
+assert(page.indexOf('src="playloop.js"') < page.indexOf("<script>"),
+  "playloop.js se carga antes del inline que lo usa");
+assert(inline[1].indexOf("window.ASCILINEPlayLoop.create({ now:now })") >= 0);
+assert(inline[1].indexOf("engine.target(clockFrames(),reader.header.fps)") >= 0);
+assert(/adopted=engine\.exchange\(target,reader\);[\s\S]{0,140}renderer\.reader=reader;/.test(inline[1]),
+  "adoptar el keyframe adelantado reapunta el renderer al reader adoptado");
+assert(inline[1].indexOf("engine.idle(reader,target)") >= 0,
+  "los callbacks que no cambian de cuadro ofrecen su tiempo muerto al motor");
+assert(inline[1].indexOf("engine.attach(readerAPI,buf,byteOffset,byteLength)") >= 0);
 assert(inline[1].indexOf("stop();") >= 0 &&
   inline[1].indexOf("Error de reproduccion") >= 0,
   "un frame corrupto debe detener el loop y pausar el audio");

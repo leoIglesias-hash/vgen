@@ -89,6 +89,11 @@
 
   function log(s){ elStatus.textContent=s; }
 
+  // W-22: la misma cadencia y el mismo pre-decode que el resto de las paginas.
+  // Esta es la de laboratorio, pero si midiera con otro motor las comparaciones
+  // que se hacen aca no dirian nada del producto.
+  var engine=window.ASCILINEPlayLoop.create({ now:now });
+
   function makeBlob(parts,type){
     try { return new Blob(parts,{type:type}); }
     catch(err){
@@ -150,6 +155,7 @@
   function openAscl(buf,byteOffset,byteLength){
     var readerAPI=window.ASCILINEReader || window.ASCL;
     reader=readerAPI.parse(buf,byteOffset,byteLength);
+    engine.attach(readerAPI,buf,byteOffset,byteLength);
     var h=reader.header;
     elRecon.value=(h.flags & FLAG_RECON_SOFT)?"soft":"nearest";
     var used=pickRenderer();
@@ -214,15 +220,19 @@
     openAscl(buf,headerSize,asclLen);
   }
 
-  function frameNow(){
+  // Posicion segun el reloj maestro (el audio, si hay) en frames fraccionarios.
+  function clockFrames(){
     var t = hasAudio ? audio.currentTime : (now()-startT)/1000;
-    return Math.floor(t * reader.header.fps);
+    return t * reader.header.fps;
   }
+
+  function frameNow(){ return engine.target(clockFrames(),reader.header.fps); }
 
   function loop(){
     if(!playing){ return; }
     var target=frameNow();
     var n=reader.header.nFrames;
+    var adopted;
     if(target>=n){
       if(hasAudio){ target=n-1; }
       else { stop(); log("fin."); return; }
@@ -232,7 +242,13 @@
       // W-14: una excepcion de seek/draw no debe dejar el loop vivo con el
       // audio sonando sobre un cuadro congelado.
       try {
-        reader.seek(target);
+        adopted=engine.exchange(target,reader);
+        if(adopted){
+          reader=adopted;
+          if(renderer && renderer.reader) renderer.reader=reader;
+        } else {
+          reader.seek(target);
+        }
         renderer.draw(reader);
       } catch(err){
         stop();
@@ -240,6 +256,8 @@
         return;
       }
       drawn++; lastShown=target;
+    } else {
+      engine.idle(reader,target);
     }
     raf=requestFrame(loop);
   }
@@ -248,6 +266,7 @@
     if(!reader) return;
     playing=true; elPlay.textContent="Pause";
     startT=now() - (lastShown/reader.header.fps)*1000;
+    engine.resetPacing(lastShown);
     if(hasAudio){ audio.play(); }
     raf=requestFrame(loop);
   }
