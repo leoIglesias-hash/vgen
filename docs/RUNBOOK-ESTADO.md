@@ -21,9 +21,22 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 [`ejecutados/`](ejecutados/README.md) y en el
 [`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
 
-**F9 (S-8): tareas cerradas y medidas, frontend publicado; falta portar W-20 a la página
-que sirve la raíz.** Orden acordado
-con el operador (Instancia 030): **F9 → F10 → F11 → F8 → DIAG-001**.
+**F9 (S-8): todo el código listo y fusionado en un solo motor; falta CI en verde y
+publicar.** Orden acordado con el operador (Instancia 030): **F9 → F10 → F11 → F8 →
+DIAG-001**.
+
+> **BLOQUEO ACTIVO — no es del código.** GitHub **no ejecuta Actions**: los tres jobs
+> mueren a los 2 s sin correr un paso y la anotación dice que *«el trabajo no arrancó
+> porque fallaron pagos recientes de la cuenta o hay que subir el límite de gasto»*.
+> Sigue igual después de que el operador se suscribiera a Pro el 2026-08-31 (Instancia
+> 039). **La causa probable es de a qué cuenta se le factura:** el repo es **privado** y
+> su dueño es **`tablerosapp-ctrl`** (cuenta de usuario), mientras que quien empuja es
+> **`leoIglesias-hash`**. Los minutos de un repo privado se le cobran **al dueño del
+> repo**, así que el Pro tiene que estar en `tablerosapp-ctrl` y esa cuenta necesita
+> método de pago válido y límite de gasto > 0. Alternativa gratuita: **repo público**
+> (minutos ilimitados), decisión del operador. Último run verde: `45122df`.
+> **Mientras dure, ninguna tarea nueva se puede marcar `cerrada`** (regla: cierra con CI
+> en verde); quedan `en curso (CI bloqueado)`.
 
 1. **F9 tiene TODAS sus tareas cerradas y medidas** (`W-16`..`W-20`; `W-21` sigue
    opcional). `W-19` cerró con el veredicto del operador —no distingue `soft` de
@@ -37,13 +50,31 @@ con el operador (Instancia 030): **F9 → F10 → F11 → F8 → DIAG-001**.
    `md5`**, overlay/textos/datachannel intactos. Antes se guardó en el repo lo que estaba
    vivo (`deploy/asciline-player/`: `worker.js`, los 15 archivos servidos y el manifiesto
    de las 71 keys) — el worker **no existía fuera de Cloudflare**.
-3. **PENDIENTE PARA CERRAR F9: portar W-20 a `live-player.html`.** El manifiesto probó que
-   `index.html` **es** `live-player.html`, no el `tv-player.html` que el MAPA llama
-   «producción»: la raíz ya ganó W-17 y W-18 (van en los `reader*.js`/`render-*.js`
-   compartidos), pero la cadencia y el pre-decode viven sólo en `tv-player.html`. Por la
-   directiva del operador —«una actualización no pierde nada»— **no** se reemplaza una
-   página por la otra (perdería overlay, textos y datachannel): se porta W-20. Después,
-   resumen en `ejecutados/` y F9 cerrada.
+3. **MOTOR ÚNICO — `W-22`..`W-25` escritas el 2026-08-31, `en curso (CI bloqueado)`.**
+   El manifiesto probó que `index.html` **es** `live-player.html`: la raíz ya tenía W-17
+   y W-18 (van en los `reader*.js`/`render-*.js` compartidos) pero **no** la cadencia,
+   que vivía copiada en `tv-player.html` y en `diagnostic-player.html`. En vez de portar
+   la copia a una tercera página, la maquinaria se extrajo a
+   **[`frontend/playloop.js`](../frontend/playloop.js)** y ahora la comparten **las
+   cuatro** páginas (pedido del operador: «que todos los reproductores tengan todas las
+   mejoras»).
+   - `W-22` motor compartido + `tests/test_playloop.js` (cableado en `run_all.py`).
+   - `W-23` `tv-player` y `diagnostic` pasan al motor; el diagnostic instrumenta los dos
+     readers con el hook `onSpare`, así que ahora **mide literalmente el código que corre
+     en producción**.
+   - `W-24` `live-player` y `player.html` lo estrenan. El intercambio de readers convive
+     con el overlay porque va **entre `beforeSeek` y `afterSeek`**, con
+     `overlay.rebind(reader)` en el medio; el gate nuevo en `test_overlay_runtime` exige
+     que **adoptar y no adoptar den exactamente las mismas celdas**.
+   - `W-25` el gate ES5 descartaba un `<script>` si la coincidencia entera contenía
+     `src=`, no si lo contenía la etiqueta: un `var src=DEFAULT_SRC;` alcanzaba para que
+     `player.html` y `diagnostic-player.html` **no se analizaran nunca**. Corregido.
+   - Verificación posible sin CI, ya hecha: las cuatro páginas cargan el clip de
+     producción servido local **sin errores de consola** (overlay, texto nativo e imagen
+     activos en live-player), y las expresiones del gate ES5 corridas aparte sobre los
+     seis archivos tocados **no dan hallazgos**.
+   - **Falta:** CI en verde → publicar el frontend a las **4 carpetas** (25 keys ahora:
+     las 24 de la Instancia 038 más `playloop.js`) → resumen en `ejecutados/` → F9 cerrada.
    - La comparación `1280 soft` vs **`1920` nativo en el TV** se **movió a F8**, que es la
      fase de validación en TV físico; sigue decidiéndose **por video**. La medición de
      W-20 fue en GPU de PC a 1280@15: la holgura de 4,5× es el margen que F8 tiene que
@@ -144,6 +175,10 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §3.
 | W-19 | F9 | reconstrucción de 4 taps (modo `soft`) + escalado entero de diagnóstico | **CERRADA 2026-08-31** (`07a94e2` + `af6bfff`): el operador **no distingue `soft` de `nearest`** en PC → **default `nearest`** (1 tap, bit-idéntico); `soft` queda disponible por video. El `1280 soft` vs `1920` en TV se mueve a **F8** (Instancia 036) | no |
 | W-20 | F9 | cadencia de presentación y pre-decode del keyframe | **CERRADA 2026-08-31** (`798203a`+`1cb0e38`): medida por el operador en pantalla real sobre el clip de producción — **p95 14,90 ms contra 66,7 de presupuesto (22 %), drops 0 y tarde 0 en 497 presentaciones**; `rgba` en 0,00 y `pre-key` p95 14,10 **fuera** del presupuesto sin causar drops (Instancia 037) | no |
 | W-21 | F9 | dirty rect en X | opcional — **candidata a dejar de serlo**: W-17 mostró que en deltas dispersos el costo dominante es barrer todo `dirtyCellBits`, no escribir | no |
+| W-22 | F9 | motor compartido de cadencia y pre-decode (`frontend/playloop.js`) + `test_playloop.js` | **en curso (CI bloqueado)** `3c46d3d` | no |
+| W-23 | F9 | `tv-player` y `diagnostic` pasan al motor (hook `onSpare`: el diagnostic mide el código de producción) | **en curso (CI bloqueado)** `2753fd1` | no |
+| W-24 | F9 | `live-player` (la raíz publicada) y `player.html` estrenan cadencia y pre-decode; `overlay.rebind` hace legal el intercambio con overlay activo | **en curso (CI bloqueado)** `26b4170` | no |
+| W-25 | F9 | el gate ES5 descartaba páginas enteras por un `src=` en el cuerpo del script | **en curso (CI bloqueado)** `1fe95a9` | no |
 | E-25 | F10 | `--gradient-boost` + mapa de suavidad reutilizable | pendiente | solo con valores ≠ 3.0 |
 | E-27 | F10 | guard anti-banding del trellis espacial | pendiente | sí |
 | E-26 | F10 | `--near-lossless-shape`: presupuesto modulado por suavidad | pendiente | sí |
@@ -269,3 +304,5 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-31 | **W-20 cerrada con medición del operador en pantalla real** (Instancia 037). Clip de producción, `1280x720@15 · webgl/nearest · pacing on`, 497 presentaciones: **p95 de decode+render 14,90 ms contra 66,7 de presupuesto (22 %), drops 0, tarde 0**, `paridad GL/2D OK delta max 0`. Con W-19 cerrada el día anterior por veredicto visual, **F9 queda con todas sus tareas medidas** y su único pendiente es publicar el frontend | tres confirmaciones que valen más que el total: (a) `rgba` marcó **0,00 ms con el clip real** — W-18 no era efecto de banco, la conversión índice→RGBA desapareció del presupuesto; (b) `pre-key` marcó p95 **14,10 ms**, casi un frame entero, **con 0 drops**: el pre-decode corre en tiempo muerto como se diseñó, y publicarlo en fila aparte fue lo que permitió verificarlo en vez de suponerlo; (c) **el cuello de botella se movió a `inflate`** (8,70 de los 14,90 del frame, ~58 %) — después de W-17/W-18 lo caro es descomprimir, no convertir ni dibujar, y eso ordena cualquier optimización futura (`W-21` toca `walk`, ya en 3,20). Lo que la medición NO dice: es GPU de PC a 1280@15, no un TV; la holgura de 4,5× es justo el margen que **F8** debe confirmar |
 | 2026-08-31 | **Frontend de F9 publicado, y directiva del operador sobre qué es una actualización** (Instancia 038). El operador fijó: «**no deberíamos perder cosas con las actualizaciones, porque son eso, actualizaciones; deben ser mejoras de lo que ya tenemos**», y además: guardar en el repo lo vivo de Cloudflare **antes** de tocarlo, y publicar con las herramientas ya cargadas en vez de pedirle pasos manuales. Se hizo primero la copia (`deploy/asciline-player/`: `worker.js` verbatim —**no existía fuera de Cloudflare**—, los 15 archivos servidos con sus `md5` iguales a los `etag` de R2, y `MANIFEST.tsv` con las 71 keys) y después la subida de 24 keys, las 24 verificadas byte-idénticas al repo; los 11 archivos no tocados conservan su `md5` | las dos directivas corrigieron el rumbo: yo proponía reemplazar el `live-player.html` publicado por `tv-player.html` (habría borrado overlay, textos y datachannel) y una ruta por CI con un secret pegado a mano. El manifiesto además desmintió al MAPA: **`index.html` ES `live-player.html`** en las 4 carpetas, y `tv-player.html` no estaba publicado en ninguna key; las variantes tienen copias byte-idénticas del código, así que toda actualización va a las 4 carpetas. Token efímero acuñado por API y **quemado** después (viejo → 403); el workflow `publish-frontend` se descartó y borró porque exigía persistir un secret. Consecuencia abierta: la raíz ganó W-17/W-18 pero **no W-20**, que vive en otra página → se porta, no se reemplaza |
 | 2026-08-31 | **CI BLOQUEADO POR FACTURACIÓN DE GITHUB, no por código.** El commit `5fdfade` (solo docs) falló con los tres jobs muertos **a los 2 segundos y sin ejecutar ningún paso**. La anotación del run lo dice literal: «The job was not started because recent account payments have failed or your spending limit needs to be increased». El último commit que sí corrió y quedó **verde es `45122df`**, que ya incluye todo el código de F9 y la publicación | esto **frena el modelo de trabajo entero**: la regla es que una tarea cierra solo con CI en verde, y esta máquina no tiene Python ni Node para validar local. Mientras no se resuelva el límite de gasto en «Billing & plans», ningún cambio de código se puede dar por cerrado — se puede escribir, no verificar. Acción del operador, fuera del repo. Diagnóstico: los jobs sin pasos y con 2 s de duración son arranque fallido, no test roto; la anotación vive en `check-runs/<job>/annotations`, no en los logs (que vuelven vacíos) |
+| 2026-08-31 | **Un solo motor de reproducción para las cuatro páginas** (Instancia 039, `3c46d3d` + `2753fd1` + `26b4170` + `1fe95a9`, **sin CI: sigue bloqueado**). El operador pidió «fusionar los backgrounds del front para que todos los reproductores tengan todas las mejoras». La cadencia y el pre-decode de W-20 estaban **copiados** en `tv-player.html` y en `diagnostic-player.html`, y **ausentes** en `live-player.html` —que es lo que sirve la raíz publicada— y en `player.html`. Se extrajo la maquinaria a `frontend/playloop.js` (W-22, con `tests/test_playloop.js`), se pasaron las dos páginas que la tenían (W-23) y la estrenaron las dos que no (W-24). Además W-25: el gate ES5 descartaba un `<script>` si la **coincidencia entera** contenía `src=`, así que un `var src=DEFAULT_SRC;` bastaba para que `player.html` y `diagnostic-player.html` no se analizaran nunca | tres cosas que la fusión hizo posibles y la copia impedía: (a) la raíz **por fin** tiene la cadencia, que era el único pendiente de F9; (b) el diagnostic mide **literalmente** el código de producción —antes medía una copia parecida, y una medición sobre otro código no dice nada del producto—; (c) el intercambio de readers convive con el overlay: va **entre `beforeSeek` y `afterSeek`** con `overlay.rebind(reader)` en el medio, porque la base guardada pertenece al reader que se va y restaurarla sobre el que llega escribiría celdas de otro cuadro. El gate nuevo no verifica el mecanismo sino la propiedad: **adoptar y no adoptar tienen que dar exactamente las mismas celdas**. Verificado sin CI hasta donde se puede: las 4 páginas cargan el clip de producción servido local sin errores de consola (overlay, texto e imagen activos), y las expresiones del gate ES5 corridas aparte sobre los 6 archivos tocados no dan hallazgos |
+| 2026-08-31 | **La suscripción a Pro no destrabó el CI, y probablemente sea por a qué cuenta se factura.** El operador se suscribió a Pro; se relanzó el run bloqueado y se empujaron cuatro commits: los tres jobs vuelven a morir a los 2 s con la **misma** anotación de pagos/límite de gasto. Dato que lo explica: el repo es **privado** y su dueño es **`tablerosapp-ctrl`** (cuenta de usuario), mientras que quien empuja es **`leoIglesias-hash`** — GitHub cobra los minutos de un repo privado **al dueño del repo** | de ahí las dos salidas, las dos del operador: Pro + método de pago válido + límite de gasto > 0 **en `tablerosapp-ctrl`**, o hacer el repo **público** (minutos ilimitados). El token de esta sesión (scopes `gist, repo, workflow`) no puede leer la facturación de esa cuenta, así que el diagnóstico es estructural, no medido: se confirma o se descarta abriendo Billing & plans de `tablerosapp-ctrl` |
