@@ -1,4 +1,4 @@
-# Especificación del formato `.ascl` / `.asclv` — v1 y primera revisión v2
+# Especificación del formato `.ascl` / `.asclv` — v1, v2 y revisión v3
 
 > Contenedor binario compacto para reproducir ASCILINE como **VOD pre-encodeado**.
 > El encoder (offline) hace todo el cómputo una vez; el reader (cliente, ES2015-safe)
@@ -57,7 +57,7 @@ Imagen fija = exactamente lo mismo con `n_frames = 1`: header + (ramp si ASCII) 
 | Offset | Tamaño | Tipo | Campo | Descripción |
 |---:|---:|---|---|---|
 | 0  | 4 | char[4] | `magic`   | `"ASCL"` = `0x41 0x53 0x43 0x4C`. Si no coincide → no es `.ascl`. |
-| 4  | 1 | uint8   | `version` | `1` o `2`. V2 inicial solo admite `mode=PIXEL`. |
+| 4  | 1 | uint8   | `version` | `1`, `2` o `3`. V2/V3 solo admiten `mode=PIXEL`; v3 = v2 + SPARSE diferencial (§14). |
 | 5  | 1 | uint8   | `mode`    | `0`=ASCII_BW, `1`=ASCII_PAL, `2`=ASCII_RGB, `3`=PIXEL. Ver §3. |
 | 6  | 1 | uint8   | `flags`   | bitfield. Ver §2.1. |
 | 7  | 1 | uint8   | `fps`     | Cuadros/seg para playback (default 15). `frame = floor(audio.currentTime × fps)`. Para imagen es informativo. |
@@ -225,9 +225,21 @@ ascl       ascl_len bytes
 audio      audio_len bytes, MP3 en la versión actual
 ```
 
-El envelope ocupa siempre **16 bytes** antes de los dos cuerpos. `ASCLVID1` exige un
-interior ASCL v1 y `ASCLVID2` exige un interior ASCL v2. El lector rechaza truncado,
-bytes posteriores a la longitud declarada y desacuerdo entre ambas versiones.
+El envelope v1/v2 ocupa siempre **16 bytes** antes de los dos cuerpos. `ASCLVID1`
+exige un interior ASCL v1 y `ASCLVID2` exige un interior ASCL v2. El lector rechaza
+truncado, bytes posteriores a la longitud declarada y desacuerdo entre ambas versiones.
+
+**`ASCLVID3` (F6-3)** agrega `meta_len` y el sidecar embebido — ver §14.2:
+
+```text
+magic      8 bytes = "ASCLVID3"
+ascl_len   uint32 LE
+audio_len  uint32 LE, 0 si no hay audio
+meta_len   uint32 LE, 0 si no hay overlay
+ascl       ascl_len bytes  (interior ASCL v3 obligatorio)
+audio      audio_len bytes
+meta       meta_len bytes  (sidecar ASCLSLOT, bytes exactos)
+```
 
 El reader crea vistas dentro del mismo `ArrayBuffer`, sin copiar el `.ascl` completo, y
 expone el audio mediante `Blob`/object URL. Un `.ascl` suelto con MP3 externo se conserva
@@ -433,7 +445,7 @@ la paleta RGB activa, estrictamente crecientes y sin repetidos.
 |---:|---|---|
 | `0x00` | `SKIP_RUN ++ run:uvarint` | Reutiliza `run>=1` tiles consecutivos. Es el único comando con corrida; un frame repetido es `SKIP_RUN(tile_count)`, no existe opcode `REPEAT`. |
 | `0x01` | `SOLID ++ color_idx:u8` | Llena **un** tile. No es `SOLID_RUN` y no lleva longitud. |
-| `0x02` | `SPARSE ++ k:uvarint ++ (offset:uvarint,value:u8)[k]` | Escribe cambios puntuales. Offsets locales absolutos, crecientes, dentro del tile; no admite escrituras idénticas. |
+| `0x02` | `SPARSE ++ k:uvarint ++ (offset:uvarint,value:u8)[k]` | Escribe cambios puntuales. Offsets locales absolutos, crecientes, dentro del tile; no admite escrituras idénticas. **En v3 los offsets viajan diferenciales (§14.1).** |
 | `0x03` | `MASK ++ bits[ceil(npix/8)] ++ values[popcount]` | Un valor por bit activo, en orden row-major; la máscara no puede estar vacía. |
 | `0x04` | `PACK1 ++ map[2] ++ codes[ceil(npix/8)]` | Dos índices locales, 1 bit/celda. |
 | `0x05` | `PACK2 ++ count:u8 ++ map[count] ++ codes[ceil(npix/4)]` | `count=3..4`, 2 bits/celda. |
@@ -495,4 +507,54 @@ y carga parcial permanecen fuera de esta revisión.
   permutar conjuntamente paleta e índices para que cada RGB mostrado permanezca idéntico;
   la Instancia 005 registra un ahorro estimado menor a 1% y por eso no es default;
 - intervención matricial, near-lossless, FPS por segmentos, diccionarios y Range;
-- otros tamaños de tile o nuevos opcodes, que requerirían otra revisión de codec.
+- otros tamaños de tile o nuevos opcodes, que requerirían otra revisión de codec
+  (la revisión v3 de §14 cambia solo la codificación de offsets de `SPARSE` y el
+  envelope; no agrega opcodes).
+
+---
+
+## 14. Revisión ASCL v3 / ASCLVID3 — implementada (F6-3, S-4)
+
+V3 agrupa los cambios de formato de la revisión única S-4 para desplegar **una sola**
+versión nueva de decoder. Un reader v2 ya desplegado rechaza tanto el magic
+`ASCLVID3` como `version=3`, limpiamente. Todo lo no listado acá es idéntico a v2:
+header de 32 bytes, CRC con el alcance v2, tags 0..9, tiles 4..32 (byte 26),
+`codec_flags=0x01`, predictores y política de paletas.
+
+### 14.1 SPARSE con offsets diferenciales (F6-1)
+
+En un interior `version=3`, el comando regional `SPARSE` codifica cada offset como
+
+```text
+delta = offset - prior - 1        # prior arranca en -1
+```
+
+de modo que el primer delta coincide con el offset absoluto y los siguientes ahorran
+bytes de uvarint en offsets altos. Como v2 ya exigía offsets estrictamente
+crecientes, el delta nunca es negativo: la propiedad "creciente" pasa a ser
+**estructural** y el decoder solo valida que el offset reconstruido quede dentro del
+tile. Las demás reglas de SPARSE (sin escrituras idénticas, uvarint canónico, solo
+en deltas) no cambian.
+
+**El modo lo declara la versión del header, nunca el stream** (regla 8): un stream
+leído con el modo equivocado puede decodificar en silencio a otra matriz, por eso no
+existe flag de negociación. Referencias: `regional_codec_v2.py`
+(`sparse_differential`), `reader-v2.js` (`_sparseDiff`), gateados por `version`.
+
+### 14.2 Envelope `ASCLVID3` con `meta_len`
+
+Layout en §7: header de **20 bytes** (`magic ++ ascl_len ++ audio_len ++ meta_len`)
+y tres cargas. `meta` transporta el sidecar `ASCLSLOT` (v1 o v2 de slots) **byte a
+byte**, con su propio CRC interno; `meta_len=0` significa video sin overlay. La
+versión del envelope y la del ASCL interior deben coincidir (3↔3) y `meta` solo
+existe en v3. El `clip.slots` externo queda como vía de transición para v1/v2: el
+live-player usa la meta embebida cuando existe y solo si no, pide el sidecar por XHR.
+
+### 14.3 Compatibilidad y verificación
+
+- `reader-factory.js` despacha `version=3` al mismo `ReaderV2`; v1 sigue en `ReaderV1`.
+- Transcodificación: `ascl_v2.py --v3 [--meta sidecar.slots]` o
+  `make_clip --format v3`. El default de producto sigue emitiendo v2 hasta que el
+  operador adopte v3 (S-4).
+- Round-trip Python↔JavaScript byte-exacto verificado por `tests/test_v3_cross.js`
+  sobre fixtures generados por `tests/test_ascl_v2.py` (patrón F7-4).

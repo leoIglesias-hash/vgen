@@ -351,5 +351,66 @@ class ASCLV3TranscodeTest(unittest.TestCase):
                                        emit_version=3, meta=b"m")
 
 
+class ASCLV3CrossFixtureTest(unittest.TestCase):
+    """F6-3 (gate de S-4): genera fixtures ASCLVID3 para tests/test_v3_cross.js.
+
+    Patron de F7-4: run_all.py corre Python ANTES que las suites JS, asi el
+    reader JavaScript decodifica exactamente lo que el decoder de referencia
+    Python produjo, byte a byte, sobre un clip v3 real del transcodificador.
+    """
+
+    def test_generate_cross_fixtures_and_python_reference(self):
+        rng = np.random.RandomState(20260831)
+        cols, rows = 37, 29
+        n = cols * rows
+        pal = bytes(v for i in range(32)
+                    for v in (i * 8, 255 - i * 8, (i * 29) % 256))
+        f0 = rng.randint(0, 32, size=n).astype(np.uint8)
+        frames_cells = [f0]
+        blocks = [make_block(0, pal, f0.tobytes())]
+        previous = f0
+        # Deltas: cambios escasos (dominio SPARSE diferencial), un frame
+        # repetido y un barrido mas denso (mezcla MASK/PACK/SPARSE).
+        for count in (3, 0, 5, 60):
+            current = previous.copy()
+            if count:
+                offsets = np.sort(rng.choice(n, count, replace=False))
+                values = (current[offsets] + 1 +
+                          rng.randint(0, 30, size=count)) % 32
+                values = np.where(values == current[offsets],
+                                  (values + 1) % 32, values).astype(np.uint8)
+                current[offsets] = values
+            changed = np.flatnonzero(current != previous)
+            blocks.append(make_block(2, None, delta_payload(
+                [int(o) for o in changed],
+                [int(current[o]) for o in changed])))
+            frames_cells.append(current)
+            previous = current
+        source = make_v1(blocks, cols, rows, pal_size=32)
+
+        v3_bytes, stats = ascl_v2.transcode_ascl_bytes(source, emit_version=3)
+        # El fixture debe ejercitar de verdad el camino diferencial.
+        self.assertIn("SPARSE", dict(stats["command_counts"]))
+        header, decoded = ascl_v2.decode_ascl_v2_bytes(v3_bytes)
+        self.assertEqual(header["version"], 3)
+        for actual, expected in zip(decoded, frames_cells):
+            np.testing.assert_array_equal(actual["cells"].reshape(-1), expected)
+
+        audio = rng.randint(0, 256, size=333).astype(np.uint8).tobytes()
+        meta = b"ASCLSLOT-cross-meta:" + bytes(range(64))
+        directory = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "fixtures", "v3-generated")
+        os.makedirs(directory, exist_ok=True)
+        ascl_bundle.pack_bytes(
+            v3_bytes, audio, os.path.join(directory, "clip.asclv"), meta=meta)
+        with open(os.path.join(directory, "expected.bin"), "wb") as stream:
+            for cells in frames_cells:
+                stream.write(cells.tobytes())
+        with open(os.path.join(directory, "meta.bin"), "wb") as stream:
+            stream.write(meta)
+        with open(os.path.join(directory, "context.bin"), "wb") as stream:
+            stream.write(struct.pack("<HHI", cols, rows, len(frames_cells)))
+
+
 if __name__ == "__main__":
     unittest.main()
