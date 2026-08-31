@@ -2314,3 +2314,73 @@ television, y un TV viejo es mucho mas lento que esta maquina: la holgura de 4,5
 es justamente el margen que F8 tiene que confirmar que alcanza. Eso **es** F8, no
 un pendiente de F9. Con esto, F9 queda con todos sus criterios medibles cumplidos
 y lo unico que resta para cerrar la fase es **publicar el frontend acelerado**.
+
+## Instancia 038 - 2026-08-31 - Publicacion del frontend de F9, y la directiva de que una actualizacion no pierde nada
+
+### La directiva del operador
+
+Ante la propuesta de cambiar la pagina principal del player, el operador fijo un
+principio: **«no deberiamos perder cosas con las actualizaciones, por que son
+eso, actualizaciones; deben ser mejoras de lo que ya tenemos»**. Y una segunda
+directiva operativa: **guardar en el repo lo que esta vivo en Cloudflare antes de
+actualizarlo**, y hacer la publicacion con las herramientas ya cargadas en vez de
+pedirle pasos manuales.
+
+Las dos corrigieron el rumbo. Yo venia proponiendo (a) reemplazar el
+`live-player.html` publicado por `tv-player.html` -que habria borrado overlay,
+textos y datachannel- y (b) una ruta por CI con un secret pegado a mano.
+
+### Lo que no estaba guardado (y ahora si)
+
+Antes de tocar nada se hizo la copia. Aparecieron tres cosas que **solo existian
+dentro de Cloudflare**:
+
+1. **El `worker.js`** no estaba en ningun lado del repo. Si alguien lo pisaba, no
+   habia copia. Ahora vive en `deploy/asciline-player/worker.js`, verbatim.
+2. **El arbol servido** se armaba en `outputs/deploy-player/`, que esta en
+   `.gitignore`. Los 15 archivos de texto de la raiz se bajaron del bucket y sus
+   13 `md5` coinciden uno a uno con los `etag` de R2.
+3. **El mapa real de keys**: 71 objetos, en `MANIFEST.tsv`.
+
+Dos hechos que el manifiesto probo y que el proyecto tenia mal documentados:
+
+- **`index.html` es `live-player.html`** (mismo `etag` `534abb7e...`), en las
+  cuatro carpetas. Lo que sirve `iargen.com/player/` es el **live-player**, no el
+  `tv-player.html` que el MAPA llama «produccion». `tv-player.html` **no estaba
+  publicado en ninguna key**.
+- **Las tres variantes tienen copias byte-identicas del codigo de la raiz.** Lo
+  unico propio de cada una es su `outputs/clip.asclv`. Toda actualizacion de
+  codigo va a las cuatro carpetas o quedan desparejas.
+
+### La publicacion
+
+Se subieron **24 keys** = (4 archivos que F9 cambio + 2 paginas nuevas) x 4
+carpetas. Procedimiento, entero desde la sesion, sin CI y sin pasos manuales del
+operador:
+
+1. Acunar un `UPLOAD_TOKEN` efimero en el worker por la API de Cloudflare.
+2. `PUT /__upload/<key>` con `x-upload-token` y `x-sha256` (doble verificacion:
+   el que sube calcula el digest y R2 lo recalcula del cuerpo recibido).
+3. Verificar bajando lo servido: **los 24 byte-identicos al repo**.
+4. Quemar el token con un valor aleatorio generado dentro de la llamada y nunca
+   devuelto. Comprobado: el token viejo da **403**, y sin token tambien.
+
+**La actualizacion fue puramente aditiva.** Los 11 archivos restantes conservan
+exactamente el `md5` que tenian antes, comprobado contra el manifiesto: overlay,
+textos y datachannel siguen intactos. Nada se perdio.
+
+Se **descarto** el workflow `publish-frontend` que se habia escrito para la ruta
+por CI: exigia un secret de GitHub, o sea persistir un token, que es justo lo que
+el modelo de trabajo prohibe. Se borro en el mismo commit.
+
+### Lo que la publicacion SI y NO le da al player publico
+
+`live-player.html` carga los mismos `reader*.js` y `render-*.js` que se
+actualizaron, asi que la raiz **gana W-17 y W-18** -LUT de paleta e indices por
+GPU, las dos ganancias grandes- sin ningun cambio de comportamiento.
+
+**No gana W-20**, porque la cadencia y el pre-decode se escribieron en
+`tv-player.html`, que es otra pagina. Aplicando la directiva del operador, la
+salida correcta **no** es reemplazar una por otra -eso perderia overlay y
+textos-: es **portar W-20 a `live-player.html`**, que suma sin restar. Queda como
+la tarea que cierra F9.

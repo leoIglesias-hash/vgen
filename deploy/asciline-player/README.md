@@ -36,10 +36,36 @@ que está en `.gitignore`. Si alguien pisaba el bucket o el worker, no había co
    `tv-player.html` que el mapa del proyecto llama «producción». `tv-player.html` no
    estaba publicado en ninguna key.
 
-## Cómo se actualiza
+## Cómo se actualiza (procedimiento ejecutado el 2026-08-31)
 
-`PUT /__upload/<key>` contra el worker, con `x-upload-token` (== el secret
-`UPLOAD_TOKEN` del worker) y `x-sha256`. El digest se verifica de los dos lados: el
-que sube lo calcula y R2 lo vuelve a calcular del cuerpo recibido. El token se rota
-por la API justo antes de publicar y se **quema** después con un valor aleatorio que
-no se registra en ningún lado.
+No hace falta CI ni pegar secrets a mano: se hace entero desde acá con la API de
+Cloudflare (MCP `cloudflare-api-mcp`) y `curl`. Cuatro pasos:
+
+1. **Acuñar un token efímero** y ponerlo en el worker:
+   `PUT /accounts/<id>/workers/scripts/asciline-player/secrets`
+   con `{name:"UPLOAD_TOKEN", text:"<aleatorio>", type:"secret_text"}`.
+2. **Subir** cada archivo: `PUT <base>/__upload/<key>` con `x-upload-token` y
+   `x-sha256`. El digest se verifica de los dos lados —quien sube lo calcula y R2 lo
+   recalcula del cuerpo recibido—, así que un archivo corrupto en tránsito no entra.
+3. **Verificar** bajando lo servido y comparando SHA-256 contra el repo, y de paso
+   comprobar que el `md5` de lo NO tocado sigue igual al de `MANIFEST.tsv`.
+4. **Quemar** el token: otro `PUT` del secret con un valor aleatorio generado
+   *dentro* de la llamada y nunca devuelto. Comprobar que el token viejo da `403`.
+
+El repo **no guarda ningún token**, ni siquiera cifrado. Por eso no hay workflow de
+publicación de frontend: se intentó uno con un secret de GitHub y se descartó — el
+secret habría quedado persistido, que es justo lo que el modelo de trabajo prohíbe.
+
+## Actualización del 2026-08-31 (F9)
+
+Se subieron **24 keys**: los 4 archivos compartidos que F9 cambió
+(`reader.js`, `reader-v2.js`, `render-webgl.js`, `render-canvas2d.js`) y 2 páginas
+nuevas (`tv-player.html`, `diagnostic-player.html`), **por cada una de las 4
+carpetas**. Los 24 quedaron verificados byte a byte contra el repo.
+
+Fue **puramente aditiva**: los 11 archivos restantes —`live-player.html`,
+`index.html`, `overlay.js`, `textlayer.js`, `slots.js`, `textfeed.js`,
+`datachannel.js`, `inflate.js`, `reader-factory.js`, `tv-controller.js`,
+`cache-refresh.js`— conservan exactamente el `md5` que tenían antes, comprobado
+contra `MANIFEST.tsv`. No se perdió nada: overlay, textos y datachannel siguen
+donde estaban.
