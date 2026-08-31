@@ -2384,3 +2384,88 @@ GPU, las dos ganancias grandes- sin ningun cambio de comportamiento.
 salida correcta **no** es reemplazar una por otra -eso perderia overlay y
 textos-: es **portar W-20 a `live-player.html`**, que suma sin restar. Queda como
 la tarea que cierra F9.
+
+## Instancia 039 - 2026-08-31 - Un solo motor de reproduccion (W-22..W-25) y el CI que Pro no destrabo
+
+### El pedido del operador
+
+Textual: «fusionar los backgrounds (del front) para que todos los reproductores tengan
+todas las mejoras para que puedan correr los nuevos formatos con la mayor eficiencia».
+Antes de eso pidio revisar el CI, porque se habia suscrito a Pro suponiendo que el
+bloqueo era por minutos agotados. Y despues de la fusion queria comparar 1280 vs 1920.
+
+### El estado que encontro esa peticion
+
+W-20 (cadencia + pre-decode) estaba escrita **dos veces**, copiada, dentro de
+`tv-player.html` y de `diagnostic-player.html`. No existia en `live-player.html` -que es
+lo que sirve la raiz publicada, segun probo el manifiesto del bucket en la Instancia
+038- ni en `player.html`. La consecuencia practica: las ganancias que el operador midio
+en su pantalla no estaban llegando al producto, y el diagnostic medía **una copia
+parecida** del codigo de produccion, no el codigo de produccion.
+
+### Lo que se hizo
+
+- **W-22** (`3c46d3d`): la maquinaria se extrajo a `frontend/playloop.js`, con
+  `tests/test_playloop.js` cableado en `run_all.py` en el mismo commit (regla 7). El
+  motor **no es dueno del reader que se muestra**: la pagina se lo pasa en cada llamada
+  y el intercambio queda explicito, porque la pagina tambien tiene que reapuntar su
+  renderer y su overlay. Esconderlo detras de un accessor habria escondido justamente lo
+  que hay que hacer bien.
+- **W-23** (`2753fd1`): `tv-player` y `diagnostic` pasan al motor. El diagnostic
+  instrumenta los DOS readers via el hook `onSpare`, asi que el desglose por etapa sigue
+  siendo valido despues de un intercambio **y** ahora mide literalmente lo que corre en
+  produccion.
+- **W-24** (`26b4170`): `live-player` y `player.html` estrenan cadencia y pre-decode.
+- **W-25** (`1fe95a9`): el gate ES5 descartaba un `<script>` si la **coincidencia
+  entera** contenia `src=`, no si lo contenia la etiqueta. Un `var src=DEFAULT_SRC;`
+  bastaba: `player.html` y `diagnostic-player.html` llevaban tiempo sin analizarse.
+
+### La decision de diseno que costo pensar: intercambio de readers CON overlay
+
+El pre-decode adopta un reader que decodifico su keyframe por su cuenta, o sea que sus
+celdas **nunca vieron un parche**. El overlay guarda la base de las celdas que pinta y
+la devuelve en `beforeSeek`. Si se reapunta mal, hay dos formas de romperlo: restaurar
+sobre el reader nuevo una base que pertenece al viejo (escribe celdas de otro cuadro), o
+dejar `overlay.reader` apuntando al viejo y que `afterSeek` pinte en el reader que ya no
+se muestra.
+
+El orden correcto es uno solo: `beforeSeek` (reader que se va) -> intercambio +
+`overlay.rebind(reader)` -> `afterSeek` (reader que llega). `rebind` apaga
+`restoreValid` porque la base guardada ya no aplica. El reader desplazado queda limpio
+-su base fue devuelta- y cuando vuelva a usarse su proximo trabajo es un **keyframe**,
+que reescribe todas las celdas: no arrastra parches.
+
+El gate nuevo en `test_overlay_runtime.js` no verifica el mecanismo sino la propiedad
+que importa: **adoptar y no adoptar tienen que dar exactamente las mismas celdas**.
+
+### Verificacion posible sin CI
+
+El CI sigue bloqueado, asi que las cuatro tareas quedan `en curso`, no `cerrada`. Lo que
+si se pudo verificar, y se hizo:
+
+- Las **cuatro paginas** cargan el clip de produccion servido local (`serve-local.ps1`)
+  **sin un solo error de consola**, con `playloop.js` en 200 en todas. El diagnostic
+  reporta `paridad GL/2D: OK (delta max 0, camino indexado)`; el live-player levanta
+  overlay, texto nativo e imagen con giro.
+- Las 16 expresiones del gate ES5 (`test_frontend_compatibility.js`), corridas aparte
+  sobre los seis archivos tocados -incluidas las dos paginas que el gate no miraba-:
+  **sin hallazgos**.
+
+Lo que esto NO cubre, y por eso las tareas no se cierran: los tests de pagina y de
+runtime (que sí ejercitan el intercambio con readers falsos), el gate de overlay nuevo y
+la regresion Python entera.
+
+### El CI: Pro no lo destrabo, y el porque probable
+
+Se relanzo el run bloqueado y se empujaron los cuatro commits. Los tres jobs siguen
+muriendo **a los 2 segundos sin ejecutar un paso**, con la misma anotacion literal:
+pagos fallidos o limite de gasto. Dato nuevo que lo explica: el repo es **privado** y su
+dueno es **`tablerosapp-ctrl`** (cuenta de usuario), mientras que quien empuja es
+**`leoIglesias-hash`**. GitHub factura los minutos de un repo privado **al dueno del
+repo**. Si el Pro se contrato en otra cuenta, no aplica.
+
+Salidas, las dos del operador: (a) Pro + metodo de pago valido + limite de gasto > 0 en
+**`tablerosapp-ctrl`**, o (b) repo **publico**, donde los minutos son ilimitados. El
+token de esta sesion (scopes `gist, repo, workflow`) no puede leer la facturacion de esa
+cuenta, asi que el diagnostico es estructural: se confirma abriendo Billing & plans de
+`tablerosapp-ctrl`.
