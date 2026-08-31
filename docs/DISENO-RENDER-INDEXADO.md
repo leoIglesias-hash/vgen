@@ -281,6 +281,23 @@ W-20.
 **Cierre:** en el diagnostic, sobre 1920, drops < 0,1 % y p95 del par decode+render bajo
 el presupuesto de frame. Es el gate `TV-02` de F8 aplicado antes de tiempo, a propósito.
 
+**IMPLEMENTADA el 2026-08-31** (`798203a` + `1cb0e38`); la medición queda pendiente de
+una pantalla real (acá el panel de navegador no compone y `requestAnimationFrame` no
+dispara nunca). `?pacing=off` y `?predecode=off` apagan cada pieza desde el TV.
+
+Dos cosas que conviene saber antes de tocarlo:
+
+- **El «buffer alterno de `cells`» terminó siendo un segundo reader** sobre los mismos
+  bytes, y adoptarlo es **intercambiar** los dos. Cada reader queda internamente
+  consistente —paleta, dirty y `decodedIndex` viajan juntos—, así que no hubo que abrirle
+  a la maquinaria dirty un modo fuera de línea ni tocar el invariante 4. El adoptado trae
+  `dirtyFull` de su propio keyframe, o sea que el renderer sube el cuadro entero. Cuesta
+  otro `cells` (2 MB a 1920) más su scratch: **anotado para MEM-001**.
+- **El primer cuadro tras un reset se engancha al reloj maestro** sin corregir, y la
+  bandera que lo marca es explícita: `performance.now()` puede valer 0 al abrir la
+  página, y con una condición sobre el último tick el enganche se repetía y la corrección
+  nunca arrancaba.
+
 ---
 
 ## 7. W-21 — Dirty rect en X (menor, opcional dentro de F9)
@@ -305,7 +322,7 @@ cambios localizados.
 | 2 | **W-17** LUT Uint32 | W-16 | no (**cerrada** 2026-08-31, `8cecc7b`) |
 | 3 | **W-18** textura de índices | W-16, W-17 | no (**implementada** 2026-08-31, `07a94e2`) |
 | 4 | **W-19** reconstrucción | W-18 (acopladas) | no (**implementada**; falta el veredicto visual del operador) |
-| 5 | **W-20** cadencia y pre-decode | W-16 | no |
+| 5 | **W-20** cadencia y pre-decode | W-16 | no (**implementada**; falta medirla en pantalla real) |
 | 6 | W-21 dirty en X | W-16 | no |
 
 Todo F9 se valida contra el clip que ya está en producción. Es la única fase del

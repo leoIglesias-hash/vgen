@@ -39,8 +39,9 @@ tocar, cómo verificarlo y cuándo una tarea se considera cerrada.
 
 ## 1. Trabajo en curso (definido fuera de este archivo)
 
-- **En ejecución: F9 (S-8)**, con `W-16`, `W-17`, `W-18` y `W-19` ya hechas; queda
-  `W-20`. El detalle vivo y el orden entre fases están en `RUNBOOK-ESTADO.md`
+- **En ejecución: F9 (S-8)**, con `W-16`..`W-20` ya escritas (`W-21` sigue opcional). Lo
+  que falta para cerrarla es **pantalla**: el veredicto visual de `W-19` y la medición de
+  `W-20` en el TV. El detalle vivo y el orden entre fases están en `RUNBOOK-ESTADO.md`
   §Próxima acción.
 - **Del operador:** probar `iargen.com/player/` en celular y Smart TV (antesala de F8).
 
@@ -86,7 +87,6 @@ de esta fase cambia el formato ni exige re-encodear.
 
 | ID | Archivo | Acción | Cierre |
 |---|---|---|---|
-| **W-20** | `frontend/tv-player.html` | presentación anclada a la cadencia del display con corrección lenta contra el audio; pre-decode **solo del próximo keyframe** en el tiempo muerto, a un buffer alterno **fijo** de `cells` (no viola el invariante 7; adelantar deltas exigiría base definida sin romper el invariante 4 y se diseñaría aparte) | en el diagnostic, a 1920: drops < 0,1 % y p95 de decode+render bajo el presupuesto de frame |
 | **W-21** | `frontend/reader-v2.js`, ambos renderers | dirty rect en X (hoy la subida es banda de ancho completo: `x0/x1` no se calculan en ningún lado) | misma imagen; subida medida menor en corpus con cambios localizados. **Opcional dentro de F9** |
 
 **Ya hecho de F9** (no re-implementar; evidencia en el REGISTRO, Instancias 032, 033 y
@@ -106,6 +106,17 @@ de esta fase cambia el formato ni exige re-encodear.
   0,00 ms) y reconstrucción de 4 taps. Contrato con el driver fijado en
   `tests/test_render_indexed.js`. **W-19 no se marca cerrada hasta el veredicto visual
   del operador en el TV** (1280 `nearest` / 1280 `soft` / 1920 nativo).
+- `W-20` **implementada** (`798203a` + `1cb0e38`) — cadencia anclada al display con
+  corrección lenta contra el audio, y pre-decode del próximo keyframe adoptado por
+  **intercambio de readers**. Verificado en `tests/test_tv_player_runtime.js` con reloj y
+  rAF manuales. **No se marca cerrada hasta medirla en pantalla real** (a 1920: drops
+  < 0,1 % y p95 de decode+render bajo el presupuesto); en esta máquina el panel de
+  navegador no compone y `requestAnimationFrame` no dispara. `?pacing=off` y
+  `?predecode=off` apagan cada pieza para comparar.
+
+**Para cerrar F9 falta pantalla, no código.** Después del veredicto del operador: publicar
+el frontend acelerado (hoy `iargen.com/player/` sirve el anterior) y recién ahí cerrar la
+fase con su resumen en `ejecutados/`.
 
 ### F10 — Pérdida adaptativa por suavidad (S-9)
 

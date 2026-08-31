@@ -2107,3 +2107,78 @@ Anotado del entorno: el panel de navegador de esta maquina no compone, asi que
 paridad se pudo medir igual (no depende del loop), pero los percentiles por
 frame necesitan una pantalla real. No es un problema del player: en un TV el
 compositor corre.
+
+---
+
+## Instancia 035 - 2026-08-31 - W-20: cadencia anclada al display y pre-decode del keyframe
+
+Commits `798203a` (implementacion) y `1cb0e38` (correccion de una asercion del
+CI), regresion en verde. Ultima tarea de codigo de F9.
+
+### (a) Judder
+
+Decidir el cuadro con `floor(audio.currentTime * fps)` reparte los frames en
+5/7/6/6 refrescos en vez de 6/6/6/6, porque en TVs viejos `currentTime` avanza a
+saltos gruesos. Ahora la fase avanza con el reloj del **display** y se corrige
+**lento** contra el maestro (2 % del desvio por cuadro); un desvio mayor a 2
+cuadros -seek, loop, stall- resincroniza de una. El audio sigue siendo el reloj
+maestro: lo que deja de decidir es el instante exacto de cada cuadro.
+
+Detalle que costo un bug: el primer cuadro despues de un reset se engancha al
+maestro sin corregir, y la bandera que lo marca es **explicita** porque
+`performance.now()` puede valer 0 justo al abrir la pagina — con una condicion
+sobre `lastTick` el enganche se repetia y la correccion nunca arrancaba.
+
+### (b) Jank de keyframe
+
+Tres de cada cuatro callbacks a 60 Hz para un video de 15 fps solo miran el
+reloj y vuelven a agendar. Ese tiempo ahora adelanta el proximo **keyframe**,
+que no depende del estado actual y por eso es seguro adelantar. Solo se adelanta
+si entra con margen (`slack > costo medido + 4 ms`): un pre-decode que no llega
+a tiempo provoca exactamente el tiron que esto viene a sacar. El costo se mide y
+se recuerda (maximo con decaimiento), no se supone.
+
+**Decision de implementacion:** el «buffer alterno de `cells`» del diseno es, en
+los hechos, un **segundo reader sobre los mismos bytes**, y adoptarlo es
+**intercambiar** los dos readers. Cada uno queda internamente consistente
+-paleta, dirty y `decodedIndex` viajan juntos-, asi que no hay que abrirle un
+modo fuera de linea a la maquinaria dirty ni tocar la transaccionalidad del
+invariante 4. El adoptado trae `dirtyFull` de su propio keyframe, o sea que el
+renderer sube el cuadro entero, que es lo correcto. Cuesta otro `cells` (2 MB a
+1920) mas su scratch de inflate: **anotado para MEM-001**.
+
+Las dos piezas se apagan desde el TV sin recompilar: `?pacing=off` y
+`?predecode=off`.
+
+### Evidencia en CI
+
+`tests/test_tv_player_runtime.js` corre el controlador real en un DOM falso con
+reloj y `requestAnimationFrame` manuales:
+
+- con un reloj maestro a saltos gruesos (audio en escalones de 200 ms, display
+  parejo de 50 ms, 10 fps) la presentacion **nunca salta dos cuadros ni
+  retrocede** y sigue avanzando. Sin pacing la misma secuencia da
+  0,0,0,0,2,2,2,2,4... — el test falla si se revierte;
+- el keyframe siguiente se adelanta en el callback ocioso, **el cuadro
+  presentado sale del reader adelantado** y no se decodifica dos veces;
+- sin keyframe proximo no se adelanta nada «por las dudas».
+
+### Lo que NO cierra todavia
+
+El criterio de cierre de W-20 es del diagnostic **sobre pantalla real**: a 1920,
+drops < 0,1 % y p95 de decode+render bajo el presupuesto de frame. En esta
+maquina no se puede medir: el panel de navegador no compone y
+`requestAnimationFrame` no dispara nunca (verificado: `document.hidden` es false
+y aun asi 0 callbacks en 1,5 s). Queda para el TV, junto con la comparacion
+visual de W-19.
+
+### Fallo de CI del camino, y por que importa
+
+El primer push rompio `test_tv_player_page.js`: una asercion exigia
+`disposeRenderer(true); reader=null; lastShown=-1` como **bloque literal
+contiguo**, y W-20 metio la liberacion del segundo reader en el medio. La
+propiedad que ese test cuida seguia valiendo. Se reescribio para verificar
+contenido y orden dentro del cuerpo de la funcion -y de paso cubre lo nuevo: el
+reader de pre-decode y el `ArrayBuffer` del clip tampoco deben quedar
+retenidos-. Un test que compara texto contiguo no verifica una propiedad: obliga
+a reescribirlo cada vez que algo se inserta al lado.

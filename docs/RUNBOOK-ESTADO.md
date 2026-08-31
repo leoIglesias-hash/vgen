@@ -21,19 +21,25 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 [`ejecutados/`](ejecutados/README.md) y en el
 [`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
 
-**F9 (S-8) en ejecución; solo queda `W-20`.** Orden acordado
+**F9 (S-8): código completo; falta pantalla.** Orden acordado
 con el operador (Instancia 030): **F9 → F10 → F11 → F8 → DIAG-001**.
 
-1. **`W-20` — cadencia de presentación y pre-decode del keyframe, la próxima.** Es lo
-   último de F9. **Lo ya hecho de la fase:** `W-16` (banco + diagnostic), `W-17` (LUT
-   `Uint32`: keyframe a 1920 de 11,4 a 5,7 ms, byte-idéntico) y `W-18`+`W-19` (textura de
-   índices con paleta en el shader — paridad GL/2D con delta **0** y conversión en CPU en
-   **0,00 ms** medidos con GL real — más la reconstrucción de 4 taps).
-2. **Pendiente del operador para cerrar `W-19`:** comparar en el **TV**, sobre el mismo
-   video, `1280 nearest` (hoy), `1280 soft` (`?rec=soft`) y `1920 nativo`. La pregunta
-   que responde es si el 1920 vale su costo o si un 1280 bien reconstruido lo iguala; y
-   se responde **por video**, no de una vez para siempre. `?scale=int` fuerza escalado
-   entero con letterbox para ver el filtro sin el remuestreo fraccionario encima.
+1. **F9 tiene todo su código escrito** (`W-16`, `W-17`, `W-18`, `W-19` y `W-20`; `W-21`
+   sigue opcional). Lo que falta para cerrar la fase **no es código: es pantalla.** Dos
+   cosas, las dos del operador y las dos en el mismo lugar:
+   - **`W-19` — comparación visual en el TV**, sobre el mismo video: `1280 nearest`
+     (como hoy), `1280 soft` (`?rec=soft`) y `1920 nativo`. La pregunta que responde es
+     si el 1920 vale su costo o si un 1280 bien reconstruido lo iguala; **se responde por
+     video**, no de una vez para siempre. `?scale=int` fuerza escalado entero con
+     letterbox para ver el filtro sin el remuestreo fraccionario encima.
+   - **`W-20` — medición en el diagnostic sobre pantalla real:** a 1920, drops < 0,1 % y
+     p95 de decode+render bajo el presupuesto de frame. En esta máquina no se puede
+     medir: el panel de navegador no compone y `requestAnimationFrame` no dispara nunca.
+     `?pacing=off` y `?predecode=off` apagan cada pieza para comparar contra el
+     comportamiento anterior sin recompilar nada.
+2. **Después de eso:** publicar el frontend acelerado (hoy `iargen.com/player/` sirve el
+   anterior) y recién ahí dar F9 por cerrada. La publicación se hace **al cerrar la
+   fase**, no por tarea.
 3. **F10 (S-9)** — pérdida adaptativa por suavidad: E-25 → E-27 → E-26 → E-28. Ataca el
    degradé escalonado sin devolver el ahorro del near-lossless 8.
 4. **F11 (S-10)** — formato v4: E-30 (LOD horneado, **sin** cambio de formato, medible
@@ -124,7 +130,7 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §3.
 | W-17 | F9 | LUT `Uint32` de paleta en la conversión RGBA | **cerrada 2026-08-31** (`8cecc7b`) | no |
 | W-18 | F9 | textura de índices + paleta en el shader (WebGL) | **implementada 2026-08-31** (`07a94e2`); paridad GL/2D verificada (delta 0) | no |
 | W-19 | F9 | reconstrucción de 4 taps (modo `soft`) + escalado entero de diagnóstico | **implementada 2026-08-31** (`07a94e2`); **falta la comparación visual del operador en el TV** | no |
-| W-20 | F9 | cadencia de presentación y pre-decode del keyframe | **pendiente — próxima** | no |
+| W-20 | F9 | cadencia de presentación y pre-decode del keyframe | **implementada 2026-08-31** (`798203a`+`1cb0e38`); **falta la medición en pantalla real** | no |
 | W-21 | F9 | dirty rect en X | opcional — **candidata a dejar de serlo**: W-17 mostró que en deltas dispersos el costo dominante es barrer todo `dirtyCellBits`, no escribir | no |
 | E-25 | F10 | `--gradient-boost` + mapa de suavidad reutilizable | pendiente | solo con valores ≠ 3.0 |
 | E-27 | F10 | guard anti-banding del trellis espacial | pendiente | sí |
@@ -246,3 +252,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-31 | **W-16 cerrada: F9 ya tiene banco** (Instancia 032, commit `f1ccfa3`, CI verde). `tools/bench_render.js` mide la conversión índice→RGBA sobre tres grillas × tres perfiles y compara el camino de bytes vigente contra el prototipo LUT `Uint32`; `frontend/diagnostic-player.html` (**F8-1 adelantada**) desglosa inflate/walk/RGBA/blit por frame con p50/p95, drops y tarde. Medición: keyframe a 1920 = **11,0 ms de pura conversión** en runner de CI; la LUT da **1,3×–3,3×** (≈2,2× en keyframe y tiles densos). Paridad byte a byte verificada en los 9 casos | el banco **publica** la tabla y **no** juzga tiempos (el runner comparte CPU: sería un test intermitente); lo que falla el CI es la paridad. La instrumentación vive entera en la página de diagnóstico, envolviendo métodos de la instancia: ningún archivo de producción se modifica para medir, así que lo medido es lo que corre en el TV. W-17 queda justificada con números antes de escribirse |
 | 2026-08-31 | **W-17 cerrada: LUT `Uint32` en los dos readers** (Instancia 033, commit `8cecc7b`, CI verde). Medido con `bench-render` HEAD vs baseline `f1ccfa3` **en la misma corrida**: keyframe a 1920 **11,4 → 5,7 ms** (2,0×), tiles densos 6,2 → 3,3 (1,9×), disperso 1,14 → 0,85 (1,33×). Salida **byte-idéntica**, verificada corriendo los dos caminos sobre el mismo reader y el mismo frame | el destino es el selector del camino (vista `Uint32` alineada → palabra; Array plano o desalineado → bytes), y eso hace que la paridad sea comprobable sin duplicar corpus. La LUT se cachea por identidad de paleta, no por frame. El disperso gana poco porque el costo dominante es barrer todo `dirtyCellBits`: es el argumento para que **W-21 deje de ser opcional** |
 | 2026-08-31 | **W-18 + W-19 implementadas** (Instancia 034, commit `07a94e2`, CI verde): en PIXEL la GPU recibe los **índices** (`LUMINANCE`) y la paleta como textura 256×1; el lookup y la mezcla de 4 taps viven en el shader. Verificado con **contexto WebGL real**: `paridad GL/2D: OK (delta max 0, camino indexado)` y etapa `rgba` en **0,00 ms** con el clip de producción. Decisión tomada acá, que el diseño no fijaba: en `soft` el **backing store sigue al tamaño de presentación** (si midiera lo mismo que la grilla, la mezcla sería un no-op y el estirado lo seguiría haciendo el compositor) | los tres modos de fallar en silencio quedaron con test: `UNPACK_ALIGNMENT` en 1, medio texel al indexar la paleta y `highp` con caída a `mediump`. La textura de índices **nunca** se filtra con LINEAR. **W-19 no se marca cerrada**: su criterio es el veredicto visual del operador en el TV, y eso no lo puede firmar nadie más |
+| 2026-08-31 | **W-20 implementada, F9 con todo su código escrito** (Instancia 035, `798203a` + `1cb0e38`, CI verde). (a) La fase de presentación avanza con el reloj del **display** y se corrige lento contra el audio, que sigue siendo el maestro; un desvío > 2 cuadros resincroniza de una. (b) El próximo **keyframe** se decodifica en el tiempo muerto y se adopta **intercambiando readers**, no copiando celdas. Las dos piezas se apagan con `?pacing=off` y `?predecode=off` | el «buffer alterno de `cells`» del diseño terminó siendo un segundo reader sobre los mismos bytes: cada uno queda internamente consistente, así que no hubo que abrirle a la maquinaria dirty un modo fuera de línea ni tocar el invariante 4. Cuesta otro `cells` (2 MB a 1920) → **anotado para MEM-001**. El CI falló una vez por una aserción que exigía un bloque de texto **contiguo**: se reescribió por contenido y orden, que es lo que la propiedad realmente dice |
