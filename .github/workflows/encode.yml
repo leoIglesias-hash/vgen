@@ -35,7 +35,7 @@ on:
         description: "off = receta de producto desde 2026-08-29; auto = tramado calibrado (referencias historicas)"
         default: "off"
       format:
-        description: "v1 / v2"
+        description: "v1 / v2 / v3 (F6-3: v3 = SPARSE diferencial + envelope ASCLVID3)"
         default: "v2"
       extra:
         description: "Flags extra para make_clip.py (default = receta de producto; vaciar para el encoder pelado)"
