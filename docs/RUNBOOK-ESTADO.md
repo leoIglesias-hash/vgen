@@ -21,7 +21,7 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 [`ejecutados/`](ejecutados/README.md) y en el
 [`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
 
-**F9 (S-8): código completo; falta pantalla.** Orden acordado
+**F9 (S-8): todas las tareas cerradas y medidas; falta publicar el frontend.** Orden acordado
 con el operador (Instancia 030): **F9 → F10 → F11 → F8 → DIAG-001**.
 
 1. **F9 tiene TODAS sus tareas cerradas y medidas** (`W-16`..`W-20`; `W-21` sigue
