@@ -72,8 +72,23 @@ assert(refreshFunction[1].indexOf("releaseAudio()") <
   refreshFunction[1].indexOf("beginDownload(true,true)"));
 assert(refreshFunction[1].indexOf("discardLoadedVideo()") <
   refreshFunction[1].indexOf("beginDownload(true,true)"));
-assert(page.indexOf("disposeRenderer(true);\n    reader=null;\n    lastShown=-1") >= 0,
-  "reader, renderer y canvas anteriores deben quedar descartados");
+/* Todo lo que puede retener un video entero se suelta al descartar, y el
+   renderer se suelta ANTES que el reader que estaba dibujando. Se verifica por
+   contenido y orden, no como bloque literal: desde W-20 hay un segundo reader
+   en el medio y un bloque literal solo obligaría a reescribir el test. */
+var discardBody = page.match(/function discardLoadedVideo\(\)\{([\s\S]*?)\n  \}/);
+assert(discardBody, "debe existir la operación de descarte del video cargado");
+assert(discardBody[1].indexOf("disposeRenderer(true)") >= 0);
+assert(discardBody[1].indexOf("spareReader=null") >= 0,
+  "W-20: el reader de pre-decode también retiene un `cells` entero");
+assert(discardBody[1].indexOf("\n    reader=null;") >= 0);
+assert(discardBody[1].indexOf("lastShown=-1") >= 0);
+assert(discardBody[1].indexOf("freshCanvas()") >= 0);
+assert(discardBody[1].indexOf("clipBuffer=null") >= 0,
+  "el ArrayBuffer del clip no debe quedar retenido por el player");
+assert(discardBody[1].indexOf("disposeRenderer(true)") <
+  discardBody[1].indexOf("\n    reader=null;"),
+  "el renderer se suelta antes que el reader que estaba dibujando");
 assert(page.indexOf("webglcontextlost") >= 0,
   "una perdida de contexto GPU debe activar el fallback Canvas");
 assert(page.indexOf("fallbackToCanvas(true)") >= 0);
