@@ -28,6 +28,9 @@ from deflate_util import best_deflate, zlib_deflate
 MAGIC = b"ASCL"
 VERSION_V1 = 1
 VERSION_V2 = 2
+# F6-3: v3 = v2 + SPARSE diferencial en el codec regional. La version del
+# header ES el gate del modo (regla 8: el decoder no negocia nada del stream).
+VERSION_V3 = 3
 MODE_PIXEL = 3
 TAG_RAW = 0
 TAG_ZLIB = 1
@@ -104,9 +107,13 @@ def _header_fields(buf, expected_version=None):
      ramp_len, cell_fmt, data_off, char_aspect, reserved, crc32) = fields
     if magic != MAGIC:
         _fail("magic ASCL invalido")
-    if expected_version is not None and version != expected_version:
-        _fail("se esperaba ASCL v%d y se recibio v%d" % (expected_version, version))
-    if version not in (VERSION_V1, VERSION_V2):
+    if expected_version is not None:
+        allowed = (expected_version if isinstance(expected_version, tuple)
+                   else (expected_version,))
+        if version not in allowed:
+            _fail("se esperaba ASCL v%s y se recibio v%d" %
+                  ("/".join(str(v) for v in allowed), version))
+    if version not in (VERSION_V1, VERSION_V2, VERSION_V3):
         _fail("version ASCL no soportada: %d" % version)
     if mode != MODE_PIXEL:
         _fail("ASCL v2 regional inicial solo admite mode=pixel")
@@ -132,7 +139,7 @@ def _header_fields(buf, expected_version=None):
     if version == VERSION_V1 and reserved != 0:
         _fail("reserved v1 debe ser cero")
     effective_tile = DEFAULT_TILE_SIZE
-    if version == VERSION_V2:
+    if version in (VERSION_V2, VERSION_V3):
         tile_size = reserved & 255
         codec_flags = reserved >> 8
         # E-09: mismo rango 4..32 que ReaderV2 (W-08).
@@ -447,7 +454,7 @@ def _frame_blocks_v1(buf, header):
         _fail("bytes extra al final del ASCL")
 
 
-def _build_v2(header, blocks, tile_size, codec_flags):
+def _build_v2(header, blocks, tile_size, codec_flags, version=VERSION_V2):
     n_frames = len(blocks)
     data_off = HEADER_SIZE
     first_offset = data_off + n_frames * 4
@@ -470,7 +477,7 @@ def _build_v2(header, blocks, tile_size, codec_flags):
     f = header["fields"]
     reserved = int(tile_size) | (int(codec_flags) << 8)
     provisional = struct.pack(
-        HEADER_FMT, MAGIC, VERSION_V2, f[2], f[3], f[4], f[5], f[6], f[7],
+        HEADER_FMT, MAGIC, version, f[2], f[3], f[4], f[5], f[6], f[7],
         f[8], f[9], f[10], data_off, f[12], reserved, 0)
     out = provisional + body
     crc = _crc_v2(out)
@@ -479,12 +486,21 @@ def _build_v2(header, blocks, tile_size, codec_flags):
 
 
 def transcode_ascl_bytes(source, tile_size=DEFAULT_TILE_SIZE,
-                         codec_flags=CODEC_FLAG_REGIONAL, verify_roundtrip=True):
-    """Convierte bytes ASCL v1 a v2 y devuelve ``(bytes, stats)``."""
+                         codec_flags=CODEC_FLAG_REGIONAL, verify_roundtrip=True,
+                         emit_version=VERSION_V2):
+    """Convierte bytes ASCL v1 a v2/v3 y devuelve ``(bytes, stats)``.
+
+    F6-3: ``emit_version=3`` emite el header v3 y activa el SPARSE diferencial
+    del codec regional (F6-1). Todo lo demás es idéntico a v2; con 2 (default)
+    la salida es el v2 histórico byte a byte.
+    """
     source = bytes(source)
     header = _header_fields(source, VERSION_V1)
     _validate_crc(source, header)
     tile_size = int(tile_size)
+    if emit_version not in (VERSION_V2, VERSION_V3):
+        _fail("emit_version debe ser 2 o 3")
+    sparse_differential = emit_version == VERSION_V3
     # E-09: cualquier tile del rango del reader; el ganador del barrido se
     # emite en el byte 26 del header (via _build_v2).
     if tile_size < MIN_TILE_SIZE or tile_size > MAX_TILE_SIZE:
@@ -519,7 +535,8 @@ def transcode_ascl_bytes(source, tile_size=DEFAULT_TILE_SIZE,
         regional = regional_codec_v2.encode_payload(
             matrix,
             previous=(None if frame["keyframe"] else previous_matrix),
-            tile_size=tile_size, zlib_level=9, fast_deflate=True)
+            tile_size=tile_size, zlib_level=9, fast_deflate=True,
+            sparse_differential=sparse_differential)
         predictor_tag, predictor_payload, predictor_id = encode_predictor_payload(
             matrix, frame["keyframe"], previous=previous_matrix, zlib_level=9,
             fast_deflate=True)
@@ -554,7 +571,8 @@ def transcode_ascl_bytes(source, tile_size=DEFAULT_TILE_SIZE,
                     decoded = regional_codec_v2.decode_payload(
                         regional.payload, header["rows"], header["cols"],
                         tile_size, frame["keyframe"], previous=previous_matrix,
-                        compressed=regional.compressed)
+                        compressed=regional.compressed,
+                        sparse_differential=sparse_differential)
                     if not np.array_equal(decoded.matrix, matrix):
                         _fail("codec regional no reconstruye exactamente frame %d" % frame["index"])
                 else:
@@ -585,10 +603,11 @@ def transcode_ascl_bytes(source, tile_size=DEFAULT_TILE_SIZE,
         output_tags[chosen_tag] += 1
         previous = frame["cells"]
 
-    result = _build_v2(header, blocks, tile_size, codec_flags)
+    result = _build_v2(header, blocks, tile_size, codec_flags, emit_version)
     if len(result) > len(source):
         _fail("invariante rota: ASCL v2 crecio respecto de v1")
     stats = {
+        "emit_version": emit_version,
         "input_bytes": len(source),
         "output_bytes": len(result),
         "saved_bytes": len(source) - len(result),
@@ -609,7 +628,8 @@ def transcode_ascl_bytes(source, tile_size=DEFAULT_TILE_SIZE,
 
 
 def transcode_ascl_bytes_sweep(source, tile_sizes=SWEEP_TILE_SIZES,
-                               verify_roundtrip=True):
+                               verify_roundtrip=True,
+                               emit_version=VERSION_V2):
     """E-09: transcodifica con cada tile_size del barrido y devuelve el menor.
 
     Determinista: en empate de bytes gana el tile_size mas chico. El resultado
@@ -623,7 +643,8 @@ def transcode_ascl_bytes_sweep(source, tile_sizes=SWEEP_TILE_SIZES,
     sweep = []
     for tile_size in tile_sizes:
         candidate, stats = transcode_ascl_bytes(
-            source, tile_size=tile_size, verify_roundtrip=verify_roundtrip)
+            source, tile_size=tile_size, verify_roundtrip=verify_roundtrip,
+            emit_version=emit_version)
         sweep.append((int(tile_size), len(candidate)))
         if best is None or len(candidate) < len(best[0]):
             best = (candidate, stats)
@@ -639,8 +660,10 @@ def iter_decoded_v2(source):
     keyframe. Se usa como decoder de referencia y para comprobar el reader JS.
     """
     source = bytes(source)
-    header = _header_fields(source, VERSION_V2)
+    header = _header_fields(source, (VERSION_V2, VERSION_V3))
     _validate_crc(source, header)
+    # F6-3: el modo SPARSE lo declara la version del header, nunca el stream.
+    sparse_differential = header["version"] == VERSION_V3
     expected = header["data_off"] + header["n_frames"] * 4
     previous = None
     active_palette = None
@@ -699,7 +722,8 @@ def iter_decoded_v2(source):
                 keyframe=keyframe, previous=previous,
                 compressed=tag in (TAG_REGIONAL_KEY_ZLIB,
                                    TAG_REGIONAL_DELTA_ZLIB),
-                palette_entries=active_palette_count)
+                palette_entries=active_palette_count,
+                sparse_differential=sparse_differential)
             cells = decoded.matrix
         else:
             cells = decode_predictor_payload(
@@ -723,20 +747,32 @@ def iter_decoded_v2(source):
 
 def decode_ascl_v2_bytes(source):
     """Materializa el decoder de referencia; conveniente para tests/diagnóstico."""
-    header = _header_fields(bytes(source), VERSION_V2)
+    header = _header_fields(bytes(source), (VERSION_V2, VERSION_V3))
     frames = list(iter_decoded_v2(source))
     return header, frames
 
 
 def transcode_path(input_path, output_path, verify_roundtrip=True,
-                   tile_size=DEFAULT_TILE_SIZE, sweep=False):
-    """Convierte .ascl o .asclv v1 sin sobrescribir la fuente."""
+                   tile_size=DEFAULT_TILE_SIZE, sweep=False,
+                   emit_version=VERSION_V2, meta=b""):
+    """Convierte .ascl o .asclv v1 sin sobrescribir la fuente.
+
+    F6-3: ``emit_version=3`` emite ASCL v3 (y por lo tanto ASCLVID3 si la
+    salida es bundle); ``meta`` embebe el sidecar ASCLSLOT en el envelope v3
+    y exige salida bundle con emit_version=3.
+    """
+    meta = bytes(meta or b"")
+    if meta and emit_version != VERSION_V3:
+        _fail("meta embebida requiere emit_version=3")
+
     def _convert(ascl):
         if sweep:
             return transcode_ascl_bytes_sweep(
-                ascl, verify_roundtrip=verify_roundtrip)
+                ascl, verify_roundtrip=verify_roundtrip,
+                emit_version=emit_version)
         return transcode_ascl_bytes(
-            ascl, tile_size=tile_size, verify_roundtrip=verify_roundtrip)
+            ascl, tile_size=tile_size, verify_roundtrip=verify_roundtrip,
+            emit_version=emit_version)
     input_resolved = os.path.normcase(os.path.realpath(os.path.abspath(input_path)))
     output_resolved = os.path.normcase(os.path.realpath(os.path.abspath(output_path)))
     same_path = input_resolved == output_resolved
@@ -752,15 +788,21 @@ def transcode_path(input_path, output_path, verify_roundtrip=True,
     is_bundle = prefix == ascl_bundle.MAGIC_V1
     if prefix == ascl_bundle.MAGIC_V2:
         _fail("la entrada ya es ASCLVID2")
+    if prefix == ascl_bundle.MAGIC_V3:
+        _fail("la entrada ya es ASCLVID3")
     if is_bundle:
         ascl, audio, version = ascl_bundle.read_parts_info(input_path)
         if version != VERSION_V1:
             _fail("el bundle de entrada no es v1")
         converted, stats = _convert(ascl)
-        total, video_bytes, audio_bytes = ascl_bundle.pack_bytes(converted, audio, output_path)
+        total, video_bytes, audio_bytes = ascl_bundle.pack_bytes(
+            converted, audio, output_path, meta=meta)
         stats.update({"bundle": True, "bundle_bytes": total,
-                      "video_bytes": video_bytes, "audio_bytes": audio_bytes})
+                      "video_bytes": video_bytes, "audio_bytes": audio_bytes,
+                      "meta_bytes": len(meta)})
     else:
+        if meta:
+            _fail("meta embebida requiere salida .asclv (bundle)")
         with open(input_path, "rb") as fh:
             ascl = fh.read()
         converted, stats = _convert(ascl)
@@ -782,11 +824,23 @@ def main(argv=None):
     parser.add_argument("--tile-sweep", action="store_true",
                         help="E-09: barre %s y conserva el menor"
                         % (SWEEP_TILE_SIZES,))
+    parser.add_argument("--v3", action="store_true",
+                        help="F6-3: emite ASCL v3 (SPARSE diferencial) y "
+                             "envelope ASCLVID3 si la salida es bundle")
+    parser.add_argument("--meta", default=None,
+                        help="F6-3: sidecar ASCLSLOT a embeber en el envelope "
+                             "v3 (requiere --v3 y salida .asclv)")
     args = parser.parse_args(argv)
+    meta = b""
+    if args.meta:
+        with open(args.meta, "rb") as fh:
+            meta = fh.read()
     try:
         stats = transcode_path(args.input, args.output,
                                verify_roundtrip=not args.no_verify_roundtrip,
-                               tile_size=args.tile_size, sweep=args.tile_sweep)
+                               tile_size=args.tile_size, sweep=args.tile_sweep,
+                               emit_version=VERSION_V3 if args.v3 else VERSION_V2,
+                               meta=meta)
     except (ASCLV2Error, OSError) as exc:
         parser.error(str(exc))
     print("OK %s" % args.output)
@@ -800,8 +854,9 @@ def main(argv=None):
            stats["n_frames"], stats["input_bytes"], stats["output_bytes"],
            stats["saved_percent"]))
     if stats.get("bundle"):
-        print("  ASCLVID2: %d B; audio copiado exacto: %d B" %
-              (stats["bundle_bytes"], stats["audio_bytes"]))
+        print("  ASCLVID%d: %d B; audio copiado exacto: %d B; meta: %d B" %
+              (stats.get("emit_version", VERSION_V2), stats["bundle_bytes"],
+               stats["audio_bytes"], stats.get("meta_bytes", 0)))
     return 0
 
 

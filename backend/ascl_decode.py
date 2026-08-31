@@ -63,8 +63,9 @@ def parse_header(buf):
     return dict(version=version, mode=mode, flags=flags, fps=fps, cols=cols, rows=rows,
                 pal_size=pal_size, n_frames=n_frames, ramp_len=ramp_len, cell_fmt=cell_fmt,
                 data_off=data_off, char_aspect=ca / 1000.0, reserved=reserved,
-                tile_size=(reserved & 255 if version == 2 else 0),
-                codec_flags=(reserved >> 8 if version == 2 else 0), crc32=crc32)
+                tile_size=(reserved & 255 if version in (2, 3) else 0),
+                codec_flags=(reserved >> 8 if version in (2, 3) else 0),
+                crc32=crc32)
 
 
 def compute_crc(buf, header=None):
@@ -78,7 +79,8 @@ def compute_crc(buf, header=None):
     version = int(header["version"])
     if version == 1:
         return zlib.crc32(buf[HEADER_SIZE:]) & 0xFFFFFFFF
-    if version == 2:
+    if version in (2, 3):
+        # F6-3: v3 conserva el alcance del CRC v2.
         value = zlib.crc32(buf[:28])
         return zlib.crc32(buf[HEADER_SIZE:], value) & 0xFFFFFFFF
     raise ValueError("version ASCL no soportada: %d" % version)
@@ -250,7 +252,8 @@ def decode_all(path):
             % (hdr["crc32"], computed))
     if hdr["version"] == 1:
         return _decode_all_v1(buf, hdr)
-    if hdr["version"] == 2:
+    if hdr["version"] in (2, 3):
+        # F6-3: iter_decoded_v2 despacha el SPARSE diferencial por la version.
         return _decode_all_v2(buf, hdr)
     raise ValueError("version ASCL no soportada: %d" % hdr["version"])
 

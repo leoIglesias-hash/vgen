@@ -109,5 +109,85 @@ class AsclBundleV2Test(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(os.stat(out_path).st_mode), 0o640)
 
 
+class AsclBundleV3Test(unittest.TestCase):
+    """F6-3: envelope ASCLVID3 de 20 bytes con meta_len (sidecar embebido)."""
+
+    def test_v3_pack_and_read_with_and_without_meta(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out_path = os.path.join(directory, "v3.asclv")
+            video = b"ASCL" + bytes((3,)) + b"regional-v3"
+            audio = bytes(range(16))
+            meta = b"ASCLSLOTmetadata"
+            total, video_len, audio_len = ascl_bundle.pack_bytes(
+                video, audio, out_path, meta=meta)
+            with open(out_path, "rb") as stream:
+                bundled = stream.read()
+            self.assertEqual(bundled[:8], ascl_bundle.MAGIC_V3)
+            self.assertEqual(total, ascl_bundle.HEADER_V3_SIZE +
+                             len(video) + len(audio) + len(meta))
+            restored = ascl_bundle.read_parts_meta(out_path)
+            self.assertEqual(restored, (video, audio, meta, 3))
+            # read_parts_info sigue devolviendo la tripla historica.
+            self.assertEqual(ascl_bundle.read_parts_info(out_path),
+                             (video, audio, 3))
+
+            # Sin meta: header v3 con meta_len 0.
+            ascl_bundle.pack_bytes(video, audio, out_path)
+            self.assertEqual(ascl_bundle.read_parts_meta(out_path),
+                             (video, audio, b"", 3))
+
+    def test_meta_requires_inner_v3(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out_path = os.path.join(directory, "bad.asclv")
+            for version in (1, 2):
+                with self.assertRaisesRegex(ValueError, "meta"):
+                    ascl_bundle.pack_bytes(
+                        b"ASCL" + bytes((version,)) + b"x", b"", out_path,
+                        meta=b"m")
+
+    def test_v3_unpack_writes_slots_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out_path = os.path.join(directory, "clip.asclv")
+            video = b"ASCL" + bytes((3,)) + b"cells"
+            meta = b"ASCLSLOTv2bytes"
+            ascl_bundle.pack_bytes(video, b"mp3", out_path, meta=meta)
+            ascl_path, audio_path, meta_path = ascl_bundle.unpack(
+                out_path, directory)
+            self.assertTrue(meta_path.endswith("clip.slots"))
+            with open(meta_path, "rb") as stream:
+                self.assertEqual(stream.read(), meta)
+            with open(ascl_path, "rb") as stream:
+                self.assertEqual(stream.read(), video)
+
+    def test_v3_rejects_truncation_mismatch_and_short_header(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "bad.asclv")
+            inner_v3 = b"ASCL" + bytes((3,)) + b"x"
+            inner_v2 = b"ASCL" + bytes((2,)) + b"x"
+            v3_header = struct.pack(
+                ascl_bundle.HEADER_V3_FMT, ascl_bundle.MAGIC_V3,
+                len(inner_v3), 0, 4)
+            cases = [
+                # meta_len declara 4 pero solo hay 3 bytes de meta.
+                v3_header + inner_v3 + b"met",
+                # meta_len declara 4 y hay 5 (bytes extra).
+                v3_header + inner_v3 + b"metaX",
+                # magic v3 con interior v2.
+                struct.pack(ascl_bundle.HEADER_V3_FMT, ascl_bundle.MAGIC_V3,
+                            len(inner_v2), 0, 0) + inner_v2,
+                # interior v3 dentro de un envelope v2 de 16 bytes.
+                struct.pack(ascl_bundle.HEADER_FMT, ascl_bundle.MAGIC_V2,
+                            len(inner_v3), 0) + inner_v3,
+                # header v3 cortado antes de meta_len.
+                struct.pack(ascl_bundle.HEADER_V3_FMT, ascl_bundle.MAGIC_V3,
+                            0, 0, 0)[:18],
+            ]
+            for bundled in cases:
+                with open(path, "wb") as stream:
+                    stream.write(bundled)
+                with self.assertRaises(ValueError):
+                    ascl_bundle.read_parts_meta(path)
+
+
 if __name__ == "__main__":
     unittest.main()

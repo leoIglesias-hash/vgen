@@ -30,8 +30,10 @@ def main(argv=None):
     p = argparse.ArgumentParser(description="video -> .asclv (un solo archivo)")
     p.add_argument("input")
     p.add_argument("--out", default=None, help="ruta .asclv (default ../outputs/<nombre>.asclv)")
-    p.add_argument("--format", choices=("v1", "v2"), default="v1",
-                   help="v1 compatible historico; v2 lossless exacto (default v1)")
+    p.add_argument("--format", choices=("v1", "v2", "v3"), default="v1",
+                   help="v1 compatible historico; v2 lossless exacto; v3 = v2 "
+                        "+ SPARSE diferencial y envelope ASCLVID3 (F6-3). "
+                        "Default v1")
     p.add_argument("--mode", choices=list(encoder.MODE_NAMES), default="pixel")
     p.add_argument("--profile", "--quality-profile", choices=encoder.QUALITY_PROFILE_NAMES,
                    default="custom", dest="quality_profile",
@@ -198,7 +200,8 @@ def main(argv=None):
         build_stem = os.path.join(workspace.name, os.path.basename(out_stem))
     # v2 nace de la matriz v1 aprobada. Se usan nombres distintos para no
     # sobrescribir nunca la fuente durante la conversión.
-    tmp_ascl = build_stem + (".source-v1.ascl" if args.format == "v2" else ".ascl")
+    tmp_ascl = build_stem + (".source-v1.ascl" if args.format in ("v2", "v3")
+                             else ".ascl")
     final_ascl = build_stem + ".ascl"
     keyint = args.keyint if args.keyint > 0 else max(1, args.fps * 2)
 
@@ -211,7 +214,7 @@ def main(argv=None):
     is_video = (not args.image) and (ext in encoder.VIDEO_EXTS)
     if args.keep:
         intermediates = [tmp_ascl]
-        if args.format == "v2":
+        if args.format in ("v2", "v3"):
             intermediates.append(final_ascl)
         if is_video:
             intermediates.append(os.path.splitext(tmp_ascl)[0] + ".mp3")
@@ -270,10 +273,11 @@ def main(argv=None):
                   "puede haber fallado.", file=sys.stderr)
         v2_stats = None
         bundle_ascl = tmp_ascl
-        if args.format == "v2":
+        if args.format in ("v2", "v3"):
             v2_stats = ascl_v2.transcode_path(
                 tmp_ascl, final_ascl,
-                tile_size=args.tile_size, sweep=args.tile_sweep)
+                tile_size=args.tile_size, sweep=args.tile_sweep,
+                emit_version=3 if args.format == "v3" else 2)
             bundle_ascl = final_ascl
         total, la, lau = ascl_bundle.pack(bundle_ascl, mp3, out)
         secs = info["n_frames"] / float(info["fps"]) or 1
@@ -293,10 +297,11 @@ def main(argv=None):
         if info.get("dither_exact"):
             print("  dither exacto (E-16): mezcla desde la base real")
         if v2_stats is not None:
-            print("  formato: ASCLVID2 lossless; %d regionales + %d predictores "
+            print("  formato: ASCLVID%d lossless; %d regionales + %d predictores "
                   "de %d frames, "
                   "%d B menos que la matriz v1 (%.2f%%)" %
-                  (v2_stats["regional_frames"], v2_stats.get("predictor_frames", 0),
+                  (v2_stats.get("emit_version", 2),
+                   v2_stats["regional_frames"], v2_stats.get("predictor_frames", 0),
                    v2_stats["n_frames"],
                    v2_stats["saved_bytes"], v2_stats["saved_percent"]))
             if v2_stats.get("sweep"):
@@ -356,7 +361,7 @@ def main(argv=None):
               (total/1024.0, la/1024.0, lau/1024.0, total/1024.0/secs))
         if not args.keep:
             cleanup = [tmp_ascl, mp3]
-            if args.format == "v2":
+            if args.format in ("v2", "v3"):
                 cleanup.append(final_ascl)
             for x in cleanup:
                 if x and os.path.exists(x):
@@ -380,10 +385,11 @@ def main(argv=None):
                                     dither_byte_budget=args.dither_byte_budget)
         v2_stats = None
         bundle_ascl = tmp_ascl
-        if args.format == "v2":
+        if args.format in ("v2", "v3"):
             v2_stats = ascl_v2.transcode_path(
                 tmp_ascl, final_ascl,
-                tile_size=args.tile_size, sweep=args.tile_sweep)
+                tile_size=args.tile_size, sweep=args.tile_sweep,
+                emit_version=3 if args.format == "v3" else 2)
             bundle_ascl = final_ascl
         total, la, lau = ascl_bundle.pack(bundle_ascl, None, out)
         print("OK %s  (imagen, %s %dx%d, %.1f KB)" %
@@ -405,9 +411,10 @@ def main(argv=None):
                   (info["dither_byte_budget"],
                    info["dither_byte_dropped_tiles"]))
         if v2_stats is not None:
-            print("  formato: ASCLVID2 lossless; %d regionales + %d predictores; "
+            print("  formato: ASCLVID%d lossless; %d regionales + %d predictores; "
                   "%d B menos (%.2f%%)" %
-                  (v2_stats["regional_frames"], v2_stats.get("predictor_frames", 0),
+                  (v2_stats.get("emit_version", 2),
+                   v2_stats["regional_frames"], v2_stats.get("predictor_frames", 0),
                    v2_stats["saved_bytes"], v2_stats["saved_percent"]))
             if v2_stats.get("sweep"):
                 print("  barrido tile_size: %s -> ganador %d" %
@@ -419,7 +426,8 @@ def main(argv=None):
               (info["dither"], (" Bayer %d" % info["dither_matrix"])
                if info["dither"] != "off" else ""))
         if not args.keep:
-            for x in (tmp_ascl, final_ascl if args.format == "v2" else None):
+            for x in (tmp_ascl,
+                      final_ascl if args.format in ("v2", "v3") else None):
                 if x and os.path.exists(x):
                     os.remove(x)
     if workspace is not None:

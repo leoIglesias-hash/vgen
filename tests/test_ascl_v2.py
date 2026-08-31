@@ -222,10 +222,133 @@ class ASCLV2TranscodeTest(unittest.TestCase):
             source_path = encode_video.call_args[0][1]
             self.assertTrue(source_path.endswith(".source-v1.ascl"))
             final_path = os.path.splitext(output)[0] + ".ascl"
-            # E-09: make_clip pasa ademas el tile regional (default 16, sin barrido)
+            # E-09: make_clip pasa ademas el tile regional (default 16, sin
+            # barrido); F6-3: la version a emitir viaja explicita.
             transcode.assert_called_once_with(source_path, final_path,
-                                              tile_size=16, sweep=False)
+                                              tile_size=16, sweep=False,
+                                              emit_version=2)
             self.assertEqual(pack.call_args[0][0], final_path)
+
+    def test_make_clip_v3_requests_emit_version_3(self):
+        info = {
+            "mode": "pixel", "cols": 32, "rows": 18, "fps": 15,
+            "n_frames": 2, "palette_mode": "global", "quality_profile": "custom",
+            "pal_size": 16, "bake_smoothing": "none", "reconstruction": "nearest",
+            "flags": 12, "palette_algorithm": "kmeans-rgb", "dither": "off",
+            "dither_matrix": 4, "audio": None,
+        }
+        v3_stats = {
+            "regional_frames": 1, "n_frames": 2, "saved_bytes": 50,
+            "saved_percent": 5.0, "emit_version": 3,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output = os.path.join(directory, "clip.asclv")
+            with mock.patch.object(make_clip.encoder, "encode_video",
+                                   return_value=info), \
+                    mock.patch.object(make_clip.ascl_v2, "transcode_path",
+                                      return_value=v3_stats) as transcode, \
+                    mock.patch.object(make_clip.ascl_bundle, "pack",
+                                      return_value=(1000, 900, 100)), \
+                    contextlib.redirect_stdout(io.StringIO()) as stdout:
+                result = make_clip.main([
+                    "synthetic.mp4", "--out", output, "--format", "v3", "--keep"])
+            self.assertEqual(result, 0)
+            self.assertEqual(transcode.call_args.kwargs["emit_version"], 3)
+            self.assertIn("ASCLVID3", stdout.getvalue())
+
+
+class ASCLV3TranscodeTest(unittest.TestCase):
+    """F6-3: ASCL v3 = v2 + SPARSE diferencial; la version del header es el gate."""
+
+    def setUp(self):
+        # Una sola grilla de 16x16 (un tile): el delta con offsets altos hace
+        # que SPARSE gane y el modo diferencial ahorre exactamente 1 byte
+        # (uvarint(210) de 2 bytes -> delta 9 de 1 byte).
+        self.cols = self.rows = 16
+        n = self.cols * self.rows
+        self.palette = bytes(value for i in range(16)
+                             for value in (i * 16, i * 16, i * 16))
+        f0 = np.zeros(n, dtype=np.uint8)
+        f1 = f0.copy()
+        f1[200] = 7
+        f1[210] = 8
+        self.expected = [f0, f1]
+        self.source = make_v1([
+            make_block(0, self.palette, f0.tobytes()),
+            make_block(2, None, delta_payload([200, 210], [7, 8])),
+        ], self.cols, self.rows)
+
+    def test_v3_shrinks_differential_sparse_and_decodes_exactly(self):
+        v2_bytes, _ = ascl_v2.transcode_ascl_bytes(self.source)
+        v3_bytes, stats = ascl_v2.transcode_ascl_bytes(
+            self.source, emit_version=3)
+        self.assertEqual(stats["emit_version"], 3)
+        self.assertEqual(v3_bytes[4], 3)
+        self.assertEqual(len(v3_bytes), len(v2_bytes) - 1)
+        header, frames = ascl_v2.decode_ascl_v2_bytes(v3_bytes)
+        self.assertEqual(header["version"], 3)
+        self.assertEqual(frames[1]["tag"], ascl_v2.TAG_REGIONAL_DELTA_RAW)
+        for actual, expected in zip(frames, self.expected):
+            np.testing.assert_array_equal(actual["cells"].reshape(-1), expected)
+        self.assertEqual(ascl_v2._crc_v2(v3_bytes), header["crc32"])
+
+    def test_default_emit_stays_v2_byte_identical(self):
+        implicit, _ = ascl_v2.transcode_ascl_bytes(self.source)
+        explicit, _ = ascl_v2.transcode_ascl_bytes(self.source, emit_version=2)
+        self.assertEqual(implicit, explicit)
+        self.assertEqual(implicit[4], 2)
+
+    def test_version_byte_is_the_gate_in_both_directions(self):
+        # Reetiquetar la version (con CRC valido) debe romper el parseo del
+        # stream SPARSE: el modo nunca se negocia desde el stream (regla 8).
+        v2_bytes, _ = ascl_v2.transcode_ascl_bytes(self.source)
+        v3_bytes, _ = ascl_v2.transcode_ascl_bytes(self.source, emit_version=3)
+        for source, wrong_version in ((v2_bytes, 3), (v3_bytes, 2)):
+            relabeled = bytearray(source)
+            relabeled[4] = wrong_version
+            struct.pack_into("<I", relabeled, 28,
+                             ascl_v2._crc_v2(bytes(relabeled)))
+            with self.assertRaises(ValueError):
+                ascl_v2.decode_ascl_v2_bytes(bytes(relabeled))
+
+    def test_invalid_emit_version_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "emit_version"):
+            ascl_v2.transcode_ascl_bytes(self.source, emit_version=4)
+
+    def test_bundle_v3_embeds_meta_and_keeps_audio_exact(self):
+        meta = b"ASCLSLOT-fake-sidecar-bytes"
+        audio = bytes(range(97)) * 2
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = os.path.join(directory, "source.asclv")
+            output_path = os.path.join(directory, "result.asclv")
+            ascl_bundle.pack_bytes(self.source, audio, source_path)
+            stats = ascl_v2.transcode_path(
+                source_path, output_path, emit_version=3, meta=meta)
+            self.assertEqual(stats["meta_bytes"], len(meta))
+            video, restored_audio, restored_meta, version = (
+                ascl_bundle.read_parts_meta(output_path))
+            self.assertEqual(version, 3)
+            self.assertEqual(restored_audio, audio)
+            self.assertEqual(restored_meta, meta)
+            _, frames = ascl_v2.decode_ascl_v2_bytes(video)
+            for actual, expected in zip(frames, self.expected):
+                np.testing.assert_array_equal(
+                    actual["cells"].reshape(-1), expected)
+
+    def test_meta_requires_v3_and_bundle_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = os.path.join(directory, "source.asclv")
+            ascl_path = os.path.join(directory, "source.ascl")
+            output_path = os.path.join(directory, "out.any")
+            ascl_bundle.pack_bytes(self.source, b"", source_path)
+            with open(ascl_path, "wb") as stream:
+                stream.write(self.source)
+            with self.assertRaisesRegex(ValueError, "meta"):
+                ascl_v2.transcode_path(source_path, output_path,
+                                       emit_version=2, meta=b"m")
+            with self.assertRaisesRegex(ValueError, "bundle"):
+                ascl_v2.transcode_path(ascl_path, output_path,
+                                       emit_version=3, meta=b"m")
 
 
 if __name__ == "__main__":
