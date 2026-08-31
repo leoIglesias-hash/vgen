@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ASCILINE diagnostic</title>
+<style>
+  html,body{ width:100%; height:100%; margin:0; overflow:hidden; background:#000; }
+  body{ color:#ddd; font-family:Arial,Helvetica,sans-serif; }
+  #stage{ position:absolute; left:0; top:0; right:0; bottom:0; overflow:hidden;
+    background:#000; cursor:pointer; outline:none; }
+  #cv{ position:absolute; left:50%; top:50%; display:block; margin:0; border:0;
+    background:#000; }
+  #hud{ position:absolute; z-index:5; right:0; top:0; width:430px; max-width:64%;
+    padding:10px 12px; color:#e6e6e6; background:#000; background:rgba(0,0,0,.72);
+    border-left:1px solid #444; font:12px/1.35 "Courier New",Courier,monospace; }
+  #head{ margin-bottom:7px; color:#fff; font-size:13px; }
+  #note{ color:#9c9; }
+  #help{ margin-top:8px; color:#999; }
+  table{ width:100%; border-collapse:collapse; }
+  th,td{ padding:1px 3px; text-align:right; white-space:nowrap; }
+  th{ color:#8ab; font-weight:normal; border-bottom:1px solid #444; }
+  td.k,th.k{ text-align:left; color:#ccc; }
+  .sec{ margin-top:8px; color:#8ab; }
+  .bad{ color:#f99; }
+  .ok{ color:#9d9; }
+</style>
+</head>
+<body>
+<div id="stage" tabindex="0"><canvas id="cv" width="640" height="360"></canvas></div>
+<div id="hud">
+  <div id="head">ASCILINE diagnostic</div>
+  <div id="note">Cargando&hellip;</div>
+  <div class="sec">Etapas del frame (ms)</div>
+  <div id="stages"></div>
+  <div class="sec">Grillas medidas</div>
+  <div id="history"></div>
+  <div id="help">1/2/3 fuente &middot; P play/pausa &middot; R reinicia medida &middot; C canvas2d &middot; G webgl</div>
+</div>
+
+<script src="inflate.js"></script>
+<script src="reader.js"></script>
+<script src="reader-v2.js"></script>
+<script src="reader-factory.js"></script>
+<script src="render-canvas2d.js"></script>
+<script src="render-webgl.js"></script>
+<script src="cache-refresh.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* W-16 (F9) - player de diagnostico. Es la tarea F8-1 adelantada: F9 no se
+     puede cerrar sin numeros reales del TV (reglas 5 y 6).
+
+     Mide, por frame y por etapa, lo mismo que el banco offline mide en Node:
+       inflate  descompresion del bloque              (reader._inflate)
+       walk     recorrido regional y escritura de celdas (reader._walkRegional)
+       rgba     conversion indice -> RGBA             (reader.fillRGBA*)
+       blit     put/upload al canvas o a la GPU       (draw - rgba)
+       otros    resto del seek (header, offsets, paleta, dirty)
+     y publica p50/p95, drops y frames tarde.
+
+     La instrumentacion vive ENTERA en esta pagina: envuelve metodos de la
+     instancia del reader y del renderer. Ningun archivo de produccion cambia,
+     asi que lo que se mide es exactamente el codigo que corre en el TV.
+
+     No reproduce audio a proposito: la sincronizacion es asunto de W-20 y aca
+     solo estorbaria a la medicion del costo por frame. */
+
+  var SAMPLE_MAX = 600;
+  var HUD_MS = 400;
+  var PRESETS = [
+    { label: "actual", dir: "./outputs/" },
+    { label: "1280-12", dir: "../1280-12/outputs/" },
+    { label: "1920-10", dir: "../1920-10/outputs/" }
+  ];
+
+  var stage = document.getElementById("stage");
+  var cv = document.getElementById("cv");
+  var noteNode = document.getElementById("note");
+  var headNode = document.getElementById("head");
+  var stagesNode = document.getElementById("stages");
+  var historyNode = document.getElementById("history");
+
+  var reader = null, renderer = null, rendererName = "", reconstruction = "nearest";
+  var ready = false, playing = false, raf = 0, startT = 0, lastShown = -1;
+  var activeXHR = null, sessions = [], session = null, hudAt = 0;
+  var requestedRenderer = null, sourceLabel = "", sourceURL = "";
+
+  var perf = window.performance;
+  var now = (perf && typeof perf.now === "function") ?
+    function(){ return perf.now(); } :
+    function(){ return Date.now ? Date.now() : new Date().getTime(); };
+
+  var nativeRequestFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
+    window.mozRequestAnimationFrame || window.msRequestAnimationFrame;
+  var nativeCancelFrame = window.cancelAnimationFrame || window.webkitCancelAnimationFrame ||
+    window.mozCancelAnimationFrame || window.msCancelAnimationFrame;
+  var requestFrame, cancelFrame;
+  if(nativeRequestFrame && nativeCancelFrame){
+    requestFrame = function(fn){ return nativeRequestFrame.call(window, fn); };
+    cancelFrame = function(id){ nativeCancelFrame.call(window, id); };
+  } else {
+    requestFrame = function(fn){ return window.setTimeout(function(){ fn(now()); }, 16); };
+    cancelFrame = function(id){ window.clearTimeout(id); };
+  }
+
+  function qs(name){
+    var match = new RegExp("[?&]" + name + "=([^&]+)").exec(window.location.search);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  function setNodeText(node, value){
+    value = value || "";
+    if(typeof node.textContent !== "undefined"){ node.textContent = value; }
+    else { node.innerText = value; }
+  }
+
+  function fixed(value, digits){
+    if(!(value > 0) && !(value < 0)){ return (0).toFixed(digits); }
+    return value.toFixed(digits);
+  }
+
+  /* --------------------------------------------------------------- series --- */
+
+  function Series(){
+    this.values = [];
+    this.index = 0;
+    this.total = 0;
+    this.frames = 0;
+    this.last = 0;
+  }
+
+  Series.prototype.add = function(value){
+    this.last = value;
+    this.total += value;
+    this.frames++;
+    if(this.values.length < SAMPLE_MAX){ this.values.push(value); }
+    else {
+      this.values[this.index] = value;
+      this.index = (this.index + 1) % SAMPLE_MAX;
+    }
+  };
+
+  Series.prototype.mean = function(){
+    return this.frames ? this.total / this.frames : 0;
+  };
+
+  /* p50/p95 sobre la ventana de las ultimas SAMPLE_MAX presentaciones; la media
+     es de toda la sesion. Se ordena una copia y solo al refrescar el HUD. */
+  Series.prototype.pct = function(q){
+    var copy = [], i, position;
+    if(!this.values.length){ return 0; }
+    for(i = 0; i < this.values.length; i++){ copy.push(this.values[i]); }
+    copy.sort(function(a, b){ return a - b; });
+    position = Math.floor(q * (copy.length - 1) + 0.5);
+    return copy[position];
+  };
+
+  function Session(label){
+    this.label = label;
+    this.grid = "?";
+    this.fps = 0;
+    this.budget = 0;
+    this.renderer = "";
+    this.version = 0;
+    this.inflate = new Series();
+    this.walk = new Series();
+    this.rgba = new Series();
+    this.blit = new Series();
+    this.other = new Series();
+    this.decode = new Series();
+    this.frame = new Series();
+    this.shown = 0;
+    this.repeated = 0;
+    this.dropped = 0;
+    this.late = 0;
+  }
+
+  /* ------------------------------------------------------ instrumentacion --- */
+
+  var acc = { inflate: 0, walk: 0, rgba: 0 };
+  var depth = { inflate: 0, walk: 0, rgba: 0 };
+  var wrapped = { inflate: false, walk: false, rgba: false };
+
+  /* El contador de profundidad no es decorativo: fillRGBA delega en
+     fillRGBARows, las dos envueltas, y sin el la conversion se contaria dos
+     veces (y blit = draw - rgba quedaria negativo). Solo suma el nivel externo. */
+  function wrapTimed(target, name, key){
+    var original = target[name];
+    if(typeof original !== "function"){ return false; }
+    target[name] = function(){
+      var t0 = now(), result;
+      depth[key]++;
+      try { result = original.apply(this, arguments); }
+      finally {
+        depth[key]--;
+        if(!depth[key]){ acc[key] += now() - t0; }
+      }
+      return result;
+    };
+    return true;
+  }
+
+  function instrument(instance){
+    acc.inflate = 0; acc.walk = 0; acc.rgba = 0;
+    wrapped.inflate = wrapTimed(instance, "_inflate", "inflate");
+    wrapped.walk = wrapTimed(instance, "_walkRegional", "walk");
+    /* El reader v1 y los bloques sin compresion no exponen todas las etapas:
+       lo que falte se informa como no disponible en vez de contarse como cero. */
+    wrapped.rgba = wrapTimed(instance, "fillRGBA", "rgba");
+    wrapped.rgba = wrapTimed(instance, "fillRGBARows", "rgba") || wrapped.rgba;
+    wrapped.rgba = wrapTimed(instance, "fillRGBAChanged", "rgba") || wrapped.rgba;
+  }
+
+  /* --------------------------------------------------------------- render --- */
+
+  function viewportSize(){
+    var root = document.documentElement;
+    return {
+      width: window.innerWidth || root.clientWidth || stage.clientWidth || 640,
+      height: window.innerHeight || root.clientHeight || stage.clientHeight || 360
+    };
+  }
+
+  function fitCanvas(){
+    if(!reader || !cv){ return; }
+    var size = viewportSize();
+    var ratio = reader.header.cols / reader.header.rows;
+    var width = size.width, height = Math.round(width / ratio);
+    if(height > size.height){ height = size.height; width = Math.round(height * ratio); }
+    cv.style.width = width + "px";
+    cv.style.height = height + "px";
+    cv.style.marginLeft = (-Math.round(width / 2)) + "px";
+    cv.style.marginTop = (-Math.round(height / 2)) + "px";
+  }
+
+  function freshCanvas(){
+    var old = cv, replacement = document.createElement("canvas");
+    replacement.id = "cv";
+    try { old.width = 1; old.height = 1; } catch(ignoredBacking) {}
+    replacement.width = 1;
+    replacement.height = 1;
+    old.parentNode.replaceChild(replacement, old);
+    cv = replacement;
+  }
+
+  function disposeRenderer(){
+    var previous = renderer;
+    renderer = null;
+    if(previous && typeof previous.dispose === "function"){
+      try { previous.dispose(true); } catch(ignoredDispose) {}
+    }
+  }
+
+  function chooseRenderer(){
+    var instance = null, webgl = null;
+    disposeRenderer();
+    freshCanvas();
+    if(requestedRenderer !== "canvas2d"){
+      try {
+        webgl = new window.WebGLRenderer(cv);
+        if(webgl.init(reader, 1, reconstruction)){ instance = webgl; }
+      } catch(ignoredWebGL) { instance = null; }
+      if(!instance && webgl && typeof webgl.dispose === "function"){
+        try { webgl.dispose(true); } catch(ignoredWebGLDispose) {}
+        freshCanvas();
+      }
+    }
+    if(instance){ rendererName = "webgl"; }
+    else {
+      instance = new window.Canvas2DRenderer(cv);
+      instance.init(reader, 1, reconstruction);
+      rendererName = "canvas2d";
+    }
+    renderer = instance;
+    if(session){ session.renderer = rendererName; }
+  }
+
+  /* ------------------------------------------------------------ medicion --- */
+
+  function measuredFrame(index){
+    var t0, t1, t2, decodeMs, drawMs, rgbaMs, blitMs, otherMs, totalMs;
+    acc.inflate = 0; acc.walk = 0; acc.rgba = 0;
+    t0 = now();
+    reader.seek(index);
+    t1 = now();
+    renderer.draw(reader);
+    t2 = now();
+    decodeMs = t1 - t0;
+    drawMs = t2 - t1;
+    rgbaMs = acc.rgba;
+    blitMs = drawMs - rgbaMs;
+    if(blitMs < 0){ blitMs = 0; }
+    otherMs = decodeMs - acc.inflate - acc.walk;
+    if(otherMs < 0){ otherMs = 0; }
+    totalMs = decodeMs + drawMs;
+    session.inflate.add(acc.inflate);
+    session.walk.add(acc.walk);
+    session.rgba.add(rgbaMs);
+    session.blit.add(blitMs);
+    session.other.add(otherMs);
+    session.decode.add(decodeMs);
+    session.frame.add(totalMs);
+    session.shown++;
+    if(session.budget > 0 && totalMs > session.budget){ session.late++; }
+    lastShown = index;
+  }
+
+  function frameNow(){
+    return Math.floor(((now() - startT) / 1000) * reader.header.fps);
+  }
+
+  function loop(){
+    var target, count;
+    if(!playing){ return; }
+    count = reader.header.nFrames;
+    target = frameNow();
+    if(target >= count){
+      startT = now();
+      reader.decodedIndex = -1;
+      lastShown = -1;
+      target = 0;
+    }
+    if(target === lastShown){ session.repeated++; }
+    else {
+      if(lastShown >= 0 && target > lastShown + 1){
+        session.dropped += target - lastShown - 1;
+      }
+      try { measuredFrame(target); }
+      catch(error){
+        playing = false;
+        setNodeText(noteNode, "Error al dibujar: " + (error && error.message ? error.message : "?"));
+        return;
+      }
+    }
+    refreshHUD(false);
+    raf = requestFrame(loop);
+  }
+
+  function play(){
+    if(!ready || playing){ return; }
+    playing = true;
+    startT = now() - (lastShown >= 0 ? (lastShown / reader.header.fps) * 1000 : 0);
+    raf = requestFrame(loop);
+  }
+
+  function pause(){
+    playing = false;
+    if(raf){ cancelFrame(raf); raf = 0; }
+    refreshHUD(true);
+  }
+
+  /* ----------------------------------------------------------------- HUD --- */
+
+  function cell(value, klass){
+    return "<td" + (klass ? " class=\"" + klass + "\"" : "") + ">" + value + "</td>";
+  }
+
+  function stageRow(name, series){
+    return "<tr>" + cell(name, "k") + cell(fixed(series.last, 2)) +
+      cell(fixed(series.mean(), 2)) + cell(fixed(series.pct(0.5), 2)) +
+      cell(fixed(series.pct(0.95), 2)) + "</tr>";
+  }
+
+  function stagesTable(){
+    var html = "<table><tr><th class=\"k\">etapa</th><th>ult</th><th>media</th>" +
+      "<th>p50</th><th>p95</th></tr>";
+    html += stageRow(wrapped.inflate ? "inflate" : "inflate n/d", session.inflate);
+    html += stageRow(wrapped.walk ? "walk" : "walk n/d", session.walk);
+    html += stageRow(wrapped.rgba ? "rgba" : "rgba n/d", session.rgba);
+    html += stageRow("blit", session.blit);
+    html += stageRow("otros", session.other);
+    html += stageRow("decode", session.decode);
+    html += stageRow("FRAME", session.frame);
+    html += "</table>";
+    return html;
+  }
+
+  function historyTable(){
+    var html = "<table><tr><th class=\"k\">grilla@fps</th><th>rend</th><th>p50</th>" +
+      "<th>p95</th><th>presu</th><th>drops</th><th>tarde</th></tr>";
+    var i, item, klass;
+    for(i = 0; i < sessions.length; i++){
+      item = sessions[i];
+      klass = (item.budget > 0 && item.frame.pct(0.95) > item.budget) ? "bad" : "ok";
+      html += "<tr>" + cell(item.grid + "@" + item.fps, "k") +
+        cell(item.renderer === "webgl" ? "gl" : "2d") +
+        cell(fixed(item.frame.pct(0.5), 2)) +
+        cell("<span class=\"" + klass + "\">" + fixed(item.frame.pct(0.95), 2) + "</span>") +
+        cell(fixed(item.budget, 1)) + cell(item.dropped) + cell(item.late) + "</tr>";
+    }
+    html += "</table>";
+    return html;
+  }
+
+  function refreshHUD(force){
+    var time = now();
+    if(!session){ return; }
+    if(!force && time - hudAt < HUD_MS){ return; }
+    hudAt = time;
+    stagesNode.innerHTML = stagesTable();
+    historyNode.innerHTML = historyTable();
+    setNodeText(noteNode,
+      sourceLabel + " · ASCL v" + session.version + " · " + session.grid +
+      " @" + session.fps + " · " + rendererName + "/" + reconstruction +
+      " · " + (playing ? "play" : "pausa") +
+      " · frames " + session.shown + " rep " + session.repeated);
+  }
+
+  /* --------------------------------------------------------------- carga --- */
+
+  function openAscl(buffer, offset, length){
+    var readerAPI = window.ASCILINEReader || window.ASCL;
+    var header;
+    reader = readerAPI.parse(buffer, offset, length);
+    header = reader.header;
+    reconstruction = qs("rec") || ((header.flags & 16) ? "soft" : "nearest");
+    instrument(reader);
+    session = new Session(sourceLabel);
+    session.grid = header.cols + "x" + header.rows;
+    session.fps = header.fps;
+    session.budget = header.fps > 0 ? 1000 / header.fps : 0;
+    session.version = header.version;
+    sessions.push(session);
+    chooseRenderer();
+    reader.decodedIndex = -1;
+    lastShown = -1;
+    measuredFrame(0);
+    ready = true;
+    fitCanvas();
+    refreshHUD(true);
+    play();
+  }
+
+  function loadBundle(buffer){
+    var view = new DataView(buffer), bytes = new Uint8Array(buffer);
+    var headerSize = bytes[7] === 51 ? 20 : 16;
+    var videoLength = view.getUint32(8, true);
+    var audioLength = view.getUint32(12, true);
+    var metaLength = headerSize === 20 ? view.getUint32(16, true) : 0;
+    if(videoLength < 32 ||
+       headerSize + videoLength + audioLength + metaLength !== buffer.byteLength){
+      throw new Error("ASCLV truncado o invalido");
+    }
+    openAscl(buffer, headerSize, videoLength);
+  }
+
+  function loadData(buffer){
+    var bytes = new Uint8Array(buffer);
+    var bundled = bytes.length >= 8 && bytes[0] === 65 && bytes[1] === 83 &&
+      bytes[2] === 67 && bytes[3] === 76 && bytes[4] === 86 && bytes[5] === 73 &&
+      bytes[6] === 68 && (bytes[7] === 49 || bytes[7] === 50 || bytes[7] === 51);
+    if(!bundled){ throw new Error("la ruta no devolvio un ASCLV"); }
+    loadBundle(buffer);
+  }
+
+  function releaseXHR(xhr){
+    if(!xhr){ return; }
+    try { xhr.onload = null; } catch(ignoredLoad) {}
+    try { xhr.onerror = null; } catch(ignoredError) {}
+    try { xhr.onabort = null; } catch(ignoredAbort) {}
+  }
+
+  function resetPlayback(){
+    pause();
+    ready = false;
+    lastShown = -1;
+    disposeRenderer();
+    reader = null;
+    rendererName = "";
+    freshCanvas();
+  }
+
+  function downloadClip(url){
+    var xhr = new XMLHttpRequest();
+    activeXHR = xhr;
+    sourceURL = url;
+    setNodeText(noteNode, "Descargando " + url + "…");
+    try {
+      xhr.open("GET", url, true);
+      xhr.responseType = "arraybuffer";
+    } catch(error){
+      if(activeXHR === xhr){ activeXHR = null; }
+      releaseXHR(xhr);
+      setNodeText(noteNode, "XHR binario no disponible");
+      return;
+    }
+    xhr.onload = function(){
+      var status, response;
+      if(activeXHR !== xhr){ releaseXHR(xhr); return; }
+      status = xhr.status;
+      response = xhr.response;
+      activeXHR = null;
+      releaseXHR(xhr);
+      if((status >= 200 && status < 300) || status === 0){
+        try { loadData(response); }
+        catch(error){
+          resetPlayback();
+          setNodeText(noteNode, "No se pudo abrir el clip: " +
+            (error && error.message ? error.message : "?"));
+        }
+      } else {
+        setNodeText(noteNode, "HTTP " + status + " · " + url);
+      }
+    };
+    xhr.onerror = function(){
+      if(activeXHR !== xhr){ releaseXHR(xhr); return; }
+      activeXHR = null;
+      releaseXHR(xhr);
+      setNodeText(noteNode, "No se pudo descargar " + url);
+    };
+    xhr.onabort = function(){
+      if(activeXHR === xhr){ activeXHR = null; }
+      releaseXHR(xhr);
+    };
+    try { xhr.send(); }
+    catch(error){
+      if(activeXHR === xhr){ activeXHR = null; }
+      releaseXHR(xhr);
+      setNodeText(noteNode, "No se pudo iniciar la descarga");
+    }
+  }
+
+  /* CACHE-001: primero el puntero mutable, despues el clip inmutable. Si el
+     puntero no existe se cae al clip.asclv historico del mismo directorio. */
+  function loadFrom(dir, label){
+    var pointerXHR, previous;
+    resetPlayback();
+    sourceLabel = label;
+    if(activeXHR){
+      previous = activeXHR;
+      activeXHR = null;
+      try { previous.abort(); } catch(ignoredAbortPrevious) {}
+      releaseXHR(previous);
+    }
+    pointerXHR = new XMLHttpRequest();
+    activeXHR = pointerXHR;
+    try { pointerXHR.open("GET", dir + "clip.current.txt", true); }
+    catch(error){
+      if(activeXHR === pointerXHR){ activeXHR = null; }
+      releaseXHR(pointerXHR);
+      downloadClip(dir + "clip.asclv");
+      return;
+    }
+    pointerXHR.onload = function(){
+      var name = "";
+      if(activeXHR !== pointerXHR){ releaseXHR(pointerXHR); return; }
+      activeXHR = null;
+      releaseXHR(pointerXHR);
+      if(pointerXHR.status === 200){
+        name = window.ASCILINECacheRefresh.parseClipPointer(pointerXHR.responseText || "");
+      }
+      downloadClip(name ? dir + name : dir + "clip.asclv");
+    };
+    pointerXHR.onerror = function(){
+      if(activeXHR !== pointerXHR){ releaseXHR(pointerXHR); return; }
+      activeXHR = null;
+      releaseXHR(pointerXHR);
+      downloadClip(dir + "clip.asclv");
+    };
+    pointerXHR.onabort = function(){
+      if(activeXHR === pointerXHR){ activeXHR = null; }
+      releaseXHR(pointerXHR);
+    };
+    try { pointerXHR.send(); }
+    catch(error){
+      if(activeXHR === pointerXHR){ activeXHR = null; }
+      releaseXHR(pointerXHR);
+      downloadClip(dir + "clip.asclv");
+    }
+  }
+
+  function loadPreset(index){
+    if(index < 0 || index >= PRESETS.length){ return; }
+    loadFrom(PRESETS[index].dir, PRESETS[index].label);
+  }
+
+  /* Reinicia la medida sin volver a descargar: la sesion vieja queda en la
+     tabla de grillas y la nueva arranca con contadores en cero. */
+  function restartMeasurement(){
+    if(!reader){ return; }
+    session = new Session(sourceLabel);
+    session.grid = reader.header.cols + "x" + reader.header.rows;
+    session.fps = reader.header.fps;
+    session.budget = reader.header.fps > 0 ? 1000 / reader.header.fps : 0;
+    session.version = reader.header.version;
+    session.renderer = rendererName;
+    sessions.push(session);
+    refreshHUD(true);
+  }
+
+  function switchRenderer(name){
+    if(!reader){ return; }
+    requestedRenderer = name;
+    pause();
+    try {
+      chooseRenderer();
+      reader.decodedIndex = -1;
+      lastShown = -1;
+      measuredFrame(0);
+      fitCanvas();
+    } catch(error){
+      setNodeText(noteNode, "No se pudo cambiar el renderer: " +
+        (error && error.message ? error.message : "?"));
+      return;
+    }
+    restartMeasurement();
+    play();
+  }
+
+  function handleKey(event){
+    var code;
+    event = event || window.event;
+    code = event.keyCode || event.which;
+    if(code === 49){ loadPreset(0); }
+    else if(code === 50){ loadPreset(1); }
+    else if(code === 51){ loadPreset(2); }
+    else if(code === 80){ if(playing){ pause(); } else { play(); } }
+    else if(code === 82){ restartMeasurement(); }
+    else if(code === 67){ switchRenderer("canvas2d"); }
+    else if(code === 71){ switchRenderer("auto"); }
+    else { return; }
+    if(event.preventDefault){ event.preventDefault(); }
+    else { event.returnValue = false; }
+  }
+
+  stage.onclick = function(){ if(playing){ pause(); } else { play(); } };
+  window.onresize = fitCanvas;
+  if(document.addEventListener){ document.addEventListener("keydown", handleKey, false); }
+  else if(document.attachEvent){ document.attachEvent("onkeydown", handleKey); }
+
+  setNodeText(headNode, "ASCILINE diagnostic · W-16");
+  requestedRenderer = qs("renderer") || "auto";
+  if(qs("src")){
+    sourceLabel = "src";
+    downloadClip(qs("src"));
+  } else if(qs("dir")){
+    loadFrom(qs("dir"), "dir");
+  } else {
+    loadPreset(0);
+  }
+}());
+</script>
+</body>
+</html>

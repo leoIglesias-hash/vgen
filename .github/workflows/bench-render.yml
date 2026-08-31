@@ -1,0 +1,61 @@
+name: bench-render
+
+# W-16 (F9): banco de la etapa de conversion indice->RGBA a tamano completo
+# (768x432, 1280x720, 1920x1080). La regresion ya corre este banco en cada push
+# con pocas repeticiones para publicar su tabla y verificar paridad; esto es la
+# corrida larga y, opcionalmente, la comparacion contra un reader anterior
+# (el vehiculo para registrar W-17 cuando la LUT entre al reader).
+
+on:
+  workflow_dispatch:
+    inputs:
+      repeats:
+        description: "Repeticiones por caso"
+        default: "40"
+        required: true
+      baseline:
+        description: "Commit/ref con el reader-v2.js anterior (vacio = solo HEAD)"
+        default: ""
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Bench HEAD (y baseline si se pidio)
+        run: |
+          set -euo pipefail
+          echo "== HEAD ($(git rev-parse --short HEAD)) =="
+          node tools/bench_render.js frontend/reader-v2.js "${{ inputs.repeats }}" | tee head.txt
+          {
+            echo "## bench render (conversion indice -> RGBA)"
+            echo ""
+            echo "### HEAD"
+            echo '```'
+            cat head.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ inputs.baseline }}" ]; then
+            # reader-v2.js requiere ./inflate.js: extraer el frontend baseline completo
+            mkdir -p /tmp/baseline
+            git show "${{ inputs.baseline }}:frontend/reader-v2.js" > /tmp/baseline/reader-v2.js
+            git show "${{ inputs.baseline }}:frontend/inflate.js" > /tmp/baseline/inflate.js
+            echo "== baseline (${{ inputs.baseline }}) =="
+            node tools/bench_render.js /tmp/baseline/reader-v2.js "${{ inputs.repeats }}" | tee baseline.txt
+            {
+              echo "### baseline ${{ inputs.baseline }}"
+              echo '```'
+              cat baseline.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
