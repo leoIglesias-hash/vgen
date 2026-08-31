@@ -21,7 +21,8 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 [`ejecutados/`](ejecutados/README.md) y en el
 [`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
 
-**F9 (S-8): todas las tareas cerradas y medidas; falta publicar el frontend.** Orden acordado
+**F9 (S-8): tareas cerradas y medidas, frontend publicado; falta portar W-20 a la página
+que sirve la raíz.** Orden acordado
 con el operador (Instancia 030): **F9 → F10 → F11 → F8 → DIAG-001**.
 
 1. **F9 tiene TODAS sus tareas cerradas y medidas** (`W-16`..`W-20`; `W-21` sigue
@@ -95,10 +96,14 @@ elige regional 32 con trellis espacial 16; ~1 h de runner, RSS 1,6 GB). Instalad
 
 **Player EN PRODUCCIÓN** (infra propia, nada preexistente tocado): bucket R2 +
 Worker `asciline-player`, ruta `iargen.com/player*`, espejo
-`asciline-player.iargen.workers.dev`. Subir clips SIN redeploy: rotar el secret
-`UPLOAD_TOKEN` vía API y `PUT /__upload/<key>` con `x-upload-token` + `x-sha256`
-(R2 verifica el digest); desde CI, workflow `publish-player` (pin por contenido).
-Ningún token se persiste jamás. Detalle del deploy:
+`asciline-player.iargen.workers.dev`. **Copia de lo desplegado, en el repo:**
+[`deploy/asciline-player/`](../deploy/asciline-player/README.md) — `worker.js` verbatim,
+los archivos servidos y `MANIFEST.tsv` con las 71 keys. Subir clips o frontend SIN
+redeploy: acuñar `UPLOAD_TOKEN` por la API, `PUT /__upload/<key>` con `x-upload-token`
++ `x-sha256` (R2 verifica el digest), verificar lo servido y **quemar** el token.
+**Ningún token se persiste jamás** — por eso no hay workflow de publicación de frontend
+(exigiría un secret de GitHub). Ojo: el worker desplegado **no tiene** autorización por
+contenido, aunque `publish-player` la asuma; ese workflow no funcionaría hoy. Detalle:
 [`ejecutados/2026-08-31-S7-resolucion-y-deploy-player.md`](ejecutados/2026-08-31-S7-resolucion-y-deploy-player.md).
 
 ## Cómo ver lo ya implementado (para no pisarse)
