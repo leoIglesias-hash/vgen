@@ -47,15 +47,19 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en
    resoluciones; homepage de iargen.com intacto. Queda pendiente que el operador lo
    pruebe en el celular y en el Smart TV (antesala de F8).
 3. **F6 (S-4) EN CURSO (arrancada 2026-08-30 con el visto del operador).** Orden:
-   F6-1 → F6-3 → F6-2 → F6-4. **F6-1 cerrada** (`95c1f9c`, CI verde run 33346511477):
-   SPARSE diferencial opt-in en el codec regional, default byte-idéntico; el gate real
-   va en el header `ASCLVID3`. **Sigue F6-3:** envelope v3 con `meta_len`, sidecar
-   adentro, espejo JS, corpus de corrupción ampliado — y ahí se activa el modo
-   diferencial por versión. Después F6-2 (barrido definitivo de `tile_size` sobre el
-   codec final) y F6-4 (nombre versionado + CACHE-001). **INT-005 sigue CONDICIONADO**
-   a los gates físicos de F8 (dirección del operador 2026-08-30). **Luego F8 (S-6)** —
-   validación física en TV (p95, MEM-001). Opcionales: E-11, W-15. Decisión menor
-   abierta: si el operador retoma el 960, re-medirlo con `--palette-refit 5`.
+   F6-1 → F6-3 → F6-2 → F6-4. **F6-1 y F6-3 CERRADAS** (filas en Carril F6): el
+   formato v3 está completo de punta a punta — SPARSE diferencial gateado por la
+   versión del header, envelope `ASCLVID3` de 20 B con el sidecar embebido, espejo JS
+   en reader/factory/players, round-trip Python↔JS byte-exacto en la regresión
+   (`test_v3_cross.js`) y spec §14. El default de producto sigue emitiendo v2: la
+   adopción de v3 es la decisión de cierre de S-4. **Sigue F6-2:** barrido definitivo
+   de `tile_size` — correr workflow `encode` con `tile=sweep` + `format=v3` + receta
+   de producto y registrar la fila (también da el primer Δbytes v3 vs v2 del
+   producto). Después F6-4 (nombre versionado + CACHE-001). **INT-005 sigue
+   CONDICIONADO** a los gates físicos de F8 (dirección del operador 2026-08-30).
+   **Luego F8 (S-6)** — validación física en TV (p95, MEM-001). Opcionales: E-11,
+   W-15. Decisión menor abierta: si el operador retoma el 960, re-medirlo con
+   `--palette-refit 5`.
 
 **Receta de producto vigente (2026-08-30):** defaults del workflow `encode` —
 768 graphic-hq, adaptive kmeans-oklab, tile 16, dither off, zopfli, overlay=off,
@@ -216,8 +220,8 @@ Orden de ejecución: F6-1 → F6-3 → F6-2 → F6-4. El barrido definitivo de `
 | ID | Tarea | Estado | Commit | Fecha | Notas |
 |---|---|---|---|---|---|
 | F6-1 | SPARSE con offsets diferenciales | cerrada | `95c1f9c` | 2026-08-30 | `sparse_differential` opt-in en `encode_payload`/`decode_payload`/`encode_frame`/`decode_frame`: delta = `offset − prior − 1` (prior arranca en −1, el primero coincide con el absoluto); «creciente» pasa a ser estructural y el decoder solo acota el offset reconstruido al tile. Default False = stream v2 **byte a byte** (test byte-exacto). El modo lo declara el ENVELOPE (header ASCLVID3, F6-3), nunca el stream: un fixture dirigido muestra que la confusión de modo se rechaza en ambas direcciones (offsets al tope del tile). Flag 0x04 en el paquete de laboratorio. 8 tests nuevos (`SparseDifferentialTest`). CI verde run 33346511477 |
-| F6-2 | barrido definitivo de `tile_size` sobre salida del trellis | pendiente | | después de F6-3: la estadística por tile cambia con E-23 y con SPARSE diferencial |
-| F6-3 | envelope `ASCLVID3` con `meta_len`; sidecar adentro | pendiente | | activa `sparse_differential` por versión; readers viejos rechazan por magic; espejo JS + corpus de corrupción ampliado |
+| F6-2 | barrido definitivo de `tile_size` sobre salida del trellis | pendiente | | con F6-3 cerrada: correr workflow `encode` con `tile=sweep` + `format=v3` + receta de producto |
+| F6-3 | envelope `ASCLVID3` con `meta_len`; sidecar adentro | cerrada | `f3cc1ef`+`53e725b`+`1e16d18` | 2026-08-30 | Tres commits, mismo ID (regla 0.1). **Python:** `ascl_bundle` v3 (header 20 B `<8sIII>`, meta = sidecar ASCLSLOT byte-exacto, versión envelope==interior siempre, `read_parts_meta`); `ascl_v2` `emit_version` 2/3 (v3 = header versión 3 + SPARSE diferencial F6-1 en encode y verify; el decoder de referencia despacha POR VERSIÓN — regla 8); `ascl_decode` y `make_clip --format v3` de punta a punta; CLI `--v3/--meta`. **JS:** `reader-v2` acepta v3 y reconstruye `prior+1+delta` en las DOS pasadas del walker; factory despacha v3 al mismo ReaderV2; los 3 players validan el header de 20 B en la ecuación de longitudes; el live-player usa la meta EMBEBIDA para el overlay (sin XHR a clip.slots); `verify_v1_v2.js` ídem. **Cross:** `test_v3_cross.js` decodifica un ASCLVID3 real del transcodificador byte a byte contra la referencia Python (fixtures de `test_ascl_v2.py`, patrón F7-4). Re-etiquetar la versión con CRC válido rompe el parseo en ambas direcciones (test en ambos lados). Spec §14. Default de producto sigue v2 hasta adopción (S-4). CI verde runs 33347145874 / 33347424117 / 33347587088 |
 | F6-4 | nombre versionado `clip.<sha-corto>.asclv` + CACHE-001 | pendiente | | prueba de caché fría y caliente |
 
 ## Sincronización y fases finales
@@ -271,8 +275,8 @@ están en el REGISTRO, por Instancia.
 (post-E-18) y 33235096580 (post-E-19/E-20) reprodujeron byte a byte `adef9e53…c05bb`;
 la Instancia 027 reprodujo `41c94170…` y `221de28f…` con el emisor post-E-24. Desde
 E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión vigente:
-**327 pruebas Python (319 + 8 de F6-1) y 26 suites JavaScript** (CI de `95c1f9c`,
-run 33346511477).
+**339 pruebas Python (327 + 12 de F6-3) y 27 suites JavaScript** (+`test_v3_cross`;
+CI de `1e16d18`, run 33347587088).
 
 ## Bitácora de decisiones de ejecución (historial append-only)
 
@@ -331,4 +335,5 @@ run 33346511477).
 | 2026-08-30 | **Deploy del player a Cloudflare CERRADO en la sesión nueva** (directiva del operador: «de lo que hay en Cloudflare activo no toques nada, solo es agregar»). El repo GitHub resultó privado y el sandbox del conector API tiene egreso bloqueado, así que la vía elegida fue: bucket R2 nuevo `asciline-player` + Worker nuevo `asciline-player` (file-server ES-modules con binding R2, ETag/304, content-types, strip de `/player`) con endpoint `PUT /__upload/<key>` guardado por secret `UPLOAD_TOKEN` de un solo uso; los 52 archivos (57 MB) se subieron desde la máquina local con `curl` y header `x-sha256` — R2 verifica el digest en el `put` (los 3 clips coinciden con `b081f4ba…`/`2a9201bf…`/`27ae0019…`). Ruta agregada `iargen.com/player*`; reproducción verificada en navegador en `iargen.com/player/`, `/player/1280-15/` y `/player/1280-12/`; homepage Pages de iargen.com intacto | los preview.mp4 validan calidad pero no el pipeline JS real; esto lo hostea con URL pública para el celular y deja la base del TV físico (F8). R2 en vez de Pages/KV por el límite de 25 MB (el futuro 1920 entra sin tocar nada). El token no se persistió: para subir de nuevo se rota el secret vía API |
 | 2026-08-30 | **El 1920@10 se suma al player hosteado vía CI** (`/player/1920-10/`, pedido del operador «¿y el 1920?»): el clip no estaba local (solo artifact `clip-asclv` del run 33333170964, retención 14 días) y la máquina no tiene `gh`, así que nace el workflow `publish-player` (`bc73e8d`): el runner baja el artifact con su GITHUB_TOKEN, verifica `sha256sum -c` contra el SHA esperado del pedido y hace el `PUT` al worker; R2 re-verifica el digest al guardar. La autorización fue POR CONTENIDO (pin key+SHA `87160987…8d4e` cargado en el worker, retirado tras publicar; el token rotativo se regeneró dentro del sandbox sin registrarse) porque el clasificador de permisos bloqueó — con razón — commitear un token al repo. Reproducción verificada: badge `ASCL v2 1920x1080 @10fps` | los estáticos del player los subió la máquina local (16 archivos); el circuito CI→worker queda probado para clips futuros. Respuesta a la pregunta del operador: subir pruebas nuevas NO requiere redeploy — la vía manual solo rota el secret; la vía CI hoy pide cargar/retirar el pin (redeploy corto) y si se vuelve habitual se migra a `__pins.json` en el bucket |
 | 2026-08-30 | **F6 (S-4) arranca con el visto del operador** («arrancá F6 mientras pruebo el player»), en orden F6-1 → F6-3 → F6-2 → F6-4: el barrido definitivo de `tile_size` (F6-2) se difiere hasta tener el codec v3 completo, porque tanto E-23 como el SPARSE diferencial cambian la estadística por tile — barrer antes mediría un codec que no será el desplegado. F6-1 se implementa **opt-in con el gate en el envelope**: el modo no se negocia desde el stream (un stream leído con el modo equivocado puede decodificar en silencio a otra matriz), así que lo declara el header ASCLVID3 en F6-3 | mismo patrón que E-22/E-23 (default = bytes idénticos hasta que el envelope lo active); S-4 despliega UNA sola versión de decoder al TV. Nota operativa: el estado del CI se consulta ahora por API de GitHub con la credencial git ya almacenada en la máquina (Chrome sin extensión conectada esta sesión; el repo es privado) |
+| 2026-08-30 | **F6-3 cerrada en tres commits con el mismo ID** (`f3cc1ef` Python, `53e725b` JS, `1e16d18` cross+spec; regla 0.1). Decisiones de diseño: (a) la versión del ENVELOPE y la del ASCL interior deben coincidir siempre (1↔1, 2↔2, 3↔3), igual que v1/v2 — un `.ascl` v3 extraído del bundle sigue autodeclarando su modo SPARSE por su propio header; (b) el modo diferencial NO se negocia desde el stream: un fixture dirigido demuestra que releer con el modo equivocado puede decodificar EN SILENCIO a otra matriz, así que el gate es la versión (regla 8) y re-etiquetarla con CRC recalculado rompe el parseo en ambas direcciones (testeado en Python y JS); (c) el `clip.slots` externo queda como VÍA DE TRANSICIÓN para v1/v2 — el live-player prefiere la meta embebida y solo si no existe hace el XHR; (d) el default de producto sigue emitiendo v2: adoptar v3 es la decisión de cierre de S-4, con el Δbytes que mida F6-2 | el criterio de S-4 es desplegar UNA sola versión nueva de decoder al TV con todos los cambios adentro; cada pieza quedó verificable en la regresión (round-trip Python↔JS byte-exacto incluido) antes de tocar ningún default |
 

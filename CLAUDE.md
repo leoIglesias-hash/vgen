@@ -108,11 +108,15 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
   `PUT /__upload/<key>` con `x-sha256`; desde CI, workflow `publish-player`
   (pin por contenido en el worker, sin secretos en el repo).
   Falta que el operador lo pruebe en celular / Smart TV (antesala de F8).
-- ▶ **F6 (S-4) EN CURSO (2026-08-30, orden F6-1 → F6-3 → F6-2 → F6-4):** F6-1
-  cerrada (`95c1f9c`: SPARSE diferencial opt-in, default byte-idéntico; el gate va
-  en el header v3). **Sigue F6-3** (envelope ASCLVID3 + sidecar adentro + espejo JS).
-  **INT-005 por época sigue CONDICIONADO** a que los gates físicos de F8 fallen para
-  el overlay nativo (dirección del operador 2026-08-30).
+- ▶ **F6 (S-4) EN CURSO (2026-08-30, orden F6-1 → F6-3 → F6-2 → F6-4):** F6-1 y
+  F6-3 cerradas — el formato v3 está completo de punta a punta (SPARSE diferencial
+  gateado por versión, envelope ASCLVID3 de 20 B con sidecar embebido, espejo JS,
+  round-trip Python↔JS byte-exacto en la regresión, spec §14). El default de
+  producto sigue v2: adoptar v3 es la decisión de cierre de S-4. **Sigue F6-2:**
+  workflow `encode` con `tile=sweep` + `format=v3` + receta de producto (da además
+  el primer Δbytes v3 vs v2). Después F6-4 (CACHE-001). **INT-005 por época sigue
+  CONDICIONADO** a que los gates físicos de F8 fallen para el overlay nativo
+  (dirección del operador 2026-08-30).
 - **Después:** F8 (S-6: TV físico, p95, MEM-001). Opcionales: E-11, W-15. Menor: si
   se retoma el 960, re-medirlo con refit 5.
 
