@@ -11,6 +11,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JS_SUITES = (
     "test_frontend_renderers.js",
+    "test_render_indexed.js",
     "test_reader_bundle_view.js",
     "test_reader_safety.js",
     "test_cache_refresh.js",

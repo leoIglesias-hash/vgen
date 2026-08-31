@@ -69,6 +69,21 @@ assert(inline[1].indexOf("function historyTable()") >= 0,
 assert(inline[1].indexOf("qs(\"renderer\")") >= 0 && inline[1].indexOf("qs(\"rec\")") >= 0,
   "renderer y reconstruccion deben ser forzables para comparar caminos");
 
+/* W-18: la paridad de pixeles GL vs Canvas2D corre donde hay contexto WebGL. */
+assert(inline[1].indexOf("function runParityCheck()") >= 0,
+  "el diagnostic debe verificar la paridad GL/2D al abrir");
+assert(inline[1].indexOf("gl.readPixels(0, 0, cols, rows") >= 0,
+  "la paridad se lee con readPixels, no a ojo");
+assert(inline[1].indexOf("(rows - 1 - y) * cols + x") >= 0,
+  "readPixels arranca abajo a la izquierda: la comparacion debe invertir la fila");
+assert(page.indexOf("id=\"parity\"") >= 0,
+  "el resultado de la paridad se publica en el HUD");
+
+/* W-19: escalado entero como herramienta de comparacion. */
+assert(inline[1].indexOf("scaleMode === \"int\"") >= 0);
+assert(inline[1].indexOf("renderer.setPresentationSize(width, height)") >= 0,
+  "el renderer necesita el tamano de presentacion para decidir su backing store");
+
 /* No mide audio a proposito (la cadencia es asunto de W-20). */
 assert(page.indexOf("<audio") < 0,
   "el diagnostic no reproduce audio: mide costo por frame");

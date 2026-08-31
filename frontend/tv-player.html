@@ -128,6 +128,11 @@
   var source=DEFAULT_SRC;
   var requestedRenderer=qs("renderer") || "auto";
   var loopEnabled=qs("loop") !== "0";
+  /* W-19: "fit" es el comportamiento historico (ocupa el panel, factor
+     fraccionario). "int" es herramienta de comparacion, no candidato a
+     producto: escala por un entero y deja letterbox, que es la unica forma de
+     ver el aporte del filtro sin el remuestreo fraccionario encima. */
+  var scaleMode=qs("scale")==="int" ? "int" : "fit";
   try { cacheStorage=window.localStorage || null; } catch(ignoredStorage) { cacheStorage=null; }
   var cacheTokens=window.ASCILINECacheRefresh.createTokenStore({
     source:source,
@@ -409,13 +414,28 @@
   function fitCanvas(){
     if(!reader || !cv){ return; }
     var size=viewportSize();
-    var ratio=reader.header.cols/reader.header.rows;
-    var width=size.width, height=Math.round(width/ratio);
+    var cols=reader.header.cols, rows=reader.header.rows;
+    var ratio=cols/rows;
+    var width=size.width, height=Math.round(width/ratio), factor;
     if(height>size.height){ height=size.height; width=Math.round(height*ratio); }
+    if(scaleMode==="int"){
+      factor=Math.floor(Math.min(size.width/cols,size.height/rows));
+      if(factor<1){ factor=1; }
+      width=cols*factor; height=rows*factor;
+    }
     cv.style.width=width+"px";
     cv.style.height=height+"px";
     cv.style.marginLeft=(-Math.round(width/2))+"px";
     cv.style.marginTop=(-Math.round(height/2))+"px";
+    /* W-19: el renderer necesita el tamano de presentacion para decidir su
+       backing store en modo soft. Si lo cambia, la superficie queda en blanco
+       y hay que volver a presentar el mismo frame (sin re-decodificar). */
+    if(renderer && typeof renderer.setPresentationSize==="function"){
+      if(renderer.setPresentationSize(width,height) &&
+         typeof renderer.present==="function"){
+        try { renderer.present(); } catch(ignoredPresent) {}
+      }
+    }
   }
 
   function drawCurrent(){

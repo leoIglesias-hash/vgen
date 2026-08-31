@@ -85,6 +85,20 @@
     return true;
   };
 
+  /* W-19: contraparte del contrato que usa WebGL. Canvas2D NO cambia su backing
+   * store con el tamano de presentacion: su `soft` sigue siendo el remuestreo del
+   * compositor (`image-rendering: auto`), que es la asimetria declarada entre
+   * renderers. Devuelve false = el caller no necesita volver a presentar. */
+  Canvas2DRenderer.prototype.setPresentationSize = function () { return false; };
+
+  /* Re-emite el ultimo frame ya convertido, sin volver a leer del reader. */
+  Canvas2DRenderer.prototype.present = function () {
+    if (!this._imageInit || !this.imgData || !this.reader) return false;
+    if (this.pixelScale > 1) { this._scaledPut(this.reader.header); }
+    else { this.ctx.putImageData(this.imgData, 0, 0); }
+    return true;
+  };
+
   Canvas2DRenderer.prototype.setReconstruction = function (reconstruction) {
     this.reconstruction = reconstructionName(reconstruction);
     setSmoothing(this.ctx, this.reconstruction === "soft");

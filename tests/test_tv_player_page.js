@@ -107,6 +107,15 @@ assert(page.indexOf("forceRefresh && !immutable && xhr.setRequestHeader") >= 0,
   "un recurso versionado por contenido nunca se fuerza a no-cache");
 assert(page.indexOf("cacheTokens.url(forceRefresh===true),false") >= 0,
   "el fallback al clip.asclv historico conserva el token de renovacion");
+/* W-19: el player informa el tamaño de presentación y vuelve a presentar si el
+   renderer cambió su backing store (redimensionarlo lo deja en blanco). */
+assert(page.indexOf("renderer.setPresentationSize(width,height)") >= 0,
+  "fitCanvas debe informar el tamaño de presentación al renderer");
+assert(page.indexOf("renderer.present()") >= 0,
+  "un cambio de backing store exige volver a presentar sin re-decodificar");
+assert(page.indexOf("var scaleMode=qs(\"scale\")===\"int\" ? \"int\" : \"fit\"") >= 0,
+  "el escalado entero es opt-in por query string: el default sigue siendo llenar el panel");
+
 assert(page.indexOf("mozfullscreenchange") >= 0);
 assert(page.indexOf("MSFullscreenChange") >= 0);
 
