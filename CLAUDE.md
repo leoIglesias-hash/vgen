@@ -108,15 +108,16 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
   `PUT /__upload/<key>` con `x-sha256`; desde CI, workflow `publish-player`
   (pin por contenido en el worker, sin secretos en el repo).
   Falta que el operador lo pruebe en celular / Smart TV (antesala de F8).
-- ▶ **F6 (S-4) EN CURSO (2026-08-30, orden F6-1 → F6-3 → F6-2 → F6-4):** F6-1 y
-  F6-3 cerradas — el formato v3 está completo de punta a punta (SPARSE diferencial
-  gateado por versión, envelope ASCLVID3 de 20 B con sidecar embebido, espejo JS,
-  round-trip Python↔JS byte-exacto en la regresión, spec §14). El default de
-  producto sigue v2: adoptar v3 es la decisión de cierre de S-4. **Sigue F6-2:**
-  workflow `encode` con `tile=sweep` + `format=v3` + receta de producto (da además
-  el primer Δbytes v3 vs v2). Después F6-4 (CACHE-001). **INT-005 por época sigue
-  CONDICIONADO** a que los gates físicos de F8 fallen para el overlay nativo
-  (dirección del operador 2026-08-30).
+- ▶ **F6 (S-4) EN CURSO (2026-08-30): F6-1, F6-3 y F6-4 CERRADAS.** Formato v3
+  completo (SPARSE diferencial por versión, ASCLVID3 20 B con sidecar embebido,
+  espejo JS, round-trip Python↔JS byte-exacto, spec §14) + CACHE-001 verificado EN
+  PRODUCCIÓN (puntero `clip.current.txt` no-cache/304 → `clip.<sha12>.asclv`
+  immutable; player 768 ya sirve por esa vía, subplayers por fallback). El default
+  de producto sigue v2. **Falta solo F6-2:** barrido de `tile_size` corriendo en
+  Actions (run 33347720448, sweep+v3+receta de producto); con su fila se decide la
+  adopción de v3 y cierra S-4. **INT-005 por época sigue CONDICIONADO** a que los
+  gates físicos de F8 fallen para el overlay nativo (dirección del operador
+  2026-08-30).
 - **Después:** F8 (S-6: TV físico, p95, MEM-001). Opcionales: E-11, W-15. Menor: si
   se retoma el 960, re-medirlo con refit 5.
 
