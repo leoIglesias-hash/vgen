@@ -2619,3 +2619,47 @@ hospeda el WebView.
 Mitigacion inmediata, del lado de la app y sin tocar el player: pintar el WebView de
 negro (`setBackgroundColor`). No arregla la causa, pero convierte un flash blanco en un
 parpadeo negro contra una pagina oscura, que es mucho menos violento.
+
+#### DIAG-002, segundo corte: el renderer NO se muere; se cae la presentacion
+
+El operador refino el sintoma (2026-08-31, sus palabras): *"muestra el primer frame, el
+segundo tercero cuarto (al azar) va en blanco, luego muestra otro frame al azar, y asi..
+no funciona. Los frames que muestra o quedan en blanco son completos, es decir, la
+pantalla pintada en su totalidad de blanco o del frame."*
+
+Esa descripcion **contesta la pregunta decisiva del primer corte sin hacerla**: despues
+de los blancos aparece **otro frame mas adelante**, no el cuadro 0. La reproduccion
+avanza -> el JS esta vivo -> **la pagina nunca se recargo** -> el proceso renderer del
+WebView NO se esta muriendo. La hipotesis de muerte-y-recreacion queda **descartada**
+(y con ella la urgencia de MEM-001 como causa de ESTO; MEM-001 sigue anotada por
+derecho propio).
+
+Lo que queda es una falla de **presentacion**: el loop corre, el seek avanza, pero la
+mayoria de los cuadros no llegan compuestos a la pantalla; en esos vsyncs el WebView no
+tiene superficie valida y se ve el blanco de la ventana de la app que esta detras. Que
+sea la MAYORIA de los cuadros (2-4 blancos por cada uno visible) tambien descarta un
+hipo ocasional de GC: es sistematico.
+
+**Sospechoso principal: WebGL en la GPU/driver de la caja.** `pickRenderer()` en
+`live-player.html` elige WebGL siempre que `init()` devuelva true; el fallback a
+Canvas2D solo se dispara si la creacion falla o si llega `webglcontextlost`. Una GPU
+vieja que compila, dibuja "bien" por API y **no presenta** no dispara ninguno de los
+dos. Canvas2D es el piso por regla 6, y en las cajas de TV puede ser tambien el unico
+camino que compone.
+
+**La prueba decisiva ya esta publicada** (tv-player soporta `?renderer=` desde F4/W-14):
+
+| URL en el MISMO WebView | Renderer |
+|---|---|
+| `https://iargen.com/player/tv-player.html?renderer=canvas2d` | Canvas2D forzado |
+| `https://iargen.com/player/tv-player.html` | auto (elige WebGL) |
+
+- 2D limpio + auto blanco -> **causa = WebGL de la caja**; salida: default/deteccion por
+  entorno (y decidir si la raiz necesita el parametro o directamente otro default).
+- Los dos blancos -> la composicion falla independiente del renderer; el diagnostico se
+  muda a la capa de la app (hardware acceleration del WebView, tipo de layer).
+- Los dos limpios -> el sintoma es propio de `live-player.html` (la raiz) y hay que
+  bisectar que tiene la raiz que tv-player no.
+
+Mitigacion inmediata sin esperar el resultado, del lado de la app:
+`setBackgroundColor(negro)` en el WebView -> el blanco pasa a negro.
