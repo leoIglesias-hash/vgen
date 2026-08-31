@@ -39,8 +39,9 @@ tocar, cómo verificarlo y cuándo una tarea se considera cerrada.
 
 ## 1. Trabajo en curso (definido fuera de este archivo)
 
-- **En ejecución: F9 (S-8)**, con `W-16` ya cerrada; la próxima tarea es `W-17`. El
-  detalle vivo y el orden entre fases están en `RUNBOOK-ESTADO.md` §Próxima acción.
+- **En ejecución: F9 (S-8)**, con `W-16`, `W-17`, `W-18` y `W-19` ya hechas; queda
+  `W-20`. El detalle vivo y el orden entre fases están en `RUNBOOK-ESTADO.md`
+  §Próxima acción.
 - **Del operador:** probar `iargen.com/player/` en celular y Smart TV (antesala de F8).
 
 ### Principio de resolución y fps (operador, 2026-08-31 — extiende la regla 9)
@@ -85,24 +86,26 @@ de esta fase cambia el formato ni exige re-encodear.
 
 | ID | Archivo | Acción | Cierre |
 |---|---|---|---|
-| **W-18** | `frontend/render-webgl.js` | índices como textura `LUMINANCE` (subida directa de `cells`) + paleta como textura 256×1 RGBA + lookup en el fragment shader. `UNPACK_ALIGNMENT 1`, corrección de medio texel, `highp` con fallback a `mediump`. Camino RGBA actual **se conserva** como fallback | paridad de píxeles con Canvas2D en modo `nearest` (`readPixels` sobre frame sintético); conversión en CPU eliminada y upload ×4 menor, medidos |
-| **W-19** | `frontend/render-webgl.js`, `frontend/render-canvas2d.js`, `frontend/tv-player.html` | modo `soft` = 4 taps NEAREST + 4 lookups + mezcla en espacio de color (**nunca interpolar índices**); modo `nearest` idéntico a hoy; `fitCanvas` gana escalado entero por query string como herramienta de comparación | el operador compara en el TV 1280 `nearest` / 1280 `soft` / 1920 nativo sobre el mismo video |
 | **W-20** | `frontend/tv-player.html` | presentación anclada a la cadencia del display con corrección lenta contra el audio; pre-decode **solo del próximo keyframe** en el tiempo muerto, a un buffer alterno **fijo** de `cells` (no viola el invariante 7; adelantar deltas exigiría base definida sin romper el invariante 4 y se diseñaría aparte) | en el diagnostic, a 1920: drops < 0,1 % y p95 de decode+render bajo el presupuesto de frame |
 | **W-21** | `frontend/reader-v2.js`, ambos renderers | dirty rect en X (hoy la subida es banda de ancho completo: `x0/x1` no se calculan en ningún lado) | misma imagen; subida medida menor en corpus con cambios localizados. **Opcional dentro de F9** |
 
-**Ya cerradas de F9** (no re-implementar; evidencia en el REGISTRO, Instancias 032 y 033):
-`W-16` (banco + diagnostic) y `W-17` (LUT `Uint32` en los dos readers, salida
-byte-idéntica; keyframe a 1920 de 11,4 a 5,7 ms medido en una sola corrida de
-`bench-render` contra el baseline `f1ccfa3`). El test de paridad de la LUT vive en
-`tests/test_reader_palette_lut.js` y usa el corpus del banco.
+**Ya hecho de F9** (no re-implementar; evidencia en el REGISTRO, Instancias 032, 033 y
+034):
 
-Precondición dura **ya cumplida**: `W-16` cerrada el 2026-08-31 (`f1ccfa3`, CI verde) —
-`tools/bench_render.js` (banco de la conversión índice→RGBA; corre en `run_all.py` y
-publica su tabla en cada push, con el workflow `bench-render` para la corrida larga y el
-HEAD-vs-baseline) y `frontend/diagnostic-player.html` (**F8-1 adelantada**: desglose por
-etapa con p50/p95, drops y frames tarde). Ninguna otra tarea de F9 se cierra sin su fila
-de medición (reglas 5 y 6 del proyecto). W-18 y W-19 se implementan juntas: la textura de
-índices rompe el modo `soft` actual si la reconstrucción no la acompaña.
+- `W-16` **cerrada** (`f1ccfa3`) — `tools/bench_render.js` (banco de la conversión
+  índice→RGBA; corre en `run_all.py` y publica su tabla en cada push, con el workflow
+  `bench-render` para la corrida larga y el HEAD-vs-baseline) y
+  `frontend/diagnostic-player.html` (**F8-1 adelantada**: desglose por etapa con p50/p95,
+  drops y frames tarde). Ninguna otra tarea de F9 se cierra sin su fila de medición
+  (reglas 5 y 6).
+- `W-17` **cerrada** (`8cecc7b`) — LUT `Uint32` en los dos readers, salida byte-idéntica;
+  keyframe a 1920 de 11,4 a 5,7 ms en una sola corrida de `bench-render` contra el
+  baseline `f1ccfa3`. Test de paridad: `tests/test_reader_palette_lut.js`.
+- `W-18` y `W-19` **implementadas** (`07a94e2`) — textura de índices con paleta en el
+  shader (paridad GL/2D con **delta 0** verificada con contexto real; etapa `rgba` en
+  0,00 ms) y reconstrucción de 4 taps. Contrato con el driver fijado en
+  `tests/test_render_indexed.js`. **W-19 no se marca cerrada hasta el veredicto visual
+  del operador en el TV** (1280 `nearest` / 1280 `soft` / 1920 nativo).
 
 ### F10 — Pérdida adaptativa por suavidad (S-9)
 

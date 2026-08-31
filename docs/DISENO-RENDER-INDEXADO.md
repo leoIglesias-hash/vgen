@@ -180,6 +180,15 @@ dispositivos**, y W-18 acelera además donde la GPU lo permite. La frase operati
 un frame sintético leído con `readPixels`), más la medición del banco y del diagnostic.
 La imagen no cambia: esto acelera, no agrega función.
 
+**IMPLEMENTADA el 2026-08-31** (`07a94e2`, CI verde). Paridad verificada **con contexto
+WebGL real**: `paridad GL/2D: OK (delta max 0, camino indexado)`, publicada por
+`diagnostic-player.html` al abrir. El CI no puede correr esa prueba —no hay GL— así que
+ahí queda fijado el contrato con el driver (`tests/test_render_indexed.js`): formato y
+alineación de la subida, que la CPU **no** convierta, que la banda parcial sea una vista
+de `cells`, la re-subida de paleta solo cuando cambia, los cuatro fallbacks y el medio
+texel para los 256 índices. Corroboración en el mismo diagnostic con el clip de
+producción: la etapa `rgba` marca **0,00 ms** por frame.
+
 ---
 
 ## 5. W-19 — Reconstrucción: cómo se estira 1280 a un panel de 1920
@@ -221,6 +230,19 @@ remuestreo fraccionario.
 esto responde —y que hoy no se puede responder— es si el 1920 vale su costo o si un 1280
 bien reconstruido lo iguala por menos de la mitad de trabajo. **La respuesta se decide
 por video, nunca de una vez para siempre.**
+
+**IMPLEMENTADA el 2026-08-31** (`07a94e2`); el cierre visual queda pendiente del
+operador. Las tres presentaciones se eligen por query string: `?rec=soft`, `?scale=int`
+y la fuente 1920 por su propia variante publicada.
+
+**Decisión que este diseño no fijaba y hubo que tomar:** en `soft` el **backing store
+sigue al tamaño de presentación**. Con el framebuffer del tamaño de la grilla, cada
+fragmento cae justo en el centro de un texel y la mezcla de 4 taps sería un no-op —el
+estirado lo seguiría haciendo el compositor, que es exactamente lo que W-19 viene a
+sacar del medio—. El player informa ese tamaño con `setPresentationSize()` y vuelve a
+presentar si cambió (redimensionar el backing store lo deja en blanco). En `nearest` no
+cambia nada: `cols × rows`, bit a bit como antes. Canvas2D declara la misma interfaz y
+**no** cambia su backing store: su `soft` sigue siendo el remuestreo del compositor.
 
 ---
 
@@ -281,8 +303,8 @@ cambios localizados.
 |---|---|---|---|
 | 1 | **W-16** medición | — | no (**cerrada** 2026-08-31, `f1ccfa3`) |
 | 2 | **W-17** LUT Uint32 | W-16 | no (**cerrada** 2026-08-31, `8cecc7b`) |
-| 3 | **W-18** textura de índices | W-16, W-17 | no |
-| 4 | **W-19** reconstrucción | W-18 (acopladas) | no |
+| 3 | **W-18** textura de índices | W-16, W-17 | no (**implementada** 2026-08-31, `07a94e2`) |
+| 4 | **W-19** reconstrucción | W-18 (acopladas) | no (**implementada**; falta el veredicto visual del operador) |
 | 5 | **W-20** cadencia y pre-decode | W-16 | no |
 | 6 | W-21 dirty en X | W-16 | no |
 

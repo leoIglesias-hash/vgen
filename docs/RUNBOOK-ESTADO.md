@@ -21,37 +21,37 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 [`ejecutados/`](ejecutados/README.md) y en el
 [`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
 
-**F9 (S-8) en ejecución; `W-16` y `W-17` cerradas, siguen `W-18`+`W-19`.** Orden acordado
+**F9 (S-8) en ejecución; solo queda `W-20`.** Orden acordado
 con el operador (Instancia 030): **F9 → F10 → F11 → F8 → DIAG-001**.
 
-1. **`W-18` + `W-19`, juntas y las próximas.** Se implementan en el mismo lote porque la
-   textura de índices rompe el modo `soft` actual si la reconstrucción no la acompaña.
-   W-18 es la apuesta principal («probarlo cuanto antes»): subir `cells` como textura
-   `LUMINANCE` y resolver la paleta en el fragment shader, con el camino RGBA actual
-   **conservado como fallback**; W-19 es la reconstrucción de 4 taps (nunca interpolar
-   índices). Cierre: paridad de píxeles con Canvas2D en `nearest` vía `readPixels`, y la
-   comparación del operador en el TV entre 1280 `nearest`, 1280 `soft` y 1920 nativo.
-   Después: `W-20` (cadencia y pre-decode). **Lo ya cerrado de F9:** `W-16` (banco
-   `bench_render.js` + `diagnostic-player.html`) y `W-17` (LUT `Uint32`: el keyframe a
-   1920 bajó de 11,4 a 5,7 ms, salida byte-idéntica).
-2. **F10 (S-9)** — pérdida adaptativa por suavidad: E-25 → E-27 → E-26 → E-28. Ataca el
+1. **`W-20` — cadencia de presentación y pre-decode del keyframe, la próxima.** Es lo
+   último de F9. **Lo ya hecho de la fase:** `W-16` (banco + diagnostic), `W-17` (LUT
+   `Uint32`: keyframe a 1920 de 11,4 a 5,7 ms, byte-idéntico) y `W-18`+`W-19` (textura de
+   índices con paleta en el shader — paridad GL/2D con delta **0** y conversión en CPU en
+   **0,00 ms** medidos con GL real — más la reconstrucción de 4 taps).
+2. **Pendiente del operador para cerrar `W-19`:** comparar en el **TV**, sobre el mismo
+   video, `1280 nearest` (hoy), `1280 soft` (`?rec=soft`) y `1920 nativo`. La pregunta
+   que responde es si el 1920 vale su costo o si un 1280 bien reconstruido lo iguala; y
+   se responde **por video**, no de una vez para siempre. `?scale=int` fuerza escalado
+   entero con letterbox para ver el filtro sin el remuestreo fraccionario encima.
+3. **F10 (S-9)** — pérdida adaptativa por suavidad: E-25 → E-27 → E-26 → E-28. Ataca el
    degradé escalonado sin devolver el ahorro del near-lossless 8.
-3. **F11 (S-10)** — formato v4: E-30 (LOD horneado, **sin** cambio de formato, medible
+4. **F11 (S-10)** — formato v4: E-30 (LOD horneado, **sin** cambio de formato, medible
    solo) → E-31 (análisis de frames de solo-paleta, sin formato) → F11-1 (opcode
    `LOD2`) → F11-5 (paleta en delta, **solo si E-31 lo justifica**) → F11-2
    (**transparencia**, pedido del operador) → F11-3 (espejo JS + cross-test) → F11-4
    (barrido y adopción). Idea anotada sin tarea: **paletas por región** (gate: que E-25
    muestre saturación de las 256 entradas).
-4. **F8 (S-6)** — validación física en TV, ya con F9-F11 adentro. **INT-005 sigue
+5. **F8 (S-6)** — validación física en TV, ya con F9-F11 adentro. **INT-005 sigue
    CONDICIONADO** a que los gates físicos fallen para el overlay nativo (dirección del
    operador 2026-08-30).
-5. **DIAG-001** — causa del escalonado del huevo; **al final por decisión del operador**,
+6. **DIAG-001** — causa del escalonado del huevo; **al final por decisión del operador**,
    y probablemente ya resuelto por F9/F10 para entonces.
-6. **Del operador, en paralelo:** probar `https://iargen.com/player/` en el **celular y
+7. **Del operador, en paralelo:** probar `https://iargen.com/player/` en el **celular y
    el Smart TV**. Ya aprobó el v3 a ojo en desktop («se ve igual», Instancia 029).
    Variantes para comparar: raíz = producto 1280@15 **v3**, `/player/1280-15/` (v2),
    `/player/1280-12/`, `/player/1920-10/`.
-7. Opcionales sin fase: E-11 (flags de audio), W-15 (camino ASCII), W-21 (dirty en X),
+8. Opcionales sin fase: E-11 (flags de audio), W-15 (camino ASCII), W-21 (dirty en X),
    E-29 (costo de decode en la elección de tag). Menor: si se retoma el 960, re-medirlo
    con refit 5. Infra: si `publish-player` se vuelve habitual, migrar los pins a un
    `__pins.json` en el bucket.
@@ -122,9 +122,9 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §3.
 |---|---|---|---|---|
 | W-16 | F9 | banco `bench_render.js` + `diagnostic-player.html` (F8-1 adelantada) | **cerrada 2026-08-31** (`f1ccfa3`) | no |
 | W-17 | F9 | LUT `Uint32` de paleta en la conversión RGBA | **cerrada 2026-08-31** (`8cecc7b`) | no |
-| W-18 | F9 | textura de índices + paleta en el shader (WebGL) | **pendiente — próxima, con W-19** | no |
-| W-19 | F9 | reconstrucción de 4 taps (modo `soft`) + escalado entero de diagnóstico | **pendiente — próxima, con W-18** | no |
-| W-20 | F9 | cadencia de presentación y pre-decode del keyframe | pendiente | no |
+| W-18 | F9 | textura de índices + paleta en el shader (WebGL) | **implementada 2026-08-31** (`07a94e2`); paridad GL/2D verificada (delta 0) | no |
+| W-19 | F9 | reconstrucción de 4 taps (modo `soft`) + escalado entero de diagnóstico | **implementada 2026-08-31** (`07a94e2`); **falta la comparación visual del operador en el TV** | no |
+| W-20 | F9 | cadencia de presentación y pre-decode del keyframe | **pendiente — próxima** | no |
 | W-21 | F9 | dirty rect en X | opcional — **candidata a dejar de serlo**: W-17 mostró que en deltas dispersos el costo dominante es barrer todo `dirtyCellBits`, no escribir | no |
 | E-25 | F10 | `--gradient-boost` + mapa de suavidad reutilizable | pendiente | solo con valores ≠ 3.0 |
 | E-27 | F10 | guard anti-banding del trellis espacial | pendiente | sí |
@@ -245,3 +245,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-31 | **Revisión del plan + dos ideas nuevas anotadas para v4** (Instancia 031): el operador pidió el parecer sobre los diseños y una idea más. Se anotaron (a) **frames de solo-paleta** (E-31 análisis sin formato → F11-5 condicionada: fundidos/flashes como transformada de paleta, ~800 B por frame en vez de cientos de KB) y (b) **paletas por región** (idea del operador: N paletas de 256 con selector por tile, partición sin superposición — la región rica es dueña exclusiva de sus tiles y el fondo queda hueco debajo; gate: saturación real de las 256 en E-25). Descartado el salto a paleta de 512 (rompe el byte por celda: reescribir todos los opcodes, +30-70 % de bytes, doble subida). Ajustes de detalle cableados: E-30 excluye rampas suaves con el mapa de E-25; E-26 se mide contra el producto post-E-27; W-20 pre-decodifica **solo** keyframes | las dos ideas quedan con gate explícito para no relajar canonicidad ni cambiar formato «por si acaso»; lo medido sigue atribuyendo el escalonado a trellis (F10) y estirado fraccionario (W-19), no a falta de colores. El plan de ejecución no cambia: arranca W-16 |
 | 2026-08-31 | **W-16 cerrada: F9 ya tiene banco** (Instancia 032, commit `f1ccfa3`, CI verde). `tools/bench_render.js` mide la conversión índice→RGBA sobre tres grillas × tres perfiles y compara el camino de bytes vigente contra el prototipo LUT `Uint32`; `frontend/diagnostic-player.html` (**F8-1 adelantada**) desglosa inflate/walk/RGBA/blit por frame con p50/p95, drops y tarde. Medición: keyframe a 1920 = **11,0 ms de pura conversión** en runner de CI; la LUT da **1,3×–3,3×** (≈2,2× en keyframe y tiles densos). Paridad byte a byte verificada en los 9 casos | el banco **publica** la tabla y **no** juzga tiempos (el runner comparte CPU: sería un test intermitente); lo que falla el CI es la paridad. La instrumentación vive entera en la página de diagnóstico, envolviendo métodos de la instancia: ningún archivo de producción se modifica para medir, así que lo medido es lo que corre en el TV. W-17 queda justificada con números antes de escribirse |
 | 2026-08-31 | **W-17 cerrada: LUT `Uint32` en los dos readers** (Instancia 033, commit `8cecc7b`, CI verde). Medido con `bench-render` HEAD vs baseline `f1ccfa3` **en la misma corrida**: keyframe a 1920 **11,4 → 5,7 ms** (2,0×), tiles densos 6,2 → 3,3 (1,9×), disperso 1,14 → 0,85 (1,33×). Salida **byte-idéntica**, verificada corriendo los dos caminos sobre el mismo reader y el mismo frame | el destino es el selector del camino (vista `Uint32` alineada → palabra; Array plano o desalineado → bytes), y eso hace que la paridad sea comprobable sin duplicar corpus. La LUT se cachea por identidad de paleta, no por frame. El disperso gana poco porque el costo dominante es barrer todo `dirtyCellBits`: es el argumento para que **W-21 deje de ser opcional** |
+| 2026-08-31 | **W-18 + W-19 implementadas** (Instancia 034, commit `07a94e2`, CI verde): en PIXEL la GPU recibe los **índices** (`LUMINANCE`) y la paleta como textura 256×1; el lookup y la mezcla de 4 taps viven en el shader. Verificado con **contexto WebGL real**: `paridad GL/2D: OK (delta max 0, camino indexado)` y etapa `rgba` en **0,00 ms** con el clip de producción. Decisión tomada acá, que el diseño no fijaba: en `soft` el **backing store sigue al tamaño de presentación** (si midiera lo mismo que la grilla, la mezcla sería un no-op y el estirado lo seguiría haciendo el compositor) | los tres modos de fallar en silencio quedaron con test: `UNPACK_ALIGNMENT` en 1, medio texel al indexar la paleta y `highp` con caída a `mediump`. La textura de índices **nunca** se filtra con LINEAR. **W-19 no se marca cerrada**: su criterio es el veredicto visual del operador en el TV, y eso no lo puede firmar nadie más |

@@ -111,18 +111,17 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
 Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
 **F9 → F10 → F11 → F8 → DIAG-001**.
 
-- **F9 (S-8) — EN EJECUCIÓN. `W-16` (`f1ccfa3`) y `W-17` (`8cecc7b`) CERRADAS; siguen
-  `W-18`+`W-19` juntas.** Aceleración del frontend sin tocar bytes ni formato. Ya hay
-  banco: `tools/bench_render.js` (corre en `run_all.py`, publica tabla en cada push;
-  workflow `bench-render` para la corrida larga y HEAD-vs-baseline) y
-  `frontend/diagnostic-player.html` (F8-1 adelantada, desglose por etapa con p50/p95).
-  La LUT `Uint32` ya está en los dos readers: keyframe a 1920 **11,4 → 5,7 ms**, salida
-  byte-idéntica. **El frontend desplegado en iargen.com todavía es el anterior: la
-  publicación se hace al cerrar F9, no por tarea.** Siguen:
-  **textura de índices + paleta en el shader** (W-18, «probarlo cuanto antes»),
-  reconstrucción de 4 taps (W-19, acoplada a W-18), cadencia y pre-decode (W-20).
-  Motivo: la conversión índice→RGBA cuesta ~14,5 M accesos y 8,3 MB de subida por
-  keyframe a 1920. Diseño: `docs/DISENO-RENDER-INDEXADO.md`.
+- **F9 (S-8) — EN EJECUCIÓN; solo queda `W-20`.** Aceleración del frontend sin tocar
+  bytes ni formato. Hecho: `W-16` (`f1ccfa3`, banco `tools/bench_render.js` + workflow
+  `bench-render` + `frontend/diagnostic-player.html`), `W-17` (`8cecc7b`, LUT `Uint32`
+  en los dos readers: keyframe a 1920 **11,4 → 5,7 ms**, byte-idéntico) y `W-18`+`W-19`
+  (`07a94e2`, índices como textura `LUMINANCE` con paleta en el shader —**paridad GL/2D
+  con delta 0** y conversión en CPU en **0,00 ms**, medidas con GL real— más
+  reconstrucción de 4 taps y `?scale=int`). Falta `W-20` (cadencia y pre-decode) y, del
+  operador, el **veredicto visual en el TV** de `W-19`: 1280 `nearest` vs 1280
+  `?rec=soft` vs 1920 nativo. **El frontend desplegado en iargen.com todavía es el
+  anterior: la publicación se hace al cerrar F9, no por tarea.**
+  Diseño: `docs/DISENO-RENDER-INDEXADO.md`.
 - **F10 (S-9)** — pérdida adaptativa por suavidad (E-25, E-27, E-26, E-28): el banding
   solo se ve en zonas suaves, así que el presupuesto deja de ser plano. Ataca el degradé
   escalonado del huevo sin devolver el ahorro del near-lossless 8. Emite v3 igual que

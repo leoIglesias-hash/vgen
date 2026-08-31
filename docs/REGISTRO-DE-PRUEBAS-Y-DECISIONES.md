@@ -2018,3 +2018,92 @@ shader, y reconstruccion de 4 taps): la textura de indices rompe el modo `soft`
 actual si la reconstruccion no la acompana. El player desplegado en
 `iargen.com/player/` todavia corre el frontend anterior; la publicacion del
 frontend acelerado se hace al cerrar F9, no por tarea.
+
+---
+
+## Instancia 034 - 2026-08-31 - W-18 + W-19: textura de indices, paleta en el shader y reconstruccion de 4 taps
+
+Commit `07a94e2`, regresion en verde. Van juntas porque la textura de indices
+rompe el modo `soft` anterior si la reconstruccion no la acompana.
+
+### W-18: la GPU deja de recibir RGBA
+
+En modo PIXEL la textura que se sube son los INDICES tal cual (LUMINANCE, 1
+byte por celda) y la paleta viaja como textura 256x1 RGBA; el lookup lo hace el
+fragment shader.
+
+| | antes | ahora |
+|---|---|---|
+| conversion en CPU | `fillRGBA*` sobre las celdas sucias | **ninguna** |
+| subida por frame completo a 1920 | 8,3 MB | **2,07 MB** |
+| buffer RGBA residente | 8,3 MB | **no se reserva** |
+
+Los tres detalles que deciden si esto anda o falla en silencio quedaron
+cubiertos y con test:
+
+1. **`UNPACK_ALIGNMENT` en 1.** El default es 4: una textura de 1 byte por
+   texel con ancho no multiplo de 4 se sube corrida fila a fila. 1280 y 1920 lo
+   son, pero la directiva del operador es que el front acepte cualquier
+   resolucion, asi que esto no es opcional.
+2. **Correccion de medio texel** al indexar la paleta (`idx * 255/256 +
+   0,5/256`). Sin ella el lookup cae en el borde entre dos entradas y los
+   colores salen corridos una posicion. El test lo verifica para los 256
+   indices, no para una muestra.
+3. **`highp` con fallback a `mediump`**: 256 niveles necesitan pasos de 1/255 y
+   mediump (~2^-10) entra sin margen.
+
+**Fallbacks, ninguno opcional:** modo no PIXEL, shader que no compila,
+LUMINANCE ausente, o sonda de 2x2 rechazada -> camino RGBA anterior entero. Y
+si la primera subida indexada del video falla, se degrada a RGBA **en caliente**
+y el cuadro se rehace completo: no hay hueco visible.
+
+### W-19: como se estira 1280 a un panel de 1920
+
+- **`nearest`**: 1 tap, identico a antes, bit a bit. Sigue siendo el default.
+- **`soft`**: 4 taps NEAREST sobre los INDICES, 4 lookups de paleta y mezcla de
+  los COLORES resultantes. Interpolar indices produce colores arbitrarios (el
+  indice 100 entre el 99 y el 101 no tiene relacion de color con ellos), por eso
+  la textura de indices **nunca** se filtra con LINEAR.
+
+**Decision que el diseno no fijaba y hubo que tomar:** en `soft` el backing
+store del canvas sigue al **tamano de presentacion**. Con el framebuffer del
+tamano de la grilla cada fragmento cae justo en el centro de un texel y la
+mezcla de 4 taps seria un no-op: el estirado real lo estaria haciendo el
+compositor igual que antes. El player informa ese tamano con
+`setPresentationSize()` y vuelve a presentar si cambio (redimensionar el
+backing store lo deja en blanco). En `nearest` no cambia nada: cols x rows.
+Canvas2D declara la misma interfaz y NO cambia su backing store; su `soft`
+sigue siendo el remuestreo del compositor, que es la asimetria entre renderers
+ya documentada.
+
+Ademas `?scale=int` en el player y en el diagnostic: escala por un entero con
+letterbox. No es candidato a producto -desperdicia panel- pero es la unica
+forma de ver el aporte del filtro sin el remuestreo fraccionario encima.
+
+### Evidencia
+
+- **Paridad de pixeles GL vs Canvas2D, con contexto WebGL real**: el diagnostic
+  la corre al abrir y publico **`paridad GL/2D: OK (delta max 0, camino
+  indexado)`**. Delta maximo CERO sobre el frame sintetico, y el camino activo
+  fue el indexado. Es el criterio de cierre de W-18, y no se puede correr en el
+  CI porque ahi no hay GL.
+- **La conversion en CPU efectivamente desaparecio**: en el mismo diagnostic,
+  con el clip de produccion 1280@15 v3, la etapa `rgba` marca **0,00 ms** por
+  frame (antes era la etapa mas cara despues del walk).
+- `tests/test_render_indexed.js` (cableado en `run_all.py`) fija el contrato con
+  el driver: formato y alineacion de la subida, que la CPU no convierta, que la
+  banda parcial sea una VISTA de `cells`, que la paleta se re-suba solo cuando
+  cambia, los cuatro fallbacks y la aritmetica del medio texel.
+
+### Lo que NO cierra todavia
+
+El criterio del operador para W-19 es visual y en el televisor: comparar sobre
+el mismo video **1280 `nearest`**, **1280 `soft`** y **1920 nativo**. Eso queda
+pendiente de su revision; el codigo esta listo y las tres presentaciones se
+eligen por query string (`?rec=soft`, `?scale=int`).
+
+Anotado del entorno: el panel de navegador de esta maquina no compone, asi que
+`requestAnimationFrame` no dispara nunca aunque `document.hidden` sea false. La
+paridad se pudo medir igual (no depende del loop), pero los percentiles por
+frame necesitan una pantalla real. No es un problema del player: en un TV el
+compositor corre.
