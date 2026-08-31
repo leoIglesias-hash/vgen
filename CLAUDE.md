@@ -101,10 +101,12 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
   definiciones finales** (qué resolución/fps queda de producto). La tasa por celda cae
   al subir resolución: 0,1451 → 0,1144 → 0,1023 B/celda/frame.
 - ✅ **Player EN PRODUCCIÓN (2026-08-30):** `https://iargen.com/player/` (768),
-  `/player/1280-15/`, `/player/1280-12/` (espejo `asciline-player.iargen.workers.dev`).
-  Infra 100 % nueva: bucket R2 `asciline-player` + Worker `asciline-player` + ruta
-  `iargen.com/player*` — nada preexistente se tocó. Subidas futuras (p. ej. 1920):
-  rotar el secret `UPLOAD_TOKEN` vía API y `PUT /__upload/<key>` con `x-sha256`.
+  `/player/1280-15/`, `/player/1280-12/`, `/player/1920-10/` (espejo
+  `asciline-player.iargen.workers.dev`). Infra 100 % nueva: bucket R2 `asciline-player`
+  + Worker `asciline-player` + ruta `iargen.com/player*` — nada preexistente se tocó.
+  Subidas futuras SIN redeploy: rotar el secret `UPLOAD_TOKEN` vía API y
+  `PUT /__upload/<key>` con `x-sha256`; desde CI, workflow `publish-player`
+  (pin por contenido en el worker, sin secretos en el repo).
   Falta que el operador lo pruebe en celular / Smart TV (antesala de F8).
 - **Después:** F6 (S-4: ASCLVID3, SPARSE diferencial, barrido definitivo de tile,
   CACHE-001; **INT-005 por época quedó CONDICIONADO** a que los gates físicos de F8

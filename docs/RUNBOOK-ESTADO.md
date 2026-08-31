@@ -28,19 +28,24 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en
    Nada instalado en `outputs/` ni cambiado en los defaults del workflow.
    Hallazgo que guía la decisión: la tasa por celda CAE al subir resolución
    (0,1451 → 0,1144 → 0,1023 B/celda/frame).
-2. **Player EN PRODUCCIÓN (deploy cerrado 2026-08-30).** URLs públicas:
-   **`https://iargen.com/player/`** (768 producto `b081f4ba…`),
-   **`/player/1280-15/`** (`2a9201bf…`), **`/player/1280-12/`** (`27ae0019…`); espejo en
+2. **Player EN PRODUCCIÓN (deploy cerrado 2026-08-30; 1920 agregado el mismo día).**
+   URLs públicas: **`https://iargen.com/player/`** (768 producto `b081f4ba…`),
+   **`/player/1280-15/`** (`2a9201bf…`), **`/player/1280-12/`** (`27ae0019…`),
+   **`/player/1920-10/`** (`87160987…`); espejo en
    `https://asciline-player.iargen.workers.dev/`. Infra (todo NUEVO, nada existente se
-   tocó): bucket R2 `asciline-player` (52 objetos, SHA-256 verificado por R2 en cada
+   tocó): bucket R2 `asciline-player` (69 objetos, SHA-256 verificado por R2 en cada
    `put`) + Worker `asciline-player` (file-server con ETag/304, binding `BUCKET`, strip
-   del prefijo `/player`) + ruta `iargen.com/player*` en la zona. Para subir/actualizar
-   clips (p. ej. un futuro 1920, R2 no tiene el límite de 25 MB): rotar el secret
-   `UPLOAD_TOKEN` del worker vía API y hacer `PUT /__upload/<key>` con headers
-   `x-upload-token` y `x-sha256` (el token de esta sesión no se persistió, a propósito).
-   Reproducción verificada en navegador (frames avanzan, logo INT-007 gira, badge
-   `ASCL v2 1280x720 @15fps`); homepage de iargen.com intacto. Queda pendiente que el
-   operador lo pruebe en el celular y en el Smart TV (antesala de F8).
+   del prefijo `/player`) + ruta `iargen.com/player*` en la zona. Dos vías para
+   subir/actualizar clips (R2 no tiene el límite de 25 MB): (a) manual desde la máquina
+   de trabajo — rotar el secret `UPLOAD_TOKEN` vía API (NO es redeploy) y
+   `PUT /__upload/<key>` con `x-upload-token` + `x-sha256`; (b) desde CI — workflow
+   `publish-player` (editar `tools/publish-player-request.json` con run_id/artifact/
+   sha256/dest), autorizado POR CONTENIDO: un pin key+SHA-256 se carga en el worker
+   antes y se retira después (sin secretos en el repo). Mejora pendiente si (b) se
+   vuelve habitual: pins en un `__pins.json` del bucket para no redeployar el worker.
+   Ningún token quedó persistido. Reproducción verificada en navegador en las 4
+   resoluciones; homepage de iargen.com intacto. Queda pendiente que el operador lo
+   pruebe en el celular y en el Smart TV (antesala de F8).
 3. **Después: F6 (S-4)** — revisión única de formato (runbook §3): SPARSE diferencial,
    barrido definitivo de `tile_size` sobre la salida del trellis, `ASCLVID3` con el
    sidecar adentro, nombre versionado/CACHE-001. **INT-005 (parches por época) quedó
@@ -307,4 +312,5 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-30 | **Veredicto parcial de S-7 y segundo escalón medido**: el operador aprobó el 1280 («quedó perfecto», y del 12 fps «casi ni se nota la diferencia de frames») y pidió el **1920 @ 10 fps solo para probar** → run 33333170964: **`87160987…8d4e` = 32.838.265 B = 84,3 % de la fuente** (34,81 dB, err_temporal 0,00803, wall 1:02:07, RSS 3,35 GB). La tasa por celda cayó OTRO escalón (0,1144 → 0,1023) a pesar de los 10 fps. En paralelo, a su pedido, el player real quedó empaquetado en `outputs/deploy-player/` (768 + 1280@15 + 1280@12, SHAs verificados) para hostearlo en Cloudflare/iargen.com desde una sesión nueva con su conector (esta no lo recibió: los conectores se fijan al inicio de sesión) | los preview.mp4 validan la CALIDAD (decodificación exacta) pero no el pipeline de reproducción JS — el hosting cubre eso y deja la base para el TV físico de F8. Falta el veredicto visual del 1920@10 y las definiciones finales de S-7; la Instancia 028 sigue ABIERTA |
 | 2026-08-29 | **E-21 adoptada y el SHA de producto se mueve a propósito**: `74be25ef…` → `41c94170…79d5` (+2.040 B, +0,012 %; PSNR/Oklab idénticos; wall −54 %). La regla 5 se preserva en su forma fuerte — la ELECCIÓN de candidatos ahora es idéntica en todos los entornos (zlib-9), cosa que antes NO pasaba: con Zopfli instalado el tag elegido podía diferir del elegido sin Zopfli. La referencia vieja queda como fila histórica congelada, como P-02 en su momento | el emisor cambió (jerarquía de costo); re-encodear desde main reproduce `41c94170…`, no `74be25ef…`. Es la primera tarea de F5 que cambia la salida, anunciada como tal |
 | 2026-08-30 | **Deploy del player a Cloudflare CERRADO en la sesión nueva** (directiva del operador: «de lo que hay en Cloudflare activo no toques nada, solo es agregar»). El repo GitHub resultó privado y el sandbox del conector API tiene egreso bloqueado, así que la vía elegida fue: bucket R2 nuevo `asciline-player` + Worker nuevo `asciline-player` (file-server ES-modules con binding R2, ETag/304, content-types, strip de `/player`) con endpoint `PUT /__upload/<key>` guardado por secret `UPLOAD_TOKEN` de un solo uso; los 52 archivos (57 MB) se subieron desde la máquina local con `curl` y header `x-sha256` — R2 verifica el digest en el `put` (los 3 clips coinciden con `b081f4ba…`/`2a9201bf…`/`27ae0019…`). Ruta agregada `iargen.com/player*`; reproducción verificada en navegador en `iargen.com/player/`, `/player/1280-15/` y `/player/1280-12/`; homepage Pages de iargen.com intacto | los preview.mp4 validan calidad pero no el pipeline JS real; esto lo hostea con URL pública para el celular y deja la base del TV físico (F8). R2 en vez de Pages/KV por el límite de 25 MB (el futuro 1920 entra sin tocar nada). El token no se persistió: para subir de nuevo se rota el secret vía API |
+| 2026-08-30 | **El 1920@10 se suma al player hosteado vía CI** (`/player/1920-10/`, pedido del operador «¿y el 1920?»): el clip no estaba local (solo artifact `clip-asclv` del run 33333170964, retención 14 días) y la máquina no tiene `gh`, así que nace el workflow `publish-player` (`bc73e8d`): el runner baja el artifact con su GITHUB_TOKEN, verifica `sha256sum -c` contra el SHA esperado del pedido y hace el `PUT` al worker; R2 re-verifica el digest al guardar. La autorización fue POR CONTENIDO (pin key+SHA `87160987…8d4e` cargado en el worker, retirado tras publicar; el token rotativo se regeneró dentro del sandbox sin registrarse) porque el clasificador de permisos bloqueó — con razón — commitear un token al repo. Reproducción verificada: badge `ASCL v2 1920x1080 @10fps` | los estáticos del player los subió la máquina local (16 archivos); el circuito CI→worker queda probado para clips futuros. Respuesta a la pregunta del operador: subir pruebas nuevas NO requiere redeploy — la vía manual solo rota el secret; la vía CI hoy pide cargar/retirar el pin (redeploy corto) y si se vuelve habitual se migra a `__pins.json` en el bucket |
 
