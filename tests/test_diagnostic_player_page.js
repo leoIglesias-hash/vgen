@@ -84,6 +84,21 @@ assert(inline[1].indexOf("scaleMode === \"int\"") >= 0);
 assert(inline[1].indexOf("renderer.setPresentationSize(width, height)") >= 0,
   "el renderer necesita el tamano de presentacion para decidir su backing store");
 
+/* W-22: el diagnostic mide EL MISMO codigo que corre en produccion. Si la
+   cadencia y el pre-decode fueran una copia parecida, lo medido aca no diria
+   nada del player. Los hooks existen para instrumentar sin duplicar. */
+assert(page.indexOf('<script src="playloop.js"></script>') >= 0);
+assert(inline[1].indexOf("window.ASCILINEPlayLoop.create({") >= 0,
+  "la cadencia y el pre-decode salen del motor compartido");
+assert(inline[1].indexOf("onSpare: instrument") >= 0,
+  "los DOS readers se instrumentan: tras un intercambio se mide el que se usa");
+assert(/onPreDecode: function\(cost\)\{ if\(session\)\{ session\.predecode\.add\(cost\); \}/.test(inline[1]),
+  "el costo de adelantar keyframes alimenta la fila pre-key del HUD");
+assert(/onAdopt: function\(\)\{ if\(session\)\{ session\.adopted\+\+; \}/.test(inline[1]),
+  "y las adopciones se cuentan contra los adelantos");
+assert(inline[1].indexOf("engine.exchange(index, reader)") >= 0);
+assert(inline[1].indexOf("engine.idle(reader, target)") >= 0);
+
 /* No mide audio a proposito (la cadencia es asunto de W-20). */
 assert(page.indexOf("<audio") < 0,
   "el diagnostic no reproduce audio: mide costo por frame");

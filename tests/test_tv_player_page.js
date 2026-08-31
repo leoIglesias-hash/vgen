@@ -79,7 +79,7 @@ assert(refreshFunction[1].indexOf("discardLoadedVideo()") <
 var discardBody = page.match(/function discardLoadedVideo\(\)\{([\s\S]*?)\n  \}/);
 assert(discardBody, "debe existir la operación de descarte del video cargado");
 assert(discardBody[1].indexOf("disposeRenderer(true)") >= 0);
-assert(discardBody[1].indexOf("spareReader=null") >= 0,
+assert(discardBody[1].indexOf("engine.detach()") >= 0,
   "W-20: el reader de pre-decode también retiene un `cells` entero");
 assert(discardBody[1].indexOf("\n    reader=null;") >= 0);
 assert(discardBody[1].indexOf("lastShown=-1") >= 0);
@@ -131,23 +131,31 @@ assert(page.indexOf("renderer.present()") >= 0,
 assert(page.indexOf("var scaleMode=qs(\"scale\")===\"int\" ? \"int\" : \"fit\"") >= 0,
   "el escalado entero es opt-in por query string: el default sigue siendo llenar el panel");
 
-/* W-20: cadencia anclada al display y pre-decode del próximo keyframe. */
+/* W-20 + W-22: cadencia anclada al display y pre-decode del próximo keyframe,
+   con la maquinaria en el motor compartido (frontend/playloop.js). La página
+   solo aporta el reloj maestro, el reader y el renderer; la matemática de la
+   cadencia se verifica una vez en tests/test_playloop.js. */
+assert(page.indexOf('<script src="playloop.js"></script>') >= 0,
+  "el motor compartido tiene que estar cargado antes del controlador inline");
+assert(page.indexOf('src="playloop.js"') < page.indexOf("<script>"),
+  "playloop.js se carga antes del inline que lo usa");
+assert(page.indexOf("window.ASCILINEPlayLoop.create({") >= 0);
 assert(page.indexOf("function pacedTarget()") >= 0);
-assert(page.indexOf("phase+=drift*0.02") >= 0,
-  "la corrección contra el reloj maestro debe ser lenta, no un salto por cuadro");
-assert(page.indexOf("if(drift>2 || drift<-2){ phase=clock; }") >= 0,
-  "un desvío grande (seek, loop, stall) sí debe resincronizar de una");
+assert(page.indexOf("engine.target(clockFrames(),reader.header.fps)") >= 0,
+  "el reloj maestro de esta página (el audio, si hay) sigue siendo suyo");
 assert(page.indexOf("var pacingEnabled=qs(\"pacing\") !== \"off\"") >= 0 &&
   page.indexOf("var preDecodeEnabled=qs(\"predecode\") !== \"off\"") >= 0,
   "las dos piezas de W-20 deben poder apagarse desde el TV sin recompilar");
-assert(page.indexOf("function preDecodeIdle(") >= 0);
-assert(page.indexOf("if(slack<preDecodeCost+4){ return; }") >= 0,
-  "adelantar un keyframe que no entra en el tiempo muerto provocaría el tirón que esto evita");
-assert(page.indexOf("function nextKeyframe(") >= 0 &&
-  page.indexOf("reader._isKey(i)") >= 0,
-  "solo se adelantan keyframes: un delta exigiría una base definida");
-assert(page.indexOf("function adoptSpare()") >= 0,
+assert(/pacing:pacingEnabled,\s*predecode:preDecodeEnabled/.test(page),
+  "y esos dos interruptores deben llegar al motor");
+assert(page.indexOf("function preDecodeIdle(") >= 0 &&
+  page.indexOf("engine.idle(reader,target)") >= 0,
+  "el tiempo muerto entre cuadros se le ofrece al motor");
+assert(page.indexOf("function adoptSpare(index)") >= 0 &&
+  page.indexOf("engine.exchange(index,reader)") >= 0,
   "adoptar el keyframe adelantado es intercambiar readers, no copiar celdas");
+assert(/adopted=engine\.exchange\(index,reader\);[\s\S]{0,120}renderer\.reader=reader;/.test(page),
+  "tras el intercambio el renderer tiene que apuntar al reader adoptado");
 
 assert(page.indexOf("mozfullscreenchange") >= 0);
 assert(page.indexOf("MSFullscreenChange") >= 0);

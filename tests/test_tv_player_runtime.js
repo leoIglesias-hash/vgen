@@ -5,6 +5,7 @@ var fs = require("fs");
 var path = require("path");
 var vm = require("vm");
 var Cache = require("../frontend/cache-refresh.js");
+var PlayLoop = require("../frontend/playloop.js");
 
 var page = fs.readFileSync(
   path.join(__dirname, "..", "frontend", "tv-player.html"), "utf8");
@@ -186,6 +187,9 @@ function createRuntime(options) {
     URL: urlAPI,
     XMLHttpRequest: MockXHR,
     ASCILINECacheRefresh: Cache,
+    /* W-22: el motor real, no un doble: lo que se mide acá es el cableado de
+       la página contra la maquinaria que corre en producción. */
+    ASCILINEPlayLoop: PlayLoop,
     WebGLRenderer: MockWebGLRenderer,
     Canvas2DRenderer: MockCanvas2DRenderer,
     ASCL: readerAPI,

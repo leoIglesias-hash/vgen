@@ -50,6 +50,10 @@
  *   engine.invalidate()             el spare deja de ser adoptable
  *   engine.setPreDecode(bool)       apagarlo libera el segundo `cells`
  *   engine.detach()                 suelta el spare
+ *
+ * Hooks opcionales: onSpare(reader) al crearlo, onPreDecode(ms) al adelantar,
+ * onAdopt(index) al intercambiar. Existen para que el diagnostic mida lo mismo
+ * que corre en produccion, sin una segunda copia de la maquinaria.
  */
 (function (root, factory) {
   "use strict";
@@ -83,6 +87,9 @@
     this.preDecode = options.predecode !== false;
     this.onPreDecode = typeof options.onPreDecode === "function" ? options.onPreDecode : null;
     this.onAdopt = typeof options.onAdopt === "function" ? options.onAdopt : null;
+    /* El diagnostic instrumenta los DOS readers: despues de un intercambio el
+     * desglose por etapa tiene que seguir midiendo el que esta en uso. */
+    this.onSpare = typeof options.onSpare === "function" ? options.onSpare : null;
     /* Fraccion del cuadro actual ya transcurrida: de ahi sale el tiempo muerto
      * que puede gastar el pre-decode sin llegar tarde. */
     this.fraction = 0;
@@ -142,6 +149,7 @@
     try {
       this._spare = readerAPI.parse(buffer, offset, length);
       this._spare.decodedIndex = -1;
+      if (this.onSpare) { this.onSpare(this._spare); }
     } catch (ignoredSpareParse) {
       this._spare = null;
       return false;
