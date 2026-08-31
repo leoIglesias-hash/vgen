@@ -1,5 +1,5 @@
 /*
- * reader-v2.js - Reader ASCL v2 PIXEL regional/predictivo, ES5.
+ * reader-v2.js - Reader ASCL v2/v3 PIXEL regional/predictivo, ES5.
  *
  * Convive con reader.js y reader-factory.js despacha por version. Conserva el
  * header ASCL de 32 bytes y los tags 0..3 de v1. Los tags regionales son:
@@ -13,6 +13,11 @@
  * Todo entero variable es LEB128 uint32 canonico y todo packing es LSB-first.
  * Cada stream cubre exactamente la grilla. La validacion completa ocurre antes
  * de la primera escritura sobre la unica matriz logica persistente `cells`.
+ *
+ * F6-3: ASCL v3 = v2 + SPARSE con offsets DIFERENCIALES (delta = offset -
+ * prior - 1, prior arranca en -1). El modo lo declara la VERSION del header,
+ * nunca el stream (regla 8); en v3 el orden creciente es estructural y solo
+ * se acota el offset reconstruido al tile.
  */
 (function (root) {
   "use strict";
@@ -168,7 +173,9 @@
     this.dv = new DataView(buffer, byteOffset, byteLength);
     this.header = parseHeader(this.dv);
     h = this.header;
-    if (h.version !== 2) fail("version no soportada " + h.version);
+    if (h.version !== 2 && h.version !== 3) fail("version no soportada " + h.version);
+    /* F6-3: la version ES el gate del SPARSE diferencial. */
+    this._sparseDiff = h.version === 3;
     if (h.mode !== MODE_PIXEL) fail("v2 regional requiere modo PIXEL");
     if ((h.flags & 0xe0) !== 0) fail("flags reservados activos");
     if ((h.flags & FLAG_OFFSET_TABLE) === 0) fail("falta tabla de offsets");
@@ -494,9 +501,13 @@
         k = this._varValue; p = this._varNext;
         if (!k || k > npix) fail("SPARSE count invalido");
         if (apply) {
+          previousOffset = -1;
           for (i = 0; i < k; i++) {
             this._readUvar(raw, p, length);
             offset = this._varValue; p = this._varNext;
+            /* F6-3 (v3): el stream trae delta = offset - prior - 1. */
+            if (this._sparseDiff) offset = previousOffset + 1 + offset;
+            previousOffset = offset;
             value = raw[p++];
             y = Math.floor(offset / this._tileW);
             x = offset - y * this._tileW;
@@ -509,6 +520,9 @@
           for (i = 0; i < k; i++) {
             this._readUvar(raw, p, length);
             offset = this._varValue; p = this._varNext;
+            /* F6-3 (v3): en diferencial "creciente" es estructural; queda
+             * acotar el offset reconstruido al tile. */
+            if (this._sparseDiff) offset = previousOffset + 1 + offset;
             if (offset >= npix || offset <= previousOffset) fail("offset SPARSE no canonico");
             if (p >= length) fail("SPARSE truncado");
             value = raw[p++];

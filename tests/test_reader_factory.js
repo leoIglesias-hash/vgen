@@ -59,7 +59,7 @@ function make(version) {
   header[19] = 3;
   header.writeUInt32LE(32, 20);
   header.writeUInt16LE(1000, 24);
-  if (version === 2) { header[26] = 16; header[27] = 1; }
+  if (version >= 2) { header[26] = 16; header[27] = 1; }
   table.writeUInt32LE(36, 0);
   result = Buffer.concat([header, table, frame]);
   if (version === 1) result.writeUInt32LE(zlib.crc32 ? zlib.crc32(result.subarray(32)) : 0, 28);
@@ -68,8 +68,8 @@ function make(version) {
 }
 
 /* Node no ofrece zlib.crc32 en todas sus versiones; CRC v1 cero es legacy valido. */
-(function dispatchesBothVersions() {
-  var v1 = make(1), v2 = make(2), reader;
+(function dispatchesAllVersions() {
+  var v1 = make(1), v2 = make(2), v3 = make(3), reader;
   reader = factory.parse(v1.buffer, v1.byteOffset, v1.byteLength);
   reader.seek(0);
   assert.deepStrictEqual(Array.prototype.slice.call(reader.cells), [1, 1, 1, 1]);
@@ -78,6 +78,11 @@ function make(version) {
   reader.seek(0);
   assert.deepStrictEqual(Array.prototype.slice.call(reader.cells), [1, 1, 1, 1]);
   assert.strictEqual(reader.header.version, 2);
+  /* F6-3: v3 despacha al mismo ReaderV2; el gate diferencial vive adentro. */
+  reader = factory.parse(v3.buffer, v3.byteOffset, v3.byteLength);
+  reader.seek(0);
+  assert.deepStrictEqual(Array.prototype.slice.call(reader.cells), [1, 1, 1, 1]);
+  assert.strictEqual(reader.header.version, 3);
 }());
 
 (function rejectsUnknownVersion() {

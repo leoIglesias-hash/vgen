@@ -44,6 +44,16 @@ function commandSparse(entries) {
   }
   return Buffer.concat(parts);
 }
+/* F6-3: SPARSE v3 - los offsets viajan como delta = offset - prior - 1. */
+function commandSparseDiff(entries) {
+  var parts = [Buffer.from([SPARSE]), uvar(entries.length)], i, prior = -1;
+  for (i = 0; i < entries.length; i++) {
+    parts.push(uvar(entries[i][0] - prior - 1));
+    parts.push(Buffer.from([entries[i][1]]));
+    prior = entries[i][0];
+  }
+  return Buffer.concat(parts);
+}
 function commandMask(npix, offsets, values) {
   var mask = Buffer.alloc(Math.ceil(npix / 8)), i;
   for (i = 0; i < offsets.length; i++) mask[offsets[i] >>> 3] |= 1 << (offsets[i] & 7);
@@ -112,7 +122,7 @@ function makeAscl(frames, options) {
   var header = Buffer.alloc(32), table = Buffer.alloc(frames.length * 4);
   var offset = 32 + table.length, i, out;
   header.write("ASCL", 0, "ascii");
-  header[4] = 2;
+  header[4] = options.version === undefined ? 2 : options.version;
   header[5] = 3;
   header[6] = options.flags === undefined ? 12 : options.flags;
   header[7] = 15;
@@ -595,6 +605,50 @@ function fixturePredictors() {
   assert.strictEqual(/\b(?:const|let|class)\b|=>/.test(source), false);
   assert.doesNotThrow(function () { new Function(source); });
   assert.strictEqual(/new Array\s*\(\s*(?:h\.)?nFrames/.test(source), false);
+}());
+
+/* F6-3: ASCL v3 = v2 + SPARSE diferencial, gateado por la version del header. */
+(function testV3DifferentialSparseDecodesExactly() {
+  var pal = palette(32);
+  var encoded = makeAscl([
+    block(KEY_RAW, pal, commandSolid(1)),
+    block(DELTA_RAW, null, commandSparseDiff([[200, 7], [210, 9]]))
+  ], { cols: 16, rows: 16, version: 3 });
+  var reader = parse(encoded);
+  assert.strictEqual(reader.header.version, 3);
+  reader.seek(1);
+  assert.strictEqual(reader.cells[200], 7);
+  assert.strictEqual(reader.cells[210], 9);
+  assert.strictEqual(reader.cells[0], 1);
+  assert.strictEqual(reader.cells[209], 1);
+}());
+
+(function testV3RejectsReconstructedOverflowAndModeConfusion() {
+  var pal = palette(32);
+  var key = block(KEY_RAW, pal, commandSolid(1));
+  /* Deltas 255 y 0 reconstruyen 255 y 256 en un tile de 256 celdas. */
+  var overflow = makeAscl([
+    key, block(DELTA_RAW, null, commandSparse([[255, 7], [0, 9]]))
+  ], { cols: 16, rows: 16, version: 3 });
+  var reader = parse(overflow);
+  reader.seek(0);
+  assert.throws(function () { reader.seek(1); }, /offset SPARSE no canonico/);
+
+  /* Stream ABSOLUTO leido como v3: 200 y 200+1+210=411 exceden el tile. */
+  var absoluteInV3 = makeAscl([
+    key, block(DELTA_RAW, null, commandSparse([[200, 7], [210, 9]]))
+  ], { cols: 16, rows: 16, version: 3 });
+  reader = parse(absoluteInV3);
+  reader.seek(0);
+  assert.throws(function () { reader.seek(1); }, /offset SPARSE no canonico/);
+
+  /* Stream DIFERENCIAL leido como v2: el delta 9 rompe el orden creciente. */
+  var diffInV2 = makeAscl([
+    key, block(DELTA_RAW, null, commandSparseDiff([[200, 7], [210, 9]]))
+  ], { cols: 16, rows: 16, version: 2 });
+  reader = parse(diffInV2);
+  reader.seek(0);
+  assert.throws(function () { reader.seek(1); }, /offset SPARSE no canonico/);
 }());
 
 console.log("reader v2 tests: OK");

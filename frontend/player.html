@@ -166,12 +166,12 @@
     openAscl(buf,0,buf.byteLength);
   }
 
-  // .asclv = ASCLVID1/2 + ascl_len(u32) + audio_len(u32) + ascl + audio
+  // .asclv = ASCLVID1/2 (16 B) o ASCLVID3 (20 B, + meta_len de sidecar embebido)
   function isBundle(buf){
     if(buf.byteLength<16) return false;
     var b=new Uint8Array(buf,0,8), s="";
     for(var i=0;i<8;i++) s+=String.fromCharCode(b[i]);
-    return s==="ASCLVID1" || s==="ASCLVID2";
+    return s==="ASCLVID1" || s==="ASCLVID2" || s==="ASCLVID3";
   }
   function toAB(buf){
     if (buf instanceof ArrayBuffer) return buf;
@@ -186,7 +186,7 @@
   function looksBundle(buf){
     var u = new Uint8Array(buf);
     return u.length >= 8 && u[0]===65 && u[1]===83 && u[2]===67 && u[3]===76 &&
-      u[4]===86 && u[5]===73 && u[6]===68 && (u[7]===49 || u[7]===50);
+      u[4]===86 && u[5]===73 && u[6]===68 && (u[7]===49 || u[7]===50 || u[7]===51);
   }
   function loadData(buf){
     buf = toAB(buf);
@@ -195,18 +195,22 @@
   function loadBundle(buf){
     buf = toAB(buf);
     var dv=new DataView(buf), bytes=new Uint8Array(buf);
+    /* F6-3: ASCLVID3 = header de 20 bytes con meta_len (sidecar embebido; este
+       player de archivos no lo consume, solo valida las longitudes). */
+    var headerSize=bytes[7]===51?20:16;
     var asclLen=dv.getUint32(8,true), audioLen=dv.getUint32(12,true);
-    if(asclLen<32 || 16+asclLen+audioLen!==buf.byteLength){
+    var metaLen=headerSize===20?dv.getUint32(16,true):0;
+    if(asclLen<32 || headerSize+asclLen+audioLen+metaLen!==buf.byteLength){
       throw new Error("bundle truncado o longitudes invalidas");
     }
-    if(bytes[7]-48!==bytes[20]){ throw new Error("version ASCLV/ASCL incompatible"); }
+    if(bytes[7]-48!==bytes[headerSize+4]){ throw new Error("version ASCLV/ASCL incompatible"); }
     if(audioLen>0){
-      var audioView=new Uint8Array(buf,16+asclLen,audioLen);
+      var audioView=new Uint8Array(buf,headerSize+asclLen,audioLen);
       setAudioBlob(makeBlob([audioView],"audio/mpeg"));
       audio.onended=function(){ stop(); };
       hasAudio=true;
     }
-    openAscl(buf,16,asclLen);
+    openAscl(buf,headerSize,asclLen);
   }
 
   function frameNow(){

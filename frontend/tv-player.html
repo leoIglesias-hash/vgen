@@ -478,25 +478,29 @@
 
   function loadBundle(buffer){
     var view=new DataView(buffer), bytes=new Uint8Array(buffer);
+    /* F6-3: ASCLVID3 lleva header de 20 bytes con meta_len (sidecar embebido,
+       que esta ruta de reproduccion pura no consume). */
+    var headerSize=bytes[7]===51?20:16;
     var videoLength=view.getUint32(8,true);
     var audioLength=view.getUint32(12,true);
-    if(videoLength<32 || 16+videoLength+audioLength!==buffer.byteLength){
+    var metaLength=headerSize===20?view.getUint32(16,true):0;
+    if(videoLength<32 || headerSize+videoLength+audioLength+metaLength!==buffer.byteLength){
       throw new Error("ASCLV truncado o invalido");
     }
-    if(bytes[7]-48!==bytes[20]){
+    if(bytes[7]-48!==bytes[headerSize+4]){
       throw new Error("La version ASCLV no coincide con el video interno");
     }
     if(audioLength>0){
-      setAudio(new Uint8Array(buffer,16+videoLength,audioLength));
+      setAudio(new Uint8Array(buffer,headerSize+videoLength,audioLength));
     }
-    openAscl(buffer,16,videoLength);
+    openAscl(buffer,headerSize,videoLength);
   }
 
   function loadData(buffer,contentType){
     var bytes=new Uint8Array(buffer);
     var bundled=bytes.length>=8 && bytes[0]===65 && bytes[1]===83 &&
       bytes[2]===67 && bytes[3]===76 && bytes[4]===86 && bytes[5]===73 &&
-      bytes[6]===68 && (bytes[7]===49 || bytes[7]===50);
+      bytes[6]===68 && (bytes[7]===49 || bytes[7]===50 || bytes[7]===51);
     if(!bundled){
       throw new Error("La ruta "+source+" devolvio otro contenido"+
         (contentType ? " ("+contentType+")" : ""));

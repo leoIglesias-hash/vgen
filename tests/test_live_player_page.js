@@ -154,11 +154,14 @@ assert(page.indexOf("ASCILINEDataChannel.create(DATA_URL,overlay,{intervalMs:150
 assert(page.indexOf("channel.start()") >= 0);
 
 /* endurecimiento del bundle, como player.html */
-assert(page.indexOf('s==="ASCLVID1" || s==="ASCLVID2"') >= 0);
-assert(page.indexOf("bytes[7]===49 || bytes[7]===50") >= 0);
-assert(page.indexOf("16+asclLen+audioLen!==buf.byteLength") >= 0);
-assert(page.indexOf("bytes[7]-48!==bytes[20]") >= 0,
+assert(page.indexOf('s==="ASCLVID1" || s==="ASCLVID2" || s==="ASCLVID3"') >= 0);
+assert(page.indexOf("headerSize+asclLen+audioLen+metaLen!==buf.byteLength") >= 0);
+assert(page.indexOf("bytes[7]-48!==bytes[headerSize+4]") >= 0,
   "envelope e interior deben declarar la misma version");
+assert(page.indexOf('s==="ASCLVID3"?20:16') >= 0,
+  "F6-3: el header ASCLVID3 mide 20 bytes (meta_len)");
+assert(page.indexOf("tryAttachOverlay(bundleMeta)") >= 0,
+  "F6-3: el sidecar embebido en el ASCLVID3 alimenta el overlay sin XHR extra");
 
 /* W-14: robustez heredada del player tradicional */
 assert(page.indexOf("renderer.dispose(true)") >= 0);

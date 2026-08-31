@@ -94,6 +94,7 @@
   var elBadge=document.getElementById("badge"), elStatus=document.getElementById("status");
   var elSim=document.getElementById("simulate"), elClear=document.getElementById("clearOverlay");
   var reader=null, renderer=null, overlay=null, channel=null, overlayMeta=null;
+  var bundleMeta=null; /* F6-3: sidecar ASCLSLOT embebido en un ASCLVID3 */
   var textLayer=null, textFields=null, textItems=null, cellScale=1;
   var textFeed=null, feedFields=null;
   var imgEl=null, imgBox=null, imgSpin=null;
@@ -492,19 +493,23 @@
     var bytes=new Uint8Array(buf);
     if(bytes.length<21){ throw new Error("bundle truncado"); }
     var s=String.fromCharCode(bytes[0],bytes[1],bytes[2],bytes[3],bytes[4],bytes[5],bytes[6],bytes[7]);
-    if(!(s==="ASCLVID1" || s==="ASCLVID2")){ throw new Error("magic invalido"); }
-    if(!(bytes[7]===49 || bytes[7]===50)){ throw new Error("version de envelope desconocida"); }
+    if(!(s==="ASCLVID1" || s==="ASCLVID2" || s==="ASCLVID3")){ throw new Error("magic invalido"); }
+    /* F6-3: ASCLVID3 = header de 20 bytes con meta_len; el sidecar viaja
+       embebido y reemplaza al clip.slots externo. */
+    var headerSize=s==="ASCLVID3"?20:16;
     var dv=new DataView(buf);
     var asclLen=dv.getUint32(8,true), audioLen=dv.getUint32(12,true);
-    if(asclLen<32||16+asclLen+audioLen!==buf.byteLength){ throw new Error("bundle invalido"); }
-    if(bytes[7]-48!==bytes[20]){ throw new Error("version del envelope no coincide con el ASCL interno"); }
+    var metaLen=headerSize===20?dv.getUint32(16,true):0;
+    if(asclLen<32||headerSize+asclLen+audioLen+metaLen!==buf.byteLength){ throw new Error("bundle invalido"); }
+    if(bytes[7]-48!==bytes[headerSize+4]){ throw new Error("version del envelope no coincide con el ASCL interno"); }
     if(audioLen>0 && urlAPI && urlAPI.createObjectURL){
-      var blob=new Blob([new Uint8Array(buf,16+asclLen,audioLen)],{type:"audio/mpeg"});
+      var blob=new Blob([new Uint8Array(buf,headerSize+asclLen,audioLen)],{type:"audio/mpeg"});
       audio.src=urlAPI.createObjectURL(blob);
       audio.onended=function(){ stop(); };
       hasAudio=true;
     }
-    openAscl(buf,16,asclLen);
+    bundleMeta=metaLen?new Uint8Array(buf,headerSize+asclLen+audioLen,metaLen):null;
+    openAscl(buf,headerSize,asclLen);
   }
   function frameNow(){
     var t=hasAudio?audio.currentTime:(now()-startT)/1000;
@@ -547,17 +552,23 @@
   x.onload=function(){
     try{
       loadBundle(x.response);
-      var s=new XMLHttpRequest();
-      s.open("GET",SLOTS_URL,true); s.responseType="arraybuffer";
-      s.onload=function(){
-        if(s.status===200 && s.response && s.response.byteLength){
-          tryAttachOverlay(new Uint8Array(s.response));
-        } else {
-          attachStandalone("Sin sidecar ("+SLOTS_URL+"): video sin overlay de matriz.");
-        }
-      };
-      s.onerror=function(){ attachStandalone("Sin sidecar: video sin overlay de matriz."); };
-      s.send();
+      if(bundleMeta){
+        /* F6-3: el sidecar embebido en el ASCLVID3 manda; no se pide el
+           clip.slots externo (via de transicion para v1/v2). */
+        tryAttachOverlay(bundleMeta);
+      } else {
+        var s=new XMLHttpRequest();
+        s.open("GET",SLOTS_URL,true); s.responseType="arraybuffer";
+        s.onload=function(){
+          if(s.status===200 && s.response && s.response.byteLength){
+            tryAttachOverlay(new Uint8Array(s.response));
+          } else {
+            attachStandalone("Sin sidecar ("+SLOTS_URL+"): video sin overlay de matriz.");
+          }
+        };
+        s.onerror=function(){ attachStandalone("Sin sidecar: video sin overlay de matriz."); };
+        s.send();
+      }
     }catch(err){ log("Error: "+err.message); }
   };
   x.onerror=function(){ log("No se pudo cargar "+CLIP_URL+" (servir por HTTP con tools/serve-local.ps1)."); };

@@ -90,10 +90,12 @@ assert(page.indexOf("activeXHR!==xhr") >= 0,
   "una respuesta XHR vieja no debe pisar un reintento nuevo");
 assert(page.indexOf("lastDownloadTouch") >= 0,
   "touch + click sintetico no deben iniciar dos descargas");
-assert(page.indexOf("bytes[7]===49 || bytes[7]===50") >= 0,
-  "la descarga debe reconocer ASCLVID1 y ASCLVID2");
-assert(page.indexOf("16+videoLength+audioLength!==buffer.byteLength") >= 0,
+assert(page.indexOf("bytes[7]===49 || bytes[7]===50 || bytes[7]===51") >= 0,
+  "la descarga debe reconocer ASCLVID1, ASCLVID2 y ASCLVID3");
+assert(page.indexOf("headerSize+videoLength+audioLength+metaLength!==buffer.byteLength") >= 0,
   "el bundle no debe aceptar truncado ni bytes anexados");
+assert(page.indexOf("bytes[7]===51?20:16") >= 0,
+  "el header ASCLVID3 mide 20 bytes (meta_len)");
 assert(page.indexOf("mozfullscreenchange") >= 0);
 assert(page.indexOf("MSFullscreenChange") >= 0);
 
@@ -114,16 +116,21 @@ assert(page.indexOf("nativeRequestFrame.call(window,fn)") >= 0 &&
   "los nativos deben invocarse con window como receptor");
 if (demo) {
   var magic = demo.slice(0, 8).toString("ascii");
-  assert(magic === "ASCLVID1" || magic === "ASCLVID2",
-    "el archivo de la ruta TV debe ser ASCLVID1 o ASCLVID2");
+  assert(magic === "ASCLVID1" || magic === "ASCLVID2" || magic === "ASCLVID3",
+    "el archivo de la ruta TV debe ser ASCLVID1, ASCLVID2 o ASCLVID3");
+  /* F6-3: ASCLVID3 lleva header de 20 bytes con meta_len. */
+  var demoHeaderSize = magic === "ASCLVID3" ? 20 : 16;
+  var demoMetaLength = magic === "ASCLVID3" ? demo.readUInt32LE(16) : 0;
   /* W-14: inventario — si el artefacto local es v1, debe llevar CRC real,
      porque la pagina TV ahora rechaza v1 con CRC en cero. */
-  if (demo[20] === 1) {
-    assert(demo.readUInt32LE(16 + 28) !== 0,
+  if (demo[demoHeaderSize + 4] === 1) {
+    assert(demo.readUInt32LE(demoHeaderSize + 28) !== 0,
       "el artefacto v1 del inventario debe llevar CRC32 distinto de cero");
   }
   assert(demo.readUInt32LE(8) > 32, "el demo debe contener video");
-  assert.strictEqual(16 + demo.readUInt32LE(8) + demo.readUInt32LE(12), demo.length,
+  assert.strictEqual(
+    demoHeaderSize + demo.readUInt32LE(8) + demo.readUInt32LE(12) + demoMetaLength,
+    demo.length,
     "el demo local no debe estar truncado ni contener bytes posteriores");
   if (requireDemo) {
     assert.strictEqual(magic, "ASCLVID2",

@@ -10,17 +10,22 @@ function fail(message) { throw new Error(message); }
 
 function input(filePath) {
   var file = fs.readFileSync(filePath), videoOffset = 0, videoLength = file.length;
-  var audio = Buffer.alloc(0), magic, declaredAudio, total;
+  var audio = Buffer.alloc(0), magic, declaredAudio, declaredMeta, headerSize, total;
   if (file.length >= 16 && file.subarray(0, 7).toString("ascii") === "ASCLVID") {
     magic = file.subarray(0, 8).toString("ascii");
-    if (magic !== "ASCLVID1" && magic !== "ASCLVID2") fail("bundle desconocido " + magic);
+    if (magic !== "ASCLVID1" && magic !== "ASCLVID2" && magic !== "ASCLVID3") {
+      fail("bundle desconocido " + magic);
+    }
+    /* F6-3: ASCLVID3 = header de 20 bytes con meta_len (sidecar embebido). */
+    headerSize = magic === "ASCLVID3" ? 20 : 16;
     videoLength = file.readUInt32LE(8);
     declaredAudio = file.readUInt32LE(12);
-    total = 16 + videoLength + declaredAudio;
+    declaredMeta = headerSize === 20 ? file.readUInt32LE(16) : 0;
+    total = headerSize + videoLength + declaredAudio + declaredMeta;
     if (videoLength < 32 || total !== file.length) fail("bundle truncado o con bytes extra");
-    videoOffset = 16;
+    videoOffset = headerSize;
     if (file[videoOffset + 4] !== Number(magic.charAt(7))) fail("version envelope/interior desigual");
-    audio = file.subarray(videoOffset + videoLength, total);
+    audio = file.subarray(videoOffset + videoLength, videoOffset + videoLength + declaredAudio);
   }
   return {
     file: file,

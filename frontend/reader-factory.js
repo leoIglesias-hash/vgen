@@ -1,4 +1,4 @@
-/* reader-factory.js - despacho ASCL v1/v2 sin cambiar el contrato de render. */
+/* reader-factory.js - despacho ASCL v1/v2/v3 sin cambiar el contrato de render. */
 (function (root) {
   "use strict";
 
@@ -28,7 +28,9 @@
       if (!legacy || typeof legacy.parse !== "function") fail("ReaderV1 no disponible");
       return legacy.parse(buffer, offset, length);
     }
-    if (version === 2) {
+    if (version === 2 || version === 3) {
+      /* F6-3: v3 es el mismo ReaderV2; el gate del SPARSE diferencial vive en
+       * la version del header que ReaderV2 valida. */
       if (!regional || typeof regional.parse !== "function") fail("ReaderV2 no disponible");
       return regional.parse(buffer, offset, length);
     }
