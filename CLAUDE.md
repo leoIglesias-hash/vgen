@@ -111,21 +111,23 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
 Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
 **F9 → F10 → F11 → F8 → DIAG-001**.
 
-- **F9 (S-8) — CÓDIGO COMPLETO; falta pantalla, no código.** Aceleración del frontend sin
-  tocar bytes ni formato. Hecho: `W-16` (`f1ccfa3`, banco `tools/bench_render.js` +
-  workflow `bench-render` + `frontend/diagnostic-player.html`), `W-17` (`8cecc7b`, LUT
-  `Uint32` en los dos readers: keyframe a 1920 **11,4 → 5,7 ms**, byte-idéntico),
-  `W-18`+`W-19` (`07a94e2`, índices como textura `LUMINANCE` con paleta en el shader
-  —**paridad GL/2D con delta 0** y conversión en CPU en **0,00 ms**, medidas con GL
-  real— más reconstrucción de 4 taps y `?scale=int`) y `W-20` (`798203a`+`1cb0e38`,
-  cadencia anclada al display y pre-decode del keyframe por intercambio de readers;
-  `?pacing=off`, `?predecode=off`). `W-21` sigue opcional, pero W-17 mostró que en deltas
-  dispersos el costo dominante es barrer todo `dirtyCellBits`.
-  **Lo que falta es del operador, en el TV:** el veredicto visual de `W-19` (1280
-  `nearest` vs 1280 `?rec=soft` vs 1920 nativo) y la medición de `W-20` en el diagnostic
-  (drops < 0,1 %, p95 bajo presupuesto). Después: publicar el frontend acelerado —hoy
-  `iargen.com/player/` sirve el anterior; **la publicación se hace al cerrar la fase, no
-  por tarea**— y recién ahí cerrar F9. Diseño: `docs/DISENO-RENDER-INDEXADO.md`.
+- **F9 (S-8) — CÓDIGO COMPLETO Y MEDIDO; falta CI en verde y publicar.** Aceleración del
+  frontend sin tocar bytes ni formato. Medido y aprobado: `W-16` (`f1ccfa3`, banco
+  `tools/bench_render.js` + `frontend/diagnostic-player.html`), `W-17` (`8cecc7b`, LUT
+  `Uint32`: keyframe a 1920 **11,4 → 5,7 ms**, byte-idéntico), `W-18`+`W-19` (`07a94e2`,
+  índices como textura `LUMINANCE` con paleta en el shader —**paridad GL/2D delta 0**,
+  conversión en CPU en **0,00 ms**—; el operador no distingue `soft` de `nearest` →
+  default `nearest`) y `W-20` (`798203a`+`1cb0e38`+`af6bfff`, cadencia + pre-decode;
+  medido por el operador en pantalla real: **p95 14,90 ms de 66,7, drops 0**; el cuello
+  pasó a `inflate`). `W-21` sigue opcional.
+  **`W-22`..`W-25` (2026-08-31) fusionan el motor:** la cadencia y el pre-decode estaban
+  copiados en dos páginas y ausentes en la que sirve la raíz; ahora viven una sola vez en
+  `frontend/playloop.js` y lo usan **las cuatro** páginas. El intercambio de readers
+  convive con el overlay yendo entre `beforeSeek` y `afterSeek` con `overlay.rebind()`.
+  **BLOQUEO: GitHub Actions no ejecuta** (facturación; los minutos del repo privado se le
+  cobran a `tablerosapp-ctrl`, no a quien empuja) → nada se marca `cerrada`. Después:
+  publicar a las 4 carpetas (25 keys) y cerrar F9. Diseño:
+  `docs/DISENO-RENDER-INDEXADO.md`.
 - **F10 (S-9)** — pérdida adaptativa por suavidad (E-25, E-27, E-26, E-28): el banding
   solo se ve en zonas suaves, así que el presupuesto deja de ser plano. Ataca el degradé
   escalonado del huevo sin devolver el ahorro del near-lossless 8. Emite v3 igual que
