@@ -22,6 +22,10 @@ function glMock(options) {
     TEXTURE_WRAP_T: 12, CLAMP_TO_EDGE: 13, NEAREST: 14, LINEAR: 15,
     RGBA: 16, UNSIGNED_BYTE: 17, TRIANGLES: 18, MAX_TEXTURE_SIZE: 19,
     TEXTURE0: 33984, TEXTURE1: 33985, UNPACK_ALIGNMENT: 3317, NO_ERROR: 0,
+    HIGH_FLOAT: 36338,
+    getShaderPrecisionFormat: function () {
+      return { precision: options.noHighFloat ? 0 : 23 };
+    },
     shaders: [], images: [], subImages: [], params: [], stores: [], units: [],
     sizes: [], draws: 0, linked: 0, errorQueue: options.errors || [],
     createShader: function () { return {}; },
@@ -265,5 +269,46 @@ var palRenderer = new WebGLRenderer(canvasMock(palGl));
 palRenderer.init(palReader, 1, "nearest");
 assert.strictEqual(palRenderer.indexed, false,
   "solo PIXEL tiene un indice de 1 byte por celda");
+
+/* --------------------------------------- 7. interaccion con el pre-decode --- */
+
+/* Regresion: W-20 intercambia readers, asi que dos frames con la MISMA banda
+ * pueden venir de arrays distintos. Cachear la vista solo por rango subia la
+ * banda del reader viejo y pintaba basura. */
+var swapGl = glMock();
+var readerA = indexedReader(16, 8);
+var readerB = indexedReader(16, 8);
+var swapRenderer = new WebGLRenderer(canvasMock(swapGl));
+for (i = 0; i < readerB.cells.length; i++) readerB.cells[i] = 200;
+swapRenderer.init(readerA, 1, "nearest");
+swapRenderer.draw(readerA);
+readerA.dirtyFull = false; readerA.dirtyY0 = 2; readerA.dirtyY1 = 3;
+swapRenderer.draw(readerA);
+readerB.dirtyFull = false; readerB.dirtyY0 = 2; readerB.dirtyY1 = 3;
+swapRenderer.draw(readerB);
+var lastBand = swapGl.subImages[swapGl.subImages.length - 1];
+assert.strictEqual(swapGl.subImages.length, 2);
+assert.strictEqual(lastBand[8].buffer, readerB.cells.buffer,
+  "la banda debe salir del reader que se esta dibujando, no del anterior");
+assert.strictEqual(lastBand[8][0], 200);
+
+/* ------------------------------------ 8. soft solo con highp de verdad --- */
+
+/* En mediump las coordenadas de texel a 1920 pierden la parte fraccionaria
+ * entera y fract() devuelve basura: mejor nearest correcto que ruido. */
+var lowGl = glMock({ noHighFloat: true });
+var lowRenderer = new WebGLRenderer(canvasMock(lowGl));
+lowRenderer.init(indexedReader(32, 16), 1, "nearest");
+var lowLinked = lowGl.linked;
+lowRenderer.setReconstruction("soft");
+assert.strictEqual(lowRenderer.softBlocked, true);
+assert.strictEqual(lowRenderer.softActive, false,
+  "sin highp la mezcla de 4 taps no se activa");
+assert.strictEqual(lowGl.linked, lowLinked,
+  "y ni siquiera se compila el programa que no se puede usar");
+assert.strictEqual(lowRenderer.canvas.width, 32,
+  "sin soft el backing store se queda en la grilla");
+assert.strictEqual(softRenderer.softActive, true,
+  "con highp disponible, soft si se activa");
 
 console.log("render indexed tests: OK");

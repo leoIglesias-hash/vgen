@@ -513,6 +513,8 @@
     setNodeText(noteNode,
       sourceLabel + " · ASCL v" + session.version + " · " + session.grid +
       " @" + session.fps + " · " + rendererName + "/" + reconstruction +
+      (reconstruction === "soft" && renderer && renderer.softBlocked ?
+        " (soft NO activo: driver sin highp)" : "") +
       " · " + (playing ? "play" : "pausa") +
       " · frames " + session.shown + " rep " + session.repeated +
       " · pacing " + (pacingEnabled ? "on" : "off") +

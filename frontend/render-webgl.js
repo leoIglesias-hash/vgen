@@ -146,6 +146,20 @@
     return gl;
   }
 
+  /* La mezcla de 4 taps trabaja en coordenadas de texel: a 1920 eso son valores
+     de hasta ~1920, y en mediump (~10 bits de mantisa) la parte fraccionaria se
+     pierde entera, asi que fract() devuelve basura y la imagen sale con ruido.
+     Si el driver no ofrece highp real en el fragment shader, `soft` NO se
+     habilita: se dibuja nearest, que es correcto, en vez de ruido. */
+  function hasHighFloat(gl) {
+    var format;
+    if (typeof gl.getShaderPrecisionFormat !== "function") return false;
+    if (gl.FRAGMENT_SHADER === undefined || gl.HIGH_FLOAT === undefined) return false;
+    try { format = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT); }
+    catch (ignoredPrecision) { return false; }
+    return !!(format && format.precision > 0);
+  }
+
   function WebGLRenderer(canvas) {
     this.canvas = canvas; this.gl = null; this.name = "webgl";
   }
@@ -302,7 +316,9 @@
 
     this._texInit = false;
     this._fullUploadChecked = false;
-    this._subRGBA = null; this._subY0 = -1; this._subY1 = -1;
+    this._subRGBA = null; this._subCells = null; this._subCellsSource = null;
+    this._subY0 = -1; this._subY1 = -1;
+    this.softBlocked = false; this.softActive = false;
     this._subUploadSupported = null;
     this.setReconstruction(this.reconstruction);
     return true;
@@ -314,7 +330,10 @@
      seria un no-op). En `nearest` se conserva cols x rows, bit a bit como antes. */
   WebGLRenderer.prototype._targetSize = function () {
     var w = this.texW, h = this.texH, cap = this.maxTexture > 0 ? this.maxTexture : 4096;
-    if (this.indexed && this.reconstruction === "soft" && this._presW > 0 && this._presH > 0) {
+    /* Manda lo que se esta dibujando de verdad (`softActive`), no lo que se
+       pidio: si la mezcla no se pudo habilitar, agrandar el framebuffer solo
+       gastaria relleno sin cambiar la imagen. */
+    if (this.indexed && this.softActive && this._presW > 0 && this._presH > 0) {
       w = this._presW; h = this._presH;
       if (w > cap) { w = cap; }
       if (h > cap) { h = cap; }
@@ -358,14 +377,19 @@
       /* La textura de INDICES nunca se filtra: interpolar indices produce
          colores arbitrarios. El suavizado, si se pide, lo hace el shader. */
       if (this.reconstruction === "soft") {
-        if (!this.progSoft) {
-          try { this.progSoft = this._buildProgram(FRAG_INDEX_SOFT); }
-          catch (softError) { this.progSoft = null; }
+        if (!this.progSoft && !this.softBlocked) {
+          if (!hasHighFloat(gl)) { this.softBlocked = true; }
+          else {
+            try { this.progSoft = this._buildProgram(FRAG_INDEX_SOFT); }
+            catch (softError) { this.progSoft = null; this.softBlocked = true; }
+          }
         }
         entry = this.progSoft || this.progNearest;
       } else {
         entry = this.progNearest;
       }
+      /* Lo que de verdad se esta dibujando, que puede no ser lo pedido. */
+      this.softActive = entry === this.progSoft;
       this._activate(entry);
       if (this.tex) {
         if (typeof gl.activeTexture === "function") { gl.activeTexture(gl.TEXTURE0); }
@@ -423,7 +447,8 @@
     if (!this.progRgba) { this._initRgba(reader); }
     else if (!this.rgba) { this.rgba = new Uint8Array(reader.n * 4); }
     this._texInit = false;
-    this._subRGBA = null; this._subY0 = -1; this._subY1 = -1;
+    this._subRGBA = null; this._subCells = null; this._subCellsSource = null;
+    this._subY0 = -1; this._subY1 = -1;
     this.setReconstruction(this.reconstruction);
   };
 
@@ -452,8 +477,14 @@
     hh = y1 - y0 + 1;
     /* subarray es una vista del propio `cells`: no copia la banda ni reserva
        nada por cuadro (invariante 7). */
-    if (!this._subCells || this._subY0 !== y0 || this._subY1 !== y1) {
+    /* La vista se cachea por rango Y TAMBIEN por el `cells` del que sale. Con
+       el pre-decode de W-20 el player intercambia readers, asi que dos frames
+       con la misma banda pueden venir de arrays distintos: cachear solo por
+       rango subia la banda del reader viejo y pintaba basura. */
+    if (!this._subCells || this._subCellsSource !== cells ||
+        this._subY0 !== y0 || this._subY1 !== y1) {
       this._subCells = cells.subarray(y0 * this.texW, (y1 + 1) * this.texW);
+      this._subCellsSource = cells;
       this._subY0 = y0; this._subY1 = y1;
     }
     if (this._subUploadSupported === false) {
@@ -616,7 +647,8 @@
     this.tex = null; this.palTex = null; this.buf = null;
     this._programs = []; this.active = null;
     this.progRgba = null; this.progNearest = null; this.progSoft = null;
-    this.rgba = null; this._subRGBA = null; this._subCells = null;
+    this.rgba = null; this._subRGBA = null;
+    this._subCells = null; this._subCellsSource = null;
     this.palRGBA = null; this._palSource = null;
     this.indexed = false;
     this._texInit = false; this._fullUploadChecked = false;
