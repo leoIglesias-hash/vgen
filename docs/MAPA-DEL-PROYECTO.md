@@ -50,6 +50,7 @@ graph TB
     subgraph TV["FRONTEND · ES5 · corre en cada reproducción, en el TV"]
         TP[tv-player.html<br/><i>producción: URL fija, fullscreen, audio maestro</i>]
         PL[player.html<br/><i>laboratorio: selector de archivo</i>]
+        DP[diagnostic-player.html<br/><i>W-16: p50/p95 por etapa, drops, tres grillas</i>]
         RF[reader-factory.js<br/><i>despacho por versión 1/2</i>]
         R1[reader.js<br/><i>ReaderV1</i>]
         R2[reader-v2.js<br/><i>ReaderV2: tiles+predictores, fallback v1</i>]
@@ -61,6 +62,7 @@ graph TB
 
         TP --> RF
         PL --> RF
+        DP --> RF
         RF --> R1
         RF --> R2
         R1 --> INF

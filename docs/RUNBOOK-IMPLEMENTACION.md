@@ -39,8 +39,8 @@ tocar, cómo verificarlo y cuándo una tarea se considera cerrada.
 
 ## 1. Trabajo en curso (definido fuera de este archivo)
 
-- **En ejecución: F9 (S-8)**, primera tarea `W-16`. El detalle vivo y el orden entre
-  fases están en `RUNBOOK-ESTADO.md` §Próxima acción.
+- **En ejecución: F9 (S-8)**, con `W-16` ya cerrada; la próxima tarea es `W-17`. El
+  detalle vivo y el orden entre fases están en `RUNBOOK-ESTADO.md` §Próxima acción.
 - **Del operador:** probar `iargen.com/player/` en celular y Smart TV (antesala de F8).
 
 ### Principio de resolución y fps (operador, 2026-08-31 — extiende la regla 9)
@@ -85,16 +85,19 @@ de esta fase cambia el formato ni exige re-encodear.
 
 | ID | Archivo | Acción | Cierre |
 |---|---|---|---|
-| **W-16** | `tools/bench_render.js` (nuevo) + `frontend/diagnostic-player.html` (nuevo, **es F8-1 adelantada**) | banco Node de la etapa de conversión índice→RGBA (corpus 768/1280/1920 × keyframe/delta disperso/tiles densos) y player de diagnóstico ES5 con p50/p95, drops y desglose por etapa (inflate, walk, conversión, blit) | el banco corre en `tests/run_all.py` y publica tabla en CI; el diagnostic abre en el TV y muestra las tres grillas |
-| **W-17** | `frontend/reader.js`, `frontend/reader-v2.js` | LUT `Uint32Array(256)` de paleta con endianness detectada una vez; escritura por palabra sobre vista `Uint32` del destino; fallback byte a byte obligatorio | salida **byte-idéntica** sobre el corpus (test de paridad) + mejora medida en `bench_render.js` |
+| **W-17** | `frontend/reader.js`, `frontend/reader-v2.js` | LUT `Uint32Array(256)` de paleta con endianness detectada una vez; escritura por palabra sobre vista `Uint32` del destino; fallback byte a byte obligatorio. El prototipo verificado ya vive en `tools/bench_render.js` (`makeLut`/`lutFull`/`lutChanged`) | salida **byte-idéntica** sobre el corpus (test de paridad) + fila de `bench-render` contra el baseline `f1ccfa3` |
 | **W-18** | `frontend/render-webgl.js` | índices como textura `LUMINANCE` (subida directa de `cells`) + paleta como textura 256×1 RGBA + lookup en el fragment shader. `UNPACK_ALIGNMENT 1`, corrección de medio texel, `highp` con fallback a `mediump`. Camino RGBA actual **se conserva** como fallback | paridad de píxeles con Canvas2D en modo `nearest` (`readPixels` sobre frame sintético); conversión en CPU eliminada y upload ×4 menor, medidos |
 | **W-19** | `frontend/render-webgl.js`, `frontend/render-canvas2d.js`, `frontend/tv-player.html` | modo `soft` = 4 taps NEAREST + 4 lookups + mezcla en espacio de color (**nunca interpolar índices**); modo `nearest` idéntico a hoy; `fitCanvas` gana escalado entero por query string como herramienta de comparación | el operador compara en el TV 1280 `nearest` / 1280 `soft` / 1920 nativo sobre el mismo video |
 | **W-20** | `frontend/tv-player.html` | presentación anclada a la cadencia del display con corrección lenta contra el audio; pre-decode **solo del próximo keyframe** en el tiempo muerto, a un buffer alterno **fijo** de `cells` (no viola el invariante 7; adelantar deltas exigiría base definida sin romper el invariante 4 y se diseñaría aparte) | en el diagnostic, a 1920: drops < 0,1 % y p95 de decode+render bajo el presupuesto de frame |
 | **W-21** | `frontend/reader-v2.js`, ambos renderers | dirty rect en X (hoy la subida es banda de ancho completo: `x0/x1` no se calculan en ningún lado) | misma imagen; subida medida menor en corpus con cambios localizados. **Opcional dentro de F9** |
 
-Precondición dura: **W-16 primero**. Ninguna otra tarea de F9 se cierra sin su medición
-(reglas 5 y 6 del proyecto). W-18 y W-19 se implementan juntas: la textura de índices
-rompe el modo `soft` actual si la reconstrucción no la acompaña.
+Precondición dura **ya cumplida**: `W-16` cerrada el 2026-08-31 (`f1ccfa3`, CI verde) —
+`tools/bench_render.js` (banco de la conversión índice→RGBA; corre en `run_all.py` y
+publica su tabla en cada push, con el workflow `bench-render` para la corrida larga y el
+HEAD-vs-baseline) y `frontend/diagnostic-player.html` (**F8-1 adelantada**: desglose por
+etapa con p50/p95, drops y frames tarde). Ninguna otra tarea de F9 se cierra sin su fila
+de medición (reglas 5 y 6 del proyecto). W-18 y W-19 se implementan juntas: la textura de
+índices rompe el modo `soft` actual si la reconstrucción no la acompaña.
 
 ### F10 — Pérdida adaptativa por suavidad (S-9)
 

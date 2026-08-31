@@ -1855,3 +1855,84 @@ v4 §3/§9/§10/§11), runbook de implementacion (filas E-31/F11-5 + ajustes
 E-26/E-30/W-20 + nota de idea anotada), runbook de estado (proxima accion,
 tabla de tareas abiertas, bitacora) y CLAUDE.md. **Ninguna medicion nueva;
 el plan de ejecucion no cambia: arranca W-16.**
+
+---
+
+## Instancia 032 - 2026-08-31 - W-16 CERRADA: banco de conversion indice->RGBA y player de diagnostico
+
+Primera tarea de F9 (S-8) y precondicion dura del resto de la fase: ninguna
+mejora del frontend se puede cerrar sin medicion registrada (reglas 5 y 6).
+Commit `f1ccfa3`, regresion en verde (3 patas de la matriz).
+
+### Que se construyo
+
+- **`tools/bench_render.js`** - banco Node de la etapa que el front paga por
+  frame DESPUES de decodificar: pasar de un indice por celda a RGBA. Corpus
+  determinista de tres grillas (768x432, 1280x720, 1920x1080) por tres perfiles
+  (keyframe completo, delta disperso ~5 % de celdas, delta de tiles densos)
+  sobre un clip ASCL v2 sintetico con paleta de 256 y tiles de 16. Dos
+  variantes por caso: el camino de bytes vigente del reader y el prototipo LUT
+  `Uint32` de W-17.
+- **`frontend/diagnostic-player.html`** - ES5, sin dependencias nuevas. Es la
+  tarea **F8-1 adelantada**. Mide por frame inflate, walk, conversion RGBA,
+  blit/upload y el resto del seek, con p50/p95, drops y frames tarde contra el
+  presupuesto que sale de los fps del clip (no de una constante).
+- **`tests/test_bench_render.js`** y **`tests/test_diagnostic_player_page.js`**
+  cableados en `tests/run_all.py` en el mismo commit (regla 7), mas el workflow
+  manual **`bench-render`** para la corrida larga y la comparacion HEAD vs
+  baseline.
+
+### Tres decisiones de diseno que conviene no re-discutir
+
+1. **El CI publica la tabla, no la juzga.** El runner comparte CPU: una
+   asercion de velocidad seria un test intermitente. Lo que si es criterio duro
+   es la **paridad** byte a byte entre el camino vigente, el prototipo LUT y la
+   reconstruccion completa; si alguna difiere, el banco lanza y el CI falla.
+2. **La instrumentacion vive entera en la pagina de diagnostico**, envolviendo
+   metodos de la instancia del reader. Ningun archivo de produccion se modifica
+   para medir, asi que lo medido es exactamente lo que corre en el TV.
+   Detalle que costo un bug y quedo fijado en test: `fillRGBA` delega en
+   `fillRGBARows`, las dos envueltas, y sin guarda de reentrada la conversion
+   se contaba dos veces (y el blit quedaba en cero).
+3. **El clip del banco es v2 a proposito.** La etapa medida es identica en v2 y
+   v3: el SPARSE diferencial de v3 cambia el walk, no la conversion.
+
+### Medicion (CI, ubuntu-latest, Node 20, 4 repeticiones)
+
+| grilla | perfil | celdas | bytes ms | lut32 ms | x |
+|---|---|---|---|---|---|
+| 768x432 | key | 331.776 | 1,515 | 0,829 | **1,83** |
+| 768x432 | sparse | 16.848 | 0,313 | 0,237 | 1,32 |
+| 768x432 | tiles | 165.888 | 1,465 | 0,447 | **3,28** |
+| 1280x720 | key | 921.600 | 4,978 | 2,152 | **2,31** |
+| 1280x720 | sparse | 46.800 | 0,901 | 0,411 | 2,19 |
+| 1280x720 | tiles | 460.800 | 2,467 | 1,244 | 1,98 |
+| 1920x1080 | key | 2.073.600 | 11,047 | 4,922 | **2,24** |
+| 1920x1080 | sparse | 105.240 | 1,166 | 0,772 | 1,51 |
+| 1920x1080 | tiles | 1.036.800 | 5,559 | 2,829 | 1,96 |
+
+Paridad OK en los 9 casos.
+
+### Lectura
+
+- El diagnostico de F9 se confirma con numeros: **el keyframe a 1920 cuesta 11
+  ms de pura conversion en un runner de CI**, sin contar inflate, walk ni
+  subida. Un TV viejo esta un orden de magnitud por debajo de esa CPU, asi que
+  esos 11 ms son el techo que se lleva puesto el presupuesto de frame.
+- **W-17 queda justificada antes de escribirla**: entre 1,3x y 3,3x segun el
+  perfil, ~2,2x en los dos casos que dominan el costo real (keyframe y tiles
+  densos). El prototipo del banco ya esta verificado byte a byte, asi que W-17
+  es llevarlo al reader con su fallback byte a byte, no inventarlo.
+- El perfil disperso gana menos (1,3-1,5x) y la razon es estructural, no de la
+  LUT: `fillRGBAChanged` recorre TODO `dirtyCellBits` (n/8 bytes) aunque cambie
+  el 5 % de las celdas. Es el hueco que ataca **W-21** (dirty en X) y conviene
+  recordarlo cuando se decida si sigue siendo opcional.
+- Los MB/s del camino de bytes se mantienen ~700-830 MB/s en las tres grillas:
+  la etapa escala lineal con las celdas, sin sorpresas de cache. La LUT sube a
+  ~1.400-1.600 MB/s, tambien plano.
+
+### Estado
+
+W-16 cerrada. Sigue **W-17** (LUT `Uint32` en `reader.js` y `reader-v2.js`),
+que se cierra con salida byte-identica sobre el corpus mas la fila de
+`bench-render` comparando el reader nuevo contra `f1ccfa3` como baseline.

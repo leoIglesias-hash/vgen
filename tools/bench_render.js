@@ -328,7 +328,7 @@ function run(options) {
   }
 
   log(pad("grilla", 11, true) + pad("perfil", 8, true) + pad("celdas", 10) +
-      pad("variante", 9, true) + pad("ms/frame", 10) + pad("MB/s", 9) + pad("x", 7));
+      pad("variante", 10) + pad("ms/frame", 10) + pad("MB/s", 9) + pad("x", 7));
 
   for (gi = 0; gi < grids.length; gi++) {
     kase = buildCase(ASCLV2, grids[gi]);
@@ -382,10 +382,10 @@ function run(options) {
         speedup: msLut > 0 ? msBytes / msLut : 0
       });
       log(pad(info.label, 11, true) + pad(profile, 8, true) + pad(touched, 10) +
-          pad("bytes", 9, true) + pad(msBytes.toFixed(3), 10) +
+          pad("bytes", 10) + pad(msBytes.toFixed(3), 10) +
           pad(rows[rows.length - 2].mbs.toFixed(0), 9) + pad("1.00", 7));
       log(pad("", 11, true) + pad("", 8, true) + pad("", 10) +
-          pad("lut32", 9, true) + pad(msLut.toFixed(3), 10) +
+          pad("lut32", 10) + pad(msLut.toFixed(3), 10) +
           pad(rows[rows.length - 1].mbs.toFixed(0), 9) +
           pad(rows[rows.length - 1].speedup.toFixed(2), 7));
     }

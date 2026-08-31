@@ -63,6 +63,29 @@ F9 se puede cerrar sin este banco.
 **Cierre:** el banco corre en `tests/run_all.py` (regla 7) y publica su tabla en el CI;
 el diagnostic abre en el TV y muestra números reales de las tres grillas.
 
+**CERRADA el 2026-08-31** (`f1ccfa3`, CI verde). Además del banco y del diagnostic quedó
+el workflow manual `bench-render` (corrida larga y comparación HEAD vs `baseline`), que
+es el vehículo con el que se registran W-17 en adelante.
+
+Tres decisiones que conviene no re-discutir:
+
+1. **El CI publica la tabla, no la juzga.** El runner comparte CPU: una aserción de
+   velocidad sería un test intermitente. El criterio duro del banco es la **paridad**
+   byte a byte entre el camino vigente, el prototipo LUT y la reconstrucción completa.
+2. **La instrumentación vive entera en `diagnostic-player.html`**, envolviendo métodos de
+   la instancia del reader: ningún archivo de producción se modifica para medir, así que
+   lo medido es exactamente lo que corre en el TV. (`fillRGBA` delega en `fillRGBARows`:
+   sin guarda de reentrada la conversión se contaba dos veces y el blit quedaba en cero.)
+3. **El clip sintético del banco es v2 a propósito:** la etapa medida es idéntica en v2 y
+   v3; el SPARSE diferencial de v3 cambia el walk, no la conversión.
+
+Medición inicial (CI, Node 20, 4 repeticiones; tabla completa en el REGISTRO,
+Instancia 032): la conversión de un **keyframe a 1920 cuesta 11,0 ms** en el runner —y un
+TV viejo está un orden de magnitud por debajo de esa CPU—, y el prototipo de W-17 rinde
+**1,3×–3,3×** según el perfil, ≈2,2× en los dos casos que dominan (keyframe y tiles
+densos). El perfil disperso es el que menos gana, y no por la LUT: `fillRGBAChanged`
+recorre todo `dirtyCellBits` aunque cambie el 5 % de las celdas — es el hueco de W-21.
+
 ---
 
 ## 3. W-17 — LUT de paleta en `Uint32`
@@ -240,7 +263,7 @@ cambios localizados.
 
 | Paso | Tarea | Depende de | Requiere re-encode |
 |---|---|---|---|
-| 1 | **W-16** medición | — | no |
+| 1 | **W-16** medición | — | no (**cerrada** 2026-08-31, `f1ccfa3`) |
 | 2 | **W-17** LUT Uint32 | W-16 | no |
 | 3 | **W-18** textura de índices | W-16, W-17 | no |
 | 4 | **W-19** reconstrucción | W-18 (acopladas) | no |
