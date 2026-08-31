@@ -1,8 +1,10 @@
 # Runbook de implementación
 
-Estado: **podado el 2026-08-30, re-podado el 2026-08-31 (F6/S-4 y S-7 cerradas)**.
+Estado: **podado el 2026-08-30, re-podado el 2026-08-31 (F6/S-4 y S-7 cerradas), ampliado
+el 2026-08-31 con el plan nuevo (F9, F10, F11 y DIAG-001)**.
 Este archivo contiene SOLO las reglas de ejecución y las tareas que quedan por hacer:
-**F8 (S-6) y las opcionales E-11/W-15**. Los cuerpos de las tareas ya ejecutadas
+**F9 (S-8), F10 (S-9), F11 (S-10), F8 (S-6), DIAG-001 y las opcionales E-11/W-15**.
+Los cuerpos de las tareas ya ejecutadas
 (P-01..P-04, E-01..E-24, W-01..W-14, F6, F7, INT-003/004/006/007, S-7, deploy del
 player) se retiraron: su resumen operativo está en
 [`ejecutados/`](ejecutados/README.md), su fila de cierre en las tablas archivadas
@@ -37,9 +39,18 @@ tocar, cómo verificarlo y cuándo una tarea se considera cerrada.
 
 ## 1. Trabajo en curso (definido fuera de este archivo)
 
-- **Del operador:** probar `iargen.com/player/` en celular y Smart TV (antesala de F8);
-  prueba futura del 1920 a más fps. El detalle vivo está en
-  `RUNBOOK-ESTADO.md` §Próxima acción.
+- **En ejecución: F9 (S-8)**, primera tarea `W-16`. El detalle vivo y el orden entre
+  fases están en `RUNBOOK-ESTADO.md` §Próxima acción.
+- **Del operador:** probar `iargen.com/player/` en celular y Smart TV (antesala de F8).
+
+### Principio de resolución y fps (operador, 2026-08-31 — extiende la regla 9)
+
+**La resolución y los fps son elegibles por video, siempre, y nunca quedan fijados por
+una receta.** El destino real son televisores de 1920, así que toda grilla se estira: lo
+que se elige por video es *cuánta densidad conviene pagar*, y esa comparación
+(1280 bien reconstruido contra 1920 nativo) es parte del trabajo de cada clip, no una
+decisión tomada de una vez para siempre. El front debe procesar cualquier combinación
+que se le pase; ninguna tarea puede asumir la grilla del producto vigente.
 
 ## 2. Tareas opcionales (no bloquean nada)
 
@@ -63,13 +74,80 @@ tocar, cómo verificarlo y cuándo una tarea se considera cerrada.
 
 ## 3. Fases pendientes
 
+Orden acordado con el operador (2026-08-31): **F9 → F10 → F11 → F8 → DIAG-001**. F9 va
+primero porque no toca bytes, se valida contra el clip que ya está en producción y su
+ciclo de prueba dura minutos en vez de una hora de runner.
+
+### F9 — Aceleración del frontend (S-8)
+
+Diseño completo: [`DISENO-RENDER-INDEXADO.md`](DISENO-RENDER-INDEXADO.md). Ninguna tarea
+de esta fase cambia el formato ni exige re-encodear.
+
+| ID | Archivo | Acción | Cierre |
+|---|---|---|---|
+| **W-16** | `tools/bench_render.js` (nuevo) + `frontend/diagnostic-player.html` (nuevo, **es F8-1 adelantada**) | banco Node de la etapa de conversión índice→RGBA (corpus 768/1280/1920 × keyframe/delta disperso/tiles densos) y player de diagnóstico ES5 con p50/p95, drops y desglose por etapa (inflate, walk, conversión, blit) | el banco corre en `tests/run_all.py` y publica tabla en CI; el diagnostic abre en el TV y muestra las tres grillas |
+| **W-17** | `frontend/reader.js`, `frontend/reader-v2.js` | LUT `Uint32Array(256)` de paleta con endianness detectada una vez; escritura por palabra sobre vista `Uint32` del destino; fallback byte a byte obligatorio | salida **byte-idéntica** sobre el corpus (test de paridad) + mejora medida en `bench_render.js` |
+| **W-18** | `frontend/render-webgl.js` | índices como textura `LUMINANCE` (subida directa de `cells`) + paleta como textura 256×1 RGBA + lookup en el fragment shader. `UNPACK_ALIGNMENT 1`, corrección de medio texel, `highp` con fallback a `mediump`. Camino RGBA actual **se conserva** como fallback | paridad de píxeles con Canvas2D en modo `nearest` (`readPixels` sobre frame sintético); conversión en CPU eliminada y upload ×4 menor, medidos |
+| **W-19** | `frontend/render-webgl.js`, `frontend/render-canvas2d.js`, `frontend/tv-player.html` | modo `soft` = 4 taps NEAREST + 4 lookups + mezcla en espacio de color (**nunca interpolar índices**); modo `nearest` idéntico a hoy; `fitCanvas` gana escalado entero por query string como herramienta de comparación | el operador compara en el TV 1280 `nearest` / 1280 `soft` / 1920 nativo sobre el mismo video |
+| **W-20** | `frontend/tv-player.html` | presentación anclada a la cadencia del display con corrección lenta contra el audio; pre-decode del próximo frame y del próximo keyframe en el tiempo muerto, a un buffer alterno **fijo** de `cells` (no viola el invariante 7) | en el diagnostic, a 1920: drops < 0,1 % y p95 de decode+render bajo el presupuesto de frame |
+| **W-21** | `frontend/reader-v2.js`, ambos renderers | dirty rect en X (hoy la subida es banda de ancho completo: `x0/x1` no se calculan en ningún lado) | misma imagen; subida medida menor en corpus con cambios localizados. **Opcional dentro de F9** |
+
+Precondición dura: **W-16 primero**. Ninguna otra tarea de F9 se cierra sin su medición
+(reglas 5 y 6 del proyecto). W-18 y W-19 se implementan juntas: la textura de índices
+rompe el modo `soft` actual si la reconstrucción no la acompaña.
+
+### F10 — Pérdida adaptativa por suavidad (S-9)
+
+Diseño completo: [`DISENO-PERDIDA-ADAPTATIVA.md`](DISENO-PERDIDA-ADAPTATIVA.md). Emite
+ASCL v3 igual que hoy: el decoder no se entera. Comparación siempre contra el producto
+vigente `dcd6afb6…1632a` (24.458.884 B, 35,02 dB, `proxy_banding` 0,001522).
+
+| ID | Archivo | Acción | Cierre |
+|---|---|---|---|
+| **E-25** | `backend/perceptual_palette.py`, `backend/encoder.py`, `backend/make_clip.py` | exponer `--gradient-boost` (default 3.0 = valor actual) y calcular el mapa de suavidad una vez por frame, disponible para las etapas siguientes | con el default, salida **byte-idéntica**. Δbytes solo con otros valores |
+| **E-27** | `backend/trellis.py` | guard: el trellis espacial no fusiona el valor menos frecuente si el tile es rampa suave (es la causa directa del escalonado en degradés) | `proxy_banding` baja; bytes ≈ iguales (< 0,1 %). Fila de registro |
+| **E-26** | `backend/trellis.py` | `--near-lossless-shape k` (default 0 = comportamiento exacto de hoy): presupuesto por celda `budget * (1 - k * suavidad)` en las tres etapas del trellis | a igual o menor cantidad de bytes, `proxy_banding` baja de forma medible. Fila de registro |
+| **E-28** | `backend/dither.py`, `backend/encoder.py` | dither dirigido **solo a mesetas detectadas**, con `--dither-byte-budget` bajo y aceptación por `proxy_banding` (métrica que no existía cuando el operador rechazó el dither global de 211 KB) | decisión visual del operador con previews. La pregunta es «¿desapareció el escalonado del huevo?», no «¿se ve mejor el clip?» |
+| **E-29** | `backend/ascl_v2.py` | término de costo de decodificación en la elección de tag: penalizar `PREDICT_*` (dos pasadas completas sobre todas las celdas) frente a `REGIONAL_DELTA` con SPARSE | bytes ≈ iguales (< 0,2 %); peor caso por frame menor en `bench_reader_v2.js`. **Opcional** |
+
+Orden: E-25 → E-27 → E-26 → E-28 → E-29.
+
+### F11 — Formato v4: LOD por tile y transparencia (S-10)
+
+Diseño completo:
+[`DISENO-FORMATO-V4-LOD-Y-ALPHA.md`](DISENO-FORMATO-V4-LOD-Y-ALPHA.md). Una sola
+revisión de formato para las dos features, por la misma razón que F6 agrupó todo en v3.
+**Depende de F9 cerrada** (la LUT de W-17 es lo que hace que el alpha no cueste nada).
+
+| ID | Archivo | Acción | Cierre |
+|---|---|---|---|
+| **E-30** | `backend/encoder.py`, `backend/make_clip.py` | `--lod-tile <umbral>` (0 = off, default): hornear bloques 2×2 idénticos en tiles de bajo detalle, en la cuantización y **antes** del trellis. Promedio en Oklab; histéresis temporal para que un tile no alterne. **Sin cambio de formato**: mide el beneficio de bytes antes de comprometerse a v4 | el default reproduce la salida actual **byte a byte**; con el flag, bytes menores + decisión visual. Fila de registro |
+| **F11-1** | `backend/regional_codec_v2.py`, `frontend/reader-v2.js` | opcode `0x08 LOD2` con sub-stream a `(tile/2)²` reutilizando los candidatos existentes. El decoder valida tile par, tile completo (los truncados de borde no admiten LOD2) y consumo exacto del sub-stream | round-trip exacto; bytes menores que E-30 solo; **trabajo del decoder ×4 menor** en tiles LOD, medido en `bench_reader_v2.js` |
+| **F11-2** | `backend/encoder.py`, `backend/make_clip.py`, `frontend/*` | transparencia: `cell_fmt = 4` (paleta RGBA) con `version = 4`; `--alpha` (lectura por ffmpeg `rawvideo/rgba`, cv2 descarta el alpha) y `--alpha-levels N` (default 4; 2 = binario). K-means solo sobre alpha > 0 y color **no** premultiplicado. WebGL con `alpha: true` solo si el clip lo declara. **Prohibido combinar con `--reserved`** en esta versión (error explícito) | clip de personaje sobre fondo transparente reproducido en el player; decoders anteriores lo **rechazan** (por versión y por `cell_fmt`), nunca lo muestran a medias |
+| **F11-3** | `frontend/reader-v2.js`, `frontend/reader-factory.js`, `backend/ascl_bundle.py`, `tests/test_v4_cross.js` | espejo JS completo, despacho por versión, `.ascl` v4 dentro del envelope, cross-test Python↔JS de matriz y RGBA, fuzzing del opcode y de la paleta RGBA | cross-test en verde; todo campo nuevo cubierto por fuzzing |
+| **F11-4** | workflow `encode` | barrido sobre el clip real (1280 y 1920), fila por variante, previews | decisión visual del operador; si adopta, producto a v4 y publicación con puntero CACHE-001 |
+
+### DIAG-001 — Causa del escalonado del huevo (**al final**, por decisión del operador)
+
+El operador decidió (2026-08-31) que el escalado se mira **al último**, después de F9-F11.
+Se deja anotado el procedimiento para no reconstruirlo: decodificar el `.asclv` vigente a
+resolución nativa (`ascl_decode.py --mp4 --scale 1`, o el workflow `encode` con
+`preview: true`) y comparar contra el player a pantalla completa.
+
+- limpio en el MP4 nativo y escalonado en el player → causa el **escalado** (W-19 lo cubre);
+- ya escalonado en el MP4 → causa la **paleta/trellis** (F10 lo cubre);
+- solo escalonado cuando el huevo se mueve → causa el **trellis temporal / sample-and-hold**.
+
+Probablemente para cuando se ejecute ya esté resuelto por F9 y F10; DIAG-001 es la
+verificación de que efectivamente lo está.
+
 ### S-6 — Validación física (F8)
 
 | ID | Tarea |
 |---|---|
-| F8-1 | `frontend/diagnostic-player.html`, ES5, separado de `tv-player.html` |
-| F8-2 | Matriz física con las resoluciones de producto: **1280@15 v3** (producto), 768 y 640 de referencia, y el **1920** (directiva del operador: el front procesa cualquier resolución/fps; el 1920 se re-prueba a más fps); Canvas2D y WebGL1, 30 minutos |
-| F8-3 | Go/no-go de v2/**v3** (`TV-02`) contra los artefactos **ya optimizados** |
+| F8-1 | `frontend/diagnostic-player.html`, ES5, separado de `tv-player.html` — **se adelanta y se ejecuta dentro de `W-16`**, porque F9 no se puede medir sin él |
+| F8-2 | Matriz física con las resoluciones de producto: **1280@15** (producto), 768 y 640 de referencia, y el **1920** (el front procesa cualquier resolución/fps; el 1920 se re-prueba a más fps); Canvas2D y WebGL1, y además **con y sin** las rutas de F9 (textura de índices, reconstrucción `soft`, pacing), 30 minutos |
+| F8-3 | Go/no-go de v2/**v3**/**v4** (`TV-02`) contra los artefactos **ya optimizados** |
 | F8-4 | `MEM-001`: memoria por componente, con y sin overlay |
 | F8-5 | Regenerar el artefacto de release **después** del último cambio de codec |
 

@@ -67,7 +67,10 @@ el TV nunca cuantiza ni decide, solo ejecuta.
 8. **Canonicidad forzada del formato:** uvarint no canónico, padding ≠ 0 u offsets no
    crecientes se **rechazan**. El decoder confía en cero campos.
 9. Los valores manuales del operador (cols, fps, colores) prevalecen sobre cualquier
-   automatismo.
+   automatismo. **Resolución y fps son elegibles POR VIDEO, nunca fijados por una
+   receta** (operador, 2026-08-31): el destino real son TVs de 1920, así que toda grilla
+   se estira; lo que se decide por clip es cuánta densidad conviene pagar. El front debe
+   procesar cualquier combinación que se le pase.
 
 Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
 `docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md`.
@@ -105,12 +108,29 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
 
 **En curso / pendiente** (detalle operativo en `RUNBOOK-ESTADO.md` §Próxima acción):
 
-- **Del operador:** probar iargen.com/player/ en celular y Smart TV (antesala
-  de F8); prueba futura del 1920 a más fps.
-- **Siguiente fase: F8 (S-6)** — TV físico, p95, MEM-001; F8-2 incluye el 1920.
-  **INT-005 por época sigue CONDICIONADO** a que los gates físicos de F8 fallen
-  para el overlay nativo (dirección del operador 2026-08-30).
-- Opcionales: E-11, W-15. Menor: si se retoma el 960, re-medirlo con refit 5.
+Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
+**F9 → F10 → F11 → F8 → DIAG-001**.
+
+- **F9 (S-8) — EN EJECUCIÓN, arranca por `W-16`.** Aceleración del frontend sin tocar
+  bytes ni formato: banco de medición + diagnostic-player (W-16), LUT `Uint32` (W-17),
+  **textura de índices + paleta en el shader** (W-18, «probarlo cuanto antes»),
+  reconstrucción de 4 taps (W-19, acoplada a W-18), cadencia y pre-decode (W-20).
+  Motivo: la conversión índice→RGBA cuesta ~14,5 M accesos y 8,3 MB de subida por
+  keyframe a 1920. Diseño: `docs/DISENO-RENDER-INDEXADO.md`.
+- **F10 (S-9)** — pérdida adaptativa por suavidad (E-25, E-27, E-26, E-28): el banding
+  solo se ve en zonas suaves, así que el presupuesto deja de ser plano. Ataca el degradé
+  escalonado del huevo sin devolver el ahorro del near-lossless 8. Emite v3 igual que
+  hoy. Diseño: `docs/DISENO-PERDIDA-ADAPTATIVA.md`.
+- **F11 (S-10) — formato v4:** LOD por tile (E-30 horneado **sin** cambio de formato →
+  F11-1 opcode `LOD2`) y **transparencia** (F11-2: `cell_fmt 4`, paleta RGBA, `--alpha`;
+  feature nueva pedida por el operador para clips de personaje sobre fondo transparente).
+  Depende de F9. Diseño: `docs/DISENO-FORMATO-V4-LOD-Y-ALPHA.md`.
+- **F8 (S-6)** — TV físico, p95, MEM-001, con F9-F11 adentro (F8-1 se adelanta como
+  W-16). **INT-005 por época sigue CONDICIONADO** a que los gates físicos fallen para el
+  overlay nativo (dirección del operador 2026-08-30).
+- **DIAG-001** — causa del escalonado del huevo, **al final por decisión del operador**.
+- **Del operador:** probar iargen.com/player/ en celular y Smart TV.
+- Opcionales: E-11, W-15, W-21, E-29. Menor: si se retoma el 960, re-medirlo con refit 5.
 
 > Docs podados el 2026-08-30 y limpiados el 2026-08-31 (cierre de F6/S-4 y S-7): los
 > runbooks solo contienen lo pendiente (F8 + opcionales); las tablas completas de

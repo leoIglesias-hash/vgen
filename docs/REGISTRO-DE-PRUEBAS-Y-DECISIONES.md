@@ -1647,3 +1647,129 @@ pasá la mejora». La adopción de v3 —hecha por métricas al cierre de
 S-4— queda además CONFIRMADA A OJO: el cambio de formato es invisible,
 como debía (v3 no toca la imagen decidida por el encoder, solo la
 representación en bytes). Instancia 029 cerrada del todo.
+
+## Instancia 030 - Auditoria de mejoras y plan nuevo (F9, F10, F11, DIAG-001)
+
+**Pedido del operador (2026-08-31):** «se llego a un punto de dificil
+avance en cuanto a mejoras... revisa las mejoras que ya se aplicaron
+para no repetir y dame una bateria de nuevas optimizaciones... nos
+interesa sobre todo como trabajar con resoluciones grandes como 1920
+estresando menos el front pero manteniendo o mejorando la calidad de
+reproduccion». Sumo un sintoma concreto: «los escalados de sombras... el
+huevo de telekino en algun punto se ve con escalones en vez de pasar la
+escala mejor».
+
+### Auditoria previa (para no re-proponer lo descartado)
+
+Se releyeron el encoder completo (15 modulos), el frontend completo (16
+archivos + suites JS) y todo el historial de decisiones (Instancias
+001-029 + `ejecutados/`). Las propuestas se filtraron contra la lista de
+lo ya probado: quedan **fuera** por evidencia previa el dither global
+(rechazado por el operador el 2026-08-29: 211.226 B y -0,17 dB sin
+banding visible), el refine uint8 (E-13, +0,36 % bytes), el dither
+exacto (E-16, +6,0 % bytes), los barridos de tile (F6-2: espacial 16 +
+regional 32 es estable entre 768 y 1280), el remap de IDs (-0,96 %,
+rechazado sin CPU fisica medida), el 960 (superado por el 768 con refit
+5) y la compensacion de movimiento (vetada por invariante).
+
+### Diagnostico del escalonado del huevo (tres causas, no una)
+
+1. **Escalado de pantalla.** El backing store queda en tamaño de grilla
+   y `fitCanvas()` estira por CSS con factor **fraccionario** (1280 en un
+   panel de 1920 = x1,5). El producto sale con `--reconstruction nearest`
+   (default de `make_clip.py`, el workflow no lo cambia), asi que el
+   compositor duplica una de cada dos columnas. Sobre siluetas curvas y
+   degradés eso agrega escalones que NO estan en el archivo.
+2. **Banding de paleta.** 256 colores para todo el frame, y el
+   `--near-lossless 8` adoptado en la Instancia 027 es un alias de
+   `--trellis-temporal 8 --trellis-spatial 8`: el trellis espacial fusiona
+   el valor MENOS FRECUENTE de cada tile que cruza los umbrales (3, 5,
+   17), que en una rampa de sombra es exactamente el escalon intermedio.
+   Medido en su momento: **+18 % de proxy_banding** (0,001345 ->
+   0,001587) por -12 % de bytes.
+3. **Animacion.** Trellis temporal (congela celdas casi iguales) +
+   remuestreo sample-and-hold puro, sin blending: un zoom lento se ve
+   por saltos.
+
+**Procedimiento de desambiguacion anotado (DIAG-001):** decodificar el
+`.asclv` vigente a resolucion nativa y comparar contra el player a
+pantalla completa. Limpio en el MP4 y escalonado en el player -> causa 1;
+escalonado ya en el MP4 -> causa 2; solo al moverse -> causa 3.
+**El operador decidio verlo AL FINAL** («el escalado del huevo sera lo
+ultimo que veremos»), despues de F9-F11.
+
+### Hallazgo central para el 1920
+
+El trabajo por frame del TV es proporcional a las **celdas**, no a los
+pixeles de pantalla, y hoy se paga entero en CPU: `fillRGBARows` hace
+~7 accesos a arrays y 2 multiplicaciones por celda, y recien despues se
+sube el RGBA.
+
+| Grilla | Celdas | Accesos por frame completo | RGBA a subir |
+|---|---|---|---|
+| 768x432 | 331.776 | ~2,3 M | 1,3 MB |
+| 1280x720 | 921.600 | ~6,5 M | 3,7 MB |
+| 1920x1080 | 2.073.600 | **~14,5 M** | **8,3 MB** |
+
+Un keyframe a 1920 hace ese trabajo completo, y en el 1920@10 medido en
+S-7 hay 28 keyframes en 154 frames (uno cada ~5,5). Es la hipotesis
+principal de por que el operador vio el 1920 «un poco trabado» pese a
+aprobar su imagen («se ve espectacular»): el costo no estaba solo en los
+10 fps.
+
+### Decisiones del operador sobre la bateria propuesta
+
+- **Textura de indices + paleta en el shader: «debemos probarlo cuanto
+  antes».** -> F9/W-18, primera prioridad tecnica.
+- **Reconstruccion:** «se reproducira en televisores con resolucion 1920
+  asi que aunque sea 1280 debera estirarse a 1920... se puede revisar a
+  ver si es cierto que termina costando menos, pero seria algo para que
+  veamos **por cada video** que trabajemos, **nunca algo fijo**...
+  siempre las resoluciones deben poder ser elegibles al igual que los
+  frames». -> W-19 implementa el filtro; la eleccion 1280-reconstruido vs
+  1920-nativo se decide por clip. **Principio anotado como extension de
+  la regla 9.**
+- **Perdida adaptativa por suavidad: «brillante, seria algo realmente
+  bueno para el degradado del huevo».** -> F10.
+- **LOD por tile: «realmente brillante, hay que aplicarlo tambien».** ->
+  F11-1 (+ E-30 como paso previo sin cambio de formato).
+- **Feature nueva pedida por el operador — transparencia:** «este formato
+  es perfecto para fondos transparentes... si yo te paso por ejemplo solo
+  el personaje del huevo de telekino y saco el resto del video, poder
+  hacer un clip con el resto transparente». -> F11-2 (ALPHA-001).
+
+### Plan resultante
+
+**Orden: F9 -> F10 -> F11 -> F8 -> DIAG-001.** F9 primero porque no toca
+bytes ni formato y se valida contra el clip ya publicado: su ciclo de
+prueba dura minutos en vez de una hora de runner.
+
+- **F9 (S-8) - frontend:** W-16 medicion (banco Node + diagnostic-player,
+  que es F8-1 adelantada), W-17 LUT `Uint32`, W-18 textura de indices con
+  lookup en el shader, W-19 reconstruccion de 4 taps (acoplada a W-18:
+  interpolar indices produce colores arbitrarios, asi que `LINEAR` sobre
+  la textura de indices queda prohibido), W-20 cadencia y pre-decode del
+  keyframe, W-21 dirty en X (opcional).
+- **F10 (S-9) - encoder, sin cambio de formato:** E-25 expone
+  `--gradient-boost` (hoy fijo en 3.0) y reutiliza el mapa de suavidad;
+  E-27 impide que el trellis espacial fusione dentro de una rampa; E-26
+  modula el presupuesto por celda; E-28 dither dirigido solo a mesetas,
+  aceptado por `proxy_banding` (la metrica que no existia cuando se
+  rechazo el dither global); E-29 costo de decodificacion en la eleccion
+  de tag (opcional).
+- **F11 (S-10) - formato v4:** E-30 hornea el LOD en la matriz **antes**
+  del trellis (el codec sigue siendo lossless: se preserva el contrato C2
+  y el beneficio de bytes se puede medir SIN cambiar el formato), F11-1
+  agrega el opcode `0x08 LOD2`, F11-2 la transparencia via `cell_fmt = 4`
+  (paleta RGBA) con `version = 4` — los decoders anteriores la **rechazan**
+  por ambos campos en vez de mostrar basura, porque el reader actual ya
+  falla con `cell_fmt !== 3` —, F11-3 el espejo JS con cross-test y
+  fuzzing, F11-4 el barrido y la adopcion.
+
+Diseños completos en `DISENO-RENDER-INDEXADO.md`,
+`DISENO-PERDIDA-ADAPTATIVA.md` y `DISENO-FORMATO-V4-LOD-Y-ALPHA.md`.
+
+**Estado: plan documentado, ejecucion pendiente.** Ninguna medicion nueva
+todavia: las cifras de esta entrada son del codigo leido y de las filas ya
+registradas, no de runs nuevos. La primera tarea que produce numeros es
+W-16.

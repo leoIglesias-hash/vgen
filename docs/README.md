@@ -16,6 +16,14 @@ orden: spec de formato → estado de ejecución → diseño vigente → registro
 | [`ejecutados/`](ejecutados/README.md) | resumen por fase cerrada con su evidencia + tablas de tareas y bitácora 2026-08-27..30 archivadas verbatim; se consulta, no se relee |
 | [`REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md) | bitácora append-only por Instancia: el porqué de cada decisión y cada medición |
 
+## Diseño de lo que está en obra (plan del 2026-08-31, Instancia 030)
+
+| Documento | Función |
+|---|---|
+| [`DISENO-RENDER-INDEXADO.md`](DISENO-RENDER-INDEXADO.md) | **F9**: LUT `Uint32`, textura de índices con lookup en el shader, reconstrucción de 4 taps, cadencia y pre-decode. No toca el formato |
+| [`DISENO-PERDIDA-ADAPTATIVA.md`](DISENO-PERDIDA-ADAPTATIVA.md) | **F10**: repartir la pérdida según el mapa de suavidad en vez de en partes iguales (el banding solo se ve en zonas suaves) |
+| [`DISENO-FORMATO-V4-LOD-Y-ALPHA.md`](DISENO-FORMATO-V4-LOD-Y-ALPHA.md) | **F11**: resolución por tile (LOD) y transparencia (paleta RGBA), agrupadas en una sola revisión de formato |
+
 ## Referencia técnica
 
 | Documento | Función |
