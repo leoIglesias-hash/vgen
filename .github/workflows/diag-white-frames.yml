@@ -1,0 +1,64 @@
+name: diag-white-frames
+
+# DIAG-002: el operador ve pantallazos blancos entre las imagenes al reproducir
+# en un WebView de TV box. Este workflow baja el clip EXACTO que sirve el player
+# publicado y lo decodifica con el decoder de referencia, para contestar la
+# pregunta que parte el problema en dos: el blanco esta en los datos o lo pone
+# el reproductor?
+#
+# No mide tiempos ni compara nada: solo reporta luma por cuadro y cuantas celdas
+# casi blancas hay. El veredicto se lee al final del step summary.
+
+on:
+  workflow_dispatch:
+    inputs:
+      clip_url:
+        description: "URL del clip a analizar (por defecto, el que sirve la raiz del player)"
+        default: "https://iargen.com/player/outputs/clip.asclv"
+        required: true
+      white_level:
+        description: "Luma a partir de la cual una celda cuenta como casi blanca"
+        default: "235"
+      jump:
+        description: "Salto de luma media que se reporta como transicion brusca"
+        default: "40"
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install encoder dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Download the published clip
+        run: |
+          curl -fsSL "${{ inputs.clip_url }}" -o clip.asclv
+          ls -l clip.asclv
+          echo "sha256: $(sha256sum clip.asclv | cut -d' ' -f1)"
+      - name: Look for white frames in the data
+        run: |
+          set +e
+          python tools/diag_white_frames.py clip.asclv \
+            --white-level "${{ inputs.white_level }}" \
+            --jump "${{ inputs.jump }}" | tee diag.txt
+          status=${PIPESTATUS[0]}
+          {
+            echo "## DIAG-002 - cuadros blancos en los datos"
+            echo ""
+            echo "Clip: \`${{ inputs.clip_url }}\`"
+            echo ""
+            echo '```'
+            cat diag.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # El script devuelve 1 cuando ENCUENTRA cuadros blancos. Eso es un
+          # hallazgo, no una falla del workflow: no debe teñir el run de rojo.
+          echo "codigo del analisis: $status"
+          exit 0
