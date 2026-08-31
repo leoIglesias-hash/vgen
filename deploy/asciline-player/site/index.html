@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCILINE live</title>
+<!--
+  F7 / INT-003: runtime REAL de la intervencion matricial (INT-001 +
+  DISENO-PARCHES-GENERICOS). Requiere un clip con reserva (10 o 32) y su
+  sidecar clip.slots (workflow encode con overlay=panel o overlay=patches):
+    - los parches se escriben como indices reservados (256-N..255) sobre la
+      matriz de celdas del reader: un solo layer, jamas un segundo canvas;
+    - el orden por frame es beforeSeek -> seek -> afterSeek (overlay.js);
+    - los valores llegan por el canal de datos (outputs/data.txt, XHR con
+      serial monotonico y validacion en 5 pasos) o con el boton de prueba,
+      que genera un payload valido por campo (digitos y presencia v2);
+    - si el clip no tiene reserva o el sidecar no coincide, el video se
+      reproduce igual, sin overlay (INV-7);
+    - INT-004 (texto nativo): con sidecar v2, los campos de numeros grandes
+      se espejan como TEXTO dibujado con Canvas2D sobre el MISMO canvas,
+      despues del frame, para comparar nitidez lado a lado con la matriz.
+      Con texto declarado el renderer es Canvas2D (regla 6) y su backing
+      store escala con el zoom (pixelScale) para que el texto sea nitido.
+      Orden por frame: beforeSeek -> seek -> afterSeek -> markDirty(texto)
+      -> renderer.draw -> textLayer.draw.
+    - INT-006 (texto standalone): sin sidecar (fondo sin reserva), el player
+      declara tres campos de texto de 2 digitos por defecto (tercios
+      horizontales, dimensionados por cols/rows) y los alimenta con
+      textfeed.js, que expone la MISMA interfaz digitCount/setValues que
+      consume datachannel.js (sin cambios). Si data.txt no existe el canal
+      falla suave (INV-7).
+    - INT-006-C (D7=a, imagen nativa): un PNG opcional (outputs/logo.png) se
+      dibuja con drawImage sobre el MISMO canvas despues del texto, igual que
+      el texto nativo: no vive en la matriz (no es byte-verificable), su caja
+      se marca sucia cada frame y solo se activa con texto declarado (el
+      renderer ya es Canvas2D con pixelScale). Sin imagen, nada cambia.
+-->
+<style>
+  :root{ color-scheme: dark; }
+  body{ margin:0; background:#0d0d10; color:#e7e7ea; font:14px/1.5 system-ui,sans-serif; }
+  header{ padding:10px 16px; border-bottom:1px solid #26262c; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  h1{ font-size:15px; margin:0 12px 0 0; }
+  select,button{ background:#1a1a20; color:#e7e7ea; border:1px solid #33333c; border-radius:6px; padding:6px 9px; font:inherit; cursor:pointer; }
+  button:disabled{ opacity:.45; cursor:default; }
+  #stage{ display:flex; justify-content:center; padding:14px; }
+  canvas{ background:#000; max-width:100%; image-rendering:pixelated; border:1px solid #26262c; }
+  #status{ padding:8px 16px; color:#8a8a92; font-family:ui-monospace,monospace; font-size:12px; }
+  .pill{ padding:2px 8px; border-radius:999px; background:#1a1a20; border:1px solid #33333c; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ASCILINE &middot; live (runtime F7)</h1>
+  <label>zoom <select id="zoom"><option selected>1</option><option>2</option></select></label>
+  <button id="play" disabled>Play</button>
+  <button id="simulate" disabled>Simular carga</button>
+  <button id="clearOverlay" disabled>Limpiar panel</button>
+  <span id="badge" class="pill">cargando...</span>
+</header>
+<div id="stage"><canvas id="cv" width="320" height="180"></canvas></div>
+<div id="status">Cargando clip y sidecar...</div>
+<audio id="audio" style="display:none"></audio>
+
+<script src="inflate.js"></script>
+<script src="reader.js"></script>
+<script src="reader-v2.js"></script>
+<script src="reader-factory.js"></script>
+<script src="render-canvas2d.js"></script>
+<script src="render-webgl.js"></script>
+<script src="slots.js"></script>
+<script src="overlay.js"></script>
+<script src="datachannel.js"></script>
+<script src="textlayer.js"></script>
+<script src="textfeed.js"></script>
+<script src="cache-refresh.js"></script>
+<script>
+(function(){
+  "use strict";
+  var CLIP_URL="./outputs/clip.asclv";
+  /* CACHE-001 (F6-4): puntero mutable -> clip versionado inmutable */
+  var POINTER_URL="./outputs/clip.current.txt";
+  var SLOTS_URL="./outputs/clip.slots";
+  var DATA_URL="./outputs/data.txt";
+  var IMG_URL="./outputs/logo.png";
+  /* INT-007-A: pila de fuentes menos comun (fallback serif garantizado) +
+   * sombra translucida (rgba con alpha) para el texto nativo */
+  var TEXT_FONT='"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif';
+  var TEXT_WEIGHT="bold";
+  var TEXT_SHADOW="rgba(0,0,0,0.55)";
+  /* INT-007-B: el logo gira como ruleta simulada - vuelta completa cada
+   * IMG_TURN frames mostrados (2 s a 15 fps); el angulo es funcion del
+   * frame, determinista: mismo frame -> mismo angulo, sin reloj */
+  var IMG_TURN=30, IMG_STEP=2*Math.PI/IMG_TURN;
+
+  var cv=document.getElementById("cv"), audio=document.getElementById("audio");
+  var elPlay=document.getElementById("play"), elZoom=document.getElementById("zoom");
+  var elBadge=document.getElementById("badge"), elStatus=document.getElementById("status");
+  var elSim=document.getElementById("simulate"), elClear=document.getElementById("clearOverlay");
+  var reader=null, renderer=null, overlay=null, channel=null, overlayMeta=null;
+  var bundleMeta=null; /* F6-3: sidecar ASCLSLOT embebido en un ASCLVID3 */
+  var textLayer=null, textFields=null, textItems=null, cellScale=1;
+  var textFeed=null, feedFields=null;
+  var imgEl=null, imgBox=null, imgSpin=null;
+  var playing=false, hasAudio=false, startT=0, raf=0, lastShown=-1, simSerial=0;
+  var urlAPI=window.URL || window.webkitURL;
+  var perf=window.performance;
+  var now=(perf && typeof perf.now==="function")?function(){return perf.now();}:function(){return new Date().getTime();};
+  var nativeRequestFrame=window.requestAnimationFrame, nativeCancelFrame=window.cancelAnimationFrame;
+  var requestFrame, cancelFrame;
+  if(nativeRequestFrame && nativeCancelFrame){
+    requestFrame=function(fn){ return nativeRequestFrame.call(window,fn); };
+    cancelFrame=function(id){ nativeCancelFrame.call(window,id); };
+  } else {
+    requestFrame=function(fn){ return window.setTimeout(function(){fn(now());},16); };
+    cancelFrame=function(id){ window.clearTimeout(id); };
+  }
+  function log(s){ elStatus.textContent=s; }
+
+  /* ---- orden por frame de INT-001 (§9.2): el overlay envuelve al seek ---- */
+  function seekTo(frame){
+    if(overlay) overlay.beforeSeek();
+    reader.seek(frame);
+    if(overlay) overlay.afterSeek();
+  }
+  /* INT-004: las cajas de texto se marcan sucias DESPUES del seek (el seek
+   * resetea los dirty sets) y ANTES del draw, para que el video se repinte
+   * debajo del texto viejo; se marcan TODAS las cajas declaradas (no solo
+   * las que tienen texto) para que borrar un texto no deje fantasma. */
+  function markTextDirty(){
+    var i,it,x,y,w,h,cols=reader.header.cols,rows=reader.header.rows;
+    textLayer.markDirty(reader);
+    for(i=0;i<textItems.length;i++){
+      it=textItems[i];
+      x=it.x; y=it.y; w=it.w; h=it.h;
+      if(x+w>cols || y+h>rows) continue;
+      /* INT-007-A: la sombra derrama menos de una celda; su caja se marca
+       * expandida 1 celda (clampeada) para que cambiar texto no deje halo */
+      if(it.shadow){
+        if(x>0){x--;w++;}
+        if(y>0){y--;h++;}
+        if(x+w<cols) w++;
+        if(y+h<rows) h++;
+      }
+      reader.markRectDirty(x,y,w,h);
+    }
+    /* INT-006-C/INT-007-B: debajo de la imagen se repinta el cuadrado que
+     * circunscribe su rotacion, no solo su caja, para que el giro no deje
+     * estela */
+    if(imgSpin){
+      reader.markRectDirty(imgSpin.x,imgSpin.y,imgSpin.w,imgSpin.h);
+    }
+  }
+  /* INT-006-C (D7=a): la imagen se dibuja DESPUES del texto, escalada por
+   * cellScale como el, sobre el mismo canvas (un solo layer).
+   * INT-007-B: gira alrededor del centro de su caja con angulo funcion del
+   * frame mostrado (ruleta simulada); save/restore acota la transformacion
+   * a este draw y no queda estado colgado en el contexto */
+  function drawImg(frame){
+    var ctx=renderer.ctx,
+        cx=(imgBox.x+imgBox.w/2)*cellScale,
+        cy=(imgBox.y+imgBox.h/2)*cellScale;
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate((frame%IMG_TURN)*IMG_STEP);
+    ctx.drawImage(imgEl,
+      -imgBox.w*cellScale/2,-imgBox.h*cellScale/2,
+      imgBox.w*cellScale,imgBox.h*cellScale);
+    ctx.restore();
+  }
+  function drawFrame(frame){
+    seekTo(frame);
+    if(textLayer) markTextDirty();
+    renderer.draw(reader);
+    if(textLayer) textLayer.draw(renderer.ctx,cellScale);
+    if(imgBox) drawImg(frame);
+  }
+
+  function overlayStatus(){
+    if(!overlay) return "overlay inactivo";
+    var s="overlay activo ("+overlay.digitCount+" digitos)";
+    if(channel && channel.lastSerial>=0) s+=" - serial "+channel.lastSerial;
+    if(channel && channel.lastError) s+=" - canal: "+channel.lastError;
+    return s;
+  }
+
+  function pickRenderer(){
+    var old=cv, nc=document.createElement("canvas");
+    nc.id="cv"; old.parentNode.replaceChild(nc,old); cv=nc;
+    var cellPx=parseInt(elZoom.value,10), r=null;
+    if(renderer && renderer.dispose){ try{ renderer.dispose(true); }catch(e1){} }
+    /* INT-004 / regla 6: con texto nativo declarado el renderer ES Canvas2D
+     * (WebGL no gana funciones; strokeText/fillText no existen alli) */
+    if(!textLayer){
+      try{
+        var w=new window.WebGLRenderer(cv);
+        if(w.init(reader,cellPx,"nearest")){ r=w; } else if(w.dispose){ w.dispose(true); }
+      }catch(e2){ r=null; }
+    }
+    if(!r){
+      r=new window.Canvas2DRenderer(cv);
+      if(textLayer){ r.pixelScale=cellPx; }
+      r.init(reader,cellPx,"nearest");
+    }
+    renderer=r;
+    cellScale=(textLayer && r.pixelScale>1)?r.pixelScale:1;
+  }
+
+  /* ---- INT-004: espejo en texto nativo de los numeros grandes ----
+   * Por cada campo v2 de digitos con slots grandes (w>=20 celdas) se declara
+   * una caja de texto al costado (misma altura, serif con borde) y cada
+   * payload aceptado alimenta la matriz Y el texto: nitidez lado a lado. */
+  function buildTextSpec(meta){
+    var items=[],fields=[],cols=reader.header.cols,i,f,s0,s1,x0,wTot,tx;
+    if(meta.version!==2) return {items:items,fields:fields};
+    for(i=0;i<meta.fields.length;i++){
+      f=meta.fields[i];
+      if(f.kind!==0) continue;
+      s0=meta.slots[f.slotIds[0]];
+      if(s0.w<20) continue;
+      s1=meta.slots[f.slotIds[f.slotIds.length-1]];
+      x0=s0.x; wTot=(s1.x+s1.w)-x0;
+      tx=x0+wTot+2;
+      if(tx+wTot>cols) tx=x0-wTot-2;
+      if(tx<0) continue;
+      items.push({id:f.fieldId,x:tx,y:s0.y,w:wTot,h:s0.h,
+        size:Math.max(1,s0.h-6),color:"#ffd700",outline:"#000000",
+        font:TEXT_FONT,weight:TEXT_WEIGHT,shadow:TEXT_SHADOW,
+        align:"center"});
+      fields.push(f);
+    }
+    return {items:items,fields:fields};
+  }
+  function fieldWire(f){
+    return f.kind===1 ? 1+wireWidth(f.max) : f.slotIds.length;
+  }
+  function mirrorTexts(payload){
+    var off=0,i,j,f;
+    for(i=0;i<overlayMeta.fields.length;i++){
+      f=overlayMeta.fields[i];
+      for(j=0;j<textFields.length;j++){
+        if(textFields[j]===f){
+          textLayer.setText(f.fieldId,payload.substr(off,fieldWire(f)));
+        }
+      }
+      off+=fieldWire(f);
+    }
+  }
+  function clearTexts(){
+    var j;
+    for(j=0;j<textFields.length;j++){
+      textLayer.setText(textFields[j].fieldId,"");
+    }
+  }
+  /* Todo payload aceptado (boton O canal de datos) actualiza ambos lados;
+   * clear() limpia matriz y textos juntos. */
+  function hookTextMirror(){
+    var origSet=overlay.setValues, origClear=overlay.clear;
+    overlay.setValues=function(payload){
+      var ok=origSet.call(overlay,payload);
+      if(ok) mirrorTexts(String(payload));
+      return ok;
+    };
+    overlay.clear=function(){
+      origClear.call(overlay);
+      clearTexts();
+    };
+  }
+  function tryAttachText(meta){
+    var spec=buildTextSpec(meta);
+    if(!spec.items.length || !window.ASCILINETextLayer) return;
+    textLayer=window.ASCILINETextLayer.create(spec.items);
+    if(!textLayer) return;
+    textFields=spec.fields;
+    textItems=spec.items;
+    hookTextMirror();
+    pickRenderer();
+    reader.decodedIndex=-1;
+    drawFrame(lastShown<0?0:lastShown);
+    tryAttachImage();
+  }
+
+  /* ---- INT-006: texto standalone (fondo sin reserva, sin sidecar) ----
+   * Sin overlay de matriz el player declara tres campos de 2 digitos en las
+   * posiciones de la demo (tercios horizontales, centrados verticalmente),
+   * dimensionados por cols/rows. El feed (textfeed.js) expone digitCount y
+   * setValues, la MISMA interfaz que el canal de datos ya consume: boton y
+   * canal alimentan el texto igual que alimentaban la matriz. */
+  function standaloneSpec(){
+    var cols=reader.header.cols, rows=reader.header.rows;
+    var w=Math.floor(cols/8), h=Math.floor(rows/5);
+    var items=[], fields=[], k, x, y;
+    if(w<2 || h<2) return {items:items,fields:fields};
+    y=Math.floor((rows-h)/2);
+    for(k=0;k<3;k++){
+      x=Math.floor(cols*(2*k+1)/6-w/2);
+      if(x<0 || x+w>cols) continue;
+      items.push({id:k+1,x:x,y:y,w:w,h:h,size:Math.max(1,h-4),
+        color:"#ffd700",outline:"#000000",font:TEXT_FONT,
+        weight:TEXT_WEIGHT,shadow:TEXT_SHADOW,align:"center"});
+      fields.push({id:k+1,width:2});
+    }
+    return {items:items,fields:fields};
+  }
+  /* Cualquier fallo deja el video como esta y solo informa el motivo (INV-7). */
+  function attachStandalone(reason){
+    var spec;
+    if(overlay || textLayer || !window.ASCILINETextLayer ||
+       !window.ASCILINETextFeed){ log(reason); return; }
+    spec=standaloneSpec();
+    if(!spec.items.length){ log(reason); return; }
+    textLayer=window.ASCILINETextLayer.create(spec.items);
+    if(!textLayer){ log(reason); return; }
+    textFeed=window.ASCILINETextFeed.create(textLayer,spec.fields);
+    if(!textFeed){ textLayer=null; log(reason); return; }
+    feedFields=spec.fields;
+    textItems=spec.items;
+    pickRenderer();
+    reader.decodedIndex=-1;
+    drawFrame(lastShown<0?0:lastShown);
+    channel=window.ASCILINEDataChannel.create(DATA_URL,textFeed,{intervalMs:15000});
+    if(channel) channel.start();
+    elSim.disabled=false;
+    elClear.disabled=false;
+    log(reason+" Texto standalone: "+textLayer.count+
+      " campos de 2 digitos (INT-006); datos: "+DATA_URL+
+      " cada 15 s (si falta, el canal falla suave).");
+    tryAttachImage();
+  }
+
+  /* ---- INT-006-C: imagen nativa opcional (decision D7, opcion a) ----
+   * Solo con texto declarado (renderer ya Canvas2D con pixelScale). La caja
+   * se dimensiona en celdas (un cuarto del ancho, aspecto preservado) en la
+   * esquina superior derecha. Sin imagen o caja inviable: nada cambia. */
+  function tryAttachImage(){
+    var im;
+    if(!textLayer || imgEl || !window.Image) return;
+    im=new Image();
+    im.onload=function(){
+      var cols=reader.header.cols, rows=reader.header.rows;
+      var w=Math.floor(cols/4);
+      var h=Math.round(w*im.naturalHeight/im.naturalWidth);
+      var d,sx,sy;
+      if(w<1 || h<1 || cols-w-2<0 || h+4>rows) return;
+      imgEl=im;
+      imgBox={x:cols-w-2,y:2,w:w,h:h};
+      /* INT-007-B: cuadrado que circunscribe la rotacion (lado = diagonal
+       * de la caja), clampeado a la grilla; es lo que se marca sucio */
+      d=Math.ceil(Math.sqrt(w*w+h*h));
+      sx=Math.max(0,Math.floor(imgBox.x+(w-d)/2));
+      sy=Math.max(0,Math.floor(imgBox.y+(h-d)/2));
+      imgSpin={x:sx,y:sy,
+        w:Math.min(cols,Math.ceil(imgBox.x+(w+d)/2))-sx,
+        h:Math.min(rows,Math.ceil(imgBox.y+(h+d)/2))-sy};
+      if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
+      log("Imagen nativa activa (INT-006-C + giro INT-007-B): "+IMG_URL+
+        " en "+imgBox.w+"x"+imgBox.h+" celdas, esquina superior derecha, "+
+        "una vuelta cada "+IMG_TURN+" frames (ruleta simulada).");
+    };
+    im.onerror=function(){ /* sin imagen: nada cambia (INV-7) */ };
+    im.src=IMG_URL;
+  }
+
+  /* ---- sidecar + canal: el fallo de cualquiera deja el video intacto ---- */
+  function tryAttachOverlay(bytes){
+    var h=reader.header, tail, i, meta, palReserved, first;
+    if(h.palSize!==256 || reader.paletteEntries!==256){
+      attachStandalone("Clip sin paleta completa: overlay de matriz inactivo. El video sigue.");
+      return;
+    }
+    /* verificacion cruzada parametrica: la cola reservada del bundle valida
+     * el sidecar (v1: 10 entradas en 246..; v2: pal_reserved en 256-N..) */
+    palReserved=(bytes.length>10 && bytes[8]===2)?bytes[10]:10;
+    first=256-palReserved;
+    tail=new Uint8Array(3*palReserved);
+    for(i=0;i<tail.length;i++) tail[i]=reader.palette[first*3+i];
+    try{
+      meta=window.ASCL_parseSlots(bytes,h.cols,h.rows,h.nFrames,tail);
+    }catch(err){
+      attachStandalone("Sidecar rechazado: "+err.message+". El video sigue sin overlay de matriz.");
+      return;
+    }
+    overlay=window.ASCILINEOverlay.attach(reader,meta);
+    if(!overlay){
+      attachStandalone("attach devolvio null (sidecar de otro bundle): video sin overlay de matriz.");
+      return;
+    }
+    overlayMeta=meta;
+    channel=window.ASCILINEDataChannel.create(DATA_URL,overlay,{intervalMs:15000});
+    if(channel) channel.start();
+    elSim.disabled=false;
+    elClear.disabled=false;
+    tryAttachText(meta);
+    log(overlayStatus()+" - panel de "+overlay.nSlots+" slots"+
+      (textLayer?" - texto nativo: "+textLayer.count+" campos espejados (INT-004)":"")+
+      "; datos: "+DATA_URL+" cada 15 s.");
+  }
+
+  /* payload valido por campo: digitos en [min,max] y, en los campos de
+   * eleccion v2, digito de presencia + valor (o ceros canonicos) */
+  function padNumber(value,width){
+    var s=String(value);
+    while(s.length<width) s="0"+s;
+    return s;
+  }
+  function wireWidth(max){
+    var w=1,t=10;
+    while(max>=t && w<10){ w++; t*=10; }
+    return w;
+  }
+  function randomPayload(fields){
+    var out="",i,f,v,w;
+    for(i=0;i<fields.length;i++){
+      f=fields[i];
+      if(f.kind===1){
+        w=wireWidth(f.max);
+        if(Math.random()<0.34){
+          out+="0"+padNumber(0,w);
+        } else {
+          v=f.min+Math.floor(Math.random()*(f.max-f.min+1));
+          out+="1"+padNumber(v,w);
+        }
+      } else {
+        v=f.min+Math.floor(Math.random()*(f.max-f.min+1));
+        out+=padNumber(v,f.slotIds.length);
+      }
+    }
+    return out;
+  }
+
+  /* INT-006: la carga simulada alimenta lo que haya activo — el overlay de
+   * matriz (con espejo de texto via el wrap) o el feed standalone. */
+  function randomDigits(n){
+    var out="",i;
+    for(i=0;i<n;i++) out+=String.fromCharCode(48+Math.floor(Math.random()*10));
+    return out;
+  }
+  elSim.onclick=function(){
+    var digits;
+    if(overlay && overlayMeta){
+      digits=randomPayload(overlayMeta.fields);
+      simSerial++;
+      if(overlay.setValues(digits)){
+        if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
+        log("Carga simulada #"+simSerial+" aplicada ("+digits.substring(0,8)+"...). "+overlayStatus());
+      }
+    } else if(textFeed){
+      digits=randomDigits(textFeed.digitCount);
+      simSerial++;
+      if(textFeed.setValues(digits)){
+        if(reader && lastShown>=0 && !playing){ drawFrame(lastShown); }
+        log("Carga simulada #"+simSerial+" aplicada ("+digits+"): texto standalone (INT-006).");
+      }
+    }
+  };
+  /* clear() ya restauro cells y dejo marcados los rects: NO se re-seekea
+   * (el seek resetea los dirty sets y perderia esos marks); se dibuja
+   * directo, marcando ademas las cajas de texto para borrar el texto viejo */
+  elClear.onclick=function(){
+    var j;
+    if(overlay){
+      overlay.clear();
+      if(reader && lastShown>=0 && !playing){
+        if(textLayer) markTextDirty();
+        renderer.draw(reader);
+        if(textLayer) textLayer.draw(renderer.ctx,cellScale);
+        if(imgBox) drawImg(lastShown);
+      }
+      log("Panel limpio (clear): matriz byte-identica al video base. "+overlayStatus());
+    } else if(textFeed && textLayer){
+      /* standalone: no hay matriz que restaurar; se vacian los textos y se
+       * repinta el fondo debajo (markTextDirty marca TODAS las cajas) */
+      for(j=0;j<feedFields.length;j++){
+        textLayer.setText(feedFields[j].id,"");
+      }
+      if(reader && lastShown>=0 && !playing){
+        markTextDirty();
+        renderer.draw(reader);
+        textLayer.draw(renderer.ctx,cellScale);
+        if(imgBox) drawImg(lastShown);
+      }
+      log("Textos limpios: fondo intacto (texto standalone, INT-006).");
+    }
+  };
+
+  function openAscl(buf,off,len){
+    var api=window.ASCILINEReader||window.ASCL;
+    reader=api.parse(buf,off,len);
+    pickRenderer();
+    reader.decodedIndex=-1;
+    drawFrame(0); lastShown=0;
+    elPlay.disabled=false;
+    var h=reader.header;
+    elBadge.textContent="ASCL v"+h.version+" "+h.cols+"x"+h.rows+" @"+h.fps+"fps";
+  }
+  function loadBundle(buf){
+    var bytes=new Uint8Array(buf);
+    if(bytes.length<21){ throw new Error("bundle truncado"); }
+    var s=String.fromCharCode(bytes[0],bytes[1],bytes[2],bytes[3],bytes[4],bytes[5],bytes[6],bytes[7]);
+    if(!(s==="ASCLVID1" || s==="ASCLVID2" || s==="ASCLVID3")){ throw new Error("magic invalido"); }
+    /* F6-3: ASCLVID3 = header de 20 bytes con meta_len; el sidecar viaja
+       embebido y reemplaza al clip.slots externo. */
+    var headerSize=s==="ASCLVID3"?20:16;
+    var dv=new DataView(buf);
+    var asclLen=dv.getUint32(8,true), audioLen=dv.getUint32(12,true);
+    var metaLen=headerSize===20?dv.getUint32(16,true):0;
+    if(asclLen<32||headerSize+asclLen+audioLen+metaLen!==buf.byteLength){ throw new Error("bundle invalido"); }
+    if(bytes[7]-48!==bytes[headerSize+4]){ throw new Error("version del envelope no coincide con el ASCL interno"); }
+    if(audioLen>0 && urlAPI && urlAPI.createObjectURL){
+      var blob=new Blob([new Uint8Array(buf,headerSize+asclLen,audioLen)],{type:"audio/mpeg"});
+      audio.src=urlAPI.createObjectURL(blob);
+      audio.onended=function(){ stop(); };
+      hasAudio=true;
+    }
+    bundleMeta=metaLen?new Uint8Array(buf,headerSize+asclLen+audioLen,metaLen):null;
+    openAscl(buf,headerSize,asclLen);
+  }
+  function frameNow(){
+    var t=hasAudio?audio.currentTime:(now()-startT)/1000;
+    return Math.floor(t*reader.header.fps);
+  }
+  function loop(){
+    if(!playing) return;
+    var target=frameNow(), n=reader.header.nFrames;
+    if(target>=n){ if(hasAudio){ target=n-1; } else { stop(); return; } }
+    if(target!==lastShown){
+      try{
+        drawFrame(target);
+      }catch(err){
+        stop();
+        log("Error de reproduccion en el frame "+target+": "+err.message);
+        return;
+      }
+      lastShown=target;
+    }
+    raf=requestFrame(loop);
+  }
+  function start(){
+    playing=true; elPlay.textContent="Pause";
+    startT=now()-(lastShown/reader.header.fps)*1000;
+    if(hasAudio){ audio.play(); }
+    raf=requestFrame(loop);
+  }
+  function stop(){ playing=false; elPlay.textContent="Play"; if(raf) cancelFrame(raf); if(hasAudio) audio.pause(); }
+  elPlay.onclick=function(){ playing?stop():start(); };
+  elZoom.onchange=function(){
+    if(!reader) return;
+    pickRenderer();
+    reader.decodedIndex=-1;
+    var frame=lastShown<0?0:lastShown;
+    drawFrame(frame);
+  };
+
+  function startDownload(clipUrl){
+    var x=new XMLHttpRequest();
+    x.open("GET",clipUrl,true); x.responseType="arraybuffer";
+    x.onload=function(){
+      try{
+        loadBundle(x.response);
+        if(bundleMeta){
+          /* F6-3: el sidecar embebido en el ASCLVID3 manda; no se pide el
+             clip.slots externo (via de transicion para v1/v2). */
+          tryAttachOverlay(bundleMeta);
+        } else {
+          var s=new XMLHttpRequest();
+          s.open("GET",SLOTS_URL,true); s.responseType="arraybuffer";
+          s.onload=function(){
+            if(s.status===200 && s.response && s.response.byteLength){
+              tryAttachOverlay(new Uint8Array(s.response));
+            } else {
+              attachStandalone("Sin sidecar ("+SLOTS_URL+"): video sin overlay de matriz.");
+            }
+          };
+          s.onerror=function(){ attachStandalone("Sin sidecar: video sin overlay de matriz."); };
+          s.send();
+        }
+      }catch(err){ log("Error: "+err.message); }
+    };
+    x.onerror=function(){ log("No se pudo cargar "+clipUrl+" (servir por HTTP con tools/serve-local.ps1)."); };
+    x.send();
+  }
+
+  /* CACHE-001: el puntero (mutable, chico) declara el clip versionado
+     (inmutable). Sin puntero valido se cae al clip.asclv historico. */
+  var ptr=new XMLHttpRequest();
+  ptr.open("GET",POINTER_URL,true);
+  ptr.onload=function(){
+    var name=(ptr.status===200)
+      ? window.ASCILINECacheRefresh.parseClipPointer(ptr.responseText||"")
+      : "";
+    startDownload(name?"./outputs/"+name:CLIP_URL);
+  };
+  ptr.onerror=function(){ startDownload(CLIP_URL); };
+  ptr.send();
+})();
+</script>
+</body>
+</html>
