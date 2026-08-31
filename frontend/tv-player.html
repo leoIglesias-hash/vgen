@@ -133,6 +133,14 @@
      producto: escala por un entero y deja letterbox, que es la unica forma de
      ver el aporte del filtro sin el remuestreo fraccionario encima. */
   var scaleMode=qs("scale")==="int" ? "int" : "fit";
+  /* W-20: cadencia anclada al display con correccion lenta contra el audio, y
+     pre-decode del proximo keyframe en el tiempo muerto. Los dos se pueden
+     apagar desde el TV sin recompilar nada: ?pacing=off y ?predecode=off. */
+  var pacingEnabled=qs("pacing") !== "off";
+  var preDecodeEnabled=qs("predecode") !== "off";
+  var phase=0, lastTick=0, paceFraction=0, paceStarted=false;
+  var spareReader=null, spareIndex=-1, spareReady=false, preDecodeCost=0;
+  var clipBuffer=null, clipOffset=0, clipLength=0;
   try { cacheStorage=window.localStorage || null; } catch(ignoredStorage) { cacheStorage=null; }
   var cacheTokens=window.ASCILINECacheRefresh.createTokenStore({
     source:source,
@@ -300,6 +308,12 @@
        coexistiran intencionalmente dos videos completos en memoria. */
     detachRestoreWatch();
     disposeRenderer(true);
+    if(spareReader && typeof spareReader.dispose==="function"){
+      try { spareReader.dispose(); } catch(ignoredSpareDispose) {}
+    }
+    spareReader=null;
+    invalidateSpare();
+    clipBuffer=null; clipOffset=0; clipLength=0;
     reader=null;
     lastShown=-1;
     rendererName="";
@@ -465,18 +479,72 @@
     return false;
   }
 
+  /* W-20 (b): adoptar el keyframe ya decodificado es INTERCAMBIAR los dos
+     readers, no copiar celdas. Cada uno queda internamente consistente -su
+     paleta, su dirty y su decodedIndex viajan juntos-, asi que la
+     transaccionalidad del invariante 4 no se toca. El adoptado trae dirtyFull
+     de su propio keyframe, o sea que el renderer sube el cuadro entero, que es
+     exactamente lo correcto. */
+  function adoptSpare(){
+    var previous=reader;
+    reader=spareReader;
+    spareReader=previous;
+    spareReady=false;
+    spareIndex=-1;
+    if(renderer && renderer.reader){ renderer.reader=reader; }
+  }
+
   function seekAndDraw(index){
     try {
-      reader.seek(index);
+      if(spareReady && spareIndex===index && spareReader){ adoptSpare(); }
+      else { reader.seek(index); }
       drawCurrent();
       lastShown=index;
       return true;
     } catch(error){ return renderFailure(error); }
   }
 
+  function invalidateSpare(){
+    spareReady=false;
+    spareIndex=-1;
+  }
+
+  function nextKeyframe(after){
+    var i, last=reader.header.nFrames-1;
+    var horizon=after+1+Math.round(reader.header.fps*3);
+    if(typeof reader._isKey!=="function"){ return -1; }
+    if(horizon>last){ horizon=last; }
+    for(i=after+1;i<=horizon;i++){ if(reader._isKey(i)){ return i; } }
+    return -1;
+  }
+
+  /* Tres de cada cuatro callbacks a 60 Hz para un video de 15 fps solo miran el
+     reloj y vuelven a agendar. Ese tiempo se usa para adelantar el proximo
+     KEYFRAME, que no depende del estado actual y por eso es seguro adelantar.
+     Un delta exigiria una base definida y se disenaria aparte. */
+  function preDecodeIdle(target){
+    var slack, key, t0, cost;
+    if(!preDecodeEnabled || !spareReader || spareReady){ return; }
+    slack=(1-paceFraction)/reader.header.fps*1000;
+    /* Solo si entra con margen: adelantar un keyframe que no llega a tiempo
+       provoca exactamente el tiron que esto viene a sacar. */
+    if(slack<preDecodeCost+4){ return; }
+    key=nextKeyframe(target);
+    if(key<0){ return; }
+    t0=now();
+    try { spareReader.seek(key); }
+    catch(ignoredPreDecode){ spareReader=null; return; }
+    cost=now()-t0;
+    if(cost>preDecodeCost){ preDecodeCost=cost; }
+    else { preDecodeCost=preDecodeCost*0.9+cost*0.1; }
+    spareIndex=key;
+    spareReady=true;
+  }
+
   function openAscl(buffer,offset,length){
     var readerAPI=window.ASCILINEReader || window.ASCL;
     reader=readerAPI.parse(buffer,offset,length);
+    clipBuffer=buffer; clipOffset=offset; clipLength=length;
     /* W-14: el reader v1 saltea la verificacion cuando el campo CRC es cero.
        En el TV eso significa reproducir bytes sin integridad verificada: se
        rechaza explicito. Todo artefacto del pipeline actual escribe su CRC. */
@@ -491,6 +559,21 @@
     drawCurrent();
     lastShown=0;
     ready=true;
+    /* W-20 (b): el buffer alterno de `cells` es, en los hechos, un segundo
+       reader sobre los MISMOS bytes. Cuesta otro `cells` (2 MB a 1920) y su
+       scratch de inflate, y a cambio evita reescribir la maquinaria dirty del
+       reader para decodificar fuera de linea. Si no se puede crear, el player
+       sigue igual que antes: el pre-decode es una optimizacion, no un requisito.
+       Anotado para MEM-001 (F8): esta es la unica estructura nueva por clip. */
+    invalidateSpare();
+    spareReader=null;
+    preDecodeCost=0;
+    if(preDecodeEnabled){
+      try {
+        spareReader=readerAPI.parse(clipBuffer,clipOffset,clipLength);
+        spareReader.decodedIndex=-1;
+      } catch(ignoredSpareReader){ spareReader=null; }
+    }
     downloadButton.style.display="none";
     fitCanvas();
     setMessage("Presioná una tecla del 1 al 8 o hacé click",
@@ -531,9 +614,49 @@
     loadBundle(buffer);
   }
 
-  function frameNow(){
+  /* Posicion segun el reloj maestro (el audio, si hay), en frames fraccionarios. */
+  function clockFrames(){
     var seconds=hasAudio ? audio.currentTime : (now()-startT)/1000;
-    return Math.floor(seconds*reader.header.fps);
+    return seconds*reader.header.fps;
+  }
+
+  /* W-20 (a): en TVs viejos audio.currentTime avanza a saltos gruesos, asi que
+     decidir el cuadro con floor(currentTime*fps) reparte los frames en 5/7/6/6
+     refrescos en vez de 6/6/6/6. Una cadencia irregular se percibe peor que un
+     fps bajo constante (por eso se descarto el 1920@10). La fase avanza con el
+     reloj del DISPLAY y se corrige LENTO contra el audio: el audio sigue siendo
+     el maestro, lo que deja de decidir es el instante exacto de cada cuadro.
+     Un desvio grande (seek, loop, stall) se resincroniza de una. */
+  function pacedTarget(){
+    var t=now(), dt=paceStarted ? t-lastTick : 0, clock=clockFrames(), drift;
+    lastTick=t;
+    if(!pacingEnabled){
+      paceFraction=clock-Math.floor(clock);
+      return Math.floor(clock);
+    }
+    if(!paceStarted){
+      /* Primer cuadro despues de un reset: todavia no hay cadencia observada,
+         asi que se engancha al reloj maestro sin corregir nada. La bandera es
+         explicita porque now() puede valer 0 justo al abrir la pagina. */
+      paceStarted=true;
+      phase=clock;
+      paceFraction=phase-Math.floor(phase);
+      return Math.floor(phase);
+    }
+    if(dt<0 || dt>250){ dt=0; }
+    phase+=dt*reader.header.fps/1000;
+    drift=clock-phase;
+    if(drift>2 || drift<-2){ phase=clock; }
+    else { phase+=drift*0.02; }
+    paceFraction=phase-Math.floor(phase);
+    return Math.floor(phase);
+  }
+
+  function resetPacing(atFrame){
+    phase=atFrame>0 ? atFrame : 0;
+    lastTick=0;
+    paceFraction=0;
+    paceStarted=false;
   }
 
   function stop(showPrompt){
@@ -552,18 +675,20 @@
       try { audio.currentTime=0; } catch(ignored) {}
     }
     reader.decodedIndex=-1;
+    invalidateSpare();
+    resetPacing(0);
     return seekAndDraw(0);
   }
 
   function loop(){
     var target, count;
     if(!playing){ return; }
-    target=frameNow();
+    target=pacedTarget();
     count=reader.header.nFrames;
     if(target>=count){
       if(loopEnabled && !hasAudio){
         if(!restart()){ return; }
-        startT=now(); target=0;
+        startT=now(); resetPacing(0); target=0;
       } else if(!hasAudio){
         if(!seekAndDraw(count-1)){ return; }
         stop(true);
@@ -572,6 +697,8 @@
     }
     if(target!==lastShown){
       if(!seekAndDraw(target)){ return; }
+    } else {
+      preDecodeIdle(target);
     }
     raf=requestFrame(loop);
   }
@@ -594,6 +721,7 @@
     playing=true;
     stage.className="playing";
     startT=now()-(lastShown/reader.header.fps)*1000;
+    resetPacing(lastShown);
     if(hasAudio){
       try {
         result=audio.play();

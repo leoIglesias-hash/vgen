@@ -116,6 +116,24 @@ assert(page.indexOf("renderer.present()") >= 0,
 assert(page.indexOf("var scaleMode=qs(\"scale\")===\"int\" ? \"int\" : \"fit\"") >= 0,
   "el escalado entero es opt-in por query string: el default sigue siendo llenar el panel");
 
+/* W-20: cadencia anclada al display y pre-decode del próximo keyframe. */
+assert(page.indexOf("function pacedTarget()") >= 0);
+assert(page.indexOf("phase+=drift*0.02") >= 0,
+  "la corrección contra el reloj maestro debe ser lenta, no un salto por cuadro");
+assert(page.indexOf("if(drift>2 || drift<-2){ phase=clock; }") >= 0,
+  "un desvío grande (seek, loop, stall) sí debe resincronizar de una");
+assert(page.indexOf("var pacingEnabled=qs(\"pacing\") !== \"off\"") >= 0 &&
+  page.indexOf("var preDecodeEnabled=qs(\"predecode\") !== \"off\"") >= 0,
+  "las dos piezas de W-20 deben poder apagarse desde el TV sin recompilar");
+assert(page.indexOf("function preDecodeIdle(") >= 0);
+assert(page.indexOf("if(slack<preDecodeCost+4){ return; }") >= 0,
+  "adelantar un keyframe que no entra en el tiempo muerto provocaría el tirón que esto evita");
+assert(page.indexOf("function nextKeyframe(") >= 0 &&
+  page.indexOf("reader._isKey(i)") >= 0,
+  "solo se adelantan keyframes: un delta exigiría una base definida");
+assert(page.indexOf("function adoptSpare()") >= 0,
+  "adoptar el keyframe adelantado es intercambiar readers, no copiar celdas");
+
 assert(page.indexOf("mozfullscreenchange") >= 0);
 assert(page.indexOf("MSFullscreenChange") >= 0);
 

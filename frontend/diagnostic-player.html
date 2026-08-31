@@ -85,6 +85,12 @@
 
   var reader = null, renderer = null, rendererName = "", reconstruction = "nearest";
   var ready = false, playing = false, raf = 0, startT = 0, lastShown = -1;
+  /* W-20: mismas dos piezas que el player de produccion, para poder medirlas.
+     ?pacing=off y ?predecode=off las apagan sin recompilar nada. */
+  var pacingEnabled = true, preDecodeEnabled = true;
+  var phase = 0, lastTick = 0, paceFraction = 0, paceStarted = false;
+  var spareReader = null, spareIndex = -1, spareReady = false, preDecodeCost = 0;
+  var clipBuffer = null, clipOffset = 0, clipLength = 0;
   var activeXHR = null, sessions = [], session = null, hudAt = 0;
   var requestedRenderer = null, sourceLabel = "", sourceURL = "", scaleMode = "fit";
 
@@ -172,10 +178,12 @@
     this.other = new Series();
     this.decode = new Series();
     this.frame = new Series();
+    this.predecode = new Series();
     this.shown = 0;
     this.repeated = 0;
     this.dropped = 0;
     this.late = 0;
+    this.adopted = 0;
   }
 
   /* ------------------------------------------------------ instrumentacion --- */
@@ -293,11 +301,57 @@
 
   /* ------------------------------------------------------------ medicion --- */
 
+  /* W-20 (b): adoptar el keyframe adelantado es intercambiar los dos readers.
+     Los dos estan instrumentados, asi que el desglose por etapa sigue siendo
+     valido despues del intercambio. */
+  function adoptSpare(){
+    var previous = reader;
+    reader = spareReader;
+    spareReader = previous;
+    spareReady = false;
+    spareIndex = -1;
+    if(renderer && renderer.reader){ renderer.reader = reader; }
+  }
+
+  function invalidateSpare(){ spareReady = false; spareIndex = -1; }
+
+  function nextKeyframe(after){
+    var i, last = reader.header.nFrames - 1;
+    var horizon = after + 1 + Math.round(reader.header.fps * 3);
+    if(typeof reader._isKey !== "function"){ return -1; }
+    if(horizon > last){ horizon = last; }
+    for(i = after + 1; i <= horizon; i++){ if(reader._isKey(i)){ return i; } }
+    return -1;
+  }
+
+  function preDecodeIdle(target){
+    var slack, key, t0, cost;
+    if(!preDecodeEnabled || !spareReader || spareReady || !session){ return; }
+    slack = (1 - paceFraction) / reader.header.fps * 1000;
+    if(slack < preDecodeCost + 4){ return; }
+    key = nextKeyframe(target);
+    if(key < 0){ return; }
+    t0 = now();
+    try { spareReader.seek(key); }
+    catch(ignoredPreDecode){ spareReader = null; return; }
+    cost = now() - t0;
+    if(cost > preDecodeCost){ preDecodeCost = cost; }
+    else { preDecodeCost = preDecodeCost * 0.9 + cost * 0.1; }
+    session.predecode.add(cost);
+    spareIndex = key;
+    spareReady = true;
+  }
+
   function measuredFrame(index){
     var t0, t1, t2, decodeMs, drawMs, rgbaMs, blitMs, otherMs, totalMs;
     acc.inflate = 0; acc.walk = 0; acc.rgba = 0;
     t0 = now();
-    reader.seek(index);
+    if(spareReady && spareIndex === index && spareReader){
+      adoptSpare();
+      session.adopted++;
+    } else {
+      reader.seek(index);
+    }
     t1 = now();
     renderer.draw(reader);
     t2 = now();
@@ -321,23 +375,60 @@
     lastShown = index;
   }
 
-  function frameNow(){
-    return Math.floor(((now() - startT) / 1000) * reader.header.fps);
+  function clockFrames(){
+    return ((now() - startT) / 1000) * reader.header.fps;
+  }
+
+  /* W-20 (a): la fase avanza con el reloj del display y se corrige lento contra
+     el reloj maestro; un desvio grande resincroniza de una. Sin audio -el
+     diagnostic no lo reproduce a proposito- el maestro es el reloj interno. */
+  function pacedTarget(){
+    var t = now(), dt = paceStarted ? t - lastTick : 0, clock = clockFrames(), drift;
+    lastTick = t;
+    if(!pacingEnabled){
+      paceFraction = clock - Math.floor(clock);
+      return Math.floor(clock);
+    }
+    if(!paceStarted){
+      /* Primer cuadro despues de un reset: se engancha al reloj maestro. */
+      paceStarted = true;
+      phase = clock;
+      paceFraction = phase - Math.floor(phase);
+      return Math.floor(phase);
+    }
+    if(dt < 0 || dt > 250){ dt = 0; }
+    phase += dt * reader.header.fps / 1000;
+    drift = clock - phase;
+    if(drift > 2 || drift < -2){ phase = clock; }
+    else { phase += drift * 0.02; }
+    paceFraction = phase - Math.floor(phase);
+    return Math.floor(phase);
+  }
+
+  function resetPacing(atFrame){
+    phase = atFrame > 0 ? atFrame : 0;
+    paceStarted = false;
+    lastTick = 0;
+    paceFraction = 0;
   }
 
   function loop(){
     var target, count;
     if(!playing){ return; }
     count = reader.header.nFrames;
-    target = frameNow();
+    target = pacedTarget();
     if(target >= count){
       startT = now();
+      resetPacing(0);
       reader.decodedIndex = -1;
+      invalidateSpare();
       lastShown = -1;
       target = 0;
     }
-    if(target === lastShown){ session.repeated++; }
-    else {
+    if(target === lastShown){
+      session.repeated++;
+      preDecodeIdle(target);
+    } else {
       if(lastShown >= 0 && target > lastShown + 1){
         session.dropped += target - lastShown - 1;
       }
@@ -356,6 +447,7 @@
     if(!ready || playing){ return; }
     playing = true;
     startT = now() - (lastShown >= 0 ? (lastShown / reader.header.fps) * 1000 : 0);
+    resetPacing(lastShown);
     raf = requestFrame(loop);
   }
 
@@ -387,6 +479,9 @@
     html += stageRow("otros", session.other);
     html += stageRow("decode", session.decode);
     html += stageRow("FRAME", session.frame);
+    /* El pre-decode NO entra en el presupuesto del frame: corre en el tiempo
+       muerto. Se publica aparte justamente para poder verificar eso. */
+    html += stageRow("pre-key", session.predecode);
     html += "</table>";
     return html;
   }
@@ -419,7 +514,9 @@
       sourceLabel + " · ASCL v" + session.version + " · " + session.grid +
       " @" + session.fps + " · " + rendererName + "/" + reconstruction +
       " · " + (playing ? "play" : "pausa") +
-      " · frames " + session.shown + " rep " + session.repeated);
+      " · frames " + session.shown + " rep " + session.repeated +
+      " · pacing " + (pacingEnabled ? "on" : "off") +
+      " · pre-key " + (preDecodeEnabled ? session.adopted + "/" + session.predecode.frames : "off"));
   }
 
   /* ------------------------------------------------- paridad GL vs 2D (W-18) --- */
@@ -512,9 +609,22 @@
     var readerAPI = window.ASCILINEReader || window.ASCL;
     var header;
     reader = readerAPI.parse(buffer, offset, length);
+    clipBuffer = buffer; clipOffset = offset; clipLength = length;
     header = reader.header;
     reconstruction = qs("rec") || ((header.flags & 16) ? "soft" : "nearest");
     instrument(reader);
+    /* Los DOS readers se instrumentan: despues de un intercambio el desglose
+       por etapa tiene que seguir midiendo el que esta en uso. */
+    invalidateSpare();
+    spareReader = null;
+    preDecodeCost = 0;
+    if(preDecodeEnabled){
+      try {
+        spareReader = readerAPI.parse(buffer, offset, length);
+        spareReader.decodedIndex = -1;
+        instrument(spareReader);
+      } catch(ignoredSpare){ spareReader = null; }
+    }
     session = new Session(sourceLabel);
     session.grid = header.cols + "x" + header.rows;
     session.fps = header.fps;
@@ -565,6 +675,12 @@
     ready = false;
     lastShown = -1;
     disposeRenderer();
+    if(spareReader && typeof spareReader.dispose === "function"){
+      try { spareReader.dispose(); } catch(ignoredSpareDispose) {}
+    }
+    spareReader = null;
+    invalidateSpare();
+    clipBuffer = null; clipOffset = 0; clipLength = 0;
     reader = null;
     rendererName = "";
     freshCanvas();
@@ -731,6 +847,8 @@
   setNodeText(headNode, "ASCILINE diagnostic · W-16");
   requestedRenderer = qs("renderer") || "auto";
   scaleMode = qs("scale") === "int" ? "int" : "fit";
+  pacingEnabled = qs("pacing") !== "off";
+  preDecodeEnabled = qs("predecode") !== "off";
   setNodeText(document.getElementById("parity"), runParityCheck());
   if(qs("src")){
     sourceLabel = "src";

@@ -50,7 +50,7 @@ function createRuntime(options) {
   var elements = {}, xhrs = [], rafCallbacks = {}, rafId = 0, clock = 0;
   var stats = {
     webglDraws: 0, canvasDraws: 0, webglDispose: [], canvasDispose: 0,
-    revoked: [], audioLoads: 0, audioPauses: 0
+    revoked: [], audioLoads: 0, audioPauses: 0, parseSlot: 0
   };
 
   function canvasElement() {
@@ -115,7 +115,13 @@ function createRuntime(options) {
     return {
       header: header,
       decodedIndex: -1,
-      seek: function (index) { this.decodedIndex = index; },
+      seeks: [],
+      seek: function (index) { this.seeks.push(index); this.decodedIndex = index; },
+      /* W-20: sin keyframes declarados solo el 0 lo es, que es el caso en que
+         no hay nada que adelantar. */
+      _isKey: function (index) {
+        return options.keyframes ? options.keyframes.indexOf(index) >= 0 : index === 0;
+      },
       fillRGBA: function () {}, fillRGBARows: function () {}
     };
   }
@@ -125,6 +131,7 @@ function createRuntime(options) {
   MockWebGLRenderer.prototype.draw = function (activeReader) {
     stats.webglDraws += 1;
     stats.lastWebGLReader = activeReader;
+    stats.lastWebGLFrame = activeReader.decodedIndex;
     if (options.contextLossDuringDraw) {
       this.canvas.emit("webglcontextlost", { preventDefault: function () {} });
       throw new Error("contexto GPU perdido durante draw");
@@ -152,11 +159,17 @@ function createRuntime(options) {
     createObjectURL: function () { return "blob:test-video"; },
     revokeObjectURL: function (url) { stats.revoked.push(url); }
   };
+  /* W-20: cada apertura crea DOS readers sobre los mismos bytes — el que
+     reproduce y el que adelanta keyframes. El primero de cada par es el que el
+     player usa para presentar. */
   var readerAPI = {
     parse: function () {
+      var instance;
       if (options.parseError) throw new Error("video corrupto");
-      stats.reader = reader();
-      return stats.reader;
+      instance = reader();
+      if (stats.parseSlot) { stats.spare = instance; stats.parseSlot = 0; }
+      else { stats.reader = instance; stats.parseSlot = 1; }
+      return instance;
     }
   };
   var window = {
@@ -388,6 +401,73 @@ function completeInitialDownload(runtime, buffer) {
   assert.strictEqual(runtime.elements.cv.listenerCount("webglcontextlost"), 1,
     "el WebGL nuevo vuelve a vigilar la perdida de contexto");
   assert(runtime.elements.cv !== webglCanvas, "WebGL se reinstala sobre un canvas nuevo");
+}());
+
+/* W-20 (a): con un reloj maestro que avanza a saltos gruesos -lo que hace
+   audio.currentTime en TVs viejos- la presentacion no debe saltar dos cuadros y
+   despues quedarse quieta. Esa irregularidad se percibe peor que un fps bajo
+   constante, y es por lo que se descarto el 1920@10. */
+(function testPacingSmoothsACoarseMasterClock() {
+  var runtime = createRuntime({ readerHeader: { fps: 10, nFrames: 60 } });
+  var audio = runtime.elements.audio, shown = [], i, step, previous;
+  completeInitialDownload(runtime, bundle(4));
+  runtime.controller().play();
+  /* El display avanza parejo (50 ms) y el audio en escalones de 200 ms. */
+  for (i = 0; i < 12; i++) {
+    step = i * 50;
+    runtime.setClock(step);
+    audio.currentTime = Math.floor(step / 200) * 0.2;
+    runtime.runRAF();
+    shown.push(runtime.stats.lastWebGLFrame);
+  }
+  for (i = 1; i < shown.length; i++) {
+    assert(shown[i] - shown[i - 1] <= 1,
+      "la presentacion nunca debe saltar dos cuadros de una: " + shown.join(","));
+    assert(shown[i] >= shown[i - 1], "y nunca debe retroceder: " + shown.join(","));
+  }
+  assert(shown[shown.length - 1] >= 4,
+    "y tiene que seguir avanzando con el audio: " + shown.join(","));
+  previous = shown[0];
+  assert.strictEqual(previous, 0, "el primer cuadro se engancha al reloj maestro");
+}());
+
+/* W-20 (b): el keyframe siguiente se decodifica en el tiempo muerto y se
+   ADOPTA intercambiando readers, no re-decodificando. */
+(function testKeyframePreDecodeAndAdoption() {
+  var runtime = createRuntime({
+    readerHeader: { fps: 10, nFrames: 40 }, keyframes: [0, 2]
+  });
+  completeInitialDownload(runtime, bundle(0));
+  var main = runtime.stats.reader, spare = runtime.stats.spare;
+  assert(spare && spare !== main, "el player abre un segundo reader para adelantar");
+  runtime.controller().play();
+
+  runtime.setClock(0);
+  runtime.runRAF();
+  assert.deepStrictEqual(spare.seeks, [2],
+    "en el callback ocioso se adelanta el proximo keyframe, no el proximo cuadro");
+
+  runtime.setClock(200);
+  runtime.runRAF();
+  assert.strictEqual(runtime.stats.lastWebGLReader, spare,
+    "el cuadro presentado sale del reader adelantado");
+  assert.deepStrictEqual(spare.seeks, [2],
+    "el keyframe adoptado no se vuelve a decodificar");
+  assert.strictEqual(main.seeks.indexOf(2), -1,
+    "y el reader que reproducia no lo decodifico nunca");
+}());
+
+/* El pre-decode es una optimizacion: si no hay proximo keyframe a la vista, el
+   tiempo muerto no se usa para nada y la reproduccion sigue igual. */
+(function testNoPreDecodeWithoutUpcomingKeyframe() {
+  var runtime = createRuntime({ readerHeader: { fps: 10, nFrames: 40 } });
+  completeInitialDownload(runtime, bundle(0));
+  var spare = runtime.stats.spare;
+  runtime.controller().play();
+  runtime.setClock(0);
+  runtime.runRAF();
+  assert.deepStrictEqual(spare.seeks, [],
+    "sin keyframe proximo no se decodifica nada por las dudas");
 }());
 
 console.log("TV player runtime tests: OK");
