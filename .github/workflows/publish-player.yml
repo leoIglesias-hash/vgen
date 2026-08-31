@@ -1,0 +1,78 @@
+name: publish-player
+
+# Publica un clip.asclv ya encodeado (artifact de un run del workflow `encode`)
+# en el player hosteado en Cloudflare (Worker `asciline-player`, endpoint
+# PUT /__upload/<key> guardado por el secret rotativo UPLOAD_TOKEN — ver
+# RUNBOOK-ESTADO «Próxima acción»). Existe porque la máquina de trabajo no
+# tiene gh/Python (modelo CI-only): el runner baja el artifact con su
+# GITHUB_TOKEN, verifica el SHA-256 esperado y lo sube; R2 vuelve a verificar
+# el digest en el put.
+#
+# Se dispara editando tools/publish-player-request.json (run_id, artifact,
+# sha256, dest — sin secretos: la subida se autoriza POR CONTENIDO, con un pin
+# de key+SHA-256 cargado a mano en el worker antes de cada publicación; solo
+# el archivo byte-idéntico al esperado puede entrar). Con run_id vacío no
+# publica nada (estado de reposo tras cada uso).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/publish-player-request.json
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Leer pedido
+        id: req
+        run: |
+          RUN_ID=$(jq -r '.run_id // empty' tools/publish-player-request.json)
+          if [ -z "$RUN_ID" ]; then
+            echo "pedido vacío; nada que publicar"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "artifact=$(jq -r .artifact tools/publish-player-request.json)" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(jq -r .sha256 tools/publish-player-request.json)" >> "$GITHUB_OUTPUT"
+          echo "dest=$(jq -r .dest tools/publish-player-request.json)" >> "$GITHUB_OUTPUT"
+      - name: Bajar el artifact del run de encode
+        if: steps.req.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ steps.req.outputs.run_id }}" \
+            -n "${{ steps.req.outputs.artifact }}" -D dl -R "$GITHUB_REPOSITORY"
+      - name: Verificar SHA-256 y subir al worker
+        if: steps.req.outputs.skip == 'false'
+        run: |
+          FILE=$(find dl -name clip.asclv | head -n1)
+          if [ -z "$FILE" ]; then
+            echo "::error::El artifact no contiene clip.asclv"
+            exit 1
+          fi
+          echo "${{ steps.req.outputs.sha256 }}  $FILE" | sha256sum -c -
+          curl -sS --fail-with-body -X PUT -T "$FILE" \
+            -H "x-sha256: ${{ steps.req.outputs.sha256 }}" \
+            "https://asciline-player.iargen.workers.dev/__upload/${{ steps.req.outputs.dest }}" \
+            | tee result.json
+          jq -e '.ok == true' result.json > /dev/null
+          {
+            echo "## publish-player"
+            echo ""
+            echo "run ${{ steps.req.outputs.run_id }} → \`${{ steps.req.outputs.dest }}\`"
+            echo ""
+            echo '```'
+            cat result.json
+            echo ""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
