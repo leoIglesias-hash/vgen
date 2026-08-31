@@ -2568,3 +2568,54 @@ cadencia ni pre-decode -esas piezas vivian en otra pagina y recien ahora estan e
 raiz-. Que el motor unico mejore, empeore o no cambie el sintoma **hay que medirlo**; no
 se puede suponer en ninguna de las dos direcciones. Tampoco esta establecido de donde
 sale el blanco: canvas limpiado, fondo de la pagina asomando, o recreacion del contexto.
+
+#### DIAG-002, primer corte: el blanco NO esta en los datos
+
+Se agrego `tools/diag_white_frames.py` y el workflow manual `diag-white-frames`, que
+**baja el clip exacto que sirve el player publicado** y lo decodifica con el decoder de
+referencia. Run 33440003966 sobre `https://iargen.com/player/outputs/clip.asclv`
+(1280x720, 231 cuadros, 15 fps, ASCL v3, PIXEL):
+
+| Metrica | Valor |
+|---|---|
+| luma media | min 97,1 / mediana 110,1 / **max 160,5** |
+| celdas casi blancas (luma >= 235), maximo | **20,7 %** del cuadro (cuadro 71, t=4,73 s) |
+| saltos de luma media >= 40 entre cuadros consecutivos | **ninguno** |
+
+**Veredicto: ningun cuadro se acerca a ser blanco.** El cuadro mas claro de todo el clip
+tiene una quinta parte de celdas casi blancas y una luma media de 160 sobre 255. No hay
+transiciones bruscas. El encoder y el formato quedan **descartados**: lo que el operador
+ve no viene de los bytes.
+
+#### Lo que aportaron las respuestas del operador, y como reencuadra el problema
+
+Tres datos, y los tres apuntan en la misma direccion:
+
+1. **Se pone blanca TODA la pantalla**, no solo el area del video.
+2. **Pasa al azar**, sin relacion con los cortes ni con el reinicio del clip.
+3. Es un **WebView embebido en una app**, no el navegador del dispositivo.
+
+El dato (1) es el que decide. El `body` de la pagina es `#0d0d10` y el canvas tiene
+`background:#000`: **cualquier falla del canvas se veria NEGRA**, no blanca, y no podria
+llevarse puesto el fondo de la pagina. Si se blanquea todo -fondo incluido- entonces lo
+que se ve **no es la pagina**: es el WebView mostrando su propio blanco porque en ese
+instante no hay pagina que pintar.
+
+Eso saca el problema del pipeline de video y lo lleva a **estabilidad del WebView**. La
+hipotesis principal pasa a ser que **el proceso renderer se muere y se recrea** (en
+Android WebView el sintoma canonico es exactamente ese: pantalla blanca completa,
+aleatoria, sin relacion con el contenido). La causa mas probable de que se muera es
+memoria: el clip entero vive como `ArrayBuffer` de **24,4 MB**, mas la copia que la
+respuesta XHR mantiene mientras se carga, mas `cells`, mas texturas -y desde W-20 un
+**segundo reader** con su propio `cells`, que ya estaba anotado en **MEM-001**-. En una
+caja de TV con memoria por proceso acotada, eso es un candidato serio.
+
+**La pregunta que lo confirma o lo descarta, y que hay que hacerle al operador:** despues
+del pantallazo, **el video vuelve a empezar desde el principio?** Si vuelve al cuadro 0,
+el renderer se murio y se recargo la pagina, y el problema es de memoria/estabilidad. Si
+sigue donde estaba, no hubo recarga y hay que buscar en composicion o en la app que
+hospeda el WebView.
+
+Mitigacion inmediata, del lado de la app y sin tocar el player: pintar el WebView de
+negro (`setBackgroundColor`). No arregla la causa, pero convierte un flash blanco en un
+parpadeo negro contra una pagina oscura, que es mucho menos violento.

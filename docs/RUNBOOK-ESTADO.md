@@ -35,7 +35,7 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 > suponer**. Tampoco está confirmado si el blanco viene del canvas, del fondo de la
 > página o de una re-creación del contexto.
 >
-> **No cerrar F10 ni empezar F11 hasta tener causa identificada.** El detalle del
+> **Primer corte (Instancia 040): el blanco NO esta en los datos** — el run 33440003966<br>> decodifico el clip publicado: cuadro mas claro = 20,7 % de celdas casi blancas, luma<br>> media maxima 160,5, cero saltos bruscos. Y el operador respondio que **se blanquea TODA<br>> la pantalla**, al azar, en un **WebView embebido**. Como el fondo de la pagina es<br>> `#0d0d10`, una falla del canvas se veria NEGRA: que se blanquee todo significa que **no<br>> se esta pintando la pagina**. Hipotesis principal: **el renderer del WebView se muere y<br>> se recrea** (memoria; ver MEM-001 y los 24,4 MB del clip en un ArrayBuffer). Pregunta<br>> que lo decide: **despues del flash, el video vuelve a empezar desde el principio?**<br>><br>> **No cerrar F10 ni empezar F11 hasta tener causa identificada.** El detalle del
 > diagnóstico va en el REGISTRO (Instancia 040) y la tarea en el runbook de
 > implementación.
 
