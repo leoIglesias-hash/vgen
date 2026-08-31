@@ -64,8 +64,36 @@
   var zeroBlock = new Uint8Array(4096);
   /* W-11: 128^k para uvarint sin Math.pow por byte. */
   var UVAR_SCALE = [1, 128, 16384, 2097152, 268435456];
+  /* W-17: LUT de paleta en Uint32. La conversion indice->RGBA pasa de 3
+   * lecturas de paleta + 4 escrituras de byte por celda a 1 lectura de LUT y
+   * 1 escritura de palabra. El orden de bytes de la maquina se DETECTA una
+   * sola vez: nunca se asume little endian. Si el destino no admite una vista
+   * Uint32 (Array plano, buffer desalineado, motor sin Uint32Array) se
+   * conserva el camino de bytes; ese fallback es parte del contrato legacy. */
+  var LUT_WORDS = typeof Uint32Array !== "undefined";
+  var LUT_LITTLE = true;
+  if (LUT_WORDS) {
+    (function () {
+      var probe = new Uint32Array(1), probeBytes = new Uint8Array(probe.buffer);
+      probe[0] = 1;
+      LUT_LITTLE = probeBytes[0] === 1;
+    }());
+  }
 
   function fail(message) { throw new Error("ASCLv2: " + message); }
+
+  function packRGBA(r, g, b) {
+    return LUT_LITTLE
+      ? (((255 << 24) | (b << 16) | (g << 8) | r) >>> 0)
+      : (((r << 24) | (g << 16) | (b << 8) | 255) >>> 0);
+  }
+
+  function rgbaWords(out, words) {
+    if (!LUT_WORDS || !out || !out.buffer) return null;
+    if (typeof out.byteOffset !== "number" || (out.byteOffset & 3)) return null;
+    try { return new Uint32Array(out.buffer, out.byteOffset, words); }
+    catch (ignoredWordView) { return null; }
+  }
 
   function makeCrcTable() {
     var table = new Uint32Array(256), i, c, k;
@@ -294,6 +322,9 @@
     this._dY1 = -1;
     this._varValue = 0;
     this._varNext = 0;
+    /* W-17: la LUT se construye por paleta, no por frame. */
+    this._lut = null;
+    this._lutPalette = null;
   }
 
   ReaderV2.prototype._offset = function (index) {
@@ -955,8 +986,30 @@
     return this;
   };
 
+  /* W-17: LUT vigente para la paleta activa. Las paletas son subvistas
+   * inmutables del archivo y solo se reemplazan por asignacion, asi que la
+   * identidad del objeto alcanza como clave de cache. Las entradas por encima
+   * de la paleta quedan en negro opaco: un indice fuera de rango no llega aca
+   * (lo rechaza la pasada de validacion) y si llegara, el camino de bytes leia
+   * undefined y escribia lo mismo. */
+  ReaderV2.prototype._paletteLut = function () {
+    var pal = this.palette, lut, count, i;
+    if (!LUT_WORDS || !pal) return null;
+    if (this._lut && this._lutPalette === pal) return this._lut;
+    lut = this._lut || new Uint32Array(256);
+    count = Math.floor(pal.length / 3);
+    if (count > 256) count = 256;
+    for (i = 0; i < count; i++) {
+      lut[i] = packRGBA(pal[i * 3], pal[i * 3 + 1], pal[i * 3 + 2]);
+    }
+    for (i = count; i < 256; i++) lut[i] = packRGBA(0, 0, 0);
+    this._lut = lut;
+    this._lutPalette = pal;
+    return lut;
+  };
+
   ReaderV2.prototype.fillRGBARows = function (out, y0, y1) {
-    var start, end, i, c, pi;
+    var start, end, i, c, pi, cells, pal, lut, words;
     if (!out || typeof out.length !== "number" || out.length < this.n * 4) {
       fail("buffer RGBA insuficiente");
     }
@@ -966,10 +1019,18 @@
     if (!this.palette) fail("RGBA sin paleta");
     start = y0 * this.header.cols;
     end = (y1 + 1) * this.header.cols;
+    cells = this.cells;
+    lut = this._paletteLut();
+    words = lut ? rgbaWords(out, this.n) : null;
+    if (words) {
+      for (i = start; i < end; i++) words[i] = lut[cells[i]];
+      return out;
+    }
+    pal = this.palette;
     for (i = start; i < end; i++) {
-      pi = this.cells[i] * 3; c = i * 4;
-      out[c] = this.palette[pi]; out[c + 1] = this.palette[pi + 1];
-      out[c + 2] = this.palette[pi + 2]; out[c + 3] = 255;
+      pi = cells[i] * 3; c = i * 4;
+      out[c] = pal[pi]; out[c + 1] = pal[pi + 1];
+      out[c + 2] = pal[pi + 2]; out[c + 3] = 255;
     }
     return out;
   };
@@ -980,21 +1041,56 @@
 
   ReaderV2.prototype.fillRGBAChanged = function (out) {
     var d, tile, y, x, base, i, c, pi, byteIndex, byte, bit, mask, bitIndex;
+    var cells, pal, lut, words;
     if (this.dirtyFull) return this.fillRGBA(out);
     if (!out || typeof out.length !== "number" || out.length < this.n * 4) {
       fail("buffer RGBA insuficiente");
     }
     if (!this.dirtyCount && !this.dirtyCellCount) return out;
     if (!this.palette) fail("RGBA sin paleta");
+    cells = this.cells;
+    lut = this._paletteLut();
+    words = lut ? rgbaWords(out, this.n) : null;
+    if (words) {
+      for (d = 0; d < this.dirtyCount; d++) {
+        tile = this.dirtyTiles[d];
+        this._tileGeometry(tile);
+        for (y = 0; y < this._tileH; y++) {
+          base = (this._tileY + y) * this.header.cols + this._tileX;
+          for (x = 0; x < this._tileW; x++) {
+            i = base + x;
+            words[i] = lut[cells[i]];
+          }
+        }
+      }
+      if (this.dirtyCellCount) {
+        if (!lowBitIndex) {
+          lowBitIndex = new Uint8Array(256);
+          for (bit = 0; bit < 8; bit++) lowBitIndex[1 << bit] = bit;
+        }
+        bitIndex = lowBitIndex;
+        for (byteIndex = 0; byteIndex < this.dirtyCellBits.length; byteIndex++) {
+          byte = this.dirtyCellBits[byteIndex];
+          while (byte) {
+            mask = byte & -byte;
+            i = (byteIndex << 3) + bitIndex[mask];
+            words[i] = lut[cells[i]];
+            byte ^= mask;
+          }
+        }
+      }
+      return out;
+    }
+    pal = this.palette;
     for (d = 0; d < this.dirtyCount; d++) {
       tile = this.dirtyTiles[d];
       this._tileGeometry(tile);
       for (y = 0; y < this._tileH; y++) {
         base = (this._tileY + y) * this.header.cols + this._tileX;
         for (x = 0; x < this._tileW; x++) {
-          i = base + x; c = i * 4; pi = this.cells[i] * 3;
-          out[c] = this.palette[pi]; out[c + 1] = this.palette[pi + 1];
-          out[c + 2] = this.palette[pi + 2]; out[c + 3] = 255;
+          i = base + x; c = i * 4; pi = cells[i] * 3;
+          out[c] = pal[pi]; out[c + 1] = pal[pi + 1];
+          out[c + 2] = pal[pi + 2]; out[c + 3] = 255;
         }
       }
     }
@@ -1010,10 +1106,10 @@
           mask = byte & -byte;
           bit = bitIndex[mask];
           i = (byteIndex << 3) + bit;
-          pi = this.cells[i] * 3;
+          pi = cells[i] * 3;
           c = i * 4;
-          out[c] = this.palette[pi]; out[c + 1] = this.palette[pi + 1];
-          out[c + 2] = this.palette[pi + 2]; out[c + 3] = 255;
+          out[c] = pal[pi]; out[c + 1] = pal[pi + 1];
+          out[c + 2] = pal[pi + 2]; out[c + 3] = 255;
           byte ^= mask;
         }
       }
@@ -1026,6 +1122,8 @@
     this.dv = null;
     this.cells = null;
     this.palette = null;
+    this._lut = null;
+    this._lutPalette = null;
     this._scratch = null;
     this.dirtyCellBits = null;
     this.dirtyTileBits = null;

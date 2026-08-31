@@ -32,7 +32,7 @@ for (i = 0; i < rows.length; i++) {
   assert(row.cells > 0, "cada caso debe tocar celdas: " + row.grid + " " + row.profile);
   assert(row.ms > 0, "cada caso debe reportar tiempo: " + row.grid + " " + row.profile);
   assert(isFinite(row.mbs) && row.mbs > 0, "cada caso debe reportar MB/s");
-  if (row.variant === "bytes") seenBytes++;
+  if (row.variant === "reader") seenBytes++;
   if (row.variant === "lut32") seenLut++;
 }
 assert.strictEqual(seenBytes, rows.length / 2);

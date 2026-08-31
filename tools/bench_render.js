@@ -14,10 +14,17 @@
  * densos), paleta de 256 entradas, tiles de 16.
  *
  * Dos variantes por caso:
- *   bytes  el camino vigente del reader (fillRGBA / fillRGBAChanged): 3 lecturas
- *          de paleta y 4 escrituras de byte por celda.
- *   lut32  el prototipo de W-17: LUT Uint32Array(256) con la paleta empaquetada
- *          en el orden de bytes de la maquina y UNA escritura de palabra.
+ *   reader  lo que hace HOY el reader que se le pase (fillRGBA /
+ *           fillRGBAChanged). Antes de W-17 era 3 lecturas de paleta y 4
+ *           escrituras de byte por celda; desde W-17 toma el camino de palabra
+ *           cuando el destino lo permite, asi que esta fila y la de abajo
+ *           convergen: esa convergencia ES la evidencia de W-17.
+ *   lut32   el prototipo de referencia: LUT Uint32Array(256) con la paleta
+ *           empaquetada en el orden de bytes de la maquina y UNA escritura de
+ *           palabra.
+ *
+ * Para comparar contra el reader anterior, el workflow `bench-render` corre
+ * este mismo banco contra el `reader-v2.js` de un commit baseline.
  *
  * El banco NO juzga tiempos: el runner de CI es ruidoso y una asercion de
  * velocidad seria un test intermitente. Publica la tabla (regla 5: la mejora se
@@ -356,7 +363,7 @@ function run(options) {
         lutChanged(reader, alt32, lut);
       }
       reader.fillRGBA(ref);
-      assertSame(info.label + " " + profile + " bytes", out, ref);
+      assertSame(info.label + " " + profile + " reader", out, ref);
       assertSame(info.label + " " + profile + " lut32", alt, ref);
 
       if (ci === 0) {
@@ -373,7 +380,7 @@ function run(options) {
 
       rows.push({
         grid: info.label, profile: profile, cells: touched,
-        variant: "bytes", ms: msBytes, mbs: touched * 4 / 1048576 / (msBytes / 1000),
+        variant: "reader", ms: msBytes, mbs: touched * 4 / 1048576 / (msBytes / 1000),
         speedup: 1
       });
       rows.push({
@@ -382,7 +389,7 @@ function run(options) {
         speedup: msLut > 0 ? msBytes / msLut : 0
       });
       log(pad(info.label, 11, true) + pad(profile, 8, true) + pad(touched, 10) +
-          pad("bytes", 10) + pad(msBytes.toFixed(3), 10) +
+          pad("reader", 10) + pad(msBytes.toFixed(3), 10) +
           pad(rows[rows.length - 2].mbs.toFixed(0), 9) + pad("1.00", 7));
       log(pad("", 11, true) + pad("", 8, true) + pad("", 10) +
           pad("lut32", 10) + pad(msLut.toFixed(3), 10) +
@@ -391,7 +398,7 @@ function run(options) {
     }
     reader.dispose();
   }
-  log("paridad: OK (bytes == lut32 == conversion completa en " +
+  log("paridad: OK (reader == lut32 == conversion completa en " +
       (rows.length / 2) + " casos)");
   return rows;
 }
@@ -411,6 +418,9 @@ if (require.main === module) main();
 module.exports = {
   run: run,
   GRIDS: GRIDS,
+  /* Exportado para que el test de paridad de W-17 use el MISMO corpus que el
+   * banco, en una grilla chica: un corpus que se bifurca deja de ser evidencia. */
+  buildCase: buildCase,
   makeLut: makeLut,
   lutFull: lutFull,
   lutChanged: lutChanged

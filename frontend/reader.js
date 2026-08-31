@@ -25,8 +25,34 @@
   var popCount = null;
   var lowBitIndex = null;
   var zeroBlock = new Uint8Array(4096);
+  /* W-17: LUT de paleta en Uint32 (mismo contrato que en reader-v2.js). Una
+   * lectura de LUT y una escritura de palabra en vez de 3 lecturas de paleta y
+   * 4 escrituras de byte por celda. El orden de bytes se DETECTA una vez; si el
+   * destino no admite vista Uint32 se conserva el camino de bytes. */
+  var LUT_WORDS = typeof Uint32Array !== "undefined";
+  var LUT_LITTLE = true;
+  if (LUT_WORDS) {
+    (function () {
+      var probe = new Uint32Array(1), probeBytes = new Uint8Array(probe.buffer);
+      probe[0] = 1;
+      LUT_LITTLE = probeBytes[0] === 1;
+    }());
+  }
 
   function fail(message) { throw new Error("ASCL: " + message); }
+
+  function packRGBA(r, g, b) {
+    return LUT_LITTLE
+      ? (((255 << 24) | (b << 16) | (g << 8) | r) >>> 0)
+      : (((r << 24) | (g << 16) | (b << 8) | 255) >>> 0);
+  }
+
+  function rgbaWords(out, words) {
+    if (!LUT_WORDS || !out || !out.buffer) return null;
+    if (typeof out.byteOffset !== "number" || (out.byteOffset & 3)) return null;
+    try { return new Uint32Array(out.buffer, out.byteOffset, words); }
+    catch (ignoredWordView) { return null; }
+  }
 
   function parseHeader(dv) {
     if (dv.byteLength < HEADER_SIZE) fail("header truncado");
@@ -267,6 +293,9 @@
     this.dirtyFull = false;
     this.dirtyY0 = h.rows;
     this.dirtyY1 = -1;
+    /* W-17: la LUT se construye por paleta, no por frame. */
+    this._lut = null;
+    this._lutPalette = null;
   }
 
   Reader.prototype._offset = function (index) {
@@ -556,10 +585,31 @@
     return this;
   };
 
+  /* W-17: LUT vigente para la paleta activa. Las paletas son subvistas
+   * inmutables del archivo y solo se reemplazan por asignacion, asi que la
+   * identidad del objeto alcanza como clave de cache. Las entradas por encima
+   * de la paleta quedan en negro opaco, que es lo mismo que escribia el camino
+   * de bytes leyendo fuera de rango. */
+  Reader.prototype._paletteLut = function () {
+    var pal = this.palette, lut, count, i;
+    if (!LUT_WORDS || !pal) return null;
+    if (this._lut && this._lutPalette === pal) return this._lut;
+    lut = this._lut || new Uint32Array(256);
+    count = Math.floor(pal.length / 3);
+    if (count > 256) count = 256;
+    for (i = 0; i < count; i++) {
+      lut[i] = packRGBA(pal[i * 3], pal[i * 3 + 1], pal[i * 3 + 2]);
+    }
+    for (i = count; i < 256; i++) lut[i] = packRGBA(0, 0, 0);
+    this._lut = lut;
+    this._lutPalette = pal;
+    return lut;
+  };
+
   /* Escribe filas inclusivas en offsets absolutos del RGBA de frame completo. */
   Reader.prototype.fillRGBARows = function (out, y0, y1) {
     var mode = this.header.mode, cols = this.header.cols, cells = this.cells, pal = this.palette;
-    var start, end, i, c, pi, g, denom;
+    var start, end, i, c, pi, g, denom, lut, words;
     if (!out || typeof out.length !== "number" || out.length < this.n * 4) fail("buffer RGBA insuficiente");
     y0 = Number(y0); y1 = Number(y1);
     if (y0 !== Math.floor(y0) || y1 !== Math.floor(y1) || y0 < 0 || y1 < y0 || y1 >= this.header.rows) {
@@ -568,6 +618,16 @@
     start = y0 * cols;
     end = (y1 + 1) * cols;
     if ((mode === MODE_PIXEL || mode === MODE_PAL) && !pal) fail("RGBA sin paleta");
+    lut = (mode === MODE_PIXEL || mode === MODE_PAL) ? this._paletteLut() : null;
+    words = lut ? rgbaWords(out, this.n) : null;
+    if (words && mode === MODE_PIXEL) {
+      for (i = start; i < end; i++) words[i] = lut[cells[i]];
+      return out;
+    }
+    if (words && mode === MODE_PAL) {
+      for (i = start; i < end; i++) words[i] = lut[cells[i * 2 + 1]];
+      return out;
+    }
     if (mode === MODE_PIXEL) {
       for (i = start; i < end; i++) {
         pi = cells[i] * 3; c = i * 4;
@@ -603,7 +663,7 @@
    */
   Reader.prototype.fillRGBAChanged = function (out) {
     var mode = this.header.mode, cells = this.cells, pal = this.palette, bits = this.dirtyCellBits;
-    var byteIndex, byte, bit, mask, i, c, pi, g, denom, bitIndex;
+    var byteIndex, byte, bit, mask, i, c, pi, g, denom, bitIndex, lut, words;
     if (this.dirtyFull) return this.fillRGBA(out);
     if (!out || typeof out.length !== "number" || out.length < this.n * 4) fail("buffer RGBA insuficiente");
     if (!this.dirtyCellCount) return out;
@@ -613,6 +673,33 @@
       for (bit = 0; bit < 8; bit++) lowBitIndex[1 << bit] = bit;
     }
     bitIndex = lowBitIndex;
+    lut = (mode === MODE_PIXEL || mode === MODE_PAL) ? this._paletteLut() : null;
+    words = lut ? rgbaWords(out, this.n) : null;
+
+    if (words && mode === MODE_PIXEL) {
+      for (byteIndex = 0; byteIndex < bits.length; byteIndex++) {
+        byte = bits[byteIndex];
+        while (byte) {
+          mask = byte & -byte;
+          i = (byteIndex << 3) + bitIndex[mask];
+          words[i] = lut[cells[i]];
+          byte ^= mask;
+        }
+      }
+      return out;
+    }
+    if (words && mode === MODE_PAL) {
+      for (byteIndex = 0; byteIndex < bits.length; byteIndex++) {
+        byte = bits[byteIndex];
+        while (byte) {
+          mask = byte & -byte;
+          i = (byteIndex << 3) + bitIndex[mask];
+          words[i] = lut[cells[i * 2 + 1]];
+          byte ^= mask;
+        }
+      }
+      return out;
+    }
 
     if (mode === MODE_PIXEL) {
       for (byteIndex = 0; byteIndex < bits.length; byteIndex++) {
