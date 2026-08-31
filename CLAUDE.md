@@ -117,7 +117,12 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
 Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
 **F9 → F10 → F11 → F8 → DIAG-001**.
 
-- **F9 (S-8) — CÓDIGO COMPLETO, MEDIDO Y CON CI VERDE; falta publicar.** Aceleración del
+- **🔴 DIAG-002 — PANTALLAZOS BLANCOS EN TV BOX: es lo próximo, antes que F10.** El
+  operador probó el player en un **WebView de TV box** y ve **flashes blancos entre las
+  imágenes**; lo llamó crítico. Encuadre que no hay que perder: probó lo publicado
+  **antes** del motor único, o sea la raíz **sin** cadencia ni pre-decode. Si el motor
+  nuevo mejora, empeora o no cambia el síntoma **se mide, no se supone**.
+- **F9 (S-8) — CERRADA 2026-08-31** (código, CI verde y publicado). Aceleración del
   frontend sin tocar bytes ni formato. Medido y aprobado: `W-16` (`f1ccfa3`, banco
   `tools/bench_render.js` + `frontend/diagnostic-player.html`), `W-17` (`8cecc7b`, LUT
   `Uint32`: keyframe a 1920 **11,4 → 5,7 ms**, byte-idéntico), `W-18`+`W-19` (`07a94e2`,
@@ -132,8 +137,9 @@ Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
   convive con el overlay yendo entre `beforeSeek` y `afterSeek` con `overlay.rebind()`.
   **W-22..W-25 CERRADAS** con el run verde de `866f2f1`: el bloqueo de Actions era
   facturación y se resolvió **mudando el repo de trabajo a `leoIglesias-hash`** (Instancia
-  040), donde está el Pro del operador. **Único pendiente de F9:** publicar a las 4
-  carpetas (25 keys) y escribir el resumen en `ejecutados/`. Diseño:
+  040), donde está el Pro del operador. **Publicado el 2026-08-31: 28 keys** (7 por
+  carpeta), número obtenido **auditando** lo servido contra el repo, no estimando.
+  Resumen: `docs/ejecutados/2026-08-31-F9-aceleracion-frontend.md`. Diseño:
   `docs/DISENO-RENDER-INDEXADO.md`.
 - **F10 (S-9)** — pérdida adaptativa por suavidad (E-25, E-27, E-26, E-28): el banding
   solo se ve en zonas suaves, así que el presupuesto deja de ser plano. Ataca el degradé

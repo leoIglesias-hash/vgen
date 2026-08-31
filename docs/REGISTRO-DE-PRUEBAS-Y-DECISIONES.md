@@ -2528,3 +2528,43 @@ La otra salida (repo publico = minutos ilimitados) tambien destrababa el CI, per
 expone el codigo. Mudarlo no expone nada -sigue privado-, no depende de arreglar pagos en
 una cuenta ajena, deja el repo original intacto como destino final, y es reversible: el
 dia que el operador quiera consolidar, `git push ctrl main` y listo.
+
+### Publicacion de F9 (segundo acto): 28 keys, no 25
+
+El operador aprobo publicar de forma explicita. Antes de subir nada se **audito lo
+servido**: 18 archivos x 4 carpetas bajados de `iargen.com/player/` y comparados por
+SHA-256 contra el repo. Resultado: 4 diferian (`live-player.html`/`index.html`,
+`tv-player.html`, `diagnostic-player.html`, `overlay.js`), 2 daban 404 (`playloop.js`,
+`player.html`, este ultimo nunca habia estado publicado) y los 12 restantes estaban
+identicos. **7 keys por carpeta x 4 = 28**, contra las «25» que decian los runbooks.
+
+Vale la pena que esa auditoria sea el primer paso de toda publicacion: cuesta 68 GETs,
+y detecto que una cuenta escrita a mano ya estaba mal.
+
+Subida con el procedimiento de `deploy/asciline-player/README.md` (token efimero por
+API, `PUT /__upload/<key>` con `x-sha256` que R2 recalcula del cuerpo recibido). Las 28
+verificadas byte a byte despues de subir; mismatches 0.
+
+**Hallazgo operativo sobre el burn del token:** el `PUT` del secret devuelve 200
+enseguida, pero **el worker tarda unos segundos en ver el valor nuevo**. El primer
+intento con el token viejo dio `200` -o sea, seguia siendo valido- y recien el siguiente
+dio `403`. Dar por quemado un token con una sola prueba es un falso negativo de
+seguridad: hay que reintentar hasta ver el 403.
+
+### DIAG-002 abierta: pantallazos blancos en TV box
+
+El operador reporto, al final de esta instancia:
+
+> «tenemos que ver un problema grave de reproduccion en los tv box.. lo acabo de probar
+> en un webview y me da pantallazos blancos. eso es algo critico […] salen pantallazos
+> blancos entre las imagenes de telekino, eso es muy grave y deberiamos estudiarlo»
+
+Se abre **DIAG-002** y se pone **adelante de F10**: un flash blanco en un televisor rompe
+el producto, pesa mas que cualquier ganancia de bytes o de milisegundos.
+
+Encuadre que conviene no perder al retomar: lo que el operador probo es **lo que estaba
+publicado antes de esta instancia**, es decir la raiz (`live-player.html`) **sin**
+cadencia ni pre-decode -esas piezas vivian en otra pagina y recien ahora estan en la
+raiz-. Que el motor unico mejore, empeore o no cambie el sintoma **hay que medirlo**; no
+se puede suponer en ninguna de las dos direcciones. Tampoco esta establecido de donde
+sale el blanco: canvas limpiado, fondo de la pagina asomando, o recreacion del contexto.

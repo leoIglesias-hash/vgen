@@ -21,9 +21,27 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 [`ejecutados/`](ejecutados/README.md) y en el
 [`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
 
-**F9 (S-8): código completo, fusionado en un solo motor y con CI en verde; falta
-publicar.** Orden acordado con el operador (Instancia 030): **F9 → F10 → F11 → F8 →
-DIAG-001**.
+> ### 🔴 DIAG-002 — PANTALLAZOS BLANCOS EN TV BOX (reporte del operador, 2026-08-31)
+>
+> **Es lo próximo, antes que F10.** El operador probó el player **en un WebView de TV
+> box** y ve **pantallazos blancos entre las imágenes**. Sus palabras: *«eso es algo
+> crítico… es muy grave y deberíamos estudiarlo»*. Un flash blanco en un televisor es
+> peor que cualquier ganancia de bytes o de milisegundos: rompe el producto.
+>
+> Lo que se sabe hasta ahora: el reporte es sobre lo que estaba **publicado antes** de
+> esta instancia, o sea `live-player.html` **sin** cadencia ni pre-decode (la raíz recién
+> los estrenó ahora). No está establecido todavía si el motor nuevo lo mejora, lo empeora
+> o es indiferente — **eso es parte de lo que hay que medir, no algo que se pueda
+> suponer**. Tampoco está confirmado si el blanco viene del canvas, del fondo de la
+> página o de una re-creación del contexto.
+>
+> **No cerrar F10 ni empezar F11 hasta tener causa identificada.** El detalle del
+> diagnóstico va en el REGISTRO (Instancia 040) y la tarea en el runbook de
+> implementación.
+
+**F9 (S-8): CERRADA el 2026-08-31** — código, CI verde y frontend publicado en las cuatro
+carpetas. Orden acordado con el operador (Instancia 030): F9 → F10 → F11 → F8 →
+DIAG-001, **ahora con DIAG-002 adelante de todo** por gravedad.
 
 > **BLOQUEO RESUELTO el 2026-08-31 (Instancia 040) — el repo de trabajo se mudó.** El
 > diagnóstico era correcto: los minutos de un repo privado se le cobran **al dueño del
@@ -81,8 +99,14 @@ DIAG-001**.
      seis archivos tocados **no dan hallazgos**. La regresión completa lo confirmó
      después en CI (suites Python + JS, incluidas `test_playloop.js` y el gate nuevo de
      `test_overlay_runtime`).
-   - **Falta para cerrar F9:** publicar el frontend a las **4 carpetas** (25 keys ahora:
-     las 24 de la Instancia 038 más `playloop.js`) → resumen en `ejecutados/`.
+   - **PUBLICADO y F9 CERRADA** (Instancia 040): **28 keys**, no 25 — el número salió de
+     **auditar** lo servido contra el repo archivo por archivo (4 diferían, 2 daban 404,
+     el resto igual), no de la cuenta escrita en los runbooks. Son 7 por carpeta:
+     `live-player.html` + su copia `index.html`, `tv-player.html`,
+     `diagnostic-player.html`, `overlay.js`, y los nuevos `playloop.js` y `player.html`.
+     Las 28 verificadas byte a byte contra el repo después de subir; token quemado
+     (403 comprobado). Resumen en
+     [`ejecutados/2026-08-31-F9-aceleracion-frontend.md`](ejecutados/2026-08-31-F9-aceleracion-frontend.md).
    - La comparación `1280 soft` vs **`1920` nativo en el TV** se **movió a F8**, que es la
      fase de validación en TV físico; sigue decidiéndose **por video**. La medición de
      W-20 fue en GPU de PC a 1280@15: la holgura de 4,5× es el margen que F8 tiene que
@@ -315,3 +339,5 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-31 | **Un solo motor de reproducción para las cuatro páginas** (Instancia 039, `3c46d3d` + `2753fd1` + `26b4170` + `1fe95a9`, **sin CI: sigue bloqueado**). El operador pidió «fusionar los backgrounds del front para que todos los reproductores tengan todas las mejoras». La cadencia y el pre-decode de W-20 estaban **copiados** en `tv-player.html` y en `diagnostic-player.html`, y **ausentes** en `live-player.html` —que es lo que sirve la raíz publicada— y en `player.html`. Se extrajo la maquinaria a `frontend/playloop.js` (W-22, con `tests/test_playloop.js`), se pasaron las dos páginas que la tenían (W-23) y la estrenaron las dos que no (W-24). Además W-25: el gate ES5 descartaba un `<script>` si la **coincidencia entera** contenía `src=`, así que un `var src=DEFAULT_SRC;` bastaba para que `player.html` y `diagnostic-player.html` no se analizaran nunca | tres cosas que la fusión hizo posibles y la copia impedía: (a) la raíz **por fin** tiene la cadencia, que era el único pendiente de F9; (b) el diagnostic mide **literalmente** el código de producción —antes medía una copia parecida, y una medición sobre otro código no dice nada del producto—; (c) el intercambio de readers convive con el overlay: va **entre `beforeSeek` y `afterSeek`** con `overlay.rebind(reader)` en el medio, porque la base guardada pertenece al reader que se va y restaurarla sobre el que llega escribiría celdas de otro cuadro. El gate nuevo no verifica el mecanismo sino la propiedad: **adoptar y no adoptar tienen que dar exactamente las mismas celdas**. Verificado sin CI hasta donde se puede: las 4 páginas cargan el clip de producción servido local sin errores de consola (overlay, texto e imagen activos), y las expresiones del gate ES5 corridas aparte sobre los 6 archivos tocados no dan hallazgos |
 | 2026-08-31 | **La suscripción a Pro no destrabó el CI, y probablemente sea por a qué cuenta se factura.** El operador se suscribió a Pro; se relanzó el run bloqueado y se empujaron cuatro commits: los tres jobs vuelven a morir a los 2 s con la **misma** anotación de pagos/límite de gasto. Dato que lo explica: el repo es **privado** y su dueño es **`tablerosapp-ctrl`** (cuenta de usuario), mientras que quien empuja es **`leoIglesias-hash`** — GitHub cobra los minutos de un repo privado **al dueño del repo** | de ahí las dos salidas, las dos del operador: Pro + método de pago válido + límite de gasto > 0 **en `tablerosapp-ctrl`**, o hacer el repo **público** (minutos ilimitados). El token de esta sesión (scopes `gist, repo, workflow`) no puede leer la facturación de esa cuenta, así que el diagnóstico es estructural, no medido: se confirma o se descarta abriendo Billing & plans de `tablerosapp-ctrl` |
 | 2026-08-31 | **El repo de trabajo se mudó a `leoIglesias-hash` y con eso el CI se destrabó** (Instancia 040). El operador: «me suscribí a Pro con `leoIglesias-hash`, ya está, hice cagada… ahora podrías descargar el proyecto y subirlo a mi github, para poder seguirlo desde ahí; luego lo sincronizamos cuando tengamos puntos de guardado, y al terminar dejo todo en `tablerosapp-ctrl`». Se creó **`leoIglesias-hash/ASCILINE-video`** (privado, vía API con la credencial ya guardada en el Credential Manager) y se espejó **todo**: `main`, `assets` (los insumos de encode), `feature/quality-optimization` y los **7 tags**. Remotos renombrados: **`origin` = el repo del operador** (donde se empuja y corre el CI), **`ctrl` = `tablerosapp-ctrl`** (destino final, se sincroniza en los puntos de guardado). El run de `866f2f1` corrió **completo y verde** (`py3.8`, `py3.11`, `py3.11 + zopfli`, 52 s), contra los 2 s sin ejecutar un paso de las últimas cuatro instancias | **confirma el diagnóstico de la Instancia 039 sin necesidad de leer facturación**: los minutos de un repo privado se cobran al **dueño del repo**, así que el Pro en `leoIglesias-hash` no servía mientras el repo fuera de `tablerosapp-ctrl`. Mudar el repo era además la salida más barata: no expone el código (sigue privado), no depende de arreglar pagos en una cuenta ajena y deja el original intacto como destino. Se canceló a mano el run que la rama vieja disparó de arrastre. Con el CI de vuelta, **W-22..W-25 pasan de `en curso (CI bloqueado)` a `cerrada`** y F9 queda con un solo pendiente: publicar |
+| 2026-08-31 | **F9 CERRADA: frontend publicado en las cuatro carpetas, 28 keys** (Instancia 040). El operador aprobó publicar de forma explícita. El número de keys **se auditó en vez de estimarse**: se bajaron los 18 archivos de las 4 carpetas y se comparó SHA-256 contra el repo — 4 diferían (`live-player.html`/`index.html`, `tv-player.html`, `diagnostic-player.html`, `overlay.js`), 2 daban 404 (`playloop.js`, `player.html`) y los 12 restantes estaban idénticos. 7 por carpeta × 4 = **28**, contra las «25» que decían los runbooks. Subida con token efímero + `x-sha256` (R2 recalcula el digest), las 28 verificadas byte a byte después, token quemado | dos cosas para la próxima: (a) **auditar lo servido antes de publicar** es barato (68 GETs) y corrige una cuenta escrita a mano que ya estaba mal; (b) el burn del secret **tarda unos segundos en propagar** — el primer `PUT` con el token viejo devolvió `200` y recién el siguiente dio `403`. Dar por quemado un token con una sola prueba es un falso negativo de seguridad |
+| 2026-08-31 | **DIAG-002 abierta y puesta ADELANTE DE TODO: pantallazos blancos en TV box** (reporte del operador, Instancia 040). Probó el player en un **WebView de TV box** y ve **flashes blancos entre las imágenes**: «eso es algo crítico… es muy grave y deberíamos estudiarlo». Se registra antes de investigar para que el reporte no se pierda | un flash blanco en un televisor rompe el producto: pesa más que cualquier ganancia de bytes o de milisegundos, así que se adelanta a F10. Dato de encuadre que **no** hay que perder: lo que el operador probó es lo que estaba publicado **antes** de esta instancia, o sea la raíz **sin** cadencia ni pre-decode. Si el motor nuevo mejora, empeora o no cambia el síntoma **hay que medirlo, no suponerlo** — y el nuevo `playloop.js` recién ahora está en la raíz |

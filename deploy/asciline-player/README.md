@@ -69,3 +69,26 @@ Fue **puramente aditiva**: los 11 archivos restantes —`live-player.html`,
 `cache-refresh.js`— conservan exactamente el `md5` que tenían antes, comprobado
 contra `MANIFEST.tsv`. No se perdió nada: overlay, textos y datachannel siguen
 donde estaban.
+
+## Actualización del 2026-08-31 (F9, segundo acto — motor único)
+
+Se subieron **28 keys** = 7 por cada una de las 4 carpetas:
+
+| Archivo | Por qué |
+| --- | --- |
+| `live-player.html` + `index.html` | W-24: la raíz estrena cadencia y pre-decode (son la misma copia, dos keys) |
+| `tv-player.html`, `diagnostic-player.html` | W-23: pasan a usar el motor compartido |
+| `overlay.js` | W-24: método `rebind()`, que hace legal el intercambio de readers con overlay activo |
+| `playloop.js` | **nuevo** — el motor compartido (W-22) |
+| `player.html` | **nuevo** — no estaba publicado en ninguna carpeta; ahora el árbol servido coincide con el repo |
+
+**El número salió de auditar, no de estimar.** Se bajaron los 18 archivos de las 4
+carpetas y se comparó SHA-256 contra el repo: 4 diferían, 2 daban 404 y el resto estaba
+igual. Los runbooks decían «25 keys»; eran 28. Vale la pena repetir esa auditoría antes
+de cada publicación en vez de confiar en la cuenta escrita.
+
+Aditiva otra vez: ningún archivo fuera de esos 7 se tocó. Las 28 keys quedaron
+verificadas byte a byte contra el repo después de subirlas, y el token se quemó (el viejo
+da `403`). **Ojo con el burn:** el secret tarda unos segundos en propagarse — el primer
+`PUT` con el token viejo puede devolver `200` todavía. Hay que reintentar hasta ver el
+`403`, no darlo por quemado con una sola prueba.
