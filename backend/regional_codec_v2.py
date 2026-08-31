@@ -14,6 +14,13 @@ Expone dos niveles:
 La eleccion de comando es puramente lossless y determinista: se materializa cada
 candidato valido y se compara su longitud binaria real. No intervienen metricas
 visuales, IA ni umbrales de calidad.
+
+F6-1 (``sparse_differential``): con el modo activo, SPARSE codifica cada offset
+como ``offset - prior - 1`` (``prior`` arranca en -1, asi el primero coincide con
+el offset absoluto). Como el formato ya exige offsets estrictamente crecientes,
+el delta nunca es negativo y la propiedad "creciente" pasa a ser estructural: el
+decoder solo valida ``offset < cell_count``. El modo pertenece al ENVELOPE (v3);
+el default False reproduce el stream v2 byte a byte.
 """
 
 from __future__ import annotations
@@ -58,6 +65,7 @@ PACKET_MAGIC = b"RGV2"
 PACKET_VERSION = 1
 PACKET_FLAG_KEYFRAME = 0x01
 PACKET_FLAG_ZLIB = 0x02
+PACKET_FLAG_SPARSE_DIFF = 0x04
 PACKET_HEADER = struct.Struct("<4sBBHIIIII")
 MAX_UINT32 = 0xFFFFFFFF
 DEFAULT_MAX_CELLS = 100_000_000
@@ -90,6 +98,7 @@ class RegionalEncoding:
     tile_size: int
     command_counts: Tuple[Tuple[str, int], ...]
     dirty_tiles: Tuple[int, ...]
+    sparse_differential: bool = False
 
     @property
     def compressed(self) -> bool:
@@ -229,7 +238,9 @@ def _dense_candidates(flat: np.ndarray) -> List[Tuple[int, bytes]]:
     return candidates
 
 
-def _delta_candidates(flat: np.ndarray, old: np.ndarray) -> List[Tuple[int, bytes]]:
+def _delta_candidates(flat: np.ndarray, old: np.ndarray,
+                      sparse_differential: bool = False
+                      ) -> List[Tuple[int, bytes]]:
     candidates = _dense_candidates(flat)
     changed = np.flatnonzero(flat != old)
     if not changed.size:
@@ -237,9 +248,13 @@ def _delta_candidates(flat: np.ndarray, old: np.ndarray) -> List[Tuple[int, byte
 
     sparse = bytearray((OP_SPARSE,))
     sparse.extend(_uvarint(int(changed.size)))
+    prior = -1
     for offset in changed:
-        sparse.extend(_uvarint(int(offset)))
+        offset = int(offset)
+        sparse.extend(_uvarint(offset - prior - 1 if sparse_differential
+                               else offset))
         sparse.append(int(flat[offset]))
+        prior = offset
     candidates.append((OP_SPARSE, bytes(sparse)))
 
     mask_len = (flat.size + 7) // 8
@@ -264,7 +279,8 @@ def _count_tuple(counts: Dict[str, int], repeat: bool = False
 
 def encode_payload(current: np.ndarray, previous: Optional[np.ndarray] = None,
                    tile_size: int = 16, zlib_level: int = 9,
-                   fast_deflate: bool = False) -> RegionalEncoding:
+                   fast_deflate: bool = False,
+                   sparse_differential: bool = False) -> RegionalEncoding:
     """Codifica una transicion exacta y devuelve RAW y ZLIB para comparar afuera.
 
     ``previous is None`` genera keyframe. En delta, ambas matrices deben tener la
@@ -274,7 +290,14 @@ def encode_payload(current: np.ndarray, previous: Optional[np.ndarray] = None,
     E-21: ``fast_deflate=True`` comprime con zlib-9 puro (barato y determinista
     con o sin Zopfli) para que el transcodificador compare candidatos; la
     emision del ganador recompone ``zlib_payload`` con best_deflate afuera.
+
+    F6-1: ``sparse_differential=True`` emite offsets SPARSE diferenciales. El
+    modo debe declararse en el envelope que transporte el stream (v3); el
+    default False es el stream v2 historico, byte a byte.
     """
+    if not isinstance(sparse_differential, (bool, np.bool_)):
+        raise TypeError("sparse_differential debe ser bool")
+    sparse_differential = bool(sparse_differential)
     current = _matrix(current, "current")
     rows, cols = current.shape
     tile_rows, tile_cols, tile_count = _geometry(rows, cols, tile_size)
@@ -311,7 +334,7 @@ def encode_payload(current: np.ndarray, previous: Optional[np.ndarray] = None,
                 continue
         flush_skip()
         candidates = (_dense_candidates(flat) if keyframe else
-                      _delta_candidates(flat, old))
+                      _delta_candidates(flat, old, sparse_differential))
         opcode, command = min(
             candidates,
             key=lambda item: (len(item[1]), _CANDIDATE_PRIORITY[item[0]]),
@@ -339,6 +362,7 @@ def encode_payload(current: np.ndarray, previous: Optional[np.ndarray] = None,
         tile_size=int(tile_size),
         command_counts=_count_tuple(counts, repeat=repeat),
         dirty_tiles=tuple(dirty),
+        sparse_differential=sparse_differential,
     )
 
 
@@ -410,7 +434,8 @@ def _validate_packed(data: bytes, start: int, cell_count: int,
 
 def _parse_payload(raw: bytes, rows: int, cols: int, tile_size: int,
                    keyframe: bool, previous: Optional[np.ndarray],
-                   palette_entries: Optional[int] = None
+                   palette_entries: Optional[int] = None,
+                   sparse_differential: bool = False
                    ) -> Tuple[List[Tuple], Tuple[int, ...], Tuple[Tuple[str, int], ...]]:
     _, tile_cols, tile_count = _geometry(rows, cols, tile_size)
     if not raw:
@@ -464,6 +489,10 @@ def _parse_payload(raw: bytes, rows: int, cols: int, tile_size: int,
             prior_offset = -1
             for _ in range(count):
                 offset, pos = _read_uvarint(raw, pos)
+                if sparse_differential:
+                    # El delta nunca es negativo: "creciente" es estructural y
+                    # solo queda acotar el offset reconstruido al tile.
+                    offset = prior_offset + 1 + offset
                 if offset >= cell_count or offset <= prior_offset:
                     raise RegionalCodecError("offset SPARSE invalido o no canonico")
                 start, pos = _take(raw, pos, 1, "valor SPARSE")
@@ -557,8 +586,14 @@ def decode_payload(payload: bytes, rows: int, cols: int, tile_size: int,
                    keyframe: bool, previous: Optional[np.ndarray] = None,
                    compressed: bool = False,
                    max_cells: int = DEFAULT_MAX_CELLS,
-                   palette_entries: Optional[int] = None) -> DecodedRegionalFrame:
-    """Valida el payload completo antes de crear/mutar la matriz de salida."""
+                   palette_entries: Optional[int] = None,
+                   sparse_differential: bool = False) -> DecodedRegionalFrame:
+    """Valida el payload completo antes de crear/mutar la matriz de salida.
+
+    F6-1: ``sparse_differential`` NO se negocia desde el stream — lo declara el
+    envelope que lo transporta. Un stream leido con el modo equivocado se
+    rechaza o diverge, por eso v3 lleva el gate en el header.
+    """
     tile_rows, tile_cols, tile_count = _geometry(
         rows, cols, tile_size, max_cells=max_cells)
     del tile_rows
@@ -566,7 +601,10 @@ def decode_payload(payload: bytes, rows: int, cols: int, tile_size: int,
         raise TypeError("payload debe ser bytes")
     if not isinstance(keyframe, (bool, np.bool_)):
         raise TypeError("keyframe debe ser bool")
+    if not isinstance(sparse_differential, (bool, np.bool_)):
+        raise TypeError("sparse_differential debe ser bool")
     keyframe = bool(keyframe)
+    sparse_differential = bool(sparse_differential)
     if palette_entries is not None:
         if (isinstance(palette_entries, bool) or
                 not isinstance(palette_entries, (int, np.integer)) or
@@ -591,7 +629,8 @@ def decode_payload(payload: bytes, rows: int, cols: int, tile_size: int,
 
     # Fase 1: parseo y validacion completa. No se toca ``previous`` ni una salida.
     operations, dirty, counts = _parse_payload(
-        raw, rows, cols, tile_size, keyframe, previous, palette_entries)
+        raw, rows, cols, tile_size, keyframe, previous, palette_entries,
+        sparse_differential)
 
     # Fase 2: una sola matriz logica mutable.
     matrix = (np.empty((rows, cols), dtype=np.uint8) if keyframe
@@ -629,14 +668,18 @@ def decode_payload(payload: bytes, rows: int, cols: int, tile_size: int,
 
 
 def encode_frame(current: np.ndarray, previous: Optional[np.ndarray] = None,
-                 tile_size: int = 16, zlib_level: int = 9) -> bytes:
+                 tile_size: int = 16, zlib_level: int = 9,
+                 sparse_differential: bool = False) -> bytes:
     """Crea un paquete autocontenido de laboratorio con CRC del stream RAW."""
-    encoded = encode_payload(current, previous, tile_size, zlib_level)
+    encoded = encode_payload(current, previous, tile_size, zlib_level,
+                             sparse_differential=sparse_differential)
     flags = PACKET_FLAG_KEYFRAME
     if not encoded.keyframe:
         flags = 0
     if encoded.compressed:
         flags |= PACKET_FLAG_ZLIB
+    if encoded.sparse_differential:
+        flags |= PACKET_FLAG_SPARSE_DIFF
     payload = encoded.payload
     header = PACKET_HEADER.pack(
         PACKET_MAGIC, PACKET_VERSION, flags, encoded.tile_size,
@@ -657,7 +700,8 @@ def decode_frame(packet: bytes, previous: Optional[np.ndarray] = None,
      payload_length, expected_crc) = PACKET_HEADER.unpack_from(packet)
     if magic != PACKET_MAGIC or version != PACKET_VERSION:
         raise RegionalCodecError("magic o version regional invalida")
-    if flags & ~(PACKET_FLAG_KEYFRAME | PACKET_FLAG_ZLIB):
+    if flags & ~(PACKET_FLAG_KEYFRAME | PACKET_FLAG_ZLIB |
+                 PACKET_FLAG_SPARSE_DIFF):
         raise RegionalCodecError("flags regionales desconocidos")
     _, _, tile_count = _geometry(rows, cols, tile_size, max_cells=max_cells)
     if raw_length <= 0 or raw_length > _raw_limit(rows, cols, tile_count):
@@ -674,13 +718,16 @@ def decode_frame(packet: bytes, previous: Optional[np.ndarray] = None,
         raise RegionalCodecError("CRC regional no coincide")
     return decode_payload(raw, rows, cols, tile_size,
                           bool(flags & PACKET_FLAG_KEYFRAME), previous,
-                          compressed=False, max_cells=max_cells)
+                          compressed=False, max_cells=max_cells,
+                          sparse_differential=bool(
+                              flags & PACKET_FLAG_SPARSE_DIFF))
 
 
 __all__ = [
     "DecodedRegionalFrame", "RegionalCodecError", "RegionalEncoding",
     "OP_SKIP_RUN", "OP_SOLID", "OP_SPARSE", "OP_MASK", "OP_PACK1",
     "OP_PACK2", "OP_PAL4", "OP_PAL8", "OPCODE_NAMES",
+    "PACKET_FLAG_SPARSE_DIFF",
     "TAG_REGIONAL_KEY_RAW", "TAG_REGIONAL_KEY_ZLIB",
     "TAG_REGIONAL_DELTA_RAW", "TAG_REGIONAL_DELTA_ZLIB",
     "encode_payload", "decode_payload", "encode_frame", "decode_frame",

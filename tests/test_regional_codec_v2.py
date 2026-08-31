@@ -256,5 +256,145 @@ class RegionalCodecV2Test(unittest.TestCase):
             codec.decode_payload(b"\x01\x00", 2, 2, 0, True)
 
 
+class SparseDifferentialTest(unittest.TestCase):
+    """F6-1: offsets SPARSE diferenciales, opt-in y gateados por el envelope."""
+
+    def roundtrip_diff(self, current, previous, tile_size=16):
+        encoded = codec.encode_payload(current, previous, tile_size=tile_size,
+                                       sparse_differential=True)
+        decoded = codec.decode_payload(
+            encoded.payload, current.shape[0], current.shape[1], tile_size,
+            encoded.keyframe, previous, compressed=encoded.compressed,
+            sparse_differential=True)
+        self.assertTrue(np.array_equal(current, decoded.matrix))
+        self.assertEqual(encoded.dirty_tiles, decoded.dirty_tiles)
+        self.assertEqual(encoded.command_counts, decoded.command_counts)
+        return encoded, decoded
+
+    def test_default_off_keeps_historic_stream_byte_identical(self):
+        # Tile 16x16: MASK cuesta 35 bytes y SPARSE gana con pocos cambios.
+        previous = np.zeros((16, 16), dtype=np.uint8)
+        current = previous.copy()
+        current[0, 1] = 5
+        current[0, 3] = 6
+        implicit = codec.encode_payload(current, previous)
+        explicit = codec.encode_payload(current, previous,
+                                        sparse_differential=False)
+        self.assertEqual(implicit.raw_payload, explicit.raw_payload)
+        self.assertEqual(implicit.zlib_payload, explicit.zlib_payload)
+        # Offsets absolutos historicos (1 y 3), no deltas.
+        self.assertEqual(implicit.raw_payload, b"\x02\x02\x01\x05\x03\x06")
+        self.assertFalse(implicit.sparse_differential)
+
+    def test_first_offset_matches_absolute_and_rest_are_deltas(self):
+        previous = np.zeros((16, 16), dtype=np.uint8)
+        current = previous.copy()
+        current[0, 1] = 5
+        current[0, 3] = 6
+        encoded, _ = self.roundtrip_diff(current, previous)
+        # prior=-1: el primer delta (1-(-1)-1) coincide con el offset absoluto;
+        # el segundo (3-1-1) baja de 3 a 1.
+        self.assertEqual(encoded.raw_payload, b"\x02\x02\x01\x05\x01\x06")
+        self.assertTrue(encoded.sparse_differential)
+
+    def test_differential_shrinks_high_offset_sparse_tiles(self):
+        rng = np.random.RandomState(61)
+        previous = rng.randint(0, 256, size=(16, 16)).astype(np.uint8)
+        current = previous.copy()
+        flat = current.reshape(-1)
+        flat[200] ^= 0x40
+        flat[210] ^= 0x40
+        absolute = codec.encode_payload(current, previous)
+        differential = codec.encode_payload(current, previous,
+                                            sparse_differential=True)
+        self.assertEqual(absolute.raw_payload[0], codec.OP_SPARSE)
+        self.assertEqual(differential.raw_payload[0], codec.OP_SPARSE)
+        # uvarint(200)+uvarint(210) = 2+2 bytes; uvarint(200)+uvarint(9) = 2+1.
+        self.assertEqual(len(absolute.raw_payload), 8)
+        self.assertEqual(len(differential.raw_payload), 7)
+
+    def test_differential_roundtrip_random_sequences_and_determinism(self):
+        rng = np.random.RandomState(20260830)
+        for rows, cols, tile_size in ((1, 1, 1), (7, 9, 2),
+                                      (17, 31, 7), (35, 19, 16)):
+            previous = rng.randint(0, 256, size=(rows, cols)).astype(np.uint8)
+            for _ in range(10):
+                current = previous.copy()
+                count = int(rng.randint(0, rows * cols + 1))
+                offsets = rng.choice(rows * cols, count, replace=False)
+                current.reshape(-1)[offsets] = rng.randint(
+                    0, 256, size=count).astype(np.uint8)
+                first, _ = self.roundtrip_diff(current, previous, tile_size)
+                second = codec.encode_payload(current, previous, tile_size,
+                                              sparse_differential=True)
+                self.assertEqual(first.raw_payload, second.raw_payload)
+                previous = current
+
+    def test_rejects_reconstructed_offset_overflow_and_null_change(self):
+        previous = np.zeros((2, 2), dtype=np.uint8)
+        # offset 3 + delta 0 reconstruye offset 4 en un tile de 4 celdas.
+        with self.assertRaisesRegex(codec.RegionalCodecError, "offset SPARSE"):
+            codec.decode_payload(b"\x02\x02\x03\x05\x00\x06", 2, 2, 2, False,
+                                 previous, sparse_differential=True)
+        with self.assertRaisesRegex(codec.RegionalCodecError, "cambio nulo"):
+            codec.decode_payload(b"\x02\x01\x01\x00", 2, 2, 2, False,
+                                 previous, sparse_differential=True)
+        # La canonicidad del uvarint sigue vigente en el modo diferencial.
+        with self.assertRaises(codec.RegionalCodecError):
+            codec.decode_payload(b"\x02\x01\x81\x00\x05", 2, 2, 2, False,
+                                 previous, sparse_differential=True)
+
+    def test_mode_confusion_is_rejected_for_this_fixture(self):
+        # El modo lo declara el ENVELOPE, no el stream: leer con el modo
+        # equivocado no esta garantizado que falle en general, pero este
+        # fixture concreto delata ambas direcciones (offsets al tope del tile).
+        previous = np.zeros((16, 16), dtype=np.uint8)
+        current = previous.copy()
+        current[15, 14] = 7
+        current[15, 15] = 8
+        absolute = codec.encode_payload(current, previous)
+        differential = codec.encode_payload(current, previous,
+                                            sparse_differential=True)
+        self.assertEqual(absolute.raw_payload,
+                         b"\x02\x02\xfe\x01\x07\xff\x01\x08")
+        self.assertEqual(differential.raw_payload,
+                         b"\x02\x02\xfe\x01\x07\x00\x08")
+        # Absoluto leido como diferencial: 254+1+255 = 510 excede el tile.
+        with self.assertRaises(codec.RegionalCodecError):
+            codec.decode_payload(absolute.raw_payload, 16, 16, 16, False,
+                                 previous, sparse_differential=True)
+        # Diferencial leido como absoluto: el 0 rompe el orden creciente.
+        with self.assertRaises(codec.RegionalCodecError):
+            codec.decode_payload(differential.raw_payload, 16, 16, 16, False,
+                                 previous, sparse_differential=False)
+
+    def test_laboratory_packet_carries_and_honors_the_flag(self):
+        rng = np.random.RandomState(93)
+        previous = rng.randint(0, 256, size=(16, 16)).astype(np.uint8)
+        current = previous.copy()
+        current[12, 8] ^= 0x20
+        current[13, 9] ^= 0x20
+        packet = codec.encode_frame(current, previous,
+                                    sparse_differential=True)
+        flags = packet[5]
+        self.assertTrue(flags & codec.PACKET_FLAG_SPARSE_DIFF)
+        decoded = codec.decode_frame(packet, previous)
+        self.assertTrue(np.array_equal(current, decoded.matrix))
+        legacy = codec.encode_frame(current, previous)
+        self.assertFalse(legacy[5] & codec.PACKET_FLAG_SPARSE_DIFF)
+        unknown = bytearray(legacy)
+        unknown[5] |= 0x08
+        with self.assertRaisesRegex(codec.RegionalCodecError, "flags"):
+            codec.decode_frame(bytes(unknown), previous)
+
+    def test_non_bool_mode_is_rejected(self):
+        frame = np.zeros((2, 2), dtype=np.uint8)
+        with self.assertRaises(TypeError):
+            codec.encode_payload(frame, sparse_differential=1)
+        with self.assertRaises(TypeError):
+            codec.decode_payload(b"\x01\x00", 2, 2, 2, True,
+                                 sparse_differential="si")
+
+
 if __name__ == "__main__":
     unittest.main()
