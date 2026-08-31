@@ -123,6 +123,24 @@
     };
   }
 
+  /* CACHE-001 (F6-4): puntero de texto plano hacia el clip versionado.
+   * La primera linea no vacia ni comentario (#) debe ser exactamente
+   * clip.<sha-hex-corto>.asclv (minusculas, 8..64 hex). Cualquier otra cosa
+   * -> "" y el caller cae al clip.asclv historico. Sin JSON (piso ES5). */
+  function parseClipPointer(text) {
+    var lines, line, i;
+    if (typeof text !== "string" || !text.length || text.length > 4096) {
+      return "";
+    }
+    lines = text.split("\n");
+    for (i = 0; i < lines.length; i++) {
+      line = lines[i].replace(/^[\s\r]+|[\s\r]+$/g, "");
+      if (!line || line.charAt(0) === "#") { continue; }
+      return /^clip\.[0-9a-f]{8,64}\.asclv$/.test(line) ? line : "";
+    }
+    return "";
+  }
+
   function GestureGuard(guardMs) {
     this.guardMs = typeof guardMs === "number" ? guardMs : 800;
     this.lastTouch = -1;
@@ -145,6 +163,7 @@
     createToken: createToken,
     appendToken: appendToken,
     createTokenStore: createTokenStore,
+    parseClipPointer: parseClipPointer,
     GestureGuard: GestureGuard
   };
 }));

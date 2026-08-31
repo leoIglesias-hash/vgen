@@ -163,6 +163,17 @@ assert(page.indexOf('s==="ASCLVID3"?20:16') >= 0,
 assert(page.indexOf("tryAttachOverlay(bundleMeta)") >= 0,
   "F6-3: el sidecar embebido en el ASCLVID3 alimenta el overlay sin XHR extra");
 
+/* CACHE-001 (F6-4): puntero mutable -> clip versionado inmutable */
+assert(page.indexOf('src="cache-refresh.js"') >= 0,
+  "el live-player necesita parseClipPointer");
+assert(page.indexOf('var POINTER_URL="./outputs/clip.current.txt"') >= 0);
+assert(page.indexOf('parseClipPointer(ptr.responseText||"")') >= 0,
+  "el puntero se valida con el parser canonico, nunca con eval/JSON");
+assert(page.indexOf('startDownload(name?"./outputs/"+name:CLIP_URL)') >= 0,
+  "sin puntero valido se cae al clip.asclv historico");
+assert(page.indexOf("ptr.onerror=function(){ startDownload(CLIP_URL); }") >= 0,
+  "un puntero inaccesible no debe romper la reproduccion");
+
 /* W-14: robustez heredada del player tradicional */
 assert(page.indexOf("renderer.dispose(true)") >= 0);
 assert(page.indexOf("w.dispose(true)") >= 0);

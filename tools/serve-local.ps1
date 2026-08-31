@@ -4,15 +4,17 @@
 #   -> http://localhost:8123/
 #
 # Imita el despliegue plano del TV (frontend/ como raiz, outputs/ al lado) y
-# responde TODO con Cache-Control: no-store para que el navegador siempre
-# muestre el ultimo artefacto y el ultimo frontend, sin cache vieja.
+# responde con Cache-Control: no-store para que el navegador siempre muestre
+# el ultimo artefacto y el ultimo frontend, sin cache vieja. EXCEPCION
+# (CACHE-001, F6-4): los clips versionados por contenido clip.<sha>.asclv se
+# sirven immutable, como en produccion — su nombre ES su invalidacion.
 # Es herramienta de revision local: no corre en CI ni en el TV.
 $root = Split-Path -Parent $PSScriptRoot
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:8123/")
 $listener.Start()
 Write-Host "sirviendo $root (layout plano, sin cache) en http://localhost:8123/"
-$types = @{ ".html"="text/html; charset=utf-8"; ".js"="application/javascript"; ".css"="text/css"; ".asclv"="application/octet-stream"; ".ascl"="application/octet-stream"; ".mp3"="audio/mpeg"; ".png"="image/png"; ".bin"="application/octet-stream"; ".md"="text/plain; charset=utf-8" }
+$types = @{ ".html"="text/html; charset=utf-8"; ".js"="application/javascript"; ".css"="text/css"; ".asclv"="application/octet-stream"; ".ascl"="application/octet-stream"; ".mp3"="audio/mpeg"; ".png"="image/png"; ".bin"="application/octet-stream"; ".md"="text/plain; charset=utf-8"; ".txt"="text/plain; charset=utf-8" }
 while ($listener.IsListening) {
   try {
     $ctx = $listener.GetContext()
@@ -31,8 +33,12 @@ while ($listener.IsListening) {
       $bytes = [IO.File]::ReadAllBytes($full)
       $ext = [IO.Path]::GetExtension($full).ToLower()
       if ($types.ContainsKey($ext)) { $ctx.Response.ContentType = $types[$ext] }
-      $ctx.Response.Headers.Add("Cache-Control", "no-store, must-revalidate")
-      $ctx.Response.Headers.Add("Pragma", "no-cache")
+      if ([IO.Path]::GetFileName($full) -cmatch '^clip\.[0-9a-f]{8,64}\.asclv$') {
+        $ctx.Response.Headers.Add("Cache-Control", "public, max-age=31536000, immutable")
+      } else {
+        $ctx.Response.Headers.Add("Cache-Control", "no-store, must-revalidate")
+        $ctx.Response.Headers.Add("Pragma", "no-cache")
+      }
       $ctx.Response.ContentLength64 = $bytes.Length
       $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
     } else {

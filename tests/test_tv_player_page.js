@@ -96,6 +96,17 @@ assert(page.indexOf("headerSize+videoLength+audioLength+metaLength!==buffer.byte
   "el bundle no debe aceptar truncado ni bytes anexados");
 assert(page.indexOf("bytes[7]===51?20:16") >= 0,
   "el header ASCLVID3 mide 20 bytes (meta_len)");
+
+/* CACHE-001 (F6-4): puntero mutable -> clip versionado inmutable */
+assert(page.indexOf('var POINTER_SRC=POINTER_DIR+"clip.current.txt"') >= 0);
+assert(page.indexOf('parseClipPointer(pointerXHR.responseText||"")') >= 0,
+  "el puntero se valida con el parser canonico");
+assert(page.indexOf("downloadVideo(manual,forceRefresh,POINTER_DIR+name,true)") >= 0,
+  "un puntero valido descarga el clip versionado como inmutable");
+assert(page.indexOf("forceRefresh && !immutable && xhr.setRequestHeader") >= 0,
+  "un recurso versionado por contenido nunca se fuerza a no-cache");
+assert(page.indexOf("cacheTokens.url(forceRefresh===true),false") >= 0,
+  "el fallback al clip.asclv historico conserva el token de renovacion");
 assert(page.indexOf("mozfullscreenchange") >= 0);
 assert(page.indexOf("MSFullscreenChange") >= 0);
 

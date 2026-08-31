@@ -72,10 +72,13 @@
 <script src="datachannel.js"></script>
 <script src="textlayer.js"></script>
 <script src="textfeed.js"></script>
+<script src="cache-refresh.js"></script>
 <script>
 (function(){
   "use strict";
   var CLIP_URL="./outputs/clip.asclv";
+  /* CACHE-001 (F6-4): puntero mutable -> clip versionado inmutable */
+  var POINTER_URL="./outputs/clip.current.txt";
   var SLOTS_URL="./outputs/clip.slots";
   var DATA_URL="./outputs/data.txt";
   var IMG_URL="./outputs/logo.png";
@@ -547,32 +550,47 @@
     drawFrame(frame);
   };
 
-  var x=new XMLHttpRequest();
-  x.open("GET",CLIP_URL,true); x.responseType="arraybuffer";
-  x.onload=function(){
-    try{
-      loadBundle(x.response);
-      if(bundleMeta){
-        /* F6-3: el sidecar embebido en el ASCLVID3 manda; no se pide el
-           clip.slots externo (via de transicion para v1/v2). */
-        tryAttachOverlay(bundleMeta);
-      } else {
-        var s=new XMLHttpRequest();
-        s.open("GET",SLOTS_URL,true); s.responseType="arraybuffer";
-        s.onload=function(){
-          if(s.status===200 && s.response && s.response.byteLength){
-            tryAttachOverlay(new Uint8Array(s.response));
-          } else {
-            attachStandalone("Sin sidecar ("+SLOTS_URL+"): video sin overlay de matriz.");
-          }
-        };
-        s.onerror=function(){ attachStandalone("Sin sidecar: video sin overlay de matriz."); };
-        s.send();
-      }
-    }catch(err){ log("Error: "+err.message); }
+  function startDownload(clipUrl){
+    var x=new XMLHttpRequest();
+    x.open("GET",clipUrl,true); x.responseType="arraybuffer";
+    x.onload=function(){
+      try{
+        loadBundle(x.response);
+        if(bundleMeta){
+          /* F6-3: el sidecar embebido en el ASCLVID3 manda; no se pide el
+             clip.slots externo (via de transicion para v1/v2). */
+          tryAttachOverlay(bundleMeta);
+        } else {
+          var s=new XMLHttpRequest();
+          s.open("GET",SLOTS_URL,true); s.responseType="arraybuffer";
+          s.onload=function(){
+            if(s.status===200 && s.response && s.response.byteLength){
+              tryAttachOverlay(new Uint8Array(s.response));
+            } else {
+              attachStandalone("Sin sidecar ("+SLOTS_URL+"): video sin overlay de matriz.");
+            }
+          };
+          s.onerror=function(){ attachStandalone("Sin sidecar: video sin overlay de matriz."); };
+          s.send();
+        }
+      }catch(err){ log("Error: "+err.message); }
+    };
+    x.onerror=function(){ log("No se pudo cargar "+clipUrl+" (servir por HTTP con tools/serve-local.ps1)."); };
+    x.send();
+  }
+
+  /* CACHE-001: el puntero (mutable, chico) declara el clip versionado
+     (inmutable). Sin puntero valido se cae al clip.asclv historico. */
+  var ptr=new XMLHttpRequest();
+  ptr.open("GET",POINTER_URL,true);
+  ptr.onload=function(){
+    var name=(ptr.status===200)
+      ? window.ASCILINECacheRefresh.parseClipPointer(ptr.responseText||"")
+      : "";
+    startDownload(name?"./outputs/"+name:CLIP_URL);
   };
-  x.onerror=function(){ log("No se pudo cargar "+CLIP_URL+" (servir por HTTP con tools/serve-local.ps1)."); };
-  x.send();
+  ptr.onerror=function(){ startDownload(CLIP_URL); };
+  ptr.send();
 })();
 </script>
 </body>

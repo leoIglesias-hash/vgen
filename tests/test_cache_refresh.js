@@ -85,6 +85,29 @@ var Cache = require("../frontend/cache-refresh.js");
     "un reloj que retrocede no debe bloquear el control");
 }());
 
+/* CACHE-001 (F6-4): puntero de texto plano hacia el clip versionado. */
+(function testClipPointerParsing() {
+  var parse = Cache.parseClipPointer;
+  assert.strictEqual(parse("clip.b081f4ba1d2e.asclv\n"), "clip.b081f4ba1d2e.asclv");
+  assert.strictEqual(
+    parse("# ASCILINE CACHE-001; sha256=abc\nclip.0123456789ab.asclv\n"),
+    "clip.0123456789ab.asclv",
+    "los comentarios # se saltean; la primera linea util manda");
+  assert.strictEqual(parse("\r\n  clip.deadbeef00aa.asclv \r\n"),
+    "clip.deadbeef00aa.asclv", "CRLF y espacios se recortan");
+  assert.strictEqual(parse("clip.DEADBEEF00AA.asclv"), "",
+    "solo hex minusculas: el puntero es canonico, no permisivo");
+  assert.strictEqual(parse("../secreto/clip.aabbccddeeff.asclv"), "",
+    "sin rutas: el nombre es exacto o no es");
+  assert.strictEqual(parse("clip.abc.asclv"), "", "menos de 8 hex es invalido");
+  assert.strictEqual(parse("clip.asclv"), "", "el nombre historico no es puntero");
+  assert.strictEqual(parse(""), "");
+  assert.strictEqual(parse(null), "");
+  assert.strictEqual(parse(new Array(5000).join("a")), "",
+    "un puntero gigante se descarta sin parsear");
+  assert.strictEqual(parse("# solo comentarios\n#\n"), "");
+}());
+
 (function testDistributedSourceStaysES5() {
   var source = fs.readFileSync(
     path.join(__dirname, "..", "frontend", "cache-refresh.js"), "utf8");

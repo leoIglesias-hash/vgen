@@ -209,9 +209,18 @@ function createRuntime(options) {
 }
 
 function completeInitialDownload(runtime, buffer) {
-  var xhr;
+  var pointer, xhr;
+  /* CACHE-001 (F6-4): la primera XHR es el puntero clip.current.txt; sin
+     responseText valido la descarga cae al clip.asclv historico. */
   assert.strictEqual(runtime.xhrs.length, 1);
-  xhr = runtime.xhrs[0];
+  pointer = runtime.xhrs[0];
+  assert.strictEqual(pointer.url, "./outputs/clip.current.txt");
+  pointer.onload();
+  assert.strictEqual(pointer.onload, null);
+  assert.strictEqual(runtime.xhrs.length, 2,
+    "sin puntero valido la descarga debe caer al clip historico");
+  xhr = runtime.xhrs[1];
+  assert(xhr.url.indexOf("./outputs/clip.asclv") === 0);
   xhr.response = buffer;
   xhr.onload();
   assert.strictEqual(xhr.onload, null);
@@ -289,9 +298,46 @@ function completeInitialDownload(runtime, buffer) {
   assert.strictEqual(oldCanvas.width, 1);
   assert.strictEqual(oldCanvas.height, 1);
   assert.strictEqual(oldCanvas.listenerCount("webglcontextlost"), 0);
+  /* CACHE-001: el refresco vuelve a pasar por el puntero, con no-cache. */
+  assert.strictEqual(runtime.xhrs.length, 3);
+  var refreshPointer = runtime.xhrs[2];
+  assert.strictEqual(refreshPointer.url, "./outputs/clip.current.txt");
+  assert.strictEqual(refreshPointer.headers["Cache-Control"], "no-cache",
+    "el no-cache del refresco aplica al recurso MUTABLE (el puntero)");
+  refreshPointer.onload();
+  assert.strictEqual(runtime.xhrs.length, 4);
+  assert(runtime.xhrs[3].url.indexOf("./outputs/clip.asclv?asclv_refresh=") === 0);
+  assert.strictEqual(runtime.xhrs[3].headers["Cache-Control"], "no-cache");
+}());
+
+/* CACHE-001 (F6-4): un puntero valido descarga el clip versionado inmutable. */
+(function testValidPointerDownloadsImmutableVersionedClip() {
+  var runtime = createRuntime();
+  assert.strictEqual(runtime.xhrs.length, 1);
+  var pointer = runtime.xhrs[0];
+  pointer.responseText = "# ASCILINE CACHE-001; sha256=x\nclip.0123456789ab.asclv\n";
+  pointer.onload();
   assert.strictEqual(runtime.xhrs.length, 2);
-  assert(runtime.xhrs[1].url.indexOf("./outputs/clip.asclv?asclv_refresh=") === 0);
-  assert.strictEqual(runtime.xhrs[1].headers["Cache-Control"], "no-cache");
+  var video = runtime.xhrs[1];
+  assert.strictEqual(video.url, "./outputs/clip.0123456789ab.asclv",
+    "el clip versionado se pide por su nombre exacto, sin token");
+  video.response = bundle(0);
+  video.onload();
+  assert.strictEqual(runtime.stats.webglDraws, 1);
+
+  runtime.elements.refreshVideo.onclick({
+    type: "click", stopPropagation: function () {}, preventDefault: function () {}
+  });
+  assert.strictEqual(runtime.xhrs.length, 3);
+  var refreshPointer = runtime.xhrs[2];
+  assert.strictEqual(refreshPointer.headers["Cache-Control"], "no-cache");
+  refreshPointer.responseText = "clip.aabbccddeeff.asclv";
+  refreshPointer.onload();
+  assert.strictEqual(runtime.xhrs.length, 4);
+  var versioned = runtime.xhrs[3];
+  assert.strictEqual(versioned.url, "./outputs/clip.aabbccddeeff.asclv");
+  assert.strictEqual(versioned.headers["Cache-Control"], undefined,
+    "un recurso versionado por contenido nunca se fuerza a no-cache");
 }());
 
 (function testInvalidBundleReleasesAudioAndPartialState() {

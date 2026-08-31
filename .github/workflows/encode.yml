@@ -140,6 +140,8 @@ jobs:
           python tools/bench_ref.py outputs/clip.asclv \
             --source "assets-src/inputs/${{ inputs.source }}" | tee bench.md
           sha256sum outputs/clip.asclv | tee sha256.txt
+          # CACHE-001 (F6-4): clip versionado por contenido + puntero mutable
+          python tools/make_versioned_clip.py outputs/clip.asclv
           {
             echo "## Resultado del encode"
             echo ""
@@ -165,6 +167,8 @@ jobs:
           name: clip-asclv
           path: |
             outputs/clip.asclv
+            outputs/clip.*.asclv
+            outputs/clip.current.txt
             outputs/clip.slots
             outputs/data.txt
             bench.md

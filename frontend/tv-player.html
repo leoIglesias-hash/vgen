@@ -75,6 +75,9 @@
 
   /* Ruta relativa del servidor PHP. El archivo local conserva su nombre original. */
   var DEFAULT_SRC="./outputs/clip.asclv";
+  /* CACHE-001 (F6-4): puntero mutable hacia el clip versionado inmutable */
+  var POINTER_DIR="./outputs/";
+  var POINTER_SRC=POINTER_DIR+"clip.current.txt";
   var FLAG_RECON_SOFT=16;
   var stage=document.getElementById("stage");
   var cv=document.getElementById("cv");
@@ -629,8 +632,16 @@
     try { xhr.onabort=null; } catch(ignoredAbortHandler) {}
   }
 
+  /* CACHE-001 (F6-4): la descarga tiene dos etapas. Primero el PUNTERO
+     clip.current.txt (mutable, chico; el no-cache del refresco aplica aca):
+     si declara un clip versionado valido, se descarga ese recurso INMUTABLE
+     sin token; si no existe o es invalido, se cae al clip.asclv historico con
+     el token de renovacion. Ambas etapas comparten las guardas de activeXHR. */
   function beginDownload(manual,forceRefresh){
-    var xhr, previous, requestSource;
+    var pointerXHR, previous;
+    function fallback(){
+      downloadVideo(manual,forceRefresh,cacheTokens.url(forceRefresh===true),false);
+    }
     if(!window.XMLHttpRequest){
       setMessage("Este navegador no ofrece carga binaria XHR","No puede abrir ASCLV",true);
       return;
@@ -641,7 +652,54 @@
       try { previous.abort(); } catch(ignored) {}
       releaseXHRHandlers(previous);
     }
-    requestSource=cacheTokens.url(forceRefresh===true);
+    pointerXHR=new XMLHttpRequest();
+    activeXHR=pointerXHR;
+    try {
+      pointerXHR.open("GET",POINTER_SRC,true);
+      if(forceRefresh && pointerXHR.setRequestHeader){
+        try { pointerXHR.setRequestHeader("Cache-Control","no-cache"); } catch(ignoredCacheHeader) {}
+        try { pointerXHR.setRequestHeader("Pragma","no-cache"); } catch(ignoredPragmaHeader) {}
+      }
+    } catch(error){
+      if(activeXHR===pointerXHR){ activeXHR=null; }
+      releaseXHRHandlers(pointerXHR);
+      fallback();
+      return;
+    }
+    pointerXHR.onload=function(){
+      var name="";
+      if(activeXHR!==pointerXHR){ releaseXHRHandlers(pointerXHR); return; }
+      activeXHR=null;
+      releaseXHRHandlers(pointerXHR);
+      if(pointerXHR.status===200){
+        name=window.ASCILINECacheRefresh.parseClipPointer(pointerXHR.responseText||"");
+      }
+      if(name){
+        downloadVideo(manual,forceRefresh,POINTER_DIR+name,true);
+      } else {
+        fallback();
+      }
+    };
+    pointerXHR.onerror=function(){
+      if(activeXHR!==pointerXHR){ releaseXHRHandlers(pointerXHR); return; }
+      activeXHR=null;
+      releaseXHRHandlers(pointerXHR);
+      fallback();
+    };
+    pointerXHR.onabort=function(){
+      if(activeXHR===pointerXHR){ activeXHR=null; }
+      releaseXHRHandlers(pointerXHR);
+    };
+    try { pointerXHR.send(); }
+    catch(error){
+      if(activeXHR===pointerXHR){ activeXHR=null; }
+      releaseXHRHandlers(pointerXHR);
+      fallback();
+    }
+  }
+
+  function downloadVideo(manual,forceRefresh,requestSource,immutable){
+    var xhr;
     xhr=new XMLHttpRequest();
     activeXHR=xhr;
     if(manual){
@@ -652,7 +710,9 @@
     try {
       xhr.open("GET",requestSource,true);
       xhr.responseType="arraybuffer";
-      if(forceRefresh && xhr.setRequestHeader){
+      /* Un recurso versionado por contenido nunca se fuerza a no-cache:
+         invalidar es cambiar el nombre en el puntero, no vaciar la cache. */
+      if(forceRefresh && !immutable && xhr.setRequestHeader){
         try { xhr.setRequestHeader("Cache-Control","no-cache"); } catch(ignoredCacheHeader) {}
         try { xhr.setRequestHeader("Pragma","no-cache"); } catch(ignoredPragmaHeader) {}
       }
