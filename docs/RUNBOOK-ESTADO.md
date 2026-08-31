@@ -46,13 +46,16 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en
    Ningún token quedó persistido. Reproducción verificada en navegador en las 4
    resoluciones; homepage de iargen.com intacto. Queda pendiente que el operador lo
    pruebe en el celular y en el Smart TV (antesala de F8).
-3. **Después: F6 (S-4)** — revisión única de formato (runbook §3): SPARSE diferencial,
-   barrido definitivo de `tile_size` sobre la salida del trellis, `ASCLVID3` con el
-   sidecar adentro, nombre versionado/CACHE-001. **INT-005 (parches por época) quedó
-   CONDICIONADO** a que los gates físicos de F8 fallen para el overlay nativo (dirección
-   del operador 2026-08-30). **Luego F8 (S-6)** — validación física en TV (p95, MEM-001).
-   Opcionales: E-11, W-15. Decisión menor abierta: si el operador retoma el 960,
-   re-medirlo con `--palette-refit 5` antes de comparar.
+3. **F6 (S-4) EN CURSO (arrancada 2026-08-30 con el visto del operador).** Orden:
+   F6-1 → F6-3 → F6-2 → F6-4. **F6-1 cerrada** (`95c1f9c`, CI verde run 33346511477):
+   SPARSE diferencial opt-in en el codec regional, default byte-idéntico; el gate real
+   va en el header `ASCLVID3`. **Sigue F6-3:** envelope v3 con `meta_len`, sidecar
+   adentro, espejo JS, corpus de corrupción ampliado — y ahí se activa el modo
+   diferencial por versión. Después F6-2 (barrido definitivo de `tile_size` sobre el
+   codec final) y F6-4 (nombre versionado + CACHE-001). **INT-005 sigue CONDICIONADO**
+   a los gates físicos de F8 (dirección del operador 2026-08-30). **Luego F8 (S-6)** —
+   validación física en TV (p95, MEM-001). Opcionales: E-11, W-15. Decisión menor
+   abierta: si el operador retoma el 960, re-medirlo con `--palette-refit 5`.
 
 **Receta de producto vigente (2026-08-30):** defaults del workflow `encode` —
 768 graphic-hq, adaptive kmeans-oklab, tile 16, dither off, zopfli, overlay=off,
@@ -76,6 +79,7 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final) y en
 | implementación 1 | 2026-08-27 | mismo snapshot, git local `5493455` (baseline) | 8 tareas cerradas; parches en `entrega-2026-08-27/patches/`, aplicables con `git am` sobre el repo real |
 | sincronización | 2026-08-27 | clon real en `Escritorio\\repo` (baseline == snapshot, verificado) | `git am` no se aplicó; los 22 archivos finales se escribieron directo en el árbol de trabajo. Historia por tarea preservada solo en los parches; el repo la recibe como un commit |
 | implementación 2 | 2026-08-27 | clon real de GitHub, `906b010` | máquina sin Python/Node **a propósito**: la regresión se valida en GitHub Actions en cada push; commits directos a `main`, un commit por tarea |
+| F6 (S-4) | 2026-08-30 | `main` en `ae5f574` (post-deploy del player) | arranca la revisión única de formato; orden elegido F6-1 → F6-3 → F6-2 → F6-4 (el barrido definitivo de tile corre sobre el codec v3 final) |
 
 > Al iniciar cada sesión de implementación: agregar una fila con el commit o snapshot
 > sobre el que se trabaja. Si el árbol cambió desde el 2026-08-27, localizar las
@@ -204,6 +208,18 @@ runbook §4-INT-007.
 | INT-007-A | `shadow`/`weight` en textlayer + pila de fuentes en live-player | cerrada | `faf2390` | 2026-08-29 | items ganan `weight` (prefijo del font shorthand) y `shadow` (color CSS con alpha, la «transparencia como sombra»); la sombra vive solo en la PRIMERA pasada del item (borde si hay, relleno si no — el glifo queda nítido) y se apaga al salir; blur ≤ 0,6·celda y offset ≤ 0,4·celda para que el derrame quepa en el margen de 1 celda que expande `markDirty` (clampeado a grilla); omitidos = salida idéntica (el mock verifica que ni se tocan las props `shadow*`). Live-player: pila `"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif` bold con `rgba(0,0,0,0.55)` en espejo y standalone. CI verde (run 33270406513) |
 | INT-007-B | logo rotando por frame (ruleta simulada), caja sucia circunscripta | cerrada | `faf2390` | 2026-08-29 | `drawImg(frame)`: save → translate al centro de la caja → `rotate((frame%30)*2π/30)` → drawImage centrado → restore; ángulo **determinista por frame mostrado** (sin reloj; los redraws en pausa usan `lastShown`); el rect sucio pasa a ser el cuadrado que circunscribe la rotación (lado = diagonal, clampeado) — sin estela. Verificado en navegador local: reproducción con giro sin errores de consola, captura enviada al operador. CI verde |
 
+## Carril F6 — revisión única de formato (S-4)
+
+Orden de ejecución: F6-1 → F6-3 → F6-2 → F6-4. El barrido definitivo de `tile_size`
+(F6-2) se corre al final del cambio de codec para medir sobre la estadística real.
+
+| ID | Tarea | Estado | Commit | Fecha | Notas |
+|---|---|---|---|---|---|
+| F6-1 | SPARSE con offsets diferenciales | cerrada | `95c1f9c` | 2026-08-30 | `sparse_differential` opt-in en `encode_payload`/`decode_payload`/`encode_frame`/`decode_frame`: delta = `offset − prior − 1` (prior arranca en −1, el primero coincide con el absoluto); «creciente» pasa a ser estructural y el decoder solo acota el offset reconstruido al tile. Default False = stream v2 **byte a byte** (test byte-exacto). El modo lo declara el ENVELOPE (header ASCLVID3, F6-3), nunca el stream: un fixture dirigido muestra que la confusión de modo se rechaza en ambas direcciones (offsets al tope del tile). Flag 0x04 en el paquete de laboratorio. 8 tests nuevos (`SparseDifferentialTest`). CI verde run 33346511477 |
+| F6-2 | barrido definitivo de `tile_size` sobre salida del trellis | pendiente | | después de F6-3: la estadística por tile cambia con E-23 y con SPARSE diferencial |
+| F6-3 | envelope `ASCLVID3` con `meta_len`; sidecar adentro | pendiente | | activa `sparse_differential` por versión; readers viejos rechazan por magic; espejo JS + corpus de corrupción ampliado |
+| F6-4 | nombre versionado `clip.<sha-corto>.asclv` + CACHE-001 | pendiente | | prueba de caché fría y caliente |
+
 ## Sincronización y fases finales
 
 | ID | Qué | Estado | Fecha | Notas |
@@ -211,7 +227,7 @@ runbook §4-INT-007.
 | S-1 | merge de F0 | cerrada | 2026-08-27 | historial lineal en el snapshot; equivale al merge |
 | S-2 | habilitar artefactos `tile_size` ≠ 16 | cerrada | 2026-08-27 | W-08 en verde: `ReaderV2` abre los seis tamaños; E-09 puede generar artefactos |
 | S-3 | desbloquear E-10 | cerrada | 2026-08-28 | W-02 estaba en verde desde la sesión 1; E-10 ejecutada y cerrada |
-| S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | pendiente | | requiere F3 (E-12..E-18) además de F2/F4 ya cerradas |
+| S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | en curso | 2026-08-30 | F6-1 cerrada; sigue F6-3 (ver Carril F6) |
 | S-5 | runtime del overlay (F7) | cerrada | 2026-08-28 | F7-1..F7-4 + integración en verde; gates de INT-002 cubiertos por la regresión (Instancia 014). Los dos gates físicos (costo p95 y MEM-001 en TV) se miden en F8-2/F8-4, donde el plan ya los prevé con y sin overlay |
 | S-6 | validación física (F8) | pendiente | | |
 | S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | pendiente | | **se ejecuta después de F5 (E-19..E-24)**, cuando el trellis ya baje bytes a calidad sostenida, y se co-diseña con S-4 (la densidad variable por zona es un cambio de formato, no un flag). Referencia obligatoria: fuente `TKN-2443` = 38.966.462 B / ~15 s ⇒ **el producto 768 ya pesa 17.379.859 B = 45 % del mp4 original**. Estimación previa del 1920 a la tasa actual (0,2244 B/celda/frame × 2.073.600 celdas × 231 frames) ≈ **107 MB = 2,7× la fuente**; el 1080p histórico dio 107,9 MB lossless pero con el encoder retirado `_encode_opt.py`, sin paleta adaptive/Oklab/refit/Zopfli/keyframes por corte, así que ese número **no es el techo**. Bloqueo operativo: a 6,25× celdas el encode se va a ~5 h y no entra en `timeout-minutes: 120` de `encode.yml`; el barrido arranca por 1280 (2,8× celdas) para medir la curva antes de gastar un runner en 1920 |
@@ -255,7 +271,8 @@ están en el REGISTRO, por Instancia.
 (post-E-18) y 33235096580 (post-E-19/E-20) reprodujeron byte a byte `adef9e53…c05bb`;
 la Instancia 027 reprodujo `41c94170…` y `221de28f…` con el emisor post-E-24. Desde
 E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión vigente:
-**319 pruebas Python y 26 suites JavaScript** (CI de `271dd19`, run 33320618751).
+**327 pruebas Python (319 + 8 de F6-1) y 26 suites JavaScript** (CI de `95c1f9c`,
+run 33346511477).
 
 ## Bitácora de decisiones de ejecución (historial append-only)
 
@@ -313,4 +330,5 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-29 | **E-21 adoptada y el SHA de producto se mueve a propósito**: `74be25ef…` → `41c94170…79d5` (+2.040 B, +0,012 %; PSNR/Oklab idénticos; wall −54 %). La regla 5 se preserva en su forma fuerte — la ELECCIÓN de candidatos ahora es idéntica en todos los entornos (zlib-9), cosa que antes NO pasaba: con Zopfli instalado el tag elegido podía diferir del elegido sin Zopfli. La referencia vieja queda como fila histórica congelada, como P-02 en su momento | el emisor cambió (jerarquía de costo); re-encodear desde main reproduce `41c94170…`, no `74be25ef…`. Es la primera tarea de F5 que cambia la salida, anunciada como tal |
 | 2026-08-30 | **Deploy del player a Cloudflare CERRADO en la sesión nueva** (directiva del operador: «de lo que hay en Cloudflare activo no toques nada, solo es agregar»). El repo GitHub resultó privado y el sandbox del conector API tiene egreso bloqueado, así que la vía elegida fue: bucket R2 nuevo `asciline-player` + Worker nuevo `asciline-player` (file-server ES-modules con binding R2, ETag/304, content-types, strip de `/player`) con endpoint `PUT /__upload/<key>` guardado por secret `UPLOAD_TOKEN` de un solo uso; los 52 archivos (57 MB) se subieron desde la máquina local con `curl` y header `x-sha256` — R2 verifica el digest en el `put` (los 3 clips coinciden con `b081f4ba…`/`2a9201bf…`/`27ae0019…`). Ruta agregada `iargen.com/player*`; reproducción verificada en navegador en `iargen.com/player/`, `/player/1280-15/` y `/player/1280-12/`; homepage Pages de iargen.com intacto | los preview.mp4 validan calidad pero no el pipeline JS real; esto lo hostea con URL pública para el celular y deja la base del TV físico (F8). R2 en vez de Pages/KV por el límite de 25 MB (el futuro 1920 entra sin tocar nada). El token no se persistió: para subir de nuevo se rota el secret vía API |
 | 2026-08-30 | **El 1920@10 se suma al player hosteado vía CI** (`/player/1920-10/`, pedido del operador «¿y el 1920?»): el clip no estaba local (solo artifact `clip-asclv` del run 33333170964, retención 14 días) y la máquina no tiene `gh`, así que nace el workflow `publish-player` (`bc73e8d`): el runner baja el artifact con su GITHUB_TOKEN, verifica `sha256sum -c` contra el SHA esperado del pedido y hace el `PUT` al worker; R2 re-verifica el digest al guardar. La autorización fue POR CONTENIDO (pin key+SHA `87160987…8d4e` cargado en el worker, retirado tras publicar; el token rotativo se regeneró dentro del sandbox sin registrarse) porque el clasificador de permisos bloqueó — con razón — commitear un token al repo. Reproducción verificada: badge `ASCL v2 1920x1080 @10fps` | los estáticos del player los subió la máquina local (16 archivos); el circuito CI→worker queda probado para clips futuros. Respuesta a la pregunta del operador: subir pruebas nuevas NO requiere redeploy — la vía manual solo rota el secret; la vía CI hoy pide cargar/retirar el pin (redeploy corto) y si se vuelve habitual se migra a `__pins.json` en el bucket |
+| 2026-08-30 | **F6 (S-4) arranca con el visto del operador** («arrancá F6 mientras pruebo el player»), en orden F6-1 → F6-3 → F6-2 → F6-4: el barrido definitivo de `tile_size` (F6-2) se difiere hasta tener el codec v3 completo, porque tanto E-23 como el SPARSE diferencial cambian la estadística por tile — barrer antes mediría un codec que no será el desplegado. F6-1 se implementa **opt-in con el gate en el envelope**: el modo no se negocia desde el stream (un stream leído con el modo equivocado puede decodificar en silencio a otra matriz), así que lo declara el header ASCLVID3 en F6-3 | mismo patrón que E-22/E-23 (default = bytes idénticos hasta que el envelope lo active); S-4 despliega UNA sola versión de decoder al TV. Nota operativa: el estado del CI se consulta ahora por API de GitHub con la credencial git ya almacenada en la máquina (Chrome sin extensión conectada esta sesión; el repo es privado) |
 

@@ -108,11 +108,13 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
   `PUT /__upload/<key>` con `x-sha256`; desde CI, workflow `publish-player`
   (pin por contenido en el worker, sin secretos en el repo).
   Falta que el operador lo pruebe en celular / Smart TV (antesala de F8).
-- **Después:** F6 (S-4: ASCLVID3, SPARSE diferencial, barrido definitivo de tile,
-  CACHE-001; **INT-005 por época quedó CONDICIONADO** a que los gates físicos de F8
-  fallen para el overlay nativo — dirección del operador 2026-08-30) → F8 (S-6: TV
-  físico, p95, MEM-001). Opcionales: E-11, W-15. Menor: si se retoma el 960,
-  re-medirlo con refit 5.
+- ▶ **F6 (S-4) EN CURSO (2026-08-30, orden F6-1 → F6-3 → F6-2 → F6-4):** F6-1
+  cerrada (`95c1f9c`: SPARSE diferencial opt-in, default byte-idéntico; el gate va
+  en el header v3). **Sigue F6-3** (envelope ASCLVID3 + sidecar adentro + espejo JS).
+  **INT-005 por época sigue CONDICIONADO** a que los gates físicos de F8 fallen para
+  el overlay nativo (dirección del operador 2026-08-30).
+- **Después:** F8 (S-6: TV físico, p95, MEM-001). Opcionales: E-11, W-15. Menor: si
+  se retoma el 960, re-medirlo con refit 5.
 
 > Docs podados el 2026-08-30: el runbook de implementación solo contiene lo pendiente;
 > los benchmarks/estados históricos se retiraron al historial Git (lista en
