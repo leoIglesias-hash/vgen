@@ -93,15 +93,52 @@ sin audio, sin intervención, sin variantes de bitrate.
 
 ## 3.b Lo que salió (emisión del 2026-09-01, H-9)
 
-Workflow `emitir-v0`, run 33559631360, desde el máster `dcd6afb6…1632a`
-(1280×720, 15 fps, **231 cuadros** = 15,4 s). 2 min 22 s de runner, RSS 487 MB.
+Workflow `emitir-v0`, run **33566441576** (la segunda corrida, la que ya trae los
+empaquetados), desde el máster `dcd6afb6…1632a` (1280×720, 15 fps, **231
+cuadros** = 15,4 s).
 
 | Pieza | Bytes | vs. Baseline | SHA-256 (12) |
 |---|---:|---:|---|
-| `v0-h264-baseline.mp4` | 9.551.693 | — | `97bb642a6dfc` |
-| `v0-h264-main.mp4` | 8.686.512 | **−9,1 %** | `e1037ead463e` |
+| `v0-h264-baseline.mp4` | 9.551.715 | — | `cf927d578ab9` |
+| `v0-h264-main.mp4` | 8.686.438 | **−9,1 %** | `b9b1e1f542fe` |
 | `v0-vp9.webm` | 4.411.693 | **−53,8 %** | `5be4650747fd` |
 | `v0-vp9-alpha.webm` | 4.664.676 | (lleva plano alfa) | `2b1fe6c3bfde` |
+| `hls-ts/stream.m3u8` | 9.795.953 | +2,6 % (sobrecarga TS) | 16 segmentos |
+| `hls-fmp4/stream.m3u8` | 9.555.175 | +0,04 % | 16 segmentos + init |
+| `dash/manifest.mpd` | 9.555.712 | +0,04 % | 16 segmentos + init |
+
+**Un hallazgo que vale por sí solo:** los segmentos de `hls-fmp4/` y los de
+`dash/` son **byte-idénticos entre sí** (mismo md5, mismo tamaño, uno a uno).
+O sea: un solo juego de piezas, dos manifiestos distintos. Es exactamente la
+tesis del formato —piezas + manifiesto— comprobada sin escribir una línea de
+muxer. Y la sobrecarga de empaquetar en CMAF/DASH es **0,04 %**; solo el TS
+clásico cuesta 2,6 %.
+
+### ⚠ El determinismo NO se cumplió en el carril H.264
+
+La segunda corrida es, sin quererlo, una prueba del invariante 7 («mismo máster +
+mismos parámetros → mismos bytes»). Resultado, textual:
+
+- **VP9 y VP9+alfa: byte-idénticos** entre las dos corridas. ✔
+- **Baseline y Main: NO.** Baseline 9.551.693 → 9.551.715 (+22 B), Main
+  8.686.512 → 8.686.438 (−74 B), con SHA-256 distintos. ✘
+
+Lo verificado sobre eso (no supuesto): **misma versión de ffmpeg** (6.1.1-3ubuntu5
+en las dos), **línea de opciones de x264 idéntica** —incluidas `threads=1`,
+`lookahead_threads=1`, `sliced_threads=0`—, y el primer byte distinto cae en el
+**offset 605**, dentro de las tablas de muestras del `moov`: cambiaron los
+tamaños de los cuadros, así que difiere el bitstream y no solo el contenedor.
+
+**Hipótesis, marcada como hipótesis:** x264 con `mbtree` usa punto flotante, y
+los runners de GitHub no son todos el mismo CPU; distintas rutas SIMD pueden
+redondear distinto y cambiar decisiones de asignación de bits. Lo consistente con
+eso es que VP9 (entero) sí sea determinista. **No está comprobado.** Lo resuelve
+**H-14**: emitir la misma pieza dos veces *dentro de la misma corrida* — si ahí
+salen iguales, el problema es entre máquinas y no dentro del encoder.
+
+Esto **no invalida las mediciones de v0** (las dos son codificaciones válidas del
+mismo máster y difieren en 0,0002 %), pero sí es una deuda abierta contra un
+invariante del proyecto, y queda escrita como tal.
 
 **Dos lecturas, las dos honestas:**
 

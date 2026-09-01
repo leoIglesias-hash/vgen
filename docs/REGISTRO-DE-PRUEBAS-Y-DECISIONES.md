@@ -3296,3 +3296,81 @@ tiene que estar guardado en el repo **antes** de actualizarlo»):
 
 Ningún token se persistió, ni acá ni en el repo. Falta lo único que no podemos
 hacer nosotros: **abrirlo en los aparatos**. Eso cierra H-10.
+
+## El pack v0 suma HLS y DASH; y el determinismo del carril H.264 falla (2026-09-01)
+
+Pregunta del operador: *«¿Y el HLS/DASH lo contemplaste?»*. La respuesta honesta
+era **a medias**: DASH estaba adentro como **modelo de datos** (decidido, §2 del
+diseño), pero el pack v0 eran **cuatro archivos progresivos** y lo único que la
+página decía de HLS/DASH era `canPlayType` — una declaración, no un hecho, y
+encima la menos confiable que hay (los WebViews de Android suelen devolver cadena
+vacía para `application/vnd.apple.mpegurl` aunque la plataforma reproduzca).
+
+**Se agregaron tres empaquetados, todos por REMUX (`-c copy`)** desde la pieza
+Baseline: `hls-ts/`, `hls-fmp4/` (CMAF) y `dash/`. No recodifican nada; son los
+mismos bytes de video envueltos distinto. Prueban dos cosas de una:
+
+- **S7 — camino D:** si algún aparato reproduce HLS/DASH nativo. Donde exista,
+  **el muxer ES5 de H-8 puede sobrar en ese perfil**: se emite la playlist y la
+  plataforma hace la costura, sin MSE. Por eso no podía quedar para después del
+  muxer. La apuesta es débil a propósito (el WebView de la caja es Android).
+- **S8 — piezas intercambiables sin recodificar**, que es la afirmación central
+  del formato.
+
+El GOP de 15 cuadros a 15 fps es lo que permite cortar segmentos de 1 s
+**exactamente en cuadro clave**: la estructura elegida en v0 habilita el
+empaquetado.
+
+### Resultado de la emisión (run 33566441576)
+
+| Empaquetado | Bytes | Sobrecarga vs. la pieza progresiva |
+|---|---:|---:|
+| `hls-ts/` (MPEG-TS) | 9.795.953 | +2,6 % |
+| `hls-fmp4/` (CMAF) | 9.555.175 | **+0,04 %** |
+| `dash/` | 9.555.712 | **+0,04 %** |
+
+**Hallazgo que vale por sí solo:** los 16 segmentos de `hls-fmp4/` y los 16 de
+`dash/` son **byte-idénticos entre sí**, uno a uno (mismo md5, mismo tamaño). Un
+solo juego de piezas, dos manifiestos distintos. Es la tesis del formato
+comprobada sin escribir una línea de muxer.
+
+### ⚠ El invariante 7 no se cumple en el carril H.264
+
+La re-emisión funcionó, sin buscarlo, como prueba de determinismo:
+
+- **VP9 y VP9+alfa: byte-idénticos** entre las dos corridas. ✔
+- **Baseline y Main: NO.** 9.551.693 → 9.551.715 (+22 B) y 8.686.512 → 8.686.438
+  (−74 B), con SHA-256 distintos. ✘
+
+Verificado, no supuesto: **misma versión de ffmpeg** (6.1.1-3ubuntu5 en las dos
+corridas), **línea de opciones de x264 idéntica** —`threads=1`,
+`lookahead_threads=1`, `sliced_threads=0`—, y el primer byte distinto en el
+**offset 605**, dentro de las tablas de muestras del `moov`: cambiaron los
+tamaños de cuadro, o sea que difiere el **bitstream**, no solo el contenedor.
+
+**Hipótesis (marcada como tal, sin comprobar):** `mbtree` de x264 usa punto
+flotante y los runners no son todos el mismo CPU; distintas rutas SIMD pueden
+redondear distinto y cambiar la asignación de bits. Es consistente con que VP9
+—entero— sí sea determinista. Se abre **H-14** para separar «no determinista» de
+«depende de la máquina»: emitir la misma pieza dos veces *dentro de la misma
+corrida*, y registrar `lscpu`.
+
+No invalida v0 (0,0002 % de diferencia, las dos son codificaciones válidas del
+mismo máster), pero es deuda abierta contra un invariante y queda escrita.
+
+### Publicación
+
+**59 keys** bajo `v0/` (las 4 piezas, los 3 empaquetados con sus 49 segmentos,
+`MANIFEST.tsv` e `index.html`), las 59 verificadas bajando y comparando SHA-256
+contra el archivo local: **0 diferencias**. Token efímero quemado (403).
+
+Hizo falta **un segundo redeploy del worker** el mismo día: `m3u8`, `mpd`, `ts` y
+`m4s` salían como `application/octet-stream`. Con HLS eso es peor que con un mp4
+—el tipo de la **playlist** es lo primero que mira el reproductor—, así que el
+aparato podría haber refutado S7 por culpa del servidor. Copia guardada y
+commiteada (`00deb9f`) antes de desplegar; verificado después: `m3u8` →
+`application/vnd.apple.mpegurl`, `mpd` → `application/dash+xml`, `ts` →
+`video/mp2t`, `m4s` → `video/iso.segment`, y la raíz del player intacta (200,
+26.679 B). **Detalle a no re-descubrir:** la primera comprobación del `m4s` dio
+`octet-stream` por caché de borde; con un parámetro anti-caché salió bien. Hay
+que verificar con cache-buster después de cambiar tipos.
