@@ -2707,3 +2707,40 @@ decide el ataque (fps del clip, resolucion, optimizar inflate, W-21).
 
 Esto es territorio F8 (p95 en TV real) llegando por la puerta del sintoma: DIAG-003
 queda como el diagnostico puntual; F8 sigue siendo la fase que lo resuelve.
+
+#### DIAG-003: alternativas discutidas con el operador (2026-09-01, sin decision aun)
+
+El operador pregunto si se puede aprovechar el decodificador de video POR HARDWARE de
+las TV box (VP8/H.264: silicio dedicado, lo unico que estas cajas hacen bien) con
+nuestro formato. Analisis:
+
+1. **Contrabandear indices en H.264** (indices como grises espaciados x8, redondeo al
+   decodificar -> indice exacto pese al lossy): el truco existe pero exige LEER los
+   pixeles por cuadro (`getImageData`, 921.600 celdas) y repintar -> mas CPU que el
+   `inflate` que ya no entra; y el remapeo en GPU es el WebGL que esta caja no
+   presenta. **Descartado para esta caja.**
+2. **MSE** (alimentar `<video>` por JS): no cambia el idioma del decodificador, solo
+   quien acerca los bytes. No resuelve; util a futuro para streaming.
+3. **HIBRIDO (candidato):** el video base lo presenta `<video>` por hardware, pero
+   renderizado POR NUESTRO ENCODER desde las celdas ya decididas (nuestra paleta/
+   cortes/look; el H.264 agrega perdida chica de transporte, criterio ya adoptado
+   "perdida minima aceptable si el ahorro lo vale"). La INTERVENCION (numeros, texto,
+   logo, canal de datos) queda en el canvas encima, que pasa de repintar ~921.600
+   celdas/cuadro a solo la zona intervenida. Esquiva los DOS problemas medidos
+   (WebGL roto: no se usa; CPU corta: el peso va al silicio). **Costo: toca el
+   invariante de un-solo-layer (pasarian a ser dos: video + canvas de intervencion).
+   Es decision de PRODUCTO del operador, pendiente.**
+
+La filosofia del proyecto se conserva en el hibrido: el encoder caro decide todo
+offline y el TV solo ejecuta; lo que cambia es el transporte del video base.
+
+**Pendiente del operador para decidir (mañana):**
+- Numeros del HUD de `diagnostic-player.html?renderer=canvas2d` en el WebView de la
+  caja (FRAME p50/p95, presupuesto, drops, tarde, costo por etapa inflate/rgba/draw)
+  -> dice si el player actual tiene chance en estas cajas con optimizacion.
+- Probar un mp4 en un `<video>` en ese WebView (p.ej. el `preview.mp4` del workflow
+  encode) -> confirma que el carril hardware funciona dentro del WebView de la app
+  (a veces las apps lo tienen desactivado).
+
+Con esas dos respuestas se decide: optimizar el player actual (fps/resolucion/inflate/
+W-21) o diseñar el hibrido formalmente.

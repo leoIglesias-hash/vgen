@@ -52,10 +52,15 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 > Con Canvas2D los blancos desaparecen pero el video sigue **entrecortado**: muestra
 > algunos frames y saltea otros. Es la cadencia de W-20 descartando cuadros tarde →
 > el trabajo por cuadro supera el presupuesto (66,7 ms a 15 fps) en esa CPU. Hipótesis:
-> `inflate` (ya era el 58 % en PC). **Próxima acción: medir, no suponer** —
-> `diagnostic-player.html?renderer=canvas2d` en el mismo WebView (ya está en el
-> servidor del operador) y leer FRAME p50/p95, drops y el costo por etapa del HUD.
-> Con esos números se elige el ataque (fps, resolución, inflate, W-21). Es territorio
+> `inflate` (ya era el 58 % en PC). **Próxima acción: dos datos del operador** —
+> (1) el HUD de `diagnostic-player.html?renderer=canvas2d` en el mismo WebView
+> (FRAME p50/p95, drops, costo por etapa) y (2) probar un mp4 en un `<video>` en ese
+> WebView (¿funciona el decode por hardware ahí adentro?). Con esos dos se decide entre
+> optimizar el player actual (fps/resolución/inflate/W-21) o el **HÍBRIDO candidato**
+> (REGISTRO 2026-09-01): video base por `<video>` hardware pero renderizado por
+> nuestro encoder desde las celdas decididas + la intervención en el canvas encima
+> (solo la zona intervenida → entra en cualquier caja). El híbrido toca el invariante
+> de un-solo-layer: **decisión de producto del operador, pendiente.** Es territorio
 > F8 llegando por el síntoma.
 >
 > **No cerrar F10 ni empezar F11 hasta resolver DIAG-002/003.** El detalle del
