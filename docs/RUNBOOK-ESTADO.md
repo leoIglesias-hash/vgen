@@ -15,199 +15,62 @@ Reglas de uso:
 4. Toda decisión que desvíe del runbook se anota en la bitácora de abajo con fecha y
    motivo. El runbook no se edita en silencio.
 
-## Próxima acción (actualizado 2026-08-31, plan nuevo aprobado por el operador)
+## Próxima acción (actualizado 2026-09-01 — DECISIÓN TOMADA: nace ASCILINE-hybrid)
 
-Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
-[`ejecutados/`](ejecutados/README.md) y en el
-[`REGISTRO`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md); no hace falta releerlos para seguir.
+**El operador decidió la dirección el 2026-09-01: el proyecto adopta el carril
+mp4/híbrido y continúa en este repo, `leoIglesias-hash/ASCILINE-hybrid`** (clon
+con la historia completa de `ASCILINE-video` — `main` + `assets` —; el repo
+anterior queda congelado como antecesor, con un aviso de continuación). Sus
+palabras: *«el paradigma cambió… necesitamos trabajar con mp4 pero logrando
+mejoras de reproductividad, y para eso tendremos que hacer nuevas
+investigaciones»*.
 
-> ### 🔴 DIAG-002 — PANTALLAZOS BLANCOS EN TV BOX (reporte del operador, 2026-08-31)
->
-> **Es lo próximo, antes que F10.** El operador probó el player **en un WebView de TV
-> box** y ve **pantallazos blancos entre las imágenes**. Sus palabras: *«eso es algo
-> crítico… es muy grave y deberíamos estudiarlo»*. Un flash blanco en un televisor es
-> peor que cualquier ganancia de bytes o de milisegundos: rompe el producto.
->
-> Lo que se sabe hasta ahora: el reporte es sobre lo que estaba **publicado antes** de
-> esta instancia, o sea `live-player.html` **sin** cadencia ni pre-decode (la raíz recién
-> los estrenó ahora). No está establecido todavía si el motor nuevo lo mejora, lo empeora
-> o es indiferente — **eso es parte de lo que hay que medir, no algo que se pueda
-> suponer**. Tampoco está confirmado si el blanco viene del canvas, del fondo de la
-> página o de una re-creación del contexto.
->
-> **Primer corte (Instancia 040): el blanco NO está en los datos** — el run 33440003966
-> decodificó el clip publicado: cuadro más claro = 20,7 % de celdas casi blancas, luma
-> media máxima 160,5, cero saltos bruscos. Encoder y formato descartados.
->
-> **CAUSA CONFIRMADA (Instancia 041): el camino WebGL de esa GPU no presenta.** La
-> prueba decisiva en el mismo WebView dio: auto (WebGL) = pantallazos; con
-> `?renderer=canvas2d` = **sin pantallazos**. El contexto se crea, `init()` da true,
-> no llega `webglcontextlost`: ningún fallback se entera. **Arreglo pendiente = W-26:**
-> la raíz (`live-player.html`) hoy no acepta `?renderer=` y elige WebGL sin salida —
-> todas las páginas necesitan el escape por URL, y hay que decidir el default para
-> WebViews de TV box.
->
-> ### 🔴 DIAG-003 — SIN FLUIDEZ EN LA TV BOX, CON CUALQUIER RENDERER (Instancia 041)
->
-> Con Canvas2D los blancos desaparecen pero el video sigue **entrecortado**: muestra
-> algunos frames y saltea otros. Es la cadencia de W-20 descartando cuadros tarde →
-> el trabajo por cuadro supera el presupuesto (66,7 ms a 15 fps) en esa CPU. Hipótesis:
-> `inflate` (ya era el 58 % en PC). **Pista nueva (2026-09-01):** por el escalado de
-> la app, el WebView le reporta a la página un viewport enorme (~3840×2160) — el
-> compositor estira cada frame a 4K, sospechoso adicional del entrecortado. Para
-> medirlo, el diagnostic ahora publica una sección **«Pantalla / escala»** (ventana
-> CSS, físico×dpr, pantalla, canvas buffer vs CSS con el factor de estirado) y el HUD
-> escala solo con el viewport (`?hud=N` lo fija; teclas +/− lo ajustan) porque a 12 px
-> era ilegible en la caja. **Dato (1) RECIBIDO (2026-09-01, tabla completa en el
-> REGISTRO): FRAME p50 = 290 ms contra 66,7 de presupuesto (4,3×; p95 = 1193 = 18×),
-> `inflate` solo ya come el presupuesto (110 ms p50), drops 324.** Confirmado además:
-> la app da al WebView 3840×2160 sobre un panel físico de 1280×720 (9× de píxeles
-> regalados al compositor). Veredicto: **el player JS no llega a 15 fps en estas cajas
-> por optimización** — el único carril JS es degradar (~640×360 @ 8–10 fps entra
-> justo). **Dato (2) RECIBIDO y POSITIVO (2026-09-01): el carril de video por
-> hardware VIVE en ese WebView.** Se midió con `frontend/tv-video-test.html` (página
-> nueva, ES5: fps de decode, frames caídos, atascos, deriva reloj-video; vistas
-> adaptada y `?view=1:1`; HUD proporcional). Dos escalones:
-> 1. **Fuente crudo** (1920×1080 ~24 fps, 38,9 MB): «aceptable, un poco lento; en
->    1:1 mucho menos» — la superficie 4K cobra peaje hasta al video por hardware.
-> 2. **`producto.mp4`** — el `.asclv` PRODUCTO decodificado a H.264 (1280×720 @15,
->    mismos píxeles que la receta: run encode 33532310754 con `preview=true`, extra
->    `--cols 1280`, sin zopfli/sweep porque solo cambian bytes): palabras del
->    operador, *«realmente esto mejoró muchísimo… reproduce muy bien nuestro
->    producto»*. **Primera reproducción fluida del producto en la caja.**
->
-> Dato económico: `producto.mp4` = **4.130.240 B (4,1 MB)** vs 24,5 MB del `.asclv`
-> (17 %) y 38,9 MB del fuente (10,6 %): el transporte H.264 de nuestro look es ~6×
-> más chico que nuestro formato.
->
-> **PRÓXIMA ACCIÓN = DECISIÓN DE PRODUCTO DEL OPERADOR (sin tomar, 2026-09-01):**
-> adoptar o no el **HÍBRIDO** — base por `<video>` hardware con el mp4 renderizado
-> por nuestro encoder desde las celdas decididas + la intervención (números, texto,
-> logo, canal de datos) en el canvas encima repintando solo la zona intervenida.
-> El operador dijo: *«puede ser que cambie la dirección del proyecto… luego
-> tomaremos decisiones»*. Qué toca si se adopta: (a) el invariante de un-solo-layer
-> pasa a dos capas (video + canvas de intervención); (b) se abre un diseño formal
-> (DISENO-HIBRIDO) — sincronía intervención↔video, distribución del mp4 (CACHE-001
-> por contenido aplica igual), rol del `.asclv` (¿sigue siendo el máster del que se
-> emite el mp4? el encoder ya lo hace hoy vía `preview=true`); (c) F10/F11 se
-> re-evalúan bajo la nueva dirección. Independiente de la decisión: **W-26 sigue
-> pendiente** (escape `?renderer=` en la raíz) y conviene pedirle a la app que el
-> WebView reporte el tamaño del panel (hoy 3840×2160 sobre panel de 1280×720 = 9×
-> de píxeles regalados).
->
-> **No cerrar F10 ni empezar F11 hasta que el operador decida la dirección
-> (DIAG-002/003).** El detalle del diagnóstico está en el REGISTRO (Instancias
-> 040-042) y la evidencia local en `outputs/producto.mp4` (gitignored).
+El porqué, medido en la caja real (REGISTRO, DIAG-002/003, 2026-08-31..09-01):
 
-**F9 (S-8): CERRADA el 2026-08-31** — código, CI verde y frontend publicado en las cuatro
-carpetas. Orden acordado con el operador (Instancia 030): F9 → F10 → F11 → F8 →
-DIAG-001, **ahora con DIAG-002 adelante de todo** por gravedad.
+- el player 100 % JS **no llega a 15 fps ahí** (FRAME p50 290 ms contra 66,7 de
+  presupuesto; el cuello es CPU — `inflate` solo ya come el presupuesto — y la
+  vista 1:1 solo mejora ~20 %); además el WebGL de esa GPU **no presenta**
+  (pantallazos blancos; canvas2d limpio);
+- el mismo producto decodificado a H.264 (`producto.mp4`: el `.asclv` máster
+  `dcd6afb6…1632a` → 1280×720 @15, 4.130.240 B) *«reproduce muy bien»* por
+  `<video>` con decodificador de **hardware** — y pesa **6× menos** que el
+  `.asclv` (17 %) y 10,6 % del mp4 fuente.
 
-> **BLOQUEO RESUELTO el 2026-08-31 (Instancia 040) — el repo de trabajo se mudó.** El
-> diagnóstico era correcto: los minutos de un repo privado se le cobran **al dueño del
-> repo**, y el Pro del operador está en **`leoIglesias-hash`**, no en `tablerosapp-ctrl`.
-> Decisión del operador: *«ahora podrías descargar el proyecto y subirlo a mi github,
-> para poder seguirlo desde ahí; luego lo sincronizamos en los puntos de guardado, y al
-> terminar dejo todo en tablerosapp-ctrl»*. Se creó
-> **`leoIglesias-hash/ASCILINE-video`** (privado) con el espejo completo —`main`,
-> `assets`, `feature/quality-optimization` y los 7 tags— y se renombraron los remotos:
->
-> | remoto | apunta a | rol |
-> |---|---|---|
-> | `origin` | `leoIglesias-hash/ASCILINE-video` | **remoto de trabajo**: acá se empuja y acá corre el CI |
-> | `ctrl` | `tablerosapp-ctrl/ASCILINE-video` | destino final; se sincroniza en los puntos de guardado |
->
-> **Actions vuelve a correr:** el run de `866f2f1` (todo el código de F9, W-22..W-25
-> incluidas) pasó **verde los tres jobs** (`py3.8`, `py3.11`, `py3.11 + zopfli`) en 52 s.
-> Con eso el modelo de trabajo se restablece: una tarea vuelve a poder cerrarse con CI en
-> verde.
+**El paradigma nuevo:** el encoder sigue decidiendo todo offline y el `.asclv`
+sigue siendo el **máster** determinista; lo que viaja al TV es el **mp4 emitido
+desde ese máster** (`preview=true` del workflow `encode`), y la **intervención**
+(números, texto, logo, canal en vivo) va en un canvas encima — dos capas, por
+decisión del operador. El player JS queda como reproductor de escritorio y banco
+de verificación del máster: se mantiene, no crece.
 
-1. **F9 tiene TODAS sus tareas cerradas y medidas** (`W-16`..`W-20`; `W-21` sigue
-   opcional). `W-19` cerró con el veredicto del operador —no distingue `soft` de
-   `nearest`, así que el default sigue `nearest`, 1 tap y bit-idéntico— y `W-20` con su
-   medición en pantalla real: **p95 14,90 ms contra 66,7 de presupuesto, drops 0**
-   (Instancias 036 y 037). El ruido que el operador había reportado eran **dos defectos
-   reales**, arreglados en `af6bfff`.
-2. **Frontend PUBLICADO el 2026-08-31** (Instancia 038): 24 keys = (los 4 archivos que F9
-   cambió + `tv-player.html` y `diagnostic-player.html`, nuevas) × las 4 carpetas, los 24
-   verificados byte-idénticos al repo. **Aditiva: los otros 11 archivos conservan su
-   `md5`**, overlay/textos/datachannel intactos. Antes se guardó en el repo lo que estaba
-   vivo (`deploy/asciline-player/`: `worker.js`, los 15 archivos servidos y el manifiesto
-   de las 71 keys) — el worker **no existía fuera de Cloudflare**.
-3. **MOTOR ÚNICO — `W-22`..`W-25`, CI VERDE el 2026-08-31 (run de `866f2f1`).**
-   El manifiesto probó que `index.html` **es** `live-player.html`: la raíz ya tenía W-17
-   y W-18 (van en los `reader*.js`/`render-*.js` compartidos) pero **no** la cadencia,
-   que vivía copiada en `tv-player.html` y en `diagnostic-player.html`. En vez de portar
-   la copia a una tercera página, la maquinaria se extrajo a
-   **[`frontend/playloop.js`](../frontend/playloop.js)** y ahora la comparten **las
-   cuatro** páginas (pedido del operador: «que todos los reproductores tengan todas las
-   mejoras»).
-   - `W-22` motor compartido + `tests/test_playloop.js` (cableado en `run_all.py`).
-   - `W-23` `tv-player` y `diagnostic` pasan al motor; el diagnostic instrumenta los dos
-     readers con el hook `onSpare`, así que ahora **mide literalmente el código que corre
-     en producción**.
-   - `W-24` `live-player` y `player.html` lo estrenan. El intercambio de readers convive
-     con el overlay porque va **entre `beforeSeek` y `afterSeek`**, con
-     `overlay.rebind(reader)` en el medio; el gate nuevo en `test_overlay_runtime` exige
-     que **adoptar y no adoptar den exactamente las mismas celdas**.
-   - `W-25` el gate ES5 descartaba un `<script>` si la coincidencia entera contenía
-     `src=`, no si lo contenía la etiqueta: un `var src=DEFAULT_SRC;` alcanzaba para que
-     `player.html` y `diagnostic-player.html` **no se analizaran nunca**. Corregido.
-   - Verificado a mano mientras el CI estaba caído: las cuatro páginas cargan el clip de
-     producción servido local **sin errores de consola** (overlay, texto nativo e imagen
-     activos en live-player), y las expresiones del gate ES5 corridas aparte sobre los
-     seis archivos tocados **no dan hallazgos**. La regresión completa lo confirmó
-     después en CI (suites Python + JS, incluidas `test_playloop.js` y el gate nuevo de
-     `test_overlay_runtime`).
-   - **PUBLICADO y F9 CERRADA** (Instancia 040): **28 keys**, no 25 — el número salió de
-     **auditar** lo servido contra el repo archivo por archivo (4 diferían, 2 daban 404,
-     el resto igual), no de la cuenta escrita en los runbooks. Son 7 por carpeta:
-     `live-player.html` + su copia `index.html`, `tv-player.html`,
-     `diagnostic-player.html`, `overlay.js`, y los nuevos `playloop.js` y `player.html`.
-     Las 28 verificadas byte a byte contra el repo después de subir; token quemado
-     (403 comprobado). Resumen en
-     [`ejecutados/2026-08-31-F9-aceleracion-frontend.md`](ejecutados/2026-08-31-F9-aceleracion-frontend.md).
-   - La comparación `1280 soft` vs **`1920` nativo en el TV** se **movió a F8**, que es la
-     fase de validación en TV físico; sigue decidiéndose **por video**. La medición de
-     W-20 fue en GPU de PC a 1280@15: la holgura de 4,5× es el margen que F8 tiene que
-     confirmar que le alcanza a un televisor.
-3. **F10 (S-9)** — pérdida adaptativa por suavidad: E-25 → E-27 → E-26 → E-28. Ataca el
-   degradé escalonado sin devolver el ahorro del near-lossless 8.
-4. **F11 (S-10)** — formato v4: E-30 (LOD horneado, **sin** cambio de formato, medible
-   solo) → E-31 (análisis de frames de solo-paleta, sin formato) → F11-1 (opcode
-   `LOD2`) → F11-5 (paleta en delta, **solo si E-31 lo justifica**) → F11-2
-   (**transparencia**, pedido del operador) → F11-3 (espejo JS + cross-test) → F11-4
-   (barrido y adopción). Idea anotada sin tarea: **paletas por región** (gate: que E-25
-   muestre saturación de las 256 entradas).
-5. **F8 (S-6)** — validación física en TV, ya con F9-F11 adentro. **INT-005 sigue
-   CONDICIONADO** a que los gates físicos fallen para el overlay nativo (dirección del
-   operador 2026-08-30).
-6. **DIAG-001** — causa del escalonado del huevo; **al final por decisión del operador**,
-   y probablemente ya resuelto por F9/F10 para entonces.
-7. **Del operador, en paralelo:** probar `https://iargen.com/player/` en el **celular y
-   el Smart TV**. Ya aprobó el v3 a ojo en desktop («se ve igual», Instancia 029).
-   Variantes para comparar: raíz = producto 1280@15 **v3**, `/player/1280-15/` (v2),
-   `/player/1280-12/`, `/player/1920-10/`.
-8. Opcionales sin fase: E-11 (flags de audio), W-15 (camino ASCII), W-21 (dirty en X),
-   E-29 (costo de decode en la elección de tag). Menor: si se retoma el 960, re-medirlo
-   con refit 5. Infra: si `publish-player` se vuelve habitual, migrar los pins a un
-   `__pins.json` en el bucket.
+Lo vivo, en orden (cuerpos en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2):
 
-Tareas con archivo, acción y criterio de cierre en el
-[`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §3. Diseño en
-[`DISENO-RENDER-INDEXADO.md`](DISENO-RENDER-INDEXADO.md),
-[`DISENO-PERDIDA-ADAPTATIVA.md`](DISENO-PERDIDA-ADAPTATIVA.md) y
-[`DISENO-FORMATO-V4-LOD-Y-ALPHA.md`](DISENO-FORMATO-V4-LOD-Y-ALPHA.md).
+1. **H-0 — repo nuevo + reorganización de docs: CERRADA con este commit.** Los
+   diseños y planes del paradigma JS pasaron **verbatim** a
+   [`historico/`](historico/README.md); F10, F11, F8, DIAG-001 y las opcionales
+   quedan **suspendidas** (no borradas: recuperables con decisión del operador).
+2. **H-1 — `DISENO-HIBRIDO.md`** (diseño formal, sin código): sincronía
+   intervención↔video, cómo viaja el sidecar si el TV ya no baja el `.asclv`,
+   distribución del mp4 con CACHE-001 por contenido, fallback si no hay `<video>`.
+3. **H-2 — investigación de reproducibilidad mp4** (paralelizable con H-1):
+   matriz de emisión H.264 (bitrate/CRF, profile/level, GOP, two-pass) desde el
+   máster vigente, medida en la caja con `frontend/tv-video-test.html` y cerrada
+   con veredicto del operador.
+4. **H-3 — player híbrido mínimo** (`<video>` + canvas de intervención reusando
+   `overlay.js`/`textlayer.js`/`slots.js`): **solo con H-1 aprobada.**
+5. **W-26** (heredada, independiente): la raíz publicada elige WebGL sin salida —
+   aceptar `?renderer=` y decidir el default para WebViews de TV box.
+6. Externo: pedirle a la app de la caja que el WebView reporte el panel real
+   (hoy da 3840×2160 sobre un panel de 1280×720 = 9× de píxeles regalados).
 
-**Principio del operador (2026-08-31, extiende la regla 9):** la **resolución y los fps
-son elegibles por video, siempre**, nunca fijados por una receta. El destino real son
-televisores de 1920, así que toda grilla se estira; lo que se elige por video es cuánta
-densidad conviene pagar, y comparar 1280 bien reconstruido contra 1920 nativo es parte
-del trabajo de cada clip.
+**Principio del operador (2026-08-31, sigue vigente):** la **resolución y los
+fps son elegibles por video, siempre**, nunca fijados por una receta. Aplica
+igual a la emisión del mp4: densidad y fps se eligen por clip.
 
-**Estado de fases: F0-F7 completas y verificadas; S-1..S-5 y S-7 cerradas; abiertas
-S-8 (F9, en ejecución), S-9 (F10), S-10 (F11) y S-6 (F8).** El detalle de cada cierre:
-tabla de fases abajo, [`ejecutados/`](ejecutados/README.md) y las tablas archivadas.
+**Estado de fases: F0-F9 completas y verificadas (paradigma anterior; resúmenes
+en [`ejecutados/`](ejecutados/README.md)); DIAG-002/003 cerradas con decisión;
+abierta la fase H (H-0 cerrada, H-1/H-2 próximas); F10/F11/F8/DIAG-001
+suspendidas.** El detalle: tabla de tareas abajo y las tablas archivadas.
 
 **Receta de producto vigente (2026-08-31, S-4 cerrada):** defaults del workflow
 `encode` + **`format=v3`** + **`tile=sweep`** + **`--cols 1280`** en extra —
@@ -249,42 +112,32 @@ contenido, aunque `publish-player` la asuma; ese workflow no funcionaría hoy. D
 | sincronización | 2026-08-27 | clon real en `Escritorio\\repo` (baseline == snapshot, verificado) | `git am` no se aplicó; los 22 archivos finales se escribieron directo en el árbol de trabajo. Historia por tarea preservada solo en los parches; el repo la recibe como un commit |
 | implementación 2 | 2026-08-27 | clon real de GitHub, `906b010` | máquina sin Python/Node **a propósito**: la regresión se valida en GitHub Actions en cada push; commits directos a `main`, un commit por tarea |
 | F6 (S-4) | 2026-08-30 | `main` en `ae5f574` (post-deploy del player) | arranca la revisión única de formato; orden elegido F6-1 → F6-3 → F6-2 → F6-4 (el barrido definitivo de tile corre sobre el codec v3 final) |
+| fase H (H-0) | 2026-09-01 | clon de `ASCILINE-video` en `f89abcd` (cierre del diagnóstico DIAG-002/003) → repo nuevo `leoIglesias-hash/ASCILINE-hybrid` | historia completa preservada (`main` + `assets`); mismo modelo de trabajo (CI-only, commits directos a `main`) |
 
 > Al iniciar cada sesión de implementación: agregar una fila con el commit o snapshot
 > sobre el que se trabaja. Si el árbol cambió desde el 2026-08-27, localizar las
 > referencias por nombre de función, no por número de línea.
 
-## Tareas abiertas (plan del 2026-08-31, Instancia 030)
+## Tareas abiertas (fase H, plan del 2026-09-01)
 
 Una fila por tarea (regla 1). El cuerpo de cada una —archivo, acción, criterio de
-cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §3.
+cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 
 | ID | Fase | Qué | Estado | Δbytes |
 |---|---|---|---|---|
-| W-16 | F9 | banco `bench_render.js` + `diagnostic-player.html` (F8-1 adelantada) | **cerrada 2026-08-31** (`f1ccfa3`) | no |
-| W-17 | F9 | LUT `Uint32` de paleta en la conversión RGBA | **cerrada 2026-08-31** (`8cecc7b`) | no |
-| W-18 | F9 | textura de índices + paleta en el shader (WebGL) | **implementada 2026-08-31** (`07a94e2`); paridad GL/2D verificada (delta 0) | no |
-| W-19 | F9 | reconstrucción de 4 taps (modo `soft`) + escalado entero de diagnóstico | **CERRADA 2026-08-31** (`07a94e2` + `af6bfff`): el operador **no distingue `soft` de `nearest`** en PC → **default `nearest`** (1 tap, bit-idéntico); `soft` queda disponible por video. El `1280 soft` vs `1920` en TV se mueve a **F8** (Instancia 036) | no |
-| W-20 | F9 | cadencia de presentación y pre-decode del keyframe | **CERRADA 2026-08-31** (`798203a`+`1cb0e38`): medida por el operador en pantalla real sobre el clip de producción — **p95 14,90 ms contra 66,7 de presupuesto (22 %), drops 0 y tarde 0 en 497 presentaciones**; `rgba` en 0,00 y `pre-key` p95 14,10 **fuera** del presupuesto sin causar drops (Instancia 037) | no |
-| W-21 | F9 | dirty rect en X | opcional — **candidata a dejar de serlo**: W-17 mostró que en deltas dispersos el costo dominante es barrer todo `dirtyCellBits`, no escribir | no |
-| W-22 | F9 | motor compartido de cadencia y pre-decode (`frontend/playloop.js`) + `test_playloop.js` | **cerrada** `3c46d3d` | sí (run de `866f2f1`) |
-| W-23 | F9 | `tv-player` y `diagnostic` pasan al motor (hook `onSpare`: el diagnostic mide el código de producción) | **cerrada** `2753fd1` | sí (run de `866f2f1`) |
-| W-24 | F9 | `live-player` (la raíz publicada) y `player.html` estrenan cadencia y pre-decode; `overlay.rebind` hace legal el intercambio con overlay activo | **cerrada** `26b4170` | sí (run de `866f2f1`) |
-| W-25 | F9 | el gate ES5 descartaba páginas enteras por un `src=` en el cuerpo del script | **cerrada** `1fe95a9` | sí (run de `866f2f1`) |
-| E-25 | F10 | `--gradient-boost` + mapa de suavidad reutilizable | pendiente | solo con valores ≠ 3.0 |
-| E-27 | F10 | guard anti-banding del trellis espacial | pendiente | sí |
-| E-26 | F10 | `--near-lossless-shape`: presupuesto modulado por suavidad | pendiente | sí |
-| E-28 | F10 | dither dirigido a mesetas con presupuesto en bytes | pendiente | sí |
-| E-29 | F10 | costo de decodificación en la elección de tag | opcional | sí |
-| E-30 | F11 | `--lod-tile`: horneado 2×2 en tiles de bajo detalle (**sin** cambio de formato; excluye rampas suaves con el mapa de E-25) | pendiente | sí |
-| E-31 | F11 | análisis offline de frames candidatos a solo-paleta (fundidos/flashes); gate de F11-5 | pendiente | no |
-| F11-1 | F11 | opcode `0x08 LOD2` | pendiente | sí |
-| F11-5 | F11 | paleta en frame delta / tag `PALETTE_ONLY` (v4) | **condicionada a E-31 + operador** | sí |
-| F11-2 | F11 | transparencia: `cell_fmt 4` (paleta RGBA), `--alpha`, `--alpha-levels` | pendiente | sí |
-| F11-3 | F11 | espejo JS, despacho por versión, `test_v4_cross.js`, fuzzing | pendiente | no |
-| F11-4 | F11 | barrido, previews y adopción del producto v4 | pendiente | sí |
-| F8-1..5 | F8 | validación física en TV (**F8-1 ya entregada dentro de W-16**: `frontend/diagnostic-player.html`) | pendiente | no |
-| DIAG-001 | — | causa del escalonado del huevo (**al final**, decisión del operador) | pendiente | no |
+| H-0 | H | repo `ASCILINE-hybrid` + docs reorganizadas al paradigma mp4/híbrido | **cerrada 2026-09-01** (este commit) | no |
+| H-1 | H | `DISENO-HIBRIDO.md`: sincronía intervención↔video, sidecar, distribución CACHE-001 del mp4, fallback | pendiente | no |
+| H-2 | H | investigación de reproducibilidad mp4: matriz de emisión H.264 desde el máster, medida en la caja | pendiente | sí (mp4) |
+| H-3 | H | player híbrido mínimo (`<video>` + canvas de intervención) | pendiente (precondición: H-1) | no |
+| W-26 | — | escape `?renderer=` en la raíz publicada + default para TV box | pendiente | no |
+
+**Suspendidas por el cambio de dirección (2026-09-01)** — recuperables verbatim de
+[`historico/RUNBOOK-IMPLEMENTACION-asclv-js.md`](historico/RUNBOOK-IMPLEMENTACION-asclv-js.md)
+solo con decisión del operador: E-25..E-28 (F10), E-30/E-31/F11-1..5 (F11),
+F8-1..5 (validación física del player JS), DIAG-001, y las opcionales
+E-11/W-15/W-21/E-29. Nota para si se retoma F10: el mp4 hereda los píxeles del
+`.asclv`, así que la calidad del máster (anti-banding) sigue teniendo efecto en
+el producto híbrido.
 
 ## Tareas cerradas (archivadas 2026-08-31)
 
@@ -315,10 +168,11 @@ re-implementa — se extiende. Resumen por carril:
 | S-3 | desbloquear E-10 | cerrada | 2026-08-28 | W-02 estaba en verde desde la sesión 1; E-10 ejecutada y cerrada |
 | S-4 | revisión única de formato (F6) + barrido definitivo de `tile_size` | cerrada | 2026-08-31 | F6-1/2/3/4 cerradas (Carril F6) y acto de cierre ejecutado: producto **1280@15 v3 tile=sweep** = `dcd6afb6…1632a` (24.458.884 B = 62,8 %, 35,02 dB, run 33352859235; sweep eligió regional 32/espacial 16 también a 1280), instalado en `outputs/` y publicado como raíz de iargen.com/player/ (puntero CACHE-001, reproducción v3 verificada en navegador). v3 ADOPTADO como formato de producto |
 | S-5 | runtime del overlay (F7) | cerrada | 2026-08-28 | F7-1..F7-4 + integración en verde; gates de INT-002 cubiertos por la regresión (Instancia 014). Los dos gates físicos (costo p95 y MEM-001 en TV) se miden en F8-2/F8-4, donde el plan ya los prevé con y sin overlay |
-| S-6 | validación física (F8) | pendiente | | |
-| S-8 | **F9 — aceleración del frontend** (W-16..W-21) | en curso | 2026-08-31 | no toca bytes ni formato: se valida contra el clip en producción. Arranca por W-16 (medición). Diseño: [`DISENO-RENDER-INDEXADO.md`](DISENO-RENDER-INDEXADO.md) |
-| S-9 | **F10 — pérdida adaptativa por suavidad** (E-25..E-29) | pendiente | | emite v3 igual que hoy. Diseño: [`DISENO-PERDIDA-ADAPTATIVA.md`](DISENO-PERDIDA-ADAPTATIVA.md) |
-| S-10 | **F11 — formato v4: LOD por tile + transparencia** (E-30, F11-1..4) | pendiente | | una sola revisión de formato para las dos features; depende de F9 cerrada. Diseño: [`DISENO-FORMATO-V4-LOD-Y-ALPHA.md`](DISENO-FORMATO-V4-LOD-Y-ALPHA.md) |
+| S-6 | validación física (F8) | **suspendida** (cambio de dirección 2026-09-01) | | era la validación del player JS en TV; el híbrido tendrá la suya (H-3) |
+| S-8 | **F9 — aceleración del frontend** (W-16..W-25) | cerrada | 2026-08-31 | medida y publicada (28 keys). Diseño archivado: [`historico/DISENO-RENDER-INDEXADO.md`](historico/DISENO-RENDER-INDEXADO.md) |
+| S-9 | **F10 — pérdida adaptativa por suavidad** (E-25..E-28) | **suspendida** (cambio de dirección 2026-09-01) | | diseño archivado: [`historico/DISENO-PERDIDA-ADAPTATIVA.md`](historico/DISENO-PERDIDA-ADAPTATIVA.md); si se retoma sigue valiendo — el mp4 hereda los píxeles del máster |
+| S-10 | **F11 — formato v4: LOD por tile + transparencia** (E-30, F11-1..5) | **suspendida** (cambio de dirección 2026-09-01) | | diseño archivado: [`historico/DISENO-FORMATO-V4-LOD-Y-ALPHA.md`](historico/DISENO-FORMATO-V4-LOD-Y-ALPHA.md); su motivación principal (aliviar el decoder JS) desapareció con el híbrido |
+| H | **fase H — híbrido mp4 + intervención** (H-0..H-3, W-26) | en curso | 2026-09-01 | H-0 cerrada (nace este repo); cuerpos en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2 |
 | S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | cerrada | 2026-08-31 | Instancia 028: tres escalones aprobados a ojo; **producto = 1280 @15 fps** (`2a9201bf…b778`, 63 % de la fuente; el 1920 descartado por fluidez a 10 fps, no por imagen — vuelve a más fps como prueba futura y el front debe procesar cualquier resolución). Hallazgo central: la tasa por celda CAE al subir resolución (0,1451 → 0,1144 → 0,1023 B/celda/frame). Re-encode del producto diferido al cierre de S-4 (v3 + tile ganador) |
 
 ## Referencias de clips (SHA-256)
@@ -401,3 +255,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-31 | **El repo de trabajo se mudó a `leoIglesias-hash` y con eso el CI se destrabó** (Instancia 040). El operador: «me suscribí a Pro con `leoIglesias-hash`, ya está, hice cagada… ahora podrías descargar el proyecto y subirlo a mi github, para poder seguirlo desde ahí; luego lo sincronizamos cuando tengamos puntos de guardado, y al terminar dejo todo en `tablerosapp-ctrl`». Se creó **`leoIglesias-hash/ASCILINE-video`** (privado, vía API con la credencial ya guardada en el Credential Manager) y se espejó **todo**: `main`, `assets` (los insumos de encode), `feature/quality-optimization` y los **7 tags**. Remotos renombrados: **`origin` = el repo del operador** (donde se empuja y corre el CI), **`ctrl` = `tablerosapp-ctrl`** (destino final, se sincroniza en los puntos de guardado). El run de `866f2f1` corrió **completo y verde** (`py3.8`, `py3.11`, `py3.11 + zopfli`, 52 s), contra los 2 s sin ejecutar un paso de las últimas cuatro instancias | **confirma el diagnóstico de la Instancia 039 sin necesidad de leer facturación**: los minutos de un repo privado se cobran al **dueño del repo**, así que el Pro en `leoIglesias-hash` no servía mientras el repo fuera de `tablerosapp-ctrl`. Mudar el repo era además la salida más barata: no expone el código (sigue privado), no depende de arreglar pagos en una cuenta ajena y deja el original intacto como destino. Se canceló a mano el run que la rama vieja disparó de arrastre. Con el CI de vuelta, **W-22..W-25 pasan de `en curso (CI bloqueado)` a `cerrada`** y F9 queda con un solo pendiente: publicar |
 | 2026-08-31 | **F9 CERRADA: frontend publicado en las cuatro carpetas, 28 keys** (Instancia 040). El operador aprobó publicar de forma explícita. El número de keys **se auditó en vez de estimarse**: se bajaron los 18 archivos de las 4 carpetas y se comparó SHA-256 contra el repo — 4 diferían (`live-player.html`/`index.html`, `tv-player.html`, `diagnostic-player.html`, `overlay.js`), 2 daban 404 (`playloop.js`, `player.html`) y los 12 restantes estaban idénticos. 7 por carpeta × 4 = **28**, contra las «25» que decían los runbooks. Subida con token efímero + `x-sha256` (R2 recalcula el digest), las 28 verificadas byte a byte después, token quemado | dos cosas para la próxima: (a) **auditar lo servido antes de publicar** es barato (68 GETs) y corrige una cuenta escrita a mano que ya estaba mal; (b) el burn del secret **tarda unos segundos en propagar** — el primer `PUT` con el token viejo devolvió `200` y recién el siguiente dio `403`. Dar por quemado un token con una sola prueba es un falso negativo de seguridad |
 | 2026-08-31 | **DIAG-002 abierta y puesta ADELANTE DE TODO: pantallazos blancos en TV box** (reporte del operador, Instancia 040). Probó el player en un **WebView de TV box** y ve **flashes blancos entre las imágenes**: «eso es algo crítico… es muy grave y deberíamos estudiarlo». Se registra antes de investigar para que el reporte no se pierda | un flash blanco en un televisor rompe el producto: pesa más que cualquier ganancia de bytes o de milisegundos, así que se adelanta a F10. Dato de encuadre que **no** hay que perder: lo que el operador probó es lo que estaba publicado **antes** de esta instancia, o sea la raíz **sin** cadencia ni pre-decode. Si el motor nuevo mejora, empeora o no cambia el síntoma **hay que medirlo, no suponerlo** — y el nuevo `playloop.js` recién ahora está en la raíz |
+| 2026-09-01 | **DECISIÓN DE DIRECCIÓN TOMADA + H-0: nace `ASCILINE-hybrid`** — el operador adoptó el carril mp4/híbrido tras el cuadro final de DIAG-002/003 («el paradigma cambió… necesitamos trabajar con mp4 pero logrando mejoras de reproductividad»). Se creó `leoIglesias-hash/ASCILINE-hybrid` (privado) clonando la historia completa (`main` + `assets`); los diseños/planes del paradigma JS se movieron **verbatim** a `docs/historico/` con README propio; runbooks, índice y CLAUDE.md reescritos para la fase H (H-1 diseño, H-2 investigación mp4, H-3 player híbrido, W-26 heredada); F10/F11/F8/DIAG-001 y opcionales quedan **suspendidas**, recuperables solo con decisión del operador | el repo anterior (`ASCILINE-video`) queda congelado como antecesor con aviso de continuación; conserva su valor como historia y evidencia. La filosofía no cambia: el encoder caro decide offline y el `.asclv` sigue de máster — cambia el transporte (mp4 emitido del máster, decodificado por hardware en el TV) y el invariante de un-solo-layer pasa a dos capas (video + canvas de intervención) por decisión explícita del operador. La rama `feature/quality-optimization` vieja no se migró (estancada; vive en los remotos del repo anterior) |

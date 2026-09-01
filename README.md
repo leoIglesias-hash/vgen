@@ -1,30 +1,33 @@
-# ASCILINE → `.ascl` / `.asclv`
+# ASCILINE-hybrid → máster `.ascl`/`.asclv` + mp4 por hardware
 
-Convierte imagen o video a una grilla de texto/bloques de color y la reproduce en el
-navegador (incluso webviews viejos), **pre-encodeando offline**: el servidor de playback
-no calcula nada, solo sirve archivos estáticos.
+**Sucesor de `ASCILINE-video` (2026-09-01).** El encoder Python **offline** sigue
+decidiendo todo (paleta perceptual, trellis, look) y emitiendo el `.asclv` como
+máster determinista; al TV viaja el **mp4 (H.264) emitido desde ese máster**,
+reproducido por `<video>` con decodificador de hardware, con la intervención
+(texto, logo, canal en vivo) en un canvas encima. El servidor de playback no
+calcula nada: solo sirve archivos estáticos.
 
 ## Estado de esta versión
 
-Al 2026-08-30: el clip de producto (768 columnas, paleta adaptive kmeans-oklab, refit,
-trellis near-lossless, Zopfli) pesa **11,3 MB = 29 % del mp4 fuente** con 35,10 dB.
-Las fases F0-F5 y F7 están cerradas; quedan la revisión única de formato (F6/ASCLVID3)
-y la validación física en Smart TV (F8). La regresión automática cubre 319 pruebas
-Python y 26 suites JavaScript, y corre en GitHub Actions en cada push. Una publicación
-pública sigue condicionada por licencia, procedencia y derechos de los videos.
+Al 2026-09-01: máster de producto **1280×720 @15 fps formato v3** (`dcd6afb6…1632a`,
+24,5 MB = 62,8 % del mp4 fuente, 35,02 dB); su emisión mp4 pesa **4,1 MB** y es la
+primera reproducción fluida del producto en la TV box real (DIAG-002/003). Fases
+F0-F9 del paradigma anterior cerradas y verificadas; en curso la **fase H**
+(diseño del player híbrido + investigación de emisión mp4) — ver
+[`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md). Una publicación pública sigue
+condicionada por licencia, procedencia y derechos de los videos.
 
-La compatibilidad legacy es un objetivo verificado por sintaxis/API y fallbacks: frontend
-ES5, XHR, Canvas2D como piso y WebGL1 opcional. La matriz física de Smart TV/WebViews sigue
-pendiente, por lo que no se afirma compatibilidad universal con cualquier modelo.
+La compatibilidad legacy es un objetivo verificado por sintaxis/API y fallbacks:
+frontend ES5, XHR, Canvas2D como piso. El player 100 % JS anterior se mantiene
+como reproductor de escritorio y banco de verificación del máster.
 
-El estado vivo (próxima acción, tareas cerradas, SHAs de referencia) está en
-[`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md). El índice de documentación está en
-[`docs/README.md`](docs/README.md).
+El índice de documentación está en [`docs/README.md`](docs/README.md); los diseños
+del paradigma anterior, en [`docs/historico/`](docs/historico/README.md).
 
 ## Estructura
 
 ```
-ASCILINE-video/
+ASCILINE-hybrid/
 ├── frontend/     # lo que corre en el navegador (SOLO esto para reproducir)
 │   ├── player.html
 │   ├── tv-player.html       # fullscreen y precarga con URL estable
@@ -164,18 +167,16 @@ debe validarse nuevamente.
 - [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md): estado vivo — próxima acción, una
   fila por tarea cerrada, SHAs de referencia.
 - [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md): reglas de ejecución
-  y tareas pendientes (F6, F8, opcionales).
+  y tareas de la fase H (híbrido).
 - [`docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md):
   decisiones append-only, por Instancia.
 - [`docs/ejecutados/`](docs/ejecutados/README.md): resumen por fase cerrada.
-- [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md): formato v1 y revisión v2.
-- [`docs/DISENO-ASCL-V2-TILES.md`](docs/DISENO-ASCL-V2-TILES.md) y
-  [`docs/DISENO-PLANIFICADOR-REGIONAL-V2.md`](docs/DISENO-PLANIFICADOR-REGIONAL-V2.md):
-  contrato v2 implementado.
+- [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md): formato máster v1 y revisión v2.
+- [`docs/historico/`](docs/historico/README.md): diseños y planes del paradigma
+  100 % JS, archivados verbatim el 2026-09-01.
 - [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md): hosting y caché.
 
-El índice completo (incluida la lista de docs retirados al historial Git) está en
-[`docs/README.md`](docs/README.md).
+El índice completo está en [`docs/README.md`](docs/README.md).
 
 ## Reproducir
 

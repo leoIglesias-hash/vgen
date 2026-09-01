@@ -2930,3 +2930,46 @@ renderizado por nuestro encoder + canvas de intervencion repintando solo la zona
 intervenida. La filosofia se conserva (el encoder caro decide todo offline; el TV
 solo ejecuta); cambia el transporte del video base y el invariante de un-solo-layer
 pasa a dos capas. Nada se implementa hasta esa decision.
+
+## DECISION DE DIRECCION TOMADA: paradigma mp4/hibrido - nace ASCILINE-hybrid (2026-09-01)
+
+El operador tomo la decision que la entrada anterior dejaba pendiente. Sus
+palabras: "el paradigma cambio.. necesitamos trabajar con mp4 pero logrando
+mejoras de reproductividad y para eso tendremos que hacer nuevas investigaciones
+y demas... no cambiaria las documentaciones pero si pasaria muchas a historicas
+para que esten pero tambien poder enfocarnos en algo mejor".
+
+**Lo decidido:**
+
+1. **El proyecto continua en un repo nuevo: `leoIglesias-hash/ASCILINE-hybrid`**
+   (privado, elegido por el operador entre cuatro nombres propuestos), clonado
+   con la historia completa de `ASCILINE-video` (`main` + `assets`). El repo
+   anterior queda congelado como antecesor. La rama vieja
+   `feature/quality-optimization` no se migro (estancada, vive en los remotos
+   del repo anterior).
+2. **El transporte del video base pasa a mp4**: el `.asclv` sigue siendo el
+   MASTER determinista que el encoder emite offline; lo que viaja al TV es su
+   decode a H.264 (hoy `preview=true` del workflow `encode`), reproducido por
+   `<video>` con decodificador de hardware. Evidencia que lo sostiene: cuadro
+   final de DIAG-002/003 (entrada anterior) - JS 290 ms/frame vs "reproduce muy
+   bien" del producto.mp4 de 4,1 MB.
+3. **La intervencion va en un canvas encima del video** (dos capas): el
+   invariante de un-solo-layer del paradigma anterior queda reemplazado por
+   decision explicita del operador. La filosofia madre no cambia: el encoder
+   caro decide todo offline, el TV solo ejecuta.
+4. **Reorganizacion documental (H-0, pedida "ejecutarla ya")**: los disenos y
+   planes del paradigma JS se movieron VERBATIM a `docs/historico/` (9 archivos,
+   con README que explica que fue cada uno y en que estado se archivo);
+   `RUNBOOK-IMPLEMENTACION.md` nuevo con la fase H; `RUNBOOK-ESTADO.md` con la
+   proxima accion nueva; CLAUDE.md e indices reescritos. Nada se borro: el
+   REGISTRO, `ejecutados/`, las referencias de clips y la bitacora siguen
+   intactos y append-only.
+
+**El plan nuevo (fase H):** H-1 diseno formal del hibrido (sincronia
+intervencion-video, viaje del sidecar, distribucion CACHE-001 del mp4,
+fallback) + H-2 investigacion de reproducibilidad mp4 (matriz de emision H.264
+desde el master, medida en la caja con tv-video-test) en paralelo; H-3 player
+hibrido minimo solo con H-1 aprobada; W-26 heredada. F10/F11/F8/DIAG-001
+quedan SUSPENDIDAS, recuperables de `historico/` solo con decision del
+operador. Nota dejada por escrito: si se retoma F10, sigue teniendo efecto -
+el mp4 hereda los pixeles del master.

@@ -1,176 +1,97 @@
-# ASCILINE-video — guía de sesión (leer esto primero, siempre)
+# ASCILINE-hybrid — guía de sesión (leer esto primero, siempre)
 
-Convierte video **offline** (Python) a un formato propio `.ascl`/`.asclv` que un player
-**ES5 sin dependencias** reproduce en Smart TVs antiguos. Encoder caro, decoder trivial:
-el TV nunca cuantiza ni decide, solo ejecuta.
+**Sucesor de `ASCILINE-video` desde el 2026-09-01, por decisión del operador.**
+El encoder Python **offline** sigue decidiendo todo (paleta, trellis, look) y
+emitiendo el `.ascl`/`.asclv` como **máster determinista**; lo que cambió es el
+transporte: al TV ya no viaja el `.asclv` para que un player JS lo decodifique,
+sino el **mp4 (H.264) emitido desde ese máster**, reproducido por `<video>` con
+decodificador de **hardware**, con la **intervención** (números, texto, logo,
+canal en vivo) en un **canvas encima** — dos capas. Por qué: medido en la TV box
+real, el player JS da 290 ms/frame contra 66,7 de presupuesto (cuello CPU),
+mientras el mismo producto como mp4 de 4,1 MB *«reproduce muy bien»*
+(DIAG-002/003, REGISTRO 2026-09-01). Encoder caro, TV que solo ejecuta: la
+filosofía no cambió, cambió el músculo que ejecuta.
 
 ## Arranque post-compact — en este orden, sin leer de más
 
-1. [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) — dónde quedó todo, próxima acción, bitácora de desvíos.
-2. [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md) — **solo la tarea a ejecutar** (archivo, acción, criterio de cierre).
+1. [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) — dónde quedó todo, próxima acción, bitácora.
+2. [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md) — **solo la tarea a ejecutar** (fase H).
 3. [`docs/ejecutados/`](docs/ejecutados/) — lo ya cumplido con su evidencia; consultar, no releer.
-4. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) — solo si falta orientación estructural.
-5. Spec de formato / diseño de intervención — solo si la tarea toca bytes u overlay.
+4. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
+5. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-## Modelo de trabajo (acordado con el operador, 2026-08-27)
+## Modelo de trabajo (acordado con el operador; heredado sin cambios 2026-09-01)
 
-- **Esta máquina no tiene Python ni Node, a propósito.** Toda la regresión (tests Python +
-  suites JS) se valida en **GitHub Actions** (workflow `regression`) en cada push.
-  Una tarea se cierra **solo con CI en verde**; si CI falla, se corrige hacia adelante.
+- **Esta máquina no tiene Python ni Node, a propósito.** Toda la regresión se
+  valida en **GitHub Actions** (workflow `regression`) en cada push. Una tarea se
+  cierra **solo con CI en verde**; si CI falla, se corrige hacia adelante.
 - **Commits directos a `main`**, un commit por tarea, mensaje `<ID>: <título>`.
-  Push tras cada tarea; el CI de ese push es la regresión de cierre.
-- **Dos remotos desde 2026-08-31** (Instancia 040): `origin` =
-  **`leoIglesias-hash/ASCILINE-video`** (privado) es el **remoto de trabajo** — ahí se
-  empuja y ahí corre el CI, porque los minutos de un repo privado se le facturan al
-  **dueño** del repo y el Pro está en esa cuenta. `ctrl` =
-  `tablerosapp-ctrl/ASCILINE-video` es el **destino final**: se sincroniza en los puntos
-  de guardado (`git push ctrl main`), por pedido del operador.
-- Al cerrar una tarea: actualizar su fila en `RUNBOOK-ESTADO.md`; al cerrar una fase o
-  lote, sumar el resumen a `docs/ejecutados/`.
-- Todo test nuevo se cablea en `tests/run_all.py` **en el mismo commit** (regla 7).
-- Los videos de producto **no se commitean a `main`** (`.gitignore` ya lo impone). El
-  clip HQ fuente vive local en `inputs/TKN-2443-GANADOR- 15seg-.mp4` y en la rama
-  huérfana **`assets`** del repo (solo insumos de encode). Receta de
-  producto vigente (2026-08-31, S-4 cerrada): **1280 @15 fps, formato v3,
-  tile=sweep** = defaults del workflow `encode` (graphic-hq, adaptive
-  kmeans-oklab, dither off, zopfli, overlay=off) **+ `format=v3` +
-  `tile=sweep` + extra `--palette-refit 5 --near-lossless 8 --cols
-  1280`** → `dcd6afb6…1632a` (24.458.884 B, 35,02 dB, **62,8 % del mp4
-  fuente**; el sweep elige regional 32 con trellis espacial 16).
-  Instalado en `outputs/` y servido como raíz de iargen.com/player/.
-- **Generar un clip para ver:** workflow `encode` (Actions → encode → Run workflow).
-  Encodea desde la rama `assets` con el perfil HQ por defecto y publica `clip.asclv`,
-  la fila de `bench_ref`, el SHA-256 y un `preview.mp4` como artifacts descargables.
-- **Al cerrar cada etapa, levantar el player para el operador** (pedido 2026-08-28):
-  bajar el último `clip.asclv` del CI a `outputs/` (verificar SHA), correr
-  `tools/serve-local.ps1` (puerto 8123, layout plano, **`Cache-Control: no-store`**
-  para que nunca vea caché vieja) y avisarle que abra `http://localhost:8123/`.
-- **Documentación siempre al día antes de cualquier compact:** estado, registro,
-  ejecutados y este archivo se actualizan al cierre de cada tarea/etapa, nunca "después".
+- **Remoto de trabajo: `origin` = `leoIglesias-hash/ASCILINE-hybrid`** (privado;
+  los minutos de Actions se facturan al dueño y el Pro está ahí). El repo
+  antecesor `ASCILINE-video` (en `leoIglesias-hash` y `tablerosapp-ctrl`) queda
+  **congelado**; si el operador quiere espejo/destino final del híbrido, lo pide.
+- Los videos de producto **no se commitean a `main`** (`.gitignore` lo impone).
+  El clip HQ fuente vive en `inputs/TKN-2443-GANADOR- 15seg-.mp4` local y en la
+  rama huérfana **`assets`** (migrada al repo nuevo).
+- **Máster vigente** (receta S-4, 2026-08-31): workflow `encode` defaults +
+  `format=v3` + `tile=sweep` + extra `--palette-refit 5 --near-lossless 8
+  --cols 1280` → `.asclv` `dcd6afb6…1632a` (24.458.884 B, 35,02 dB, 1280×720
+  @15). **Su emisión mp4**: mismo workflow con **`preview=true`** →
+  `producto.mp4` 4.130.240 B (run 33532310754); vive local en `outputs/`
+  (gitignored) — regenerable, nunca se supone.
+- **Al cerrar cada etapa, levantar el player para el operador**: bajar el
+  artifact del CI a `outputs/`, correr `tools/serve-local.ps1` (puerto 8123,
+  `Cache-Control: no-store`, sirve `.mp4`) y avisarle que abra
+  `http://localhost:8123/`.
+- **Documentación siempre al día antes de cualquier compact.**
 
 ## Ayuda-memoria — no perder de vista nunca
 
-1. **Retrocompatibilidad JS:** frontend en sintaxis **ES5.1 estricta**, piso ECMAScript
-   2015 de features: sin `fetch`/`Promise`/`Worker`/`WASM`/`JSON`/arrow/`let`/`const`/
-   template strings. El gate `tests/test_frontend_compatibility.js` lo verifica; correrlo
-   mentalmente antes de escribir cada línea de frontend.
-2. **Un solo layer (un solo elemento canvas):** la intervención GRÁFICA escribe índices
-   sobre la **misma matriz de celdas** del video, con paleta reservada paramétrica
-   (10 → 246..255 o 32 → 224..255; la 255 siempre transparente). Jamás un segundo
-   canvas ni un DOM overlay. Desde INT-004 (2026-08-28), los TEXTOS se dibujan
-   nativos con la API de texto de Canvas2D **sobre ese mismo canvas**, después del
-   frame (no viven en la matriz; con texto nativo el renderer es Canvas2D).
-3. **Optimización siempre en el front, pero ganando calidad de imagen:** el costo se paga
-   offline (Oklab, K-means, dither, trellis); el front solo se optimiza para hacer *menos
-   trabajo por frame*, nunca degradando la imagen ya decidida por el encoder.
-4. **Validar todo antes de mutar:** corrupción = excepción tipada; `cells` jamás queda a
-   medias. Esta propiedad no se sacrifica por velocidad (fusionar pasadas sí, perder la
-   transaccionalidad no).
-5. **Determinismo y medición:** mismo input → mismos bytes. Una mejora sin fila de
-   `tools/bench_ref.py` registrada no existe. Byte-idéntico se verifica, no se supone.
-6. **Canvas2D es el piso; WebGL1 solo acelera**, nunca agrega función.
-7. **Ningún buffer nuevo proporcional al frame por cuadro** en el loop estable.
-8. **Canonicidad forzada del formato:** uvarint no canónico, padding ≠ 0 u offsets no
-   crecientes se **rechazan**. El decoder confía en cero campos.
-9. Los valores manuales del operador (cols, fps, colores) prevalecen sobre cualquier
-   automatismo. **Resolución y fps son elegibles POR VIDEO, nunca fijados por una
-   receta** (operador, 2026-08-31): el destino real son TVs de 1920, así que toda grilla
-   se estira; lo que se decide por clip es cuánta densidad conviene pagar. El front debe
-   procesar cualquier combinación que se le pase.
-
-Referencia completa de invariantes: `docs/MAPA-DEL-PROYECTO.md` §7 y
-`docs/PLAN-IMPLEMENTACION-OPTIMIZACION.md`.
+1. **Retrocompatibilidad JS:** todo frontend en sintaxis **ES5.1 estricta**
+   (gate `tests/test_frontend_compatibility.js`): sin `fetch`/`Promise`/`Worker`/
+   `WASM`/`JSON`/arrow/`let`/`const`/template strings. Vale igual para el player
+   híbrido nuevo.
+2. **Dos capas, y solo dos (decisión del operador, 2026-09-01):** `<video>`
+   hardware como base + **un** canvas de intervención encima que repinta solo la
+   zona intervenida. Reemplaza al invariante de un-solo-layer del paradigma
+   anterior. Jamás DOM overlay adicional ni un canvas por elemento. El canvas de
+   intervención es **Canvas2D** (en la caja medida, WebGL no presenta).
+3. **La optimización cara va offline:** el TV nunca cuantiza ni decide. La
+   fluidez se compra en la **emisión** del mp4 (H-2), no degradando la imagen
+   que el encoder ya decidió.
+4. **Validar todo antes de mutar; corrupción = excepción tipada.** Aplica al
+   máster y a todo parser nuevo (sidecar del híbrido incluido).
+5. **Determinismo y medición:** mismo input → mismos bytes, también para el mp4
+   emitido. Una mejora sin fila del REGISTRO no existe; byte-idéntico se
+   verifica, no se supone. Las mediciones de la caja las firma **el operador**.
+6. **Ningún buffer nuevo proporcional al frame por cuadro** en el loop estable
+   de la capa de intervención.
+7. **Canonicidad forzada del formato máster:** uvarint no canónico, padding ≠ 0
+   u offsets no crecientes se **rechazan**. Nada de eso se relaja por el híbrido.
+8. **Los valores manuales del operador prevalecen** sobre cualquier automatismo.
+   **Resolución y fps son elegibles POR VIDEO, nunca fijados por receta** — vale
+   también para la emisión del mp4.
+9. **El player JS anterior se mantiene, no crece:** queda como reproductor de
+   escritorio y banco de verificación del máster (las 4 páginas + `playloop.js`).
+   Única deuda activa ahí: **W-26** (escape `?renderer=` en la raíz).
 
 ## Estado (resumen grueso — el detalle vive en RUNBOOK-ESTADO)
 
-**Cerrado y verificado** (no re-implementar; resumen en `docs/ejecutados/`, porqué en el
-REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
-
-- **F0-F7 completas (todas las fases de encoder/frontend/overlay/formato).**
-  Encoder: paleta reservada/glifos/sidecar (F1), Zopfli + tile_size 4..32 +
-  keyframes por corte (F2), refit de paleta (F3, solo E-12 adoptado), carril
-  trellis completo (F5). Frontend: W-01..14 (F4). Overlay: runtime F7, INT-003,
-  INT-004 (texto nativo), INT-006, INT-007 (logo ruleta). **F6 (S-4) CERRADA
-  2026-08-31: formato v3 ADOPTADO** — SPARSE diferencial gateado por versión,
-  envelope ASCLVID3 (20 B) con sidecar embebido, tile ganador espacial 16 +
-  regional 32 (vía `tile=sweep`, estable entre resoluciones), CACHE-001
-  (puntero `clip.current.txt` no-cache/304 → `clip.<sha12>.asclv` immutable).
-- **S-7 CERRADA (Instancia 028):** producto = 1280@15 elegido a ojo; el 1920@10
-  descartado por FLUIDEZ, no por imagen — vuelve a más fps y **el front debe
-  procesar cualquier resolución que se le tire** (directiva del operador). Tasa
-  por celda CAE con la resolución: 0,1451 → 0,1144 → 0,1023 B/celda/frame.
-- **Producto vigente:** `dcd6afb6…1632a` = 24.458.884 B = **62,8 % del mp4
-  fuente** (35,02 dB, 1280×720 @15, v3) — en `outputs/` y como raíz de
-  iargen.com/player/. El operador adoptó cada escalón de pérdida a ojo; su
-  criterio: «pérdida mínima aceptable si el ahorro lo vale».
-- **Player EN PRODUCCIÓN:** `https://iargen.com/player/` (PRODUCTO 1280@15 v3
-  vía puntero CACHE-001), variantes `/player/1280-15/` (v2), `/player/1280-12/`,
-  `/player/1920-10/` (espejo `asciline-player.iargen.workers.dev`). Bucket R2 +
-  Worker `asciline-player`, nada preexistente tocado. Subidas SIN redeploy:
-  rotar `UPLOAD_TOKEN` vía API y `PUT /__upload/<key>` con `x-sha256`; desde CI,
-  workflow `publish-player` (pin por contenido).
-- **Byte-identidad re-verificada** (regla 5) también para el pipeline v3
-  (dos pares de runs byte-idénticos en F6-2).
-
-**En curso / pendiente** (detalle operativo en `RUNBOOK-ESTADO.md` §Próxima acción):
-
-Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
-**F9 → F10 → F11 → F8 → DIAG-001**.
-
-- **🔴 DIAG-002/003 — DIAGNÓSTICO TV BOX COMPLETO (2026-09-01): DECISIÓN DE
-  DIRECCIÓN PENDIENTE DEL OPERADOR, antes que F10.** Medido en la caja real:
-  (a) el WebGL de esa GPU **no presenta** (pantallazos blancos; canvas2d limpio;
-  falta W-26 = escape `?renderer=` en la raíz); (b) el player 100 % JS **no llega
-  a 15 fps ahí** (FRAME p50 233–290 ms vs 66,7; el cuello es CPU, la superficie
-  4K que la app da al WebView —3840×2160 sobre panel de 1280×720— es secundaria);
-  (c) **el carril `<video>` por hardware SÍ vive en ese WebView**: `producto.mp4`
-  (el `.asclv` producto decodificado a H.264 1280@15, 4,1 MB, vía workflow encode
-  `preview=true`) *«reproduce muy bien»* (operador). Herramientas nuevas:
-  `frontend/tv-video-test.html` y el diagnostic con sección Pantalla/escala, HUD
-  proporcional, `?view=`. **Sobre la mesa: el HÍBRIDO** (video hw con nuestro look
-  + canvas solo-intervención; dos capas en vez de una) — *«puede ser que cambie la
-  dirección del proyecto… luego tomaremos decisiones»*. Nada se implementa hasta
-  esa decisión. Evidencia: REGISTRO 2026-09-01 + RUNBOOK-ESTADO §Próxima acción.
-- **F9 (S-8) — CERRADA 2026-08-31** (código, CI verde y publicado). Aceleración del
-  frontend sin tocar bytes ni formato. Medido y aprobado: `W-16` (`f1ccfa3`, banco
-  `tools/bench_render.js` + `frontend/diagnostic-player.html`), `W-17` (`8cecc7b`, LUT
-  `Uint32`: keyframe a 1920 **11,4 → 5,7 ms**, byte-idéntico), `W-18`+`W-19` (`07a94e2`,
-  índices como textura `LUMINANCE` con paleta en el shader —**paridad GL/2D delta 0**,
-  conversión en CPU en **0,00 ms**—; el operador no distingue `soft` de `nearest` →
-  default `nearest`) y `W-20` (`798203a`+`1cb0e38`+`af6bfff`, cadencia + pre-decode;
-  medido por el operador en pantalla real: **p95 14,90 ms de 66,7, drops 0**; el cuello
-  pasó a `inflate`). `W-21` sigue opcional.
-  **`W-22`..`W-25` (2026-08-31) fusionan el motor:** la cadencia y el pre-decode estaban
-  copiados en dos páginas y ausentes en la que sirve la raíz; ahora viven una sola vez en
-  `frontend/playloop.js` y lo usan **las cuatro** páginas. El intercambio de readers
-  convive con el overlay yendo entre `beforeSeek` y `afterSeek` con `overlay.rebind()`.
-  **W-22..W-25 CERRADAS** con el run verde de `866f2f1`: el bloqueo de Actions era
-  facturación y se resolvió **mudando el repo de trabajo a `leoIglesias-hash`** (Instancia
-  040), donde está el Pro del operador. **Publicado el 2026-08-31: 28 keys** (7 por
-  carpeta), número obtenido **auditando** lo servido contra el repo, no estimando.
-  Resumen: `docs/ejecutados/2026-08-31-F9-aceleracion-frontend.md`. Diseño:
-  `docs/DISENO-RENDER-INDEXADO.md`.
-- **F10 (S-9)** — pérdida adaptativa por suavidad (E-25, E-27, E-26, E-28): el banding
-  solo se ve en zonas suaves, así que el presupuesto deja de ser plano. Ataca el degradé
-  escalonado del huevo sin devolver el ahorro del near-lossless 8. Emite v3 igual que
-  hoy. Diseño: `docs/DISENO-PERDIDA-ADAPTATIVA.md`.
-- **F11 (S-10) — formato v4:** LOD por tile (E-30 horneado **sin** cambio de formato →
-  F11-1 opcode `LOD2`) y **transparencia** (F11-2: `cell_fmt 4`, paleta RGBA, `--alpha`;
-  feature nueva pedida por el operador para clips de personaje sobre fondo transparente).
-  Sumado en la Instancia 031: **frames de solo-paleta** (E-31 análisis sin formato →
-  F11-5 condicionada — fundidos como transformada de paleta) e idea anotada sin tarea
-  de **paletas por región** (gate: saturación de las 256 en E-25). Depende de F9.
-  Diseño: `docs/DISENO-FORMATO-V4-LOD-Y-ALPHA.md`.
-- **F8 (S-6)** — TV físico, p95, MEM-001, con F9-F11 adentro (F8-1 se adelanta como
-  W-16). **INT-005 por época sigue CONDICIONADO** a que los gates físicos fallen para el
-  overlay nativo (dirección del operador 2026-08-30).
-- **DIAG-001** — causa del escalonado del huevo, **al final por decisión del operador**.
-- **Del operador:** probar iargen.com/player/ en celular y Smart TV.
-- Opcionales: E-11, W-15, W-21, E-29. Menor: si se retoma el 960, re-medirlo con refit 5.
-
-> Docs podados el 2026-08-30 y limpiados el 2026-08-31 (cierre de F6/S-4 y S-7): los
-> runbooks solo contienen lo pendiente (F8 + opcionales); las tablas completas de
-> tareas cerradas y la bitácora 2026-08-27..30 están archivadas **verbatim** en
-> `docs/ejecutados/2026-08-31-tablas-de-tareas-cerradas.md`; los benchmarks/estados
-> históricos retirados viven en el historial Git (lista en `docs/README.md`). La
-> evidencia canónica es REGISTRO + ejecutados/.
+- **Heredado cerrado y verificado (paradigma anterior, F0-F9 + deploy):** no
+  re-implementar; resúmenes en `docs/ejecutados/`, diseños en `docs/historico/`,
+  porqués en el REGISTRO. Player JS EN PRODUCCIÓN en `https://iargen.com/player/`
+  (R2 + Worker `asciline-player`; subidas con token efímero + `x-sha256`,
+  siempre quemado después).
+- **DIAG-002/003 cerradas con decisión (2026-09-01):** el diagnóstico completo
+  de la TV box terminó en la adopción del híbrido y este repo. Cuadro de
+  evidencia en el REGISTRO; herramientas que quedaron:
+  `frontend/tv-video-test.html` y el diagnostic con sección Pantalla/escala.
+- **En curso — fase H:** H-0 cerrada (este repo). Siguen **H-1**
+  (`DISENO-HIBRIDO.md`, sin código) y **H-2** (investigación de
+  reproducibilidad mp4: matriz de emisión H.264 medida en la caja con
+  `frontend/tv-video-test.html`), paralelizables; **H-3** (player híbrido
+  mínimo) solo con H-1 aprobada; **W-26** independiente. Externo: pedir a la
+  app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
+- **Suspendidas** (recuperables de `docs/historico/` solo con decisión del
+  operador): F10 (pérdida adaptativa — ojo: seguiría mejorando el mp4, que
+  hereda los píxeles del máster), F11 (formato v4), F8, DIAG-001, opcionales.
