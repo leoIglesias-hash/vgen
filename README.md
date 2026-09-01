@@ -1,19 +1,23 @@
-# ASCILINE-hybrid → máster `.ascl`/`.asclv` + mp4 por hardware
+# ASCILINE-hybrid → máster `.ascl`/`.asclv` + formato propio por hardware
 
 **Sucesor de `ASCILINE-video` (2026-09-01).** El encoder Python **offline** sigue
 decidiendo todo (paleta perceptual, trellis, look) y emitiendo el `.asclv` como
-máster determinista; al TV viaja el **mp4 (H.264) emitido desde ese máster**,
-reproducido por `<video>` con decodificador de hardware, con la intervención
-(texto, logo, canal en vivo) en un canvas encima. El servidor de playback no
-calcula nada: solo sirve archivos estáticos.
+máster determinista; al TV viaja un **paquete propio, códec-agnóstico**, emitido
+desde ese máster, cuyo video reproduce `<video>` con decodificador de **hardware**
+y cuya intervención (texto, logo, canal en vivo) va en un canvas encima. El
+servidor de playback no calcula nada: solo sirve archivos estáticos.
+
+**Encoder caro, decoder sin estrés.** Norte del proyecto:
+[`docs/VISION-Y-OBJETIVOS.md`](docs/VISION-Y-OBJETIVOS.md).
 
 ## Estado de esta versión
 
 Al 2026-09-01: máster de producto **1280×720 @15 fps formato v3** (`dcd6afb6…1632a`,
 24,5 MB = 62,8 % del mp4 fuente, 35,02 dB); su emisión mp4 pesa **4,1 MB** y es la
 primera reproducción fluida del producto en la TV box real (DIAG-002/003). Fases
-F0-F9 del paradigma anterior cerradas y verificadas; en curso la **fase H**
-(diseño del player híbrido + investigación de emisión mp4) — ver
+F0-F9 del paradigma anterior cerradas y verificadas; en curso la **fase H** —
+sondas de capacidad y banco de reproducción en aparatos reales, después la matriz
+de emisión multi-códec y la spec del formato — ver
 [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md). Una publicación pública sigue
 condicionada por licencia, procedencia y derechos de los videos.
 
@@ -164,10 +168,16 @@ debe validarse nuevamente.
 ### Documentación activa
 
 - [`CLAUDE.md`](CLAUDE.md): guía de arranque de sesión, modelo de trabajo e invariantes.
+- [`docs/VISION-Y-OBJETIVOS.md`](docs/VISION-Y-OBJETIVOS.md): **el norte** — qué
+  construimos, de qué linaje sale cada pieza, escalera de intervención, no-objetivos.
 - [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md): estado vivo — próxima acción, una
   fila por tarea cerrada, SHAs de referencia.
 - [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md): reglas de ejecución
-  y tareas de la fase H (híbrido).
+  y tareas de la fase H (H-4..H-8).
+- [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md): sondas, banco de reproducción y
+  registro de aparatos — lo que desbloquea al formato.
+- [`docs/DISENO-FORMATO-ASCLH.md`](docs/DISENO-FORMATO-ASCLH.md): el formato en obra, con
+  la tabla de decidido vs. gateado por medición.
 - [`docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md):
   decisiones append-only, por Instancia.
 - [`docs/ejecutados/`](docs/ejecutados/README.md): resumen por fase cerrada.

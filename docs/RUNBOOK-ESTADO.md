@@ -15,17 +15,76 @@ Reglas de uso:
 4. Toda decisión que desvíe del runbook se anota en la bitácora de abajo con fecha y
    motivo. El runbook no se edita en silencio.
 
-## Próxima acción (actualizado 2026-09-01 — DECISIÓN TOMADA: nace ASCILINE-hybrid)
+## Próxima acción (actualizado 2026-09-01 — el alcance es un FORMATO PROPIO)
 
-**El operador decidió la dirección el 2026-09-01: el proyecto adopta el carril
-mp4/híbrido y continúa en este repo, `leoIglesias-hash/ASCILINE-hybrid`** (clon
-con la historia completa de `ASCILINE-video` — `main` + `assets` —; el repo
-anterior queda congelado como antecesor, con un aviso de continuación). Sus
-palabras: *«el paradigma cambió… necesitamos trabajar con mp4 pero logrando
-mejoras de reproductividad, y para eso tendremos que hacer nuevas
-investigaciones»*.
+> **Leer primero [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md).** Es el norte
+> del proyecto y lo que evita que una sesión post-compact se desvíe. Después,
+> [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md), que es lo que desbloquea todo lo
+> demás.
 
-El porqué, medido en la caja real (REGISTRO, DIAG-002/003, 2026-08-31..09-01):
+**Dos cosas pasaron el 2026-09-01, en este orden.** Primero el operador decidió
+la dirección que DIAG-002/003 había dejado pendiente (adoptar el híbrido; nace
+este repo; **H-0 cerrada**). Después, en un debate de ideas el mismo día, el
+alcance se amplió: ya no construimos «un player híbrido con mp4», sino
+
+> **un formato de video propio, códec-agnóstico, que se decide caro y offline, se
+> reproduce siempre por hardware, y se puede intervenir en vivo sin re-codificar.**
+
+Sus palabras: *«nuestro propio formato de video sería ideal… sacar de estos
+formatos cada cosa útil: v9 la compresión, dash la compatibilidad, asciline la
+base que permite todo. encoder caro no importa, decoder con poco estrés»*.
+
+**Lo que quedó fijado en el debate** (desarrollo en
+[`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md)):
+
+- **`<video>` es la única puerta al hardware.** Todo lo que emitamos termina en
+  algo que `<video>` acepta nativamente; nada se decodifica en CPU propia.
+- **Códec-agnóstico desde el día uno:** piezas etiquetadas, el aparato elige.
+  H.264 Baseline es el **piso**, no el centro. Hipótesis fuerte a verificar: si
+  YouTube anda bien en la caja, esa caja tiene **VP9 por hardware** — o sea que
+  VP9 es su camino más rodado, no el exótico.
+- **De DASH tomamos el modelo de datos** (Periods / AdaptationSets /
+  Representations / segmentos por rango de bytes), no su runtime. Es la gramática
+  exacta de un contenido intervenible: **cambiar solo la música es cambiar de
+  pista**, y una intervención es un Period.
+- **Base 1280×720 con fps variable** (decisión del operador). Fijar la resolución
+  es lo que vuelve **intercambiables** a las piezas y evita que el decodificador
+  se reconfigure a mitad de stream. El fps variable por segmento es
+  probablemente el ahorro más grande y más barato de todo el sistema.
+- **Escalera de intervención N1–N4** con su límite honesto escrito: N1
+  estructural (gratis), N2 composición encima, N3 variantes pre-codificadas, N4
+  sub-cuadro (investigación). Tocar un píxel arbitrario del video en vivo es
+  imposible y todo diseño que lo necesite está mal planteado.
+- **Nada se normaliza sin medición.** El proyecto ya se equivocó una vez por
+  suponer capacidades (F9 completa, y en la caja 290 ms/cuadro contra 66,7).
+
+**Lo vivo, en orden** (cuerpos en
+[`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2):
+
+1. **H-4 — sonda de capacidades** (`frontend/probe.html`, nueva): la lista
+   cerrada de [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) §2 — códecs, VP9 por
+   hardware, alfa en WebM, MSE, `blob:`, IndexedDB, instrumentos de medición,
+   videos simultáneos, canvas encima del video, panel real, HLS/DASH nativo.
+   **Es la próxima acción real.**
+2. **H-5 — banco de reproducción** (`frontend/tv-video-test.html` crece): medir
+   con `getVideoPlaybackQuality()` en vez de a ojo.
+3. **H-6 — matriz de emisión multi-códec** desde el máster vigente: códec × fps
+   fijo/variable × bitrate × estructura × zonas estáticas × paleta consciente del
+   4:2:0. Cierra con **una receta por perfil de dispositivo**, no una global.
+4. **H-7 — spec normativa del formato** (`docs/SPEC-ASCLH.md`): solo con la tabla
+   de H-4/H-5/H-6; cierra las filas «gateadas» de
+   [`DISENO-FORMATO-ASCLH.md`](DISENO-FORMATO-ASCLH.md) §10.
+5. **H-8 — muxer ES5 + player híbrido mínimo:** solo con H-7 aprobada.
+6. **W-26** (heredada, independiente): la raíz publicada elige WebGL sin salida.
+7. Externo: pedirle a la app de la caja que el WebView reporte el panel real
+   (hoy da 3840×2160 sobre un panel de 1280×720 = 9× de píxeles regalados).
+
+**H-1, H-2 y H-3 quedaron REEMPLAZADAS** el mismo día por el debate: eran el
+diseño del player híbrido, la investigación de emisión H.264 y el player mínimo;
+su contenido está absorbido y ampliado en H-4..H-8. Esos IDs no se reusan.
+
+**El porqué de todo esto, medido en la caja real** (REGISTRO, DIAG-002/003,
+2026-08-31..09-01):
 
 - el player 100 % JS **no llega a 15 fps ahí** (FRAME p50 290 ms contra 66,7 de
   presupuesto; el cuello es CPU — `inflate` solo ya come el presupuesto — y la
@@ -36,41 +95,21 @@ El porqué, medido en la caja real (REGISTRO, DIAG-002/003, 2026-08-31..09-01):
   `<video>` con decodificador de **hardware** — y pesa **6× menos** que el
   `.asclv` (17 %) y 10,6 % del mp4 fuente.
 
-**El paradigma nuevo:** el encoder sigue decidiendo todo offline y el `.asclv`
-sigue siendo el **máster** determinista; lo que viaja al TV es el **mp4 emitido
-desde ese máster** (`preview=true` del workflow `encode`), y la **intervención**
-(números, texto, logo, canal en vivo) va en un canvas encima — dos capas, por
-decisión del operador. El player JS queda como reproductor de escritorio y banco
-de verificación del máster: se mantiene, no crece.
+**El máster no se reemplaza:** el `.ascl`/`.asclv` sigue siendo la verdad
+determinista offline (paleta, trellis, look, byte-identidad). El formato nuevo
+(`.asclh`, nombre provisorio) **lo envuelve**: es lo que viaja. El player JS
+queda como reproductor de escritorio y banco de verificación del máster: se
+mantiene, no crece.
 
-Lo vivo, en orden (cuerpos en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2):
-
-1. **H-0 — repo nuevo + reorganización de docs: CERRADA con este commit.** Los
-   diseños y planes del paradigma JS pasaron **verbatim** a
-   [`historico/`](historico/README.md); F10, F11, F8, DIAG-001 y las opcionales
-   quedan **suspendidas** (no borradas: recuperables con decisión del operador).
-2. **H-1 — `DISENO-HIBRIDO.md`** (diseño formal, sin código): sincronía
-   intervención↔video, cómo viaja el sidecar si el TV ya no baja el `.asclv`,
-   distribución del mp4 con CACHE-001 por contenido, fallback si no hay `<video>`.
-3. **H-2 — investigación de reproducibilidad mp4** (paralelizable con H-1):
-   matriz de emisión H.264 (bitrate/CRF, profile/level, GOP, two-pass) desde el
-   máster vigente, medida en la caja con `frontend/tv-video-test.html` y cerrada
-   con veredicto del operador.
-4. **H-3 — player híbrido mínimo** (`<video>` + canvas de intervención reusando
-   `overlay.js`/`textlayer.js`/`slots.js`): **solo con H-1 aprobada.**
-5. **W-26** (heredada, independiente): la raíz publicada elige WebGL sin salida —
-   aceptar `?renderer=` y decidir el default para WebViews de TV box.
-6. Externo: pedirle a la app de la caja que el WebView reporte el panel real
-   (hoy da 3840×2160 sobre un panel de 1280×720 = 9× de píxeles regalados).
-
-**Principio del operador (2026-08-31, sigue vigente):** la **resolución y los
-fps son elegibles por video, siempre**, nunca fijados por una receta. Aplica
-igual a la emisión del mp4: densidad y fps se eligen por clip.
+**Principio del operador (2026-08-31, sigue vigente):** los valores manuales
+prevalecen sobre cualquier automatismo, y **la densidad se elige por clip** —
+ahora **dentro** del paquete (vía Representations), sin cambiar la resolución
+base del contenedor.
 
 **Estado de fases: F0-F9 completas y verificadas (paradigma anterior; resúmenes
 en [`ejecutados/`](ejecutados/README.md)); DIAG-002/003 cerradas con decisión;
-abierta la fase H (H-0 cerrada, H-1/H-2 próximas); F10/F11/F8/DIAG-001
-suspendidas.** El detalle: tabla de tareas abajo y las tablas archivadas.
+abierta la fase H (H-0 cerrada, H-1..H-3 reemplazadas, H-4 próxima);
+F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla de tareas abajo.
 
 **Receta de producto vigente (2026-08-31, S-4 cerrada):** defaults del workflow
 `encode` + **`format=v3`** + **`tile=sweep`** + **`--cols 1280`** en extra —
@@ -78,7 +117,8 @@ suspendidas.** El detalle: tabla de tareas abajo y las tablas archivadas.
 `--palette-refit 5 --near-lossless 8 --cols 1280` →
 **`dcd6afb6…1632a`** (24.458.884 B, 35,02 dB, **62,8 % del mp4 fuente**; el sweep
 elige regional 32 con trellis espacial 16; ~1 h de runner, RSS 1,6 GB). Instalado en
-`outputs/` y servido como raíz de iargen.com/player/ vía puntero CACHE-001.
+`outputs/` y servido como raíz de iargen.com/player/ vía puntero CACHE-001. **Es el
+máster de entrada de toda la matriz de emisión H-6.**
 
 **Player EN PRODUCCIÓN** (infra propia, nada preexistente tocado): bucket R2 +
 Worker `asciline-player`, ruta `iargen.com/player*`, espejo
@@ -113,6 +153,7 @@ contenido, aunque `publish-player` la asuma; ese workflow no funcionaría hoy. D
 | implementación 2 | 2026-08-27 | clon real de GitHub, `906b010` | máquina sin Python/Node **a propósito**: la regresión se valida en GitHub Actions en cada push; commits directos a `main`, un commit por tarea |
 | F6 (S-4) | 2026-08-30 | `main` en `ae5f574` (post-deploy del player) | arranca la revisión única de formato; orden elegido F6-1 → F6-3 → F6-2 → F6-4 (el barrido definitivo de tile corre sobre el codec v3 final) |
 | fase H (H-0) | 2026-09-01 | clon de `ASCILINE-video` en `f89abcd` (cierre del diagnóstico DIAG-002/003) → repo nuevo `leoIglesias-hash/ASCILINE-hybrid` | historia completa preservada (`main` + `assets`); mismo modelo de trabajo (CI-only, commits directos a `main`) |
+| fase H (debate + documentación objetiva) | 2026-09-01 | `main` de `ASCILINE-hybrid` en `8dae1e5` (H-0 cerrada, CI verde) | debate de dirección con el operador el mismo día: el alcance pasa a un **formato propio códec-agnóstico**. Se escriben `VISION-Y-OBJETIVOS.md`, `DISENO-FORMATO-ASCLH.md` y `PLAN-DE-MEDICION.md`; H-1..H-3 quedan reemplazadas por H-4..H-8. Sin código |
 
 > Al iniciar cada sesión de implementación: agregar una fila con el commit o snapshot
 > sobre el que se trabaja. Si el árbol cambió desde el 2026-08-27, localizar las
@@ -125,10 +166,13 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 
 | ID | Fase | Qué | Estado | Δbytes |
 |---|---|---|---|---|
-| H-0 | H | repo `ASCILINE-hybrid` + docs reorganizadas al paradigma mp4/híbrido | **cerrada 2026-09-01** (este commit) | no |
-| H-1 | H | `DISENO-HIBRIDO.md`: sincronía intervención↔video, sidecar, distribución CACHE-001 del mp4, fallback | pendiente | no |
-| H-2 | H | investigación de reproducibilidad mp4: matriz de emisión H.264 desde el máster, medida en la caja | pendiente | sí (mp4) |
-| H-3 | H | player híbrido mínimo (`<video>` + canvas de intervención) | pendiente (precondición: H-1) | no |
+| H-0 | H | repo `ASCILINE-hybrid` + docs reorganizadas al paradigma mp4/híbrido | **cerrada 2026-09-01** (`8dae1e5`) | no |
+| H-1..H-3 | H | (diseño del player híbrido / emisión H.264 / player mínimo) | **reemplazadas 2026-09-01** por el debate de dirección; absorbidas y ampliadas en H-4..H-8. IDs no reusables | — |
+| H-4 | H | **sonda de capacidades** (`frontend/probe.html`): códecs, VP9 hw, alfa WebM, MSE, `blob:`, IndexedDB, videos simultáneos, canvas encima, panel real | **próxima acción** | no |
+| H-5 | H | **banco de reproducción**: `getVideoPlaybackQuality()` — caídos, arranque, deriva, atascos, con y sin intervención | pendiente | no |
+| H-6 | H | **matriz de emisión multi-códec** desde el máster: códec × fps variable × bitrate × estructura × zonas estáticas × paleta 4:2:0 | pendiente (precondición: H-4) | sí (variantes) |
+| H-7 | H | **spec normativa `SPEC-ASCLH.md`**: contenedor, manifiesto, segmentos, sprites, cues, huecos, perfil → camino de runtime | pendiente (precondición: H-4..H-6) | define bytes |
+| H-8 | H | **muxer ES5 + player híbrido mínimo** (incluye «cambiar solo la música») | pendiente (precondición: H-7) | no |
 | W-26 | — | escape `?renderer=` en la raíz publicada + default para TV box | pendiente | no |
 
 **Suspendidas por el cambio de dirección (2026-09-01)** — recuperables verbatim de
@@ -172,7 +216,7 @@ re-implementa — se extiende. Resumen por carril:
 | S-8 | **F9 — aceleración del frontend** (W-16..W-25) | cerrada | 2026-08-31 | medida y publicada (28 keys). Diseño archivado: [`historico/DISENO-RENDER-INDEXADO.md`](historico/DISENO-RENDER-INDEXADO.md) |
 | S-9 | **F10 — pérdida adaptativa por suavidad** (E-25..E-28) | **suspendida** (cambio de dirección 2026-09-01) | | diseño archivado: [`historico/DISENO-PERDIDA-ADAPTATIVA.md`](historico/DISENO-PERDIDA-ADAPTATIVA.md); si se retoma sigue valiendo — el mp4 hereda los píxeles del máster |
 | S-10 | **F11 — formato v4: LOD por tile + transparencia** (E-30, F11-1..5) | **suspendida** (cambio de dirección 2026-09-01) | | diseño archivado: [`historico/DISENO-FORMATO-V4-LOD-Y-ALPHA.md`](historico/DISENO-FORMATO-V4-LOD-Y-ALPHA.md); su motivación principal (aliviar el decoder JS) desapareció con el híbrido |
-| H | **fase H — híbrido mp4 + intervención** (H-0..H-3, W-26) | en curso | 2026-09-01 | H-0 cerrada (nace este repo); cuerpos en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2 |
+| H | **fase H — formato propio híbrido** (H-0, H-4..H-8, W-26) | en curso | 2026-09-01 | H-0 cerrada (nace este repo). **H-1..H-3 reemplazadas el mismo día** por el debate de dirección: el alcance pasó de «un player híbrido con mp4» a «un formato propio códec-agnóstico». Norte: [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md); cuerpos en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2; lo que desbloquea todo: [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) |
 | S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | cerrada | 2026-08-31 | Instancia 028: tres escalones aprobados a ojo; **producto = 1280 @15 fps** (`2a9201bf…b778`, 63 % de la fuente; el 1920 descartado por fluidez a 10 fps, no por imagen — vuelve a más fps como prueba futura y el front debe procesar cualquier resolución). Hallazgo central: la tasa por celda CAE al subir resolución (0,1451 → 0,1144 → 0,1023 B/celda/frame). Re-encode del producto diferido al cierre de S-4 (v3 + tile ganador) |
 
 ## Referencias de clips (SHA-256)
@@ -256,3 +300,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-31 | **F9 CERRADA: frontend publicado en las cuatro carpetas, 28 keys** (Instancia 040). El operador aprobó publicar de forma explícita. El número de keys **se auditó en vez de estimarse**: se bajaron los 18 archivos de las 4 carpetas y se comparó SHA-256 contra el repo — 4 diferían (`live-player.html`/`index.html`, `tv-player.html`, `diagnostic-player.html`, `overlay.js`), 2 daban 404 (`playloop.js`, `player.html`) y los 12 restantes estaban idénticos. 7 por carpeta × 4 = **28**, contra las «25» que decían los runbooks. Subida con token efímero + `x-sha256` (R2 recalcula el digest), las 28 verificadas byte a byte después, token quemado | dos cosas para la próxima: (a) **auditar lo servido antes de publicar** es barato (68 GETs) y corrige una cuenta escrita a mano que ya estaba mal; (b) el burn del secret **tarda unos segundos en propagar** — el primer `PUT` con el token viejo devolvió `200` y recién el siguiente dio `403`. Dar por quemado un token con una sola prueba es un falso negativo de seguridad |
 | 2026-08-31 | **DIAG-002 abierta y puesta ADELANTE DE TODO: pantallazos blancos en TV box** (reporte del operador, Instancia 040). Probó el player en un **WebView de TV box** y ve **flashes blancos entre las imágenes**: «eso es algo crítico… es muy grave y deberíamos estudiarlo». Se registra antes de investigar para que el reporte no se pierda | un flash blanco en un televisor rompe el producto: pesa más que cualquier ganancia de bytes o de milisegundos, así que se adelanta a F10. Dato de encuadre que **no** hay que perder: lo que el operador probó es lo que estaba publicado **antes** de esta instancia, o sea la raíz **sin** cadencia ni pre-decode. Si el motor nuevo mejora, empeora o no cambia el síntoma **hay que medirlo, no suponerlo** — y el nuevo `playloop.js` recién ahora está en la raíz |
 | 2026-09-01 | **DECISIÓN DE DIRECCIÓN TOMADA + H-0: nace `ASCILINE-hybrid`** — el operador adoptó el carril mp4/híbrido tras el cuadro final de DIAG-002/003 («el paradigma cambió… necesitamos trabajar con mp4 pero logrando mejoras de reproductividad»). Se creó `leoIglesias-hash/ASCILINE-hybrid` (privado) clonando la historia completa (`main` + `assets`); los diseños/planes del paradigma JS se movieron **verbatim** a `docs/historico/` con README propio; runbooks, índice y CLAUDE.md reescritos para la fase H (H-1 diseño, H-2 investigación mp4, H-3 player híbrido, W-26 heredada); F10/F11/F8/DIAG-001 y opcionales quedan **suspendidas**, recuperables solo con decisión del operador | el repo anterior (`ASCILINE-video`) queda congelado como antecesor con aviso de continuación; conserva su valor como historia y evidencia. La filosofía no cambia: el encoder caro decide offline y el `.asclv` sigue de máster — cambia el transporte (mp4 emitido del máster, decodificado por hardware en el TV) y el invariante de un-solo-layer pasa a dos capas (video + canvas de intervención) por decisión explícita del operador. La rama `feature/quality-optimization` vieja no se migró (estancada; vive en los remotos del repo anterior) |
+| 2026-09-01 | **EL ALCANCE SE AMPLÍA: de «player híbrido» a FORMATO PROPIO** (debate de dirección con el operador, mismo día que H-0, sin código). Sus palabras: «nuestro propio formato de video sería ideal… sacar de estos formatos cada cosa útil: **v9 la compresión, dash la compatibilidad, asciline la base que permite todo. encoder caro no importa, decoder con poco estrés**», y «estamos abiertos a nuevos paradigmas». Lo fijado: (a) **`<video>` es la única puerta al hardware** — todo termina en algo que `<video>` acepta nativo, nada se decodifica en CPU propia; (b) **códec-agnóstico desde el día uno** (piezas etiquetadas, el aparato elige; H.264 Baseline es el piso, no el centro); (c) de **DASH el modelo de datos** (Periods / AdaptationSets / Representations / segmentos por rango), no su runtime; (d) **base 1280×720 con fps variable** (decisión del operador); (e) **escalera de intervención N1–N4** con su límite imposible escrito; (f) **nada se normaliza sin medición**. Documentos nuevos: `VISION-Y-OBJETIVOS.md` (norte), `DISENO-FORMATO-ASCLH.md` (diseño en obra, con tabla de decidido vs. gateado) y `PLAN-DE-MEDICION.md` (sondas, banco, registro de aparatos). H-1..H-3 **reemplazadas** por **H-4..H-8** | tres razones por las que el orden cambió a **medir primero**: (a) el proyecto ya se equivocó una vez por suponer capacidades — F9 completa, medida y publicada, y en la caja real 290 ms/cuadro contra 66,7; (b) la hipótesis más rentable es verificable en minutos: **si YouTube anda bien en la caja, esa caja tiene VP9 por hardware**, o sea que VP9 es su camino más rodado y no el exótico, lo que da vuelta la suposición de que H.264 era «lo compatible»; (c) hay bifurcaciones de diseño que no se pueden resolver escribiendo — si un canvas encima del `<video>` le baja el fps, la intervención va **al lado** y no encima, y eso cambia el layout de todo el producto. Fijar 1280×720 no es estético: es lo que hace **intercambiables** a las piezas (cabecera compartida) y evita que el decodificador se reconfigure a mitad de stream, causa clásica de tildado en SoCs baratos. El fps variable es gratis en el contenedor —la duración de cada cuadro es un dato, no bitstream— y baja el costo de decodificación de forma lineal. El caso «cambiar solo la música» resultó ser **el más fácil** del sistema, no el más difícil: es cambiar de pista de audio, y en su versión inmediata ni siquiera necesita el muxer |

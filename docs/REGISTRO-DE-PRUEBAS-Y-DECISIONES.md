@@ -2973,3 +2973,141 @@ hibrido minimo solo con H-1 aprobada; W-26 heredada. F10/F11/F8/DIAG-001
 quedan SUSPENDIDAS, recuperables de `historico/` solo con decision del
 operador. Nota dejada por escrito: si se retoma F10, sigue teniendo efecto -
 el mp4 hereda los pixeles del master.
+
+## Debate de dirección: el alcance pasa a un FORMATO PROPIO (2026-09-01)
+
+Mismo día que la decisión anterior y que H-0, en un debate explícitamente sin
+acción («trabajemos en un debate en el cual todavía no tendremos acción»), el
+operador amplió el alcance del proyecto. No es un ajuste: cambia qué estamos
+construyendo.
+
+**Los problemas que planteó** (siete, textuales en lo esencial): (1) con mp4 se
+pierde la intervención en vivo que el player JS hacía en un solo canvas;
+(2) tampoco se puede hacer un personaje sin fondo interactuando con una capa
+anterior; (3) el mp4 normalmente no queda en caché del navegador, y las wifi de
+los locales fallan; (4) se abre una puerta de eficiencia inversa — antes
+evitábamos pedirle trabajo al aparato, ahora hay que **exprimir** el hardware de
+video, aprendiendo de sistemas que funcionan bien ahí (YouTube); (5) el paradigma
+real es un WebView dentro de una app propia modificable, pero primero hay que
+resolverlo en la **versión web**, apuntando a que aguante 2-3 videos sin
+romperse; (6) están abiertos los paradigmas nuevos; (7) para datos vivos se puede
+usar multicapa, pero al mínimo, porque los WebViews se degradan con la cantidad
+de DOM.
+
+**Y la corrección de encuadre que ordenó todo**, después de una primera ronda en
+la que la discusión se había centrado en el chip de esta caja: *«te estás
+centrando en el bloque de silicio del decoder de este tv box, pero en realidad
+estamos basándonos en este para crear un nuevo formato compatible con todo…
+seguramente lo que permite usar estos recursos mejor es la etiqueta video. por
+eso te digo que nuestro propio formato de video sería ideal… algo que tenemos que
+entender probando y ejecutando mejoras constantes»*. Y el cierre: *«sacar de
+estos formatos cada cosa útil: **v9 la compresión, dash la compatibilidad,
+asciline la base que permite todo. encoder caro no importa, decoder con poco
+estrés**»*.
+
+**Lo que quedó fijado:**
+
+1. **Qué construimos:** un **formato de video propio, códec-agnóstico**, que se
+   decide caro y offline, se reproduce **siempre por hardware** y se puede
+   **intervenir en vivo sin re-codificar**. No es un player: es un paquete + un
+   contrato de reproducción.
+2. **`<video>` es la única puerta al hardware.** Desde una página no hay otra
+   forma de tocar el decodificador; ni WebGL ni WASM ni un decoder propio (todo
+   eso es CPU, y ese camino ya se midió y se descartó en DIAG-002/003). Por lo
+   tanto **todo lo que emitamos termina en algo que `<video>` acepta nativo**, y
+   a cambio funciona en todo lo que tenga un `<video>`.
+3. **Códec-agnóstico desde el día uno.** Las piezas van etiquetadas y el aparato
+   elige. H.264 Baseline es el **piso universal**, no el centro del diseño.
+   Hipótesis fuerte, verificable en minutos: **si YouTube anda bien en la caja,
+   esa caja tiene VP9 por hardware** (YouTube sirve VP9 en Android TV) — o sea
+   que VP9 es su camino **más rodado**, no el exótico. Eso da vuelta la
+   suposición con la que se venía trabajando.
+4. **Composición de linajes.** De **VP9/AV1**: compresión y primitivas — golden
+   frames / alt-ref (fondo estático + primer plano resuelto **dentro** del
+   códec), tiles independientes (la vía limpia para intercambiar un rectángulo) y
+   **alfa real en WebM** (video transparente compuesto por el navegador, sin
+   canvas ni CPU: la respuesta más limpia al problema 2). De **DASH**: el
+   **modelo de datos** — Periods (una intervención = un Period), AdaptationSets
+   (video y audio independientes → **cambiar solo la música es cambiar de
+   pista**), Representations (variantes por códec, por capacidad **o por
+   contenido**), duraciones variables por segmento, direccionamiento por rango de
+   bytes; adoptamos su modelo, **no su runtime**. De **HLS**: la validación de
+   campo de que un video puede ser una lista de piezas, y el piso de
+   compatibilidad. De **ASCILINE**: el máster determinista, la intervención
+   matricial con índice transparente y la disciplina de medición — la ventaja
+   competitiva real es que **controlamos los píxeles antes de que entren al
+   códec**, y eso ningún encoder genérico lo tiene.
+5. **Base 1280×720 con fps variable** (decisión del operador). No es estético:
+   fijar la resolución es lo que vuelve **intercambiables** a las piezas
+   (comparten cabecera de códec, se concatenan sin re-codificar) y evita que el
+   decodificador se **reconfigure** a mitad de stream, causa clásica de tildado y
+   crash en SoCs baratos. El fps, en cambio, es libre y **variable por segmento**:
+   en un contenedor la duración de cada cuadro es un dato, no bitstream, así que
+   se retimea sin re-codificar — y menos cuadros es menos trabajo de
+   decodificación, de forma lineal. Probablemente el ahorro más grande y barato
+   del sistema, y **lo puede derivar el encoder solo** (el máster ya sabe dónde
+   hay movimiento).
+6. **Escalera de intervención**, con su límite honesto por escrito: **N1**
+   estructural (elegir piezas, orden, duración y audio — gratis, en el
+   manifiesto); **N2** composición encima (sprites ASCILINE con alfa y texto en
+   el canvas, cayendo en **huecos horneados por el encoder**; o video WebM con
+   alfa donde exista); **N3** variantes pre-codificadas (fuerza bruta: N copias
+   del mismo segmento con distinto contenido); **N4** intercambio sub-cuadro
+   (tiles/slices) como **investigación de alto riesgo, no cimiento**. **N5 es
+   imposible**: tocar un píxel arbitrario del video en vivo exige re-codificar, y
+   re-codificar en el TV no va a pasar — todo diseño que lo necesite está mal
+   planteado y se baja a N1-N3.
+7. **Perfiles de dispositivo P0..P3** (piso H.264+blob → VP9 → MSE/IndexedDB/dos
+   decodificadores → AV1/tiles/rVFC). **Qué perfil le toca a cada aparato sale de
+   la medición, no del criterio de nadie.**
+8. **Nada se normaliza sin medición.** Regla nueva del runbook (§0.8).
+
+**Por qué el orden cambió a medir primero.** El proyecto ya se equivocó una vez
+por suponer capacidades: F9 completa, medida y publicada (W-16..W-25), y en la
+caja real 290 ms por cuadro contra 66,7 de presupuesto. El trabajo estaba bien
+hecho; la suposición de base estaba mal. Además hay bifurcaciones que no se
+resuelven escribiendo: **si un canvas encima del `<video>` le baja el fps al
+video** (puede sacarlo de su plano de hardware), la intervención va **al lado** y
+no encima — y eso cambia el layout de todo el producto.
+
+**Advertencia técnica registrada para no malinterpretar mediciones futuras:**
+muchos trucos clásicos para aliviar H.264 (entropía más simple, filtro de bloques
+apagado) rinden **solo si el decodificador es por software**; en hardware esas
+etapas son silicio y son casi gratis, y ahí lo que cuesta es ancho de banda de
+memoria, cantidad de cuadros, tamaño del buffer de referencias y picos de
+bitrate. Por eso «¿hardware o software?» se responde **antes** de barrer la
+matriz de emisión: bifurca toda la lista de optimizaciones.
+
+**Hallazgo lateral que vale una tarea futura:** todos los códecs submuestrean el
+color (4:2:0), lo cual es veneno para arte plano con bordes duros y podría
+explicar parte del escalonado que se venía persiguiendo (DIAG-001). Elegir la
+paleta de modo que los colores se separen sobre todo en **luma** haría que el
+submuestreo casi no dañe. Es una restricción nueva para el K-means y no la aplica
+nadie más. Anotada en `DISENO-FORMATO-ASCLH.md` §11 y como eje de H-6.
+
+**El caso «cambiar solo la música» resultó ser el más fácil del sistema**, no el
+más difícil: es elegir otra Representation del AdaptationSet de audio, y en su
+versión inmediata ni siquiera necesita el muxer (un `<audio>` separado usa un
+decodificador distinto, no compite por la sesión de video, y cambiar de tema es
+cambiar un `src`).
+
+**Lo que NO es este proyecto**, escrito para que ninguna sesión futura lo intente:
+no inventamos un códec; no escribimos un encoder desde cero (manejamos encoders
+existentes **desde el máster** — nosotros decidimos keyframes, fps por segmento,
+zonas estáticas, paleta y estructura); no cargamos un player DASH/HLS (tomamos su
+modelo, no su runtime); no decodificamos video en JS; no hacemos crecer el player
+JS anterior; no diseñamos sobre suposiciones de capacidades.
+
+**Documentación creada** (sin código, a pedido del operador — «en vez de ya
+empezar a lo loco… creá documentación que nos permita luego hacer compacts y
+seguir sin perdernos la línea de trabajo»): `docs/VISION-Y-OBJETIVOS.md` (el
+norte: filosofía, linajes, objetivos macro, escalera de intervención, perfiles,
+invariantes, no-objetivos), `docs/DISENO-FORMATO-ASCLH.md` (el formato en obra,
+con **tabla explícita de decidido vs. gateado por medición**) y
+`docs/PLAN-DE-MEDICION.md` (sondas, banco, matriz de emisión y registro de
+aparatos vacío). Runbooks actualizados: **H-1..H-3 quedan REEMPLAZADAS** (eran el
+diseño del player híbrido, la investigación de emisión H.264 y el player mínimo;
+su contenido está absorbido y ampliado) por **H-4** sonda de capacidades, **H-5**
+banco de reproducción, **H-6** matriz de emisión multi-códec, **H-7** spec
+normativa del formato y **H-8** muxer ES5 + player híbrido mínimo. Esos IDs no se
+reusan. Próxima acción real: **H-4**.

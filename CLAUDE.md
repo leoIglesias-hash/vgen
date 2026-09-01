@@ -1,26 +1,38 @@
 # ASCILINE-hybrid — guía de sesión (leer esto primero, siempre)
 
 **Sucesor de `ASCILINE-video` desde el 2026-09-01, por decisión del operador.**
+
+Construimos **un formato de video propio, códec-agnóstico, que se decide caro y
+offline, se reproduce siempre por hardware, y se puede intervenir en vivo sin
+re-codificar.** No es un player: es un **paquete + un contrato de reproducción**.
+
 El encoder Python **offline** sigue decidiendo todo (paleta, trellis, look) y
-emitiendo el `.ascl`/`.asclv` como **máster determinista**; lo que cambió es el
-transporte: al TV ya no viaja el `.asclv` para que un player JS lo decodifique,
-sino el **mp4 (H.264) emitido desde ese máster**, reproducido por `<video>` con
+emitiendo el `.ascl`/`.asclv` como **máster determinista**. Lo que cambió es el
+transporte: al TV ya no viaja el `.asclv` para que un player JS lo decodifique;
+viaja un paquete emitido desde ese máster cuyo video reproduce `<video>` con
 decodificador de **hardware**, con la **intervención** (números, texto, logo,
-canal en vivo) en un **canvas encima** — dos capas. Por qué: medido en la TV box
-real, el player JS da 290 ms/frame contra 66,7 de presupuesto (cuello CPU),
+canal en vivo) en un canvas encima — dos capas. Por qué: medido en la TV box
+real, el player JS da 290 ms/cuadro contra 66,7 de presupuesto (cuello CPU),
 mientras el mismo producto como mp4 de 4,1 MB *«reproduce muy bien»*
-(DIAG-002/003, REGISTRO 2026-09-01). Encoder caro, TV que solo ejecuta: la
-filosofía no cambió, cambió el músculo que ejecuta.
+(DIAG-002/003, REGISTRO 2026-09-01).
+
+**Encoder caro, decoder sin estrés.** La filosofía no cambió; cambió el músculo
+que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 
 ## Arranque post-compact — en este orden, sin leer de más
 
-1. [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) — dónde quedó todo, próxima acción, bitácora.
-2. [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md) — **solo la tarea a ejecutar** (fase H).
-3. [`docs/ejecutados/`](docs/ejecutados/) — lo ya cumplido con su evidencia; consultar, no releer.
-4. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
-5. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
+1. [`docs/VISION-Y-OBJETIVOS.md`](docs/VISION-Y-OBJETIVOS.md) — **el norte**: qué
+   construimos, de qué linaje sale cada pieza, invariantes y no-objetivos. Si se
+   lee un solo documento de diseño, es este.
+2. [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) — dónde quedó todo, próxima acción, bitácora.
+3. [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md) — **solo la tarea a ejecutar** (fase H).
+4. [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md) — sondas, banco y registro de aparatos; **es lo que desbloquea al formato**.
+5. [`docs/DISENO-FORMATO-ASCLH.md`](docs/DISENO-FORMATO-ASCLH.md) — el formato en obra, con la tabla de **decidido vs. gateado por medición**.
+6. [`docs/ejecutados/`](docs/ejecutados/) — lo ya cumplido con su evidencia; consultar, no releer.
+7. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
+8. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-## Modelo de trabajo (acordado con el operador; heredado sin cambios 2026-09-01)
+## Modelo de trabajo (acordado con el operador; heredado sin cambios)
 
 - **Esta máquina no tiene Python ni Node, a propósito.** Toda la regresión se
   valida en **GitHub Actions** (workflow `regression`) en cada push. Una tarea se
@@ -36,9 +48,10 @@ filosofía no cambió, cambió el músculo que ejecuta.
 - **Máster vigente** (receta S-4, 2026-08-31): workflow `encode` defaults +
   `format=v3` + `tile=sweep` + extra `--palette-refit 5 --near-lossless 8
   --cols 1280` → `.asclv` `dcd6afb6…1632a` (24.458.884 B, 35,02 dB, 1280×720
-  @15). **Su emisión mp4**: mismo workflow con **`preview=true`** →
-  `producto.mp4` 4.130.240 B (run 33532310754); vive local en `outputs/`
-  (gitignored) — regenerable, nunca se supone.
+  @15). **Es el máster de entrada de toda la matriz de emisión (H-6).** Su
+  emisión mp4 conocida: mismo workflow con **`preview=true`** → `producto.mp4`
+  4.130.240 B (run 33532310754); vive local en `outputs/` (gitignored) —
+  regenerable, nunca se supone.
 - **Al cerrar cada etapa, levantar el player para el operador**: bajar el
   artifact del CI a `outputs/`, correr `tools/serve-local.ps1` (puerto 8123,
   `Cache-Control: no-store`, sirve `.mp4`) y avisarle que abra
@@ -47,33 +60,44 @@ filosofía no cambió, cambió el músculo que ejecuta.
 
 ## Ayuda-memoria — no perder de vista nunca
 
-1. **Retrocompatibilidad JS:** todo frontend en sintaxis **ES5.1 estricta**
+1. **`<video>` es la única puerta al hardware.** Todo lo que emitamos termina en
+   algo que `<video>` acepta **nativamente**. Nada se decodifica en CPU propia —
+   ese camino ya se midió y se descartó. Si una idea no llega a `<video>`, no es
+   un camino.
+2. **La densidad decide el transporte.** Imagen densa a pantalla completa → va
+   por el `<video>`. Contenido escaso (personaje, destello, números, ruleta) o
+   reactivo a datos vivos → capa de intervención, cuyo costo es proporcional a su
+   área, no a la pantalla.
+3. **Pintar una vez, animar en el compositor.** Cero repintado de superficie
+   completa por cuadro; cero mutación de DOM dentro del loop. **Presupuesto de
+   capas: ≤1 `<video>` base, ≤1 canvas que repinta, ≤2 elementos que solo se
+   transforman.** Todo dato vivo se dibuja **dentro** del canvas, nunca como
+   nodos: los WebViews se degradan con la cantidad de DOM.
+4. **Encoder caro, decoder sin estrés.** El TV nunca cuantiza ni decide. La
+   fluidez se compra en la **emisión** (códec, fps por segmento, estructura), no
+   degradando la imagen que el encoder ya decidió.
+5. **Piezas intercambiables:** **1280×720 base fija** con **fps variable por
+   segmento** (decisión del operador, 2026-09-01). Fijar la resolución es lo que
+   permite que las piezas compartan cabecera y se concatenen sin re-codificar, y
+   evita que el decodificador se reconfigure a mitad de stream. La densidad se
+   sigue eligiendo por clip, pero **dentro** del paquete (vía Representations).
+6. **Retrocompatibilidad JS:** todo frontend en sintaxis **ES5.1 estricta**
    (gate `tests/test_frontend_compatibility.js`): sin `fetch`/`Promise`/`Worker`/
-   `WASM`/`JSON`/arrow/`let`/`const`/template strings. Vale igual para el player
-   híbrido nuevo.
-2. **Dos capas, y solo dos (decisión del operador, 2026-09-01):** `<video>`
-   hardware como base + **un** canvas de intervención encima que repinta solo la
-   zona intervenida. Reemplaza al invariante de un-solo-layer del paradigma
-   anterior. Jamás DOM overlay adicional ni un canvas por elemento. El canvas de
-   intervención es **Canvas2D** (en la caja medida, WebGL no presenta).
-3. **La optimización cara va offline:** el TV nunca cuantiza ni decide. La
-   fluidez se compra en la **emisión** del mp4 (H-2), no degradando la imagen
-   que el encoder ya decidió.
-4. **Validar todo antes de mutar; corrupción = excepción tipada.** Aplica al
-   máster y a todo parser nuevo (sidecar del híbrido incluido).
-5. **Determinismo y medición:** mismo input → mismos bytes, también para el mp4
-   emitido. Una mejora sin fila del REGISTRO no existe; byte-idéntico se
-   verifica, no se supone. Las mediciones de la caja las firma **el operador**.
-6. **Ningún buffer nuevo proporcional al frame por cuadro** en el loop estable
-   de la capa de intervención.
-7. **Canonicidad forzada del formato máster:** uvarint no canónico, padding ≠ 0
-   u offsets no crecientes se **rechazan**. Nada de eso se relaja por el híbrido.
-8. **Los valores manuales del operador prevalecen** sobre cualquier automatismo.
-   **Resolución y fps son elegibles POR VIDEO, nunca fijados por receta** — vale
-   también para la emisión del mp4.
-9. **El player JS anterior se mantiene, no crece:** queda como reproductor de
-   escritorio y banco de verificación del máster (las 4 páginas + `playloop.js`).
-   Única deuda activa ahí: **W-26** (escape `?renderer=` en la raíz).
+   `WASM`/`JSON`/arrow/`let`/`const`/template strings. Las APIs nuevas que
+   usamos (IndexedDB, MSE, Blob) son de **eventos**, no de promesas: entran sin
+   romper el gate.
+7. **Nada se normaliza sin medición.** Ninguna decisión de formato entra en la
+   spec sin una fila que la sostenga. Nada se estima: si no se midió, la celda
+   queda vacía. **Lo que requiere pantalla lo firma el operador**, textual.
+8. **Determinismo:** mismo máster + mismos parámetros → mismos bytes emitidos, en
+   cualquier códec. Byte-idéntico se verifica, no se supone.
+9. **Validar antes de mutar; corrupción = excepción tipada.** Y **canonicidad
+   forzada del máster**: uvarint no canónico, padding ≠ 0 u offsets no crecientes
+   se rechazan. Nada de eso se relaja por el formato nuevo.
+10. **Los valores manuales del operador prevalecen** sobre cualquier automatismo.
+    Y **el player JS anterior se mantiene, no crece**: queda como reproductor de
+    escritorio y banco de verificación del máster (las 4 páginas + `playloop.js`).
+    Única deuda activa ahí: **W-26** (escape `?renderer=` en la raíz).
 
 ## Estado (resumen grueso — el detalle vive en RUNBOOK-ESTADO)
 
@@ -86,12 +110,17 @@ filosofía no cambió, cambió el músculo que ejecuta.
   de la TV box terminó en la adopción del híbrido y este repo. Cuadro de
   evidencia en el REGISTRO; herramientas que quedaron:
   `frontend/tv-video-test.html` y el diagnostic con sección Pantalla/escala.
-- **En curso — fase H:** H-0 cerrada (este repo). Siguen **H-1**
-  (`DISENO-HIBRIDO.md`, sin código) y **H-2** (investigación de
-  reproducibilidad mp4: matriz de emisión H.264 medida en la caja con
-  `frontend/tv-video-test.html`), paralelizables; **H-3** (player híbrido
-  mínimo) solo con H-1 aprobada; **W-26** independiente. Externo: pedir a la
-  app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
+- **En curso — fase H.** H-0 cerrada (nace este repo). **H-1..H-3 reemplazadas**
+  el 2026-09-01 por el debate de dirección: el alcance pasó de «un player híbrido
+  con mp4» a «un formato propio códec-agnóstico»; esos IDs no se reusan. Lo vivo:
+  **H-4** sonda de capacidades (**próxima acción**), **H-5** banco de
+  reproducción, **H-6** matriz de emisión multi-códec, **H-7** spec normativa
+  `SPEC-ASCLH.md`, **H-8** muxer ES5 + player híbrido mínimo; **W-26**
+  independiente. Externo: pedir a la app que el WebView reporte el panel real
+  (hoy 3840×2160 sobre 1280×720).
+- **Hipótesis rectora a verificar en H-4:** si YouTube anda bien en la caja, esa
+  caja tiene **VP9 por hardware** — o sea que VP9 es su camino más rodado, no el
+  exótico. Da vuelta la suposición de que H.264 era «lo compatible».
 - **Suspendidas** (recuperables de `docs/historico/` solo con decisión del
-  operador): F10 (pérdida adaptativa — ojo: seguiría mejorando el mp4, que
+  operador): F10 (pérdida adaptativa — ojo: seguiría mejorando el producto, que
   hereda los píxeles del máster), F11 (formato v4), F8, DIAG-001, opcionales.
