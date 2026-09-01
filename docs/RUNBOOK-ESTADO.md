@@ -52,10 +52,17 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 > Con Canvas2D los blancos desaparecen pero el video sigue **entrecortado**: muestra
 > algunos frames y saltea otros. Es la cadencia de W-20 descartando cuadros tarde →
 > el trabajo por cuadro supera el presupuesto (66,7 ms a 15 fps) en esa CPU. Hipótesis:
-> `inflate` (ya era el 58 % en PC). **Próxima acción: dos datos del operador** —
+> `inflate` (ya era el 58 % en PC). **Pista nueva (2026-09-01):** por el escalado de
+> la app, el WebView le reporta a la página un viewport enorme (~3840×2160) — el
+> compositor estira cada frame a 4K, sospechoso adicional del entrecortado. Para
+> medirlo, el diagnostic ahora publica una sección **«Pantalla / escala»** (ventana
+> CSS, físico×dpr, pantalla, canvas buffer vs CSS con el factor de estirado) y el HUD
+> escala solo con el viewport (`?hud=N` lo fija; teclas +/− lo ajustan) porque a 12 px
+> era ilegible en la caja. **Próxima acción: dos datos del operador** —
 > (1) el HUD de `diagnostic-player.html?renderer=canvas2d` en el mismo WebView
-> (FRAME p50/p95, drops, costo por etapa) y (2) probar un mp4 en un `<video>` en ese
-> WebView (¿funciona el decode por hardware ahí adentro?). Con esos dos se decide entre
+> (FRAME p50/p95, drops, costo por etapa, y ahora los tamaños de pantalla) y (2) probar
+> un mp4 en un `<video>` en ese WebView (¿funciona el decode por hardware ahí adentro?).
+> Con esos dos se decide entre
 > optimizar el player actual (fps/resolución/inflate/W-21) o el **HÍBRIDO candidato**
 > (REGISTRO 2026-09-01): video base por `<video>` hardware pero renderizado por
 > nuestro encoder desde las celdas decididas + la intervención en el canvas encima

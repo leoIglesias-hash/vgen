@@ -32,11 +32,13 @@
   <div id="head">ASCILINE diagnostic</div>
   <div id="note">Cargando&hellip;</div>
   <div id="parity">paridad GL/2D: sin correr</div>
+  <div class="sec">Pantalla / escala</div>
+  <div id="env"></div>
   <div class="sec">Etapas del frame (ms)</div>
   <div id="stages"></div>
   <div class="sec">Grillas medidas</div>
   <div id="history"></div>
-  <div id="help">1/2/3 fuente &middot; P play/pausa &middot; R reinicia medida &middot; C canvas2d &middot; G webgl</div>
+  <div id="help">1/2/3 fuente &middot; P play/pausa &middot; R reinicia medida &middot; C canvas2d &middot; G webgl &middot; +/- HUD</div>
 </div>
 
 <script src="inflate.js"></script>
@@ -83,6 +85,9 @@
   var headNode = document.getElementById("head");
   var stagesNode = document.getElementById("stages");
   var historyNode = document.getElementById("history");
+  var envNode = document.getElementById("env");
+  var hudNode = document.getElementById("hud");
+  var hudScale = 1;
 
   var reader = null, renderer = null, rendererName = "", reconstruction = "nearest";
   var ready = false, playing = false, raf = 0, startT = 0, lastShown = -1;
@@ -406,6 +411,50 @@
 
   /* ----------------------------------------------------------------- HUD --- */
 
+  /* DIAG-003: el WebView de la TV box escala la pagina (reporta viewports tipo
+     3840x2160), asi que (a) hay que PUBLICAR de que tamano nos ve la caja, para
+     saber cuanto estira el compositor cada frame, y (b) el HUD tiene que crecer
+     con ese viewport o queda ilegible. ?hud=N fuerza el factor; +/- lo ajusta. */
+
+  function applyHudScale(){
+    hudNode.style.fontSize = Math.round(12 * hudScale) + "px";
+    hudNode.style.width = Math.round(430 * hudScale) + "px";
+    hudNode.style.maxWidth = "92%";
+    headNode.style.fontSize = Math.round(13 * hudScale) + "px";
+  }
+
+  function envRow(name, value){
+    return "<tr><td class=\"k\">" + name + "</td>" +
+      "<td style=\"text-align:left\">" + value + "</td></tr>";
+  }
+
+  function envTable(){
+    var dpr = window.devicePixelRatio || 1;
+    var root = document.documentElement;
+    var vw = window.innerWidth || (root ? root.clientWidth : 0) || 0;
+    var vh = window.innerHeight || (root ? root.clientHeight : 0) || 0;
+    var dw = root ? root.clientWidth : 0, dh = root ? root.clientHeight : 0;
+    var sw = window.screen ? window.screen.width : 0;
+    var sh = window.screen ? window.screen.height : 0;
+    var vvScale = (window.visualViewport && window.visualViewport.scale) ?
+      window.visualViewport.scale : 0;
+    var cw = cv ? cv.clientWidth : 0, ch = cv ? cv.clientHeight : 0;
+    var bw = cv ? cv.width : 0, bh = cv ? cv.height : 0;
+    var html = "<table>";
+    html += envRow("ventana CSS", vw + "x" + vh +
+      ((dw && (dw !== vw || dh !== vh)) ? " (doc " + dw + "x" + dh + ")" : ""));
+    html += envRow("fisico (dpr " + fixed(dpr, 2) + ")",
+      Math.round(vw * dpr) + "x" + Math.round(vh * dpr) +
+      (vvScale ? " · vv " + fixed(vvScale, 2) : ""));
+    html += envRow("pantalla", sw + "x" + sh);
+    html += envRow("canvas buffer", bw + "x" + bh);
+    html += envRow("canvas en CSS", cw + "x" + ch +
+      (bw > 0 ? " (estira x" + fixed(cw / bw, 2) + ")" : ""));
+    html += envRow("HUD", "x" + fixed(hudScale, 2) + " (+/- ajusta, ?hud=N fija)");
+    html += "</table>";
+    return html;
+  }
+
   function cell(value, klass){
     return "<td" + (klass ? " class=\"" + klass + "\"" : "") + ">" + value + "</td>";
   }
@@ -452,9 +501,10 @@
 
   function refreshHUD(force){
     var time = now();
-    if(!session){ return; }
     if(!force && time - hudAt < HUD_MS){ return; }
     hudAt = time;
+    envNode.innerHTML = envTable();
+    if(!session){ return; }
     stagesNode.innerHTML = stagesTable();
     historyNode.innerHTML = historyTable();
     setNodeText(noteNode,
@@ -771,17 +821,35 @@
     else if(code === 82){ restartMeasurement(); }
     else if(code === 67){ switchRenderer("canvas2d"); }
     else if(code === 71){ switchRenderer("auto"); }
+    else if(code === 187 || code === 107){
+      if(hudScale < 6){ hudScale += 0.25; }
+      applyHudScale(); refreshHUD(true);
+    }
+    else if(code === 189 || code === 109){
+      if(hudScale > 0.75){ hudScale -= 0.25; }
+      applyHudScale(); refreshHUD(true);
+    }
     else { return; }
     if(event.preventDefault){ event.preventDefault(); }
     else { event.returnValue = false; }
   }
 
   stage.onclick = function(){ if(playing){ pause(); } else { play(); } };
-  window.onresize = fitCanvas;
+  window.onresize = function(){ fitCanvas(); refreshHUD(true); };
   if(document.addEventListener){ document.addEventListener("keydown", handleKey, false); }
   else if(document.attachEvent){ document.attachEvent("onkeydown", handleKey); }
 
   setNodeText(headNode, "ASCILINE diagnostic · W-16");
+  hudScale = parseFloat(qs("hud") || "");
+  if(!(hudScale > 0)){
+    /* Auto: 1x hasta ~1440 de ancho CSS, 2x a 1920, 4x si el WebView reporta
+       3840 (el caso medido en la TV box). Redondeo a entero para nitidez. */
+    hudScale = Math.round((window.innerWidth || 960) / 960);
+    if(hudScale < 1){ hudScale = 1; }
+    if(hudScale > 6){ hudScale = 6; }
+  }
+  applyHudScale();
+  refreshHUD(true);
   requestedRenderer = qs("renderer") || "auto";
   scaleMode = qs("scale") === "int" ? "int" : "fit";
   pacingEnabled = qs("pacing") !== "off";

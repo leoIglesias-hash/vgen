@@ -2744,3 +2744,30 @@ offline y el TV solo ejecuta; lo que cambia es el transporte del video base.
 
 Con esas dos respuestas se decide: optimizar el player actual (fps/resolucion/inflate/
 W-21) o diseñar el hibrido formalmente.
+
+## DIAG-003: la app escala el WebView a ~4K; el diagnostic ahora lo mide (2026-09-01)
+
+Hallazgo del operador al montar el diagnostic en su app: **por efecto del escalado,
+el WebView le reporta a la pagina un tamano mucho mayor del que se reproduce** (del
+orden de 3840x2160). Dos consecuencias:
+
+1. **Sospechoso adicional del entrecortado:** con un viewport 4K, `fitCanvas` estira
+   el canvas por CSS a ese ancho y el compositor de la caja tiene que escalar cada
+   frame 1280x720 -> ~3840x2160. Ese costo no aparece en ninguna etapa del HUD
+   (inflate/rgba/blit): es del compositor. Habia que hacerlo visible.
+2. **El HUD quedaba ilegible:** 12 px CSS sobre una pagina "de 4K" se ve microscopico
+   (foto del operador).
+
+Cambio en `frontend/diagnostic-player.html` (solo la pagina de diagnostico, ningun
+archivo de produccion):
+
+- Seccion nueva **"Pantalla / escala"** en el HUD: ventana CSS (y doc si difiere),
+  fisico = ventana x devicePixelRatio (+ visualViewport.scale si existe), pantalla
+  (screen.width/height), canvas buffer (backing real), canvas en CSS con el factor
+  de estirado (`estira xN`). Se refresca con el HUD y en cada resize.
+- **HUD escalable:** factor automatico = round(innerWidth/960) acotado a 1..6 (1x
+  hasta ~1440, 2x a 1920, 4x a 3840); `?hud=N` lo fija; teclas **+/-** lo ajustan en
+  caliente (0,25 por paso). ES5 estricto, sin dependencias.
+
+Con esto, la proxima foto del HUD en la caja trae los dos datos que faltaban ver:
+cuanto estira el compositor y los tiempos por etapa, legibles.
