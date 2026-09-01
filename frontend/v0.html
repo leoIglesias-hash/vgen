@@ -5,64 +5,63 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ASCILINE-hybrid - pack v0</title>
 <style>
+  html, body { height: 100%; margin: 0; overflow: hidden; }
   html { background: #101014; color: #e8e8ee; font-family: monospace; }
-  body { margin: 0; padding: 0.8em; }
-  h1 { font-size: 1.1em; margin: 0 0 0.4em 0; }
-  p.sub { margin: 0 0 0.8em 0; color: #9aa0b4; font-size: 0.62em; }
-  #stage { position: relative; width: 100%; max-width: 1280px; background: #000; }
-  #stage video { width: 100%; display: block; }
-  #alphaBg { display: none; background: #1f6f3f; }
+  #head { position: absolute; left: 0; right: 0; top: 0; padding: 0.25em 0.6em; }
+  #titulo { font-size: 0.7em; color: #9aa0b4; }
+  #estado { font-size: 1.15em; display: block; }
+  #estado b { color: #ffd479; }
+  #alphaBg { position: absolute; background: #1f6f3f; display: none; }
   #alphaBg.on { display: block; }
-  table { border-collapse: collapse; width: 100%; font-size: 0.55em; margin-top: 0.6em; }
-  th, td { border: 1px solid #33384a; padding: 0.25em 0.4em; text-align: left; }
+  #video { position: absolute; background: #000; }
+  #side { position: absolute; overflow: hidden; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.62em; }
+  th, td { border: 1px solid #33384a; padding: 0.18em 0.3em; text-align: left;
+           white-space: nowrap; }
   th { background: #1a1e2c; }
   td.ok { color: #7ee08a; }
   td.no { color: #ff8f8f; }
-  button { font: inherit; font-size: 0.6em; margin: 0.2em 0.3em 0.2em 0;
-           background: #2a2f45; color: #e8e8ee; border: 1px solid #4a5170;
-           padding: 0.45em 0.7em; }
-  #report { width: 100%; height: 9em; font-size: 0.5em; background: #0b0d13;
-            color: #cdd3e6; border: 1px solid #33384a; }
-  .env { font-size: 0.55em; color: #b8bed4; margin-top: 0.5em; }
-  #buffer { font-size: 1.6em; color: #ffd479; min-height: 1.1em;
+  #keys { position: absolute; left: 0; right: 0; padding: 0 0.6em; }
+  #buffer { font-size: 1.3em; color: #ffd479; height: 1.15em;
             letter-spacing: 0.08em; }
-  #teclas { font-size: 0.55em; margin: 0.2em 0 0.4em 0; }
-  #teclas .op { display: inline-block; width: 31%; margin: 0.12em 1% 0.12em 0; }
-  #teclas .n { display: inline-block; min-width: 1.8em; text-align: center;
+  #teclas .op { display: inline-block; width: 24%; font-size: 0.62em;
+                margin: 0.06em 0; cursor: pointer; }
+  #teclas .n { display: inline-block; min-width: 1.7em; text-align: center;
                background: #2a2f45; border: 1px solid #4a5170; color: #ffd479;
-               padding: 0.05em 0.2em; margin-right: 0.35em; }
+               margin-right: 0.3em; }
+  #foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 0.6em;
+          font-size: 0.55em; color: #8d93a8; overflow: hidden; }
+  #full { position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+          background: #05060a; display: none; padding: 0.5em; }
+  #full.on { display: block; }
+  #report { width: 100%; height: 100%; font: inherit; font-size: 0.72em;
+            background: #05060a; color: #cdd3e6; border: 0; resize: none; }
 </style>
 </head>
 <body>
-<h1>pack v0 - por donde entra el video</h1>
-<p class="sub">Cada pieza es una apuesta (docs/EMISION-V0.md). Corre las tres de
-video, mira la de alfa, y pasame el reporte de abajo.</p>
 
-<div id="stage">
-  <div id="alphaBg"><video id="alpha" muted playsinline loop></video></div>
-  <video id="video" muted playsinline></video>
+<div id="head">
+  <span id="titulo">pack v0 - por donde entra el video</span>
+  <span id="estado">listo</span>
 </div>
 
-<div id="botones">
-  <button id="runAll">correr todo</button>
-  <button id="runStreams">probar HLS/DASH</button>
-  <button id="runAlpha">probar alfa</button>
-  <button id="runBlob">probar blob:</button>
+<div id="alphaBg"></div>
+<video id="video" muted playsinline></video>
+<div id="side">
+  <table>
+    <thead><tr><th>pieza</th><th>ok</th><th>caidos/total</th><th>1er</th></tr></thead>
+    <tbody id="filas"></tbody>
+  </table>
 </div>
 
-<div id="buffer"></div>
-<div id="teclas"></div>
+<div id="keys">
+  <div id="buffer"></div>
+  <div id="teclas"></div>
+</div>
 
-<table id="tabla">
-  <thead><tr>
-    <th>pieza</th><th>dice</th><th>arranco</th><th>1er cuadro</th>
-    <th>caidos/total</th><th>deriva</th><th>atascos</th><th>bytes</th>
-  </tr></thead>
-  <tbody id="filas"></tbody>
-</table>
+<div id="foot"><span id="env"></span></div>
 
-<div class="env" id="env"></div>
-<textarea id="report" readonly></textarea>
+<div id="full"><textarea id="report" readonly></textarea></div>
 
 <script src="keypad.js"></script>
 <script>
@@ -74,6 +73,14 @@ video, mira la de alfa, y pasame el reporte de abajo.</p>
  * -que codecs, alfa, blob:, MSE, panel real, cuadros caidos- se contestan como
  * subproducto de reproducir material verdadero, y en varios aparatos. Un
  * canPlayType dice "probably"; un video que corre sin caer cuadros dice que si.
+ *
+ * PANTALLA FIJA, SIN SCROLL (pedido del operador, 2026-09-01): en una TV el
+ * scroll se hace con flechas y se pierde de vista lo que importa. Todo entra en
+ * una pantalla, TODAS las piezas se reproducen en el MISMO recuadro -una sola
+ * etiqueta <video>, incluida la de alfa- y la tabla queda siempre a la vista,
+ * al lado del video y no debajo. Por eso la geometria se calcula en JS: asi el
+ * recuadro respeta 16:9 sin depender de object-fit, que en WebViews viejos no
+ * existe.
  *
  * ES5.1 estricto (gate tests/test_frontend_compatibility.js): sin fetch, sin
  * Promise, sin JSON, sin arrow, sin let/const. El manifiesto es texto tabulado
@@ -89,20 +96,52 @@ var aborted = false;       /* corta una secuencia en curso */
 function byId(id) { return document.getElementById(id); }
 
 function param(name) {
-  var query = window.location.search;
   var pattern = new RegExp("[?&]" + name + "=([^&]*)");
-  var found = pattern.exec(query);
+  var found = pattern.exec(window.location.search);
   return found ? decodeURIComponent(found[1]) : "";
 }
 
-/* HUD proporcional: la caja le da al WebView una superficie de 3840x2160 sobre
- * un panel de 1280x720. Sin esto el texto es ilegible ahi. */
-function scaleUI() {
-  var width = window.innerWidth || 1280;
-  document.documentElement.style.fontSize = Math.max(12, Math.round(width / 34)) + "px";
+function text(node, value) {
+  while (node.firstChild) { node.removeChild(node.firstChild); }
+  node.appendChild(document.createTextNode(value));
 }
 
-function text(node, value) {
+function px(node, left, top, width, height) {
+  node.style.left = left + "px";
+  node.style.top = top + "px";
+  node.style.width = width + "px";
+  node.style.height = height + "px";
+}
+
+/* Geometria de una sola pantalla. La caja le da al WebView una superficie de
+ * 3840x2160 sobre un panel de 1280x720, asi que todo -tipografia incluida- se
+ * calcula desde el ancho real y nada se fija en pixeles a mano. */
+function layout() {
+  var w = window.innerWidth || 1280;
+  var h = window.innerHeight || 720;
+  var headH, keysH, footH, midTop, midH, stageW, vw, vh;
+  document.documentElement.style.fontSize =
+    Math.max(11, Math.round(w / 46)) + "px";
+  headH = Math.round(h * 0.13);
+  keysH = Math.round(h * 0.20);
+  footH = Math.round(h * 0.07);
+  midTop = headH;
+  midH = h - headH - keysH - footH;
+  stageW = Math.round(w * 0.60);
+  /* Las piezas son 16:9: el recuadro toma esa forma para que el video no se
+   * deforme, y la tabla se queda con lo que sobra a la derecha. */
+  vw = stageW;
+  vh = Math.round(stageW * 9 / 16);
+  if (vh > midH) { vh = midH; vw = Math.round(midH * 16 / 9); }
+  px(byId("video"), 0, midTop + Math.round((midH - vh) / 2), vw, vh);
+  px(byId("alphaBg"), 0, midTop + Math.round((midH - vh) / 2), vw, vh);
+  px(byId("side"), stageW + 8, midTop, w - stageW - 12, midH);
+  byId("keys").style.top = (midTop + midH) + "px";
+  byId("keys").style.height = keysH + "px";
+}
+
+function say(value) {
+  var node = byId("estado");
   while (node.firstChild) { node.removeChild(node.firstChild); }
   node.appendChild(document.createTextNode(value));
 }
@@ -156,7 +195,8 @@ function blank(piece) {
 }
 
 /* Reproduce una pieza SECONDS segundos y llama a done(medicion). No hay
- * Promise: se encadena con callbacks, que es lo que este piso permite. */
+ * Promise: se encadena con callbacks, que es lo que este piso permite.
+ * Siempre en el MISMO <video>: la de alfa tambien, con el fondo verde detras. */
 function measure(piece, src, done) {
   var video = byId("video");
   var row = blank(piece);
@@ -195,6 +235,7 @@ function measure(piece, src, done) {
 
   function tick() {
     if (finished) { return; }
+    if (aborted) { finish(); return; }
     if (!row.started && video.currentTime > 0) {
       row.started = true;
       row.firstMs = new Date().getTime() - t0;
@@ -210,6 +251,9 @@ function measure(piece, src, done) {
     raf = window.setTimeout(tick, 100);
   }
 
+  /* El fondo verde solo aparece para la pieza con alfa: si el aparato la
+   * compone, se ve verde alrededor de la figura; si no, se ve negro. */
+  byId("alphaBg").className = piece.role === "alpha" ? "on" : "";
   row.says = video.canPlayType(piece.mime) || "no";
   video.addEventListener("waiting", onStall, false);
   video.addEventListener("error", onError, false);
@@ -239,18 +283,15 @@ function draw() {
     r = results[piece.id];
     tr = document.createElement("tr");
     cell(tr, piece.id);
-    cell(tr, r ? r.says : byId("video").canPlayType(piece.mime) || "no");
     if (!r) {
-      cell(tr, "-"); cell(tr, "-"); cell(tr, "-"); cell(tr, "-"); cell(tr, "-");
+      cell(tr, "-"); cell(tr, "-"); cell(tr, "-");
     } else {
-      cell(tr, r.error ? r.error : (r.started ? "si" : "no"), r.started && !r.error);
-      cell(tr, r.firstMs < 0 ? "-" : r.firstMs + " ms");
-      cell(tr, r.total ? (r.dropped + "/" + r.total) : "sin instrumento",
+      cell(tr, r.error ? "ERR" : (r.started ? "si" : "no"),
+           r.started && !r.error);
+      cell(tr, r.total ? (r.dropped + "/" + r.total) : "-",
            r.total ? (r.dropped * 20 <= r.total) : undefined);
-      cell(tr, r.driftMs + " ms");
-      cell(tr, "" + r.stalls);
+      cell(tr, r.firstMs < 0 ? "-" : r.firstMs + "ms");
     }
-    cell(tr, piece.bytes);
     body.appendChild(tr);
   }
   writeReport();
@@ -293,7 +334,9 @@ function writeReport() {
                "\t" + r.driftMs + "\t" + r.stalls + "\t" + r.error);
   }
   byId("report").value = lines.join("\n");
-  text(byId("env"), env.join("   |   "));
+  text(byId("env"), "panel " + screen.width + "x" + screen.height +
+       " · superficie " + window.innerWidth + "x" + window.innerHeight +
+       " · 95 para ver el reporte entero");
 }
 
 /* --- corridas --- */
@@ -308,17 +351,27 @@ function withRole(role) {
 
 function baseOnly() { return withRole("base"); }
 
-/* Los empaquetados HLS/DASH van en su propia corrida: contestan otra pregunta
- * -si el aparato reproduce segmentos NATIVO (camino D)- y en muchos aparatos
- * van a fallar sin que eso diga nada malo de las piezas progresivas.
- * `canPlayType` de un m3u8 no sirve como evidencia: los WebViews de Android
- * suelen devolver vacio aunque la plataforma reproduzca. Se prueba tocando. */
-function runStreams() { runSequence(withRole("stream"), 0); }
+/* "Correr todo" es TODO: las progresivas, la de alfa y los empaquetados, una
+ * atras de otra y en el mismo recuadro. Con la pantalla fija ya no hace falta
+ * ir tecla por tecla. */
+function everything() {
+  var all = [], i, list = [withRole("base"), withRole("alpha"),
+                           withRole("stream")];
+  for (i = 0; i < list.length; i++) {
+    all = all.concat(list[i]);
+  }
+  return all;
+}
 
 function runSequence(list, index) {
   if (index === 0) { lastList = list; aborted = false; }
-  if (aborted || index >= list.length) { draw(); return; }
+  if (aborted || index >= list.length) {
+    say(aborted ? "cortado" : "listo");
+    draw();
+    return;
+  }
   var piece = list[index];
+  say((index + 1) + "/" + list.length + "  " + piece.id);
   measure(piece, base + piece.file, function (row) {
     results[piece.id] = row;
     draw();
@@ -331,6 +384,7 @@ function runOnly(id) {
   for (i = 0; i < pieces.length; i++) {
     if (pieces[i].id === id) { runSequence([pieces[i]], 0); return; }
   }
+  say("no esta la pieza " + id);
 }
 
 /* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
@@ -338,9 +392,10 @@ function runOnly(id) {
 function stopAll() {
   aborted = true;
   byId("video").pause();
-  byId("alpha").pause();
   byId("alphaBg").className = "";
+  byId("full").className = "";
   results = {};
+  say("listo");
   draw();
 }
 
@@ -348,54 +403,44 @@ function repeatLast() {
   if (lastList && lastList.length) { runSequence(lastList, 0); }
 }
 
-function runAlpha() {
-  var i, piece = null;
-  for (i = 0; i < pieces.length; i++) {
-    if (pieces[i].role === "alpha") { piece = pieces[i]; }
-  }
-  if (!piece) { return; }
-  /* El fondo es verde a proposito: si el aparato compone el alfa se ve verde
-   * alrededor del disco; si no, se ve negro. El veredicto lo firma el operador. */
-  byId("alphaBg").className = "on";
-  var alpha = byId("alpha");
-  alpha.src = base + piece.file;
-  alpha.load();
-  alpha.play();
-}
-
 /* blob: es el piso de la cache (bajar una vez y reproducir sin red). Se prueba
- * con la pieza mas chica que haya arrancado. */
+ * con la primera pieza progresiva. */
 function runBlob() {
   var list = baseOnly();
   if (!list.length) { return; }
   var piece = list[0];
   var xhr = new XMLHttpRequest();
+  say("bajando a memoria: " + piece.id);
   xhr.open("GET", base + piece.file, true);
   xhr.responseType = "blob";
   xhr.onreadystatechange = function () {
     if (xhr.readyState !== 4) { return; }
     var url = window.URL || window.webkitURL;
     if (xhr.status < 200 || xhr.status >= 300 || !url || !url.createObjectURL) {
-      results["blob:"] = blank({ id: "blob:", bytes: "-" });
-      results["blob:"].error = "sin blob:";
-      draw();
+      say("sin blob:");
       return;
     }
     var objectUrl = url.createObjectURL(xhr.response);
-    measure({ id: "blob:" + piece.id, role: "base", mime: piece.mime,
-              file: piece.file, bytes: piece.bytes },
-      objectUrl, function (row) {
-        row.id = "blob:" + piece.id;
-        results[row.id] = row;
-        pieces.push({ id: row.id, role: "blob", mime: piece.mime,
-                      file: "(blob)", bytes: piece.bytes, sha256: "", note: "" });
-        draw();
-      });
+    var fake = { id: "blob:" + piece.id, role: "blob", mime: piece.mime,
+                 file: piece.file, bytes: piece.bytes, sha256: "", note: "" };
+    say("blob: " + piece.id);
+    measure(fake, objectUrl, function (row) {
+      results[fake.id] = row;
+      pieces.push({ id: fake.id, role: "blob", mime: piece.mime,
+                    file: "(blob)", bytes: piece.bytes, sha256: "", note: "" });
+      say("listo");
+      draw();
+    });
   };
   xhr.send(null);
 }
 
-/* --- arranque --- */
+/* En una TV no se puede copiar texto: el reporte se lee a pantalla completa y
+ * se saca una foto. Por eso ocupa todo y con tipografia grande. */
+function toggleReport() {
+  var full = byId("full");
+  full.className = full.className === "on" ? "" : "on";
+}
 
 /* Mando numerico. El destino es un TV BOX con control remoto: el click ahi es
  * caro y las teclas numericas son gratis.
@@ -405,14 +450,14 @@ function runBlob() {
  * seguir creciendo-: 9 + numero. El retardo se ajusta con ?delay=<ms>, y OK
  * dispara sin esperar. */
 var TECLAS = [
-  { code: "1", label: "correr todo", detail: "las 3 piezas progresivas",
+  { code: "1", label: "correr todo", detail: "progresivas, alfa y empaquetados",
+    run: function () { runSequence(everything(), 0); } },
+  { code: "2", label: "progresivas", detail: "las 3 piezas sueltas",
     run: function () { runSequence(baseOnly(), 0); } },
-  { code: "2", label: "HLS / DASH", detail: "los 3 empaquetados",
-    run: runStreams },
   { code: "3", label: "alfa", detail: "transparencia sobre fondo verde",
-    run: runAlpha },
-  { code: "4", label: "blob:", detail: "reproducir desde memoria",
-    run: runBlob },
+    run: function () { runSequence(withRole("alpha"), 0); } },
+  { code: "4", label: "HLS / DASH", detail: "los 3 empaquetados",
+    run: function () { runSequence(withRole("stream"), 0); } },
   { code: "5", label: "solo baseline", detail: "H.264 Baseline",
     run: function () { runOnly("v0-h264-baseline"); } },
   { code: "6", label: "solo main", detail: "H.264 Main (detector de hardware)",
@@ -427,10 +472,12 @@ var TECLAS = [
     run: function () { runOnly("v0-hls-fmp4"); } },
   { code: "91", label: "solo dash", detail: "DASH",
     run: function () { runOnly("v0-dash"); } },
-  { code: "92", label: "alfa como video", detail: "la pieza con alfa, sin fondo",
-    run: function () { runOnly("v0-vp9-alpha"); } },
+  { code: "92", label: "blob:", detail: "reproducir desde memoria",
+    run: runBlob },
   { code: "93", label: "repetir", detail: "la ultima corrida otra vez",
     run: repeatLast },
+  { code: "95", label: "reporte", detail: "a pantalla completa, para la foto",
+    run: toggleReport },
   /* El lanzador vive en OTRO servidor (es un archivo suelto), asi que no se
    * puede linkear a una ruta fija: se vuelve con el historial, y ?ir=<url>
    * permite apuntarlo si algun dia conviene. */
@@ -455,19 +502,21 @@ function renderKeys() {
     name = document.createElement("span");
     text(name, TECLAS[i].label);
     row.appendChild(name);
+    /* La misma leyenda es el boton: en el celular y en el escritorio se toca,
+     * en la TV se aprieta el numero. Una sola interfaz para los dos mundos. */
+    row.onclick = (function (action) {
+      return function () { if (action.run) { action.run(); } };
+    })(TECLAS[i]);
     box.appendChild(row);
   }
 }
 
 function start() {
-  scaleUI();
+  layout();
   base = param("base");
   if (base && base.charAt(base.length - 1) !== "/") { base += "/"; }
-  byId("runAll").onclick = function () { runSequence(baseOnly(), 0); };
-  byId("runStreams").onclick = runStreams;
-  byId("runAlpha").onclick = runAlpha;
-  byId("runBlob").onclick = runBlob;
   renderKeys();
+  draw();
   if (window.ASCLKeypad) {
     ASCLKeypad.create({
       delay: param("delay") ? parseInt(param("delay"), 10) : 900,
@@ -479,13 +528,14 @@ function start() {
   }
   get(base + "MANIFEST.tsv", function (body) {
     pieces = parseManifest(body);
+    say("listo - " + pieces.length + " piezas");
     draw();
   }, function (why) {
-    text(byId("env"), "no se pudo leer MANIFEST.tsv: " + why);
+    say("no se pudo leer MANIFEST.tsv: " + why);
   });
 }
 
-window.onresize = scaleUI;
+window.onresize = layout;
 start();
 </script>
 </body>
