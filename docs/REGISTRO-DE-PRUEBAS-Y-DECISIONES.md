@@ -2771,3 +2771,12 @@ archivo de produccion):
 
 Con esto, la proxima foto del HUD en la caja trae los dos datos que faltaban ver:
 cuanto estira el compositor y los tiempos por etapa, legibles.
+
+**Correccion del operador (mismo dia):** la primera version calculaba la escala del
+HUD UNA vez al cargar; si el WebView toma su tamano despues (o no dispara resize),
+el cartel queda chico igual. Lo pedido: "el video se ajusta al tamano, el cartel
+debe hacer lo mismo". Ahora la escala es proporcional continua (ancho/1280, piso
+0,75, tope 8) y se recalcula en cada refresco del HUD (400 ms), no solo al arranque:
+a 3840 de ancho la fuente pasa a 36 px y el panel a 1290 px = la misma fraccion de
+pantalla que 12 px/430 px en una ventana de 1280. Verificado en navegador emulando
+399, 1280 y 3840 de ancho. `?hud=N` sigue fijando el factor y +/- multiplica encima.

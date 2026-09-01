@@ -87,7 +87,7 @@
   var historyNode = document.getElementById("history");
   var envNode = document.getElementById("env");
   var hudNode = document.getElementById("hud");
-  var hudScale = 1;
+  var hudScale = 0, hudUser = 1, hudFixed = 0;
 
   var reader = null, renderer = null, rendererName = "", reconstruction = "nearest";
   var ready = false, playing = false, raf = 0, startT = 0, lastShown = -1;
@@ -413,10 +413,27 @@
 
   /* DIAG-003: el WebView de la TV box escala la pagina (reporta viewports tipo
      3840x2160), asi que (a) hay que PUBLICAR de que tamano nos ve la caja, para
-     saber cuanto estira el compositor cada frame, y (b) el HUD tiene que crecer
-     con ese viewport o queda ilegible. ?hud=N fuerza el factor; +/- lo ajusta. */
+     saber cuanto estira el compositor cada frame, y (b) el HUD tiene que ocupar
+     SIEMPRE la misma fraccion del viewport que ocupa el video, como hace
+     fitCanvas: la escala es proporcional al ancho actual (1x a 1280) y se
+     recalcula en cada refresco, no solo al cargar, porque en la caja el WebView
+     puede tomar su tamano despues del arranque sin disparar resize.
+     ?hud=N fija el factor; +/- multiplica encima en caliente. */
+
+  function hudBaseScale(){
+    var root = document.documentElement;
+    var vw = window.innerWidth || (root ? root.clientWidth : 0) || 1280;
+    var scale = vw / 1280;
+    if(scale < 0.75){ scale = 0.75; }
+    return scale;
+  }
 
   function applyHudScale(){
+    var target = (hudFixed > 0 ? hudFixed : hudBaseScale()) * hudUser;
+    if(target < 0.5){ target = 0.5; }
+    if(target > 8){ target = 8; }
+    if(hudScale > 0 && target > hudScale - 0.01 && target < hudScale + 0.01){ return; }
+    hudScale = target;
     hudNode.style.fontSize = Math.round(12 * hudScale) + "px";
     hudNode.style.width = Math.round(430 * hudScale) + "px";
     hudNode.style.maxWidth = "92%";
@@ -450,7 +467,9 @@
     html += envRow("canvas buffer", bw + "x" + bh);
     html += envRow("canvas en CSS", cw + "x" + ch +
       (bw > 0 ? " (estira x" + fixed(cw / bw, 2) + ")" : ""));
-    html += envRow("HUD", "x" + fixed(hudScale, 2) + " (+/- ajusta, ?hud=N fija)");
+    html += envRow("HUD", "x" + fixed(hudScale, 2) +
+      (hudFixed > 0 ? " fijo ?hud=" + hudFixed : " auto (viewport/1280)") +
+      (hudUser !== 1 ? " · ajuste x" + fixed(hudUser, 2) : "") + " · +/-");
     html += "</table>";
     return html;
   }
@@ -503,6 +522,7 @@
     var time = now();
     if(!force && time - hudAt < HUD_MS){ return; }
     hudAt = time;
+    applyHudScale();
     envNode.innerHTML = envTable();
     if(!session){ return; }
     stagesNode.innerHTML = stagesTable();
@@ -822,12 +842,12 @@
     else if(code === 67){ switchRenderer("canvas2d"); }
     else if(code === 71){ switchRenderer("auto"); }
     else if(code === 187 || code === 107){
-      if(hudScale < 6){ hudScale += 0.25; }
-      applyHudScale(); refreshHUD(true);
+      if(hudUser < 4){ hudUser += 0.25; }
+      refreshHUD(true);
     }
     else if(code === 189 || code === 109){
-      if(hudScale > 0.75){ hudScale -= 0.25; }
-      applyHudScale(); refreshHUD(true);
+      if(hudUser > 0.5){ hudUser -= 0.25; }
+      refreshHUD(true);
     }
     else { return; }
     if(event.preventDefault){ event.preventDefault(); }
@@ -840,15 +860,8 @@
   else if(document.attachEvent){ document.attachEvent("onkeydown", handleKey); }
 
   setNodeText(headNode, "ASCILINE diagnostic · W-16");
-  hudScale = parseFloat(qs("hud") || "");
-  if(!(hudScale > 0)){
-    /* Auto: 1x hasta ~1440 de ancho CSS, 2x a 1920, 4x si el WebView reporta
-       3840 (el caso medido en la TV box). Redondeo a entero para nitidez. */
-    hudScale = Math.round((window.innerWidth || 960) / 960);
-    if(hudScale < 1){ hudScale = 1; }
-    if(hudScale > 6){ hudScale = 6; }
-  }
-  applyHudScale();
+  hudFixed = parseFloat(qs("hud") || "");
+  if(!(hudFixed > 0)){ hudFixed = 0; }
   refreshHUD(true);
   requestedRenderer = qs("renderer") || "auto";
   scaleMode = qs("scale") === "int" ? "int" : "fit";
