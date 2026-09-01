@@ -14,7 +14,17 @@ donde entra el video al hardware del aparato:
                          el cuello no es el bitstream (suposicion S2)
   v0-vp9.webm            banda: el camino que YouTube usa en Android TV (S3)
   v0-vp9-alpha.webm      el personaje sin fondo, compuesto por el navegador (S4)
+
+y despues las EMPAQUETA en segmentos, por REMUX (`-c copy`, sin recodificar):
+
+  hls-ts/stream.m3u8     HLS clasico con segmentos MPEG-TS
+  hls-fmp4/stream.m3u8   HLS CMAF: init separado, como nuestro formato
+  dash/manifest.mpd      DASH: el modelo de datos del formato, servido tal cual
   MANIFEST.tsv           el embrion del manifiesto del formato
+
+Los tres empaquetados prueban dos cosas de una: si el aparato reproduce HLS/DASH
+NATIVO (camino D -en ese aparato el muxer ES5 podria sobrar-) y si las piezas se
+intercambian sin recodificar, que es la afirmacion central del formato.
 
 El manifiesto va en TEXTO TABULADO y NUNCA en JSON: el gate ES5 del proyecto
 prohibe `JSON` porque los WebViews viejos del parque no lo garantizan.
@@ -112,6 +122,61 @@ VARIANTS = (
     },
 )
 
+# Empaquetados segmentados. Salen de una pieza YA CODIFICADA por REMUX (`-c
+# copy`): no se recodifica nada, no se toca un pixel, y cuesta segundos. Prueban
+# dos cosas de una: si el aparato reproduce HLS/DASH NATIVO (camino D, que en ese
+# aparato puede volver innecesario al muxer ES5), y si las piezas se intercambian
+# sin recodificar -que es la afirmacion central del formato-.
+#
+# El GOP de 15 cuadros a 15 fps hace que `-hls_time 1` corte EXACTAMENTE en
+# cuadros clave: la estructura que elegimos en v0 es la que habilita esto.
+SEGMENT_ARGS = ["-c", "copy", "-map_metadata", "-1",
+                "-fflags", "+bitexact", "-flags:v", "+bitexact"]
+
+STREAMS = (
+    {
+        "id": "v0-hls-ts",
+        "role": "stream",
+        "source": "v0-h264-baseline",
+        "dir": "hls-ts",
+        "playlist": "stream.m3u8",
+        "mime": "application/vnd.apple.mpegurl",
+        "note": "HLS con segmentos MPEG-TS: el empaquetado mas rodado",
+        "args": ["-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod",
+                 "-hls_list_size", "0", "-hls_segment_type", "mpegts",
+                 "-hls_flags", "independent_segments"],
+        "segment_name": "seg%03d.ts",
+    },
+    {
+        "id": "v0-hls-fmp4",
+        "role": "stream",
+        "source": "v0-h264-baseline",
+        "dir": "hls-fmp4",
+        "playlist": "stream.m3u8",
+        "mime": "application/vnd.apple.mpegurl",
+        "note": "HLS CMAF: init separado, como nuestro formato",
+        "args": ["-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod",
+                 "-hls_list_size", "0", "-hls_segment_type", "fmp4",
+                 "-hls_fmp4_init_filename", "init.mp4",
+                 "-hls_flags", "independent_segments"],
+        "segment_name": "seg%03d.m4s",
+    },
+    {
+        "id": "v0-dash",
+        "role": "stream",
+        "source": "v0-h264-baseline",
+        "dir": "dash",
+        "playlist": "manifest.mpd",
+        "mime": "application/dash+xml",
+        "note": "DASH: el modelo de datos del formato, servido tal cual",
+        "args": ["-f", "dash", "-seg_duration", "1", "-use_template", "1",
+                 "-use_timeline", "1",
+                 "-init_seg_name", "init.m4s",
+                 "-media_seg_name", "chunk-$Number%05d$.m4s"],
+        "segment_name": None,
+    },
+)
+
 MANIFEST_NAME = "MANIFEST.tsv"
 MANIFEST_COLUMNS = ("id", "role", "mime", "file", "bytes", "sha256", "note")
 
@@ -131,6 +196,33 @@ def build_command(ffmpeg, variant, width, height, fps, out_path):
              "-s", "%dx%d" % (width, height), "-r", str(fps), "-i", "-"]
             + list(DETERMINISM) + list(variant["args"]) + list(BITEXACT)
             + [out_path])
+
+
+def stream_by_id(stream_id):
+    for stream in STREAMS:
+        if stream["id"] == stream_id:
+            return stream
+    raise KeyError(stream_id)
+
+
+def build_segment_command(ffmpeg, stream, source_path, out_dir):
+    """Remux de una pieza ya codificada a un empaquetado segmentado. `-c copy`
+    es lo que hace que esto NO sea una segunda codificacion: los mismos bytes de
+    video, envueltos distinto."""
+    command = [ffmpeg, "-y", "-nostdin", "-i", source_path] + list(SEGMENT_ARGS)
+    if stream["segment_name"]:
+        command += ["-hls_segment_filename",
+                    os.path.join(out_dir, stream["segment_name"])]
+    return command + list(stream["args"]) + [os.path.join(out_dir, stream["playlist"])]
+
+
+def directory_bytes(directory):
+    total = 0
+    for name in sorted(os.listdir(directory)):
+        path = os.path.join(directory, name)
+        if os.path.isfile(path):
+            total += os.path.getsize(path)
+    return total
 
 
 _GRID_CACHE = {}
@@ -209,8 +301,49 @@ def resolve_master(path, work_dir):
     return path
 
 
+def emit_streams(ffmpeg, out_dir, produced, log):
+    """Empaqueta las piezas ya emitidas en HLS y DASH, por remux. Devuelve una
+    fila de manifiesto por empaquetado: `file` apunta al playlist/manifiesto y
+    `bytes` es el total de la carpeta (playlist + init + segmentos), porque lo
+    que se reproduce es el conjunto, no un archivo."""
+    rows = []
+    for stream in STREAMS:
+        source = produced.get(stream["source"])
+        if not source:
+            continue
+        directory = os.path.join(out_dir, stream["dir"])
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+        command = build_segment_command(ffmpeg, stream, source, directory)
+        log("+ " + stream["id"] + " (remux, sin recodificar)")
+        errlog = open(os.path.join(out_dir, stream["id"] + ".ffmpeg.log"), "wb")
+        try:
+            code = subprocess.call(command, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.DEVNULL, stderr=errlog)
+        finally:
+            errlog.close()
+        if code != 0:
+            raise RuntimeError("ffmpeg fallo (%d) empaquetando %s (ver %s.ffmpeg.log)"
+                               % (code, stream["id"], stream["id"]))
+        playlist = os.path.join(directory, stream["playlist"])
+        total = directory_bytes(directory)
+        pieces = len(os.listdir(directory)) - 1
+        rows.append({
+            "id": stream["id"],
+            "role": stream["role"],
+            "mime": stream["mime"],
+            "file": stream["dir"] + "/" + stream["playlist"],
+            "bytes": total,
+            "sha256": sha256_of(playlist),
+            "note": stream["note"] + "; %d segmentos" % pieces,
+        })
+        log("  %-18s %10d B  %s (%d segmentos)" %
+            (stream["id"], total, rows[-1]["file"], pieces))
+    return rows
+
+
 def emit(master_path, out_dir, only=None, max_frames=None, ffmpeg=None,
-         work_dir=None, log=None):
+         work_dir=None, log=None, segment=True):
     log = log or (lambda message: None)
     ffmpeg = ffmpeg or _resolve_ffmpeg()
     variants = [variant_by_id(name) for name in only] if only else list(VARIANTS)
@@ -281,8 +414,14 @@ def emit(master_path, out_dir, only=None, max_frames=None, ffmpeg=None,
             "note": variant["note"],
         })
         log("  %-18s %10d B  %s" % (variant["id"], size, variant["file"]))
-    for stream in logs:
-        stream.close()
+    for handle in logs:
+        handle.close()
+
+    if segment:
+        produced = {}
+        for row in rows:
+            produced[row["id"]] = os.path.join(out_dir, row["file"])
+        rows = rows + emit_streams(ffmpeg, out_dir, produced, log)
 
     manifest_path = os.path.join(out_dir, MANIFEST_NAME)
     with open(manifest_path, "w") as stream:
@@ -303,10 +442,13 @@ def main(argv=None):
     parser.add_argument("--frames", type=int, default=None,
                         help="cortar en N cuadros (pruebas de humo)")
     parser.add_argument("--ffmpeg", default=None, help="ruta a ffmpeg")
+    parser.add_argument("--no-segment", action="store_true",
+                        help="no empaquetar HLS/DASH (por defecto se empaquetan)")
     args = parser.parse_args(argv)
 
     result = emit(args.master, args.out, only=args.only, max_frames=args.frames,
-                  ffmpeg=args.ffmpeg, log=lambda message: print(message, flush=True))
+                  ffmpeg=args.ffmpeg, segment=not args.no_segment,
+                  log=lambda message: print(message, flush=True))
     print("-- PACK v0 --  %s" % result["manifest"])
     return 0
 

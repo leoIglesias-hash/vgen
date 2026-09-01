@@ -72,6 +72,47 @@ class BuildCommandTest(unittest.TestCase):
             self.assertIn("-map_metadata", command)
 
 
+class SegmentCommandTest(unittest.TestCase):
+    """Los empaquetados HLS/DASH son un REMUX, no una segunda codificacion.
+    Si alguna vez desaparece el `-c copy`, esta prueba lo detiene: con re-encode
+    dejarian de medir lo mismo que las piezas progresivas."""
+
+    def command(self, stream_id):
+        stream = emit_pieces.stream_by_id(stream_id)
+        return emit_pieces.build_segment_command(
+            "ffmpeg", stream, "src.mp4", "out")
+
+    def test_los_tres_empaquetados_existen(self):
+        ids = [stream["id"] for stream in emit_pieces.STREAMS]
+        self.assertEqual(ids, ["v0-hls-ts", "v0-hls-fmp4", "v0-dash"])
+
+    def test_ninguno_recodifica(self):
+        for stream in emit_pieces.STREAMS:
+            command = self.command(stream["id"])
+            self.assertEqual(command[command.index("-c") + 1], "copy")
+            self.assertNotIn("libx264", command)
+            self.assertNotIn("libvpx-vp9", command)
+
+    def test_el_corte_cae_en_cuadro_clave(self):
+        # GOP de 15 cuadros a 15 fps: un segmento de 1 s cae exactamente en un
+        # cuadro clave. La estructura elegida en v0 es la que habilita esto.
+        hls = self.command("v0-hls-ts")
+        self.assertEqual(hls[hls.index("-hls_time") + 1], "1")
+        dash = self.command("v0-dash")
+        self.assertEqual(dash[dash.index("-seg_duration") + 1], "1")
+        self.assertEqual(emit_pieces.GOP, 15)
+
+    def test_salen_de_una_pieza_ya_emitida(self):
+        for stream in emit_pieces.STREAMS:
+            emit_pieces.variant_by_id(stream["source"])  # no debe levantar
+
+    def test_hls_fmp4_separa_el_init(self):
+        command = self.command("v0-hls-fmp4")
+        self.assertIn("fmp4", command)
+        self.assertEqual(command[command.index("-hls_fmp4_init_filename") + 1],
+                         "init.mp4")
+
+
 class AlphaTest(unittest.TestCase):
     """La pieza con alfa prueba COMPOSICION, no arte: mascara deterministica,
     borde duro (el caso que mas sufre) y movimiento derivado del indice."""
@@ -164,7 +205,7 @@ class EmitSmokeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             result = emit_pieces.emit(FIXTURE, directory,
                                       only=["v0-h264-baseline"], max_frames=2,
-                                      ffmpeg=ffmpeg)
+                                      ffmpeg=ffmpeg, segment=False)
             self.assertEqual(len(result["rows"]), 1)
             row = result["rows"][0]
             self.assertGreater(row["bytes"], 0)

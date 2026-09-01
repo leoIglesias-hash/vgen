@@ -63,7 +63,25 @@ registrados — mismo máster + mismos parámetros → mismos bytes.
 | `v0-h264-main.mp4` | H.264 Main, MP4 | igual, pero `profile=main` (CABAC + 8×8) | **hardware o software**: si esta gana, la memoria no era el cuello |
 | `v0-vp9.webm` | VP9, WebM | calidad constante, GOP 15, hilos fijos | si VP9 existe y con cuánta banda menos |
 | `v0-vp9-alpha.webm` | VP9 + alfa, WebM | `yuva420p`, recorte chico (no pantalla completa) | si el **personaje sin fondo** se puede hacer por video, con CPU ≈ 0 |
-| `MANIFEST.tsv` | texto tabulado | una fila por pieza: id, tipo MIME completo, archivo, bytes, sha256 | el embrión del manifiesto del formato |
+| `hls-ts/stream.m3u8` | HLS + MPEG-TS | **remux** de la pieza Baseline, segmentos de 1 s | HLS nativo en su forma más rodada |
+| `hls-fmp4/stream.m3u8` | HLS + CMAF | ídem, con `init.mp4` separado | HLS nativo con **init compartido**, que es la forma de nuestro formato |
+| `dash/manifest.mpd` | DASH + fMP4 | ídem, plantilla + timeline | **DASH nativo**: nuestro modelo de datos servido tal cual |
+| `MANIFEST.tsv` | texto tabulado | una fila por pieza: id, rol, tipo MIME, archivo, bytes, sha256 | el embrión del manifiesto del formato |
+
+**Los tres empaquetados son un REMUX, no una segunda codificación** (`-c copy`):
+los mismos bytes de video, envueltos distinto. Cuestan segundos y no tocan un
+píxel. Por eso pueden compararse contra la pieza progresiva de la que salieron:
+la única variable es el empaquetado.
+
+Y hay una razón para no dejarlos para después: **nuestro formato es «piezas +
+manifiesto», y HLS/DASH son exactamente esa idea, ya probada y decodificada por
+hardware.** Si un aparato reproduce un `.m3u8` nativo, en ese aparato el muxer
+ES5 (H-8) puede sobrar: se emite la playlist y la plataforma hace la costura
+sola, sin MSE. Eso hay que saberlo **antes** de escribir el muxer, no después.
+
+El GOP de 15 cuadros a 15 fps es lo que permite cortar segmentos de 1 s
+**exactamente en cuadros clave**: la estructura elegida en §3 es la que habilita
+el empaquetado.
 
 **Restricción de formato que aparece acá y no es negociable:** el manifiesto de
 runtime **no puede ser JSON** — el gate ES5 del proyecto prohíbe `JSON` porque
@@ -116,6 +134,8 @@ reproducido.
 | **S4** | El alfa de WebM lo compone el navegador sin CPU nuestra | es una propiedad estándar de VP8/VP9 en WebM | no transparenta (fondo negro) o cuesta cuadros → el personaje sin fondo vuelve al **sprite ASCILINE** sobre el canvas (N2), que ya sabemos hacer |
 | **S5** | Un canvas encima del `<video>` no lo saca de su plano de hardware | es lo normal en navegadores modernos | caen cuadros al activar el canvas → **la intervención va al lado, no encima**: bifurcación de layout de todo el producto (se prueba en H-11) |
 | **S6** | Menos cuadros = menos trabajo, lineal (fps variable por segmento) | en el contenedor la duración del cuadro es un dato, no bitstream | no baja el costo proporcionalmente → el ahorro está en otro eje (se prueba en H-6) |
+| **S7** | Algún aparato del parque reproduce **HLS o DASH nativo** | HLS es nativo en Safari/iOS y en muchos Smart TV; el WebView de la caja es Android, donde lo normal es que **no** lo sea. La apuesta es débil a propósito | ninguno lo reproduce → el camino D no existe en el parque y **el muxer ES5 (H-8) es obligatorio**, no opcional. Si alguno sí → en ese perfil el muxer se puede saltear entero |
+| **S8** | Las piezas se **intercambian sin recodificar**: segmentar es un remux | es la afirmación central del formato, y `-c copy` la ejecuta sin tocar un píxel | los segmentos no reproducen o se ve la costura → el modelo «piezas Lego» se cae y hay que revisar la estructura (GOP, init compartido) antes de seguir |
 
 ## 5. Lo que v0 **no** prueba
 

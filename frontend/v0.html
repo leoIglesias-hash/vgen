@@ -38,6 +38,7 @@ video, mira la de alfa, y pasame el reporte de abajo.</p>
 
 <div id="botones">
   <button id="runAll">correr todo</button>
+  <button id="runStreams">probar HLS/DASH</button>
   <button id="runAlpha">probar alfa</button>
   <button id="runBlob">probar blob:</button>
 </div>
@@ -284,13 +285,22 @@ function writeReport() {
 
 /* --- corridas --- */
 
-function baseOnly() {
+function withRole(role) {
   var out = [], i;
   for (i = 0; i < pieces.length; i++) {
-    if (pieces[i].role === "base") { out.push(pieces[i]); }
+    if (pieces[i].role === role) { out.push(pieces[i]); }
   }
   return out;
 }
+
+function baseOnly() { return withRole("base"); }
+
+/* Los empaquetados HLS/DASH van en su propia corrida: contestan otra pregunta
+ * -si el aparato reproduce segmentos NATIVO (camino D)- y en muchos aparatos
+ * van a fallar sin que eso diga nada malo de las piezas progresivas.
+ * `canPlayType` de un m3u8 no sirve como evidencia: los WebViews de Android
+ * suelen devolver vacio aunque la plataforma reproduzca. Se prueba tocando. */
+function runStreams() { runSequence(withRole("stream"), 0); }
 
 function runSequence(list, index) {
   if (index >= list.length) { draw(); return; }
@@ -356,6 +366,7 @@ function start() {
   base = param("base");
   if (base && base.charAt(base.length - 1) !== "/") { base += "/"; }
   byId("runAll").onclick = function () { runSequence(baseOnly(), 0); };
+  byId("runStreams").onclick = runStreams;
   byId("runAlpha").onclick = runAlpha;
   byId("runBlob").onclick = runBlob;
   get(base + "MANIFEST.tsv", function (body) {

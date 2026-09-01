@@ -31,7 +31,13 @@ var MANIFEST = [
   ["v0-vp9", "base", 'video/webm; codecs="vp9"',
    "v0-vp9.webm", "2400000", "cc", "banda"].join("\t"),
   ["v0-vp9-alpha", "alpha", 'video/webm; codecs="vp9"',
-   "v0-vp9-alpha.webm", "900000", "dd", "alfa"].join("\t")
+   "v0-vp9-alpha.webm", "900000", "dd", "alfa"].join("\t"),
+  ["v0-hls-ts", "stream", "application/vnd.apple.mpegurl",
+   "hls-ts/stream.m3u8", "9600000", "ee", "HLS TS; 16 segmentos"].join("\t"),
+  ["v0-hls-fmp4", "stream", "application/vnd.apple.mpegurl",
+   "hls-fmp4/stream.m3u8", "9600000", "ff", "HLS CMAF; 16 segmentos"].join("\t"),
+  ["v0-dash", "stream", "application/dash+xml",
+   "dash/manifest.mpd", "9600000", "aa11", "DASH; 16 segmentos"].join("\t")
 ].join("\n") + "\n";
 
 function makeNode(name) {
@@ -124,8 +130,19 @@ assert.strictEqual(requested.length, 1, "la pagina pide el manifiesto una vez");
 assert(/MANIFEST\.tsv$/.test(requested[0]), "pide MANIFEST.tsv");
 
 var filas = byId("filas");
-assert.strictEqual(filas.childNodes.length, 4,
-  "una fila por pieza del pack, incluida la de alfa");
+assert.strictEqual(filas.childNodes.length, 7,
+  "una fila por pieza del pack: 3 progresivas + alfa + 3 empaquetados");
+
+/* HLS/DASH van en su propia corrida: contestan otra pregunta (camino D, si el
+ * aparato reproduce segmentos NATIVO) y su fracaso no dice nada de las piezas
+ * progresivas. Y no se juzgan por canPlayType, que en WebViews de Android
+ * devuelve vacio aunque la plataforma reproduzca: se prueban tocando. */
+assert(page.indexOf("runStreams") >= 0,
+  "los empaquetados segmentados tienen su propio disparador");
+assert(page.indexOf('withRole("stream")') >= 0,
+  "los empaquetados se corren aparte de las piezas progresivas");
+assert(/function baseOnly\(\) \{ return withRole\("base"\); \}/.test(page),
+  "la corrida automatica sigue siendo solo las piezas progresivas");
 
 var reporte = byId("report").value;
 assert(reporte.indexOf("# pack v0") === 0, "el reporte arranca identificandose");

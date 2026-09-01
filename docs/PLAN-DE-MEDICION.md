@@ -51,7 +51,14 @@ los aparatos del operador:
 | alfa en WebM | la pieza con alfa sobre un fondo de color: ¿se transparenta? | si el personaje sin fondo va por video o por sprite |
 | `blob:` reproduce | reproducir una pieza desde `URL.createObjectURL` | si existe el camino A (el piso de la caché) |
 | panel real vs. superficie | `screen`, `devicePixelRatio`, `innerWidth` | cuánto píxel se regala (en la caja: 3840×2160 sobre panel de 1280×720) |
+| **HLS / DASH nativo** | **reproduciendo** `hls-ts/`, `hls-fmp4/` y `dash/` en un `<video>`, no preguntando `canPlayType` | el **camino D**. Donde exista, el muxer ES5 (H-8) puede sobrar: la plataforma hace la costura sola, sin MSE |
+| segmentación sin recodificar | los mismos empaquetados: si reproducen, las piezas se intercambian de verdad | valida la afirmación central del formato en hardware real |
 | MSE / rVFC / IndexedDB | detección directa, en la misma página | caminos B, sincronía exacta, persistencia |
+
+**Por qué `canPlayType` no cuenta como evidencia para HLS:** los WebViews de
+Android suelen devolver cadena vacía para `application/vnd.apple.mpegurl` aunque
+la plataforma reproduzca, y Safari devuelve `"maybe"`. Es una declaración, no un
+hecho — justo lo que este plan dejó de aceptar. Se prueba tocando.
 
 **Regla de firma:** todo lo que requiere pantalla **lo firma el operador**. La
 página produce números; el veredicto de imagen es suyo y se transcribe textual.

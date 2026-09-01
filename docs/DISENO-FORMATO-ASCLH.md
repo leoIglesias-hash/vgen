@@ -224,6 +224,8 @@ bifurcación de layout, y hay que conocerla antes de dibujar una sola pantalla.
 | Nombre `.asclh` / magic `ASCLHYB1` | provisorio — confirma el operador |
 | Qué códecs emitimos y en qué orden de preferencia | **gateado por el pack v0** (H-9/H-10): ¿VP9 existe? ¿Main sale gratis, o sea hardware? |
 | Camino de runtime por perfil (A/B/C/D) | **gateado** (¿`blob:`? ¿MSE? ¿WebM alfa?) — lo responde reproducir v0 |
+| Camino **D** (HLS/DASH nativo) | **gateado por el pack v0**: lleva `hls-ts/`, `hls-fmp4/` y `dash/` emitidos **por remux**. Donde D exista, el muxer ES5 puede sobrar en ese perfil |
+| Que las piezas se intercambien sin recodificar | **gateado** por los mismos empaquetados: si los segmentos reproducen sin costura, la afirmación central del formato queda probada en hardware |
 | Persistencia del paquete | **gateado** por **H-12** (¿IndexedDB persiste y cuánto?) |
 | Intervención encima o al lado del video | **gateado** por **H-11** (¿el canvas encima cuesta cuadros?) |
 | Techo de planos de video simultáneos | **gateado** (sesiones de decodificación) |
