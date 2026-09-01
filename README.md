@@ -15,10 +15,12 @@ servidor de playback no calcula nada: solo sirve archivos estáticos.
 Al 2026-09-01: máster de producto **1280×720 @15 fps formato v3** (`dcd6afb6…1632a`,
 24,5 MB = 62,8 % del mp4 fuente, 35,02 dB); su emisión mp4 pesa **4,1 MB** y es la
 primera reproducción fluida del producto en la TV box real (DIAG-002/003). Fases
-F0-F9 del paradigma anterior cerradas y verificadas; en curso la **fase H** —
-sondas de capacidad y banco de reproducción en aparatos reales, después la matriz
-de emisión multi-códec y la spec del formato — ver
-[`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md). Una publicación pública sigue
+F0-F9 del paradigma anterior cerradas y verificadas; en curso la **fase H**. El
+**pack v0** ya está emitido y publicado (`https://iargen.com/player/v0/`): cuatro
+piezas —H.264 Baseline y Main, VP9 y VP9 con alfa— más los empaquetados **HLS y
+DASH** obtenidos por remux, y la página que las reproduce y mide. Lo que sigue es
+abrirla en aparatos reales y, con esa tabla, la matriz de emisión y la spec del
+formato — ver [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md). Una publicación pública sigue
 condicionada por licencia, procedencia y derechos de los videos.
 
 La compatibilidad legacy es un objetivo verificado por sintaxis/API y fallbacks:
@@ -173,7 +175,9 @@ debe validarse nuevamente.
 - [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md): estado vivo — próxima acción, una
   fila por tarea cerrada, SHAs de referencia.
 - [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md): reglas de ejecución
-  y tareas de la fase H (H-4..H-8).
+  y tareas de la fase H (H-9 cerrada; H-10, H-11, H-6, H-12, H-7, H-8, H-14, W-26).
+- [`docs/EMISION-V0.md`](docs/EMISION-V0.md): el primer video — qué le tomamos a cada
+  códec y las suposiciones, cada una con su refutación escrita.
 - [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md): sondas, banco de reproducción y
   registro de aparatos — lo que desbloquea al formato.
 - [`docs/DISENO-FORMATO-ASCLH.md`](docs/DISENO-FORMATO-ASCLH.md): el formato en obra, con

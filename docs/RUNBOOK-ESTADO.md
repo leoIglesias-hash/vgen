@@ -75,6 +75,30 @@ primer video** — la página que reproduce el pack v0 reporta lo mismo, pero so
 material verdadero y en varios aparatos. Invariante nuevo:
 **ningún aparato solo define el formato** (refutar sí, consagrar no).
 
+---
+
+### ⏵ LO PRIMERO AL RETOMAR (escrito antes del compact del 2026-09-01)
+
+**Todo lo que dependía de nosotros está hecho, publicado y verificado. Lo que
+falta lo hace el operador y nadie más: abrir la página en los aparatos.**
+
+1. Pedirle el reporte de `https://iargen.com/player/v0/` — abre, aprieta **1**
+   (corre las 7 piezas seguidas, ~70 s) y después **95** (el reporte a pantalla
+   completa, para fotografiarlo: en una TV no se puede copiar texto). Hace falta
+   en la **TV box** y en **2-3 aparatos más** (celular, Smart TV, escritorio).
+   El lanzador `ir.html` ya lo tiene él, en su propio servidor, y **funciona**.
+2. Con eso: volcar la tabla de [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) §5,
+   marcar **S1..S5, S7 y S8** como sostenidas o refutadas en
+   [`EMISION-V0.md`](EMISION-V0.md) §4, y recién ahí elegir el camino.
+3. **Nada se normaliza con un solo aparato** (invariante §8.11 de la visión).
+
+**Si el operador ya lo corrió y hay números, van al REGISTRO antes que a
+cualquier otra cosa.** Si dice «anduvo bien» sin números, pedirle el reporte:
+`canPlayType` y las impresiones no cuentan como evidencia — esa es justamente la
+regla que este proyecto se dio.
+
+---
+
 **Lo vivo, en orden** (cuerpos en
 [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2; suposiciones y
 refutaciones en [`EMISION-V0.md`](EMISION-V0.md)):
@@ -189,6 +213,7 @@ contenido, aunque `publish-player` la asuma; ese workflow no funcionaría hoy. D
 | fase H (H-0) | 2026-09-01 | clon de `ASCILINE-video` en `f89abcd` (cierre del diagnóstico DIAG-002/003) → repo nuevo `leoIglesias-hash/ASCILINE-hybrid` | historia completa preservada (`main` + `assets`); mismo modelo de trabajo (CI-only, commits directos a `main`) |
 | fase H (debate + documentación objetiva) | 2026-09-01 | `main` de `ASCILINE-hybrid` en `8dae1e5` (H-0 cerrada, CI verde) | debate de dirección con el operador el mismo día: el alcance pasa a un **formato propio códec-agnóstico**. Se escriben `VISION-Y-OBJETIVOS.md`, `DISENO-FORMATO-ASCLH.md` y `PLAN-DE-MEDICION.md`; H-1..H-3 quedan reemplazadas por H-4..H-8. Sin código |
 | fase H (corrección de método) | 2026-09-01 | `main` de `ASCILINE-hybrid` en `0128309` (CI verde) | el operador frena la sonda sintética: hubiera fijado el formato contra una sola TV box. Se arranca **emitiendo** el pack v0 por suposición. Se escribe `EMISION-V0.md`, se reescribe `PLAN-DE-MEDICION.md`, H-4/H-5 quedan reemplazadas por H-9..H-12. Sin código |
+| fase H (H-9 + herramientas + publicación) | 2026-09-01 | `main` de `ASCILINE-hybrid`, de `5ea6459` a `eef9e45` (CI verde en cada push) | **H-9 cerrada**: emisor `tools/emit_pieces.py` + workflow `emitir-v0`, pack v0 con los empaquetados HLS/DASH por remux, `frontend/v0.html` (una pantalla, sin scroll, mando numérico), `frontend/keypad.js` compartido y `frontend/ir.html` (lanzador autocontenido, va en otro servidor). Worker redesplegado dos veces (MIME de video + `Range`, y los tipos del carril segmentado), 60 keys publicadas y verificadas por SHA-256. Se abre **H-14**. Resumen: `ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md` |
 
 > Al iniciar cada sesión de implementación: agregar una fila con el commit o snapshot
 > sobre el que se trabaja. Si el árbol cambió desde el 2026-08-27, localizar las
@@ -204,8 +229,8 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | H-0 | H | repo `ASCILINE-hybrid` + docs reorganizadas al paradigma mp4/híbrido | **cerrada 2026-09-01** (`8dae1e5`) | no |
 | H-1..H-3 | H | (diseño del player híbrido / emisión H.264 / player mínimo) | **reemplazadas 2026-09-01** por el debate de dirección; absorbidas al pasar el alcance a «formato propio». IDs no reusables | — |
 | H-4, H-5 | H | (sonda sintética de capacidades / banco como paso previo) | **reemplazadas 2026-09-01** (misma tarde) por decisión del operador: hubieran fijado el formato contra **una sola TV box**. Disueltas dentro de H-9/H-10. IDs no reusables | — |
-| H-9 | H | **pack v0 — el primer video, por suposición** (`tools/emit_pieces.py` + workflow `emitir-v0`): Baseline, Main, VP9, VP9+alfa y `MANIFEST.tsv` desde el máster, con parámetros explícitos y hash por pieza | **cerrada 2026-09-01** (`d51be8c`, run `33559631360` verde): 9.551.693 / 8.686.512 / 4.411.693 / 4.664.676 B, 231 cuadros; fila en el REGISTRO | sí (piezas nuevas) |
-| H-10 | H | **reproducirlo y que él nos diga** (`frontend/v0.html`): cuál arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, panel real — en la caja **y** 2-3 aparatos más | **en curso** — página escrita y con suite propia; falta abrirla en los aparatos y llenar la tabla | no |
+| H-9 | H | **pack v0 — el primer video, por suposición** (`tools/emit_pieces.py` + workflow `emitir-v0`): 4 piezas + `hls-ts/`, `hls-fmp4/`, `dash/` por remux, y `MANIFEST.tsv` | **cerrada 2026-09-01** (run `33566441576` verde). Resumen: [`ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md`](ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md); SHAs abajo en «Referencias de clips» | sí (piezas nuevas) |
+| H-10 | H | **reproducirlo y que él nos diga** (`frontend/v0.html` + `keypad.js`): cuál arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, HLS/DASH, panel real — en la caja **y** 2-3 aparatos más | **en curso — falta SOLO el operador.** La página está publicada y verificada en `https://iargen.com/player/v0/` (una pantalla, sin scroll, mando numérico, tecla 95 = reporte a pantalla completa). Lo pendiente es abrirla en los aparatos y volcar la tabla | no |
 | H-11 | H | **la bifurcación de layout**: canvas de intervención **encima** del `<video>`, con y sin, midiendo caídos (suposición S5) | pendiente (precondición: H-10) | no |
 | H-6 | H | **matriz de emisión**, ya con el terreno elegido por v0: cantidad de cuadros × estructura × bitrate × zonas estáticas × paleta 4:2:0 | pendiente (precondición: H-10) | sí (variantes) |
 | H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido y borrado de claves viejas | pendiente (precondición: H-10) | no |
@@ -262,6 +287,21 @@ re-implementa — se extiende. Resumen por carril:
 
 Todos los clips medidos, del vigente al histórico. «Reproducible» = re-encodear desde
 `main` con esos flags devuelve ese SHA byte a byte (regla 5, verificada — nunca supuesta).
+
+**Pack v0 (H-9, 2026-09-01, run `33566441576`)** — emitido del máster vigente con
+`tools/emit_pieces.py`, publicado en `https://iargen.com/player/v0/`:
+
+| Pieza | Bytes | SHA-256 |
+|---|---:|---|
+| `v0-h264-baseline.mp4` | 9.551.715 | `cf927d578ab993d468ada2cd2440d9a18b030a343e23ef5008ed39912ef04fdc` |
+| `v0-h264-main.mp4` | 8.686.438 | `b9b1e1f542fe4f10ff44dc53f6eb2a297bcff9e357d9c277068a088e72451890` |
+| `v0-vp9.webm` | 4.411.693 | `5be4650747fd511aa0b54b493c3a9a1d7c24f15c630ba7d22fc1acf42543830b` |
+| `v0-vp9-alpha.webm` | 4.664.676 | `2b1fe6c3bfdee0cd0d3d07acec80bdcff3d877070ca839f21cbceccbbc76bc6c` |
+
+**Ojo con «reproducible» acá:** VP9 y VP9+alfa **sí** salieron byte-idénticos entre
+dos corridas; las dos piezas de H.264 **no** (Baseline +22 B, Main −74 B, con la
+misma ffmpeg y las mismas opciones de x264). Es la deuda **H-14**, abierta por
+evidencia y no por sospecha.
 
 **Producto vigente (S-4/S-7 cerradas, 2026-08-31): 1280 @15 fps, formato v3,
 tile=sweep (espacial 16 + regional 32) = `dcd6afb6…1632a`**

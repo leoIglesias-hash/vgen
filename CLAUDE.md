@@ -98,7 +98,16 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. **Validar antes de mutar; corrupción = excepción tipada.** Y **canonicidad
    forzada del máster**: uvarint no canónico, padding ≠ 0 u offsets no crecientes
    se rechazan. Nada de eso se relaja por el formato nuevo.
-10. **Los valores manuales del operador prevalecen** sobre cualquier automatismo.
+10. **Las páginas se usan con un CONTROL REMOTO, no con un mouse.** En un WebView
+    de TV el click exige mover un puntero emulado y el scroll se hace con
+    flechas, así que: **cada acción tiene una tecla numérica**, **todo entra en
+    una sola pantalla** (`overflow: hidden`, geometría calculada en JS — nada de
+    `object-fit`, que no existe en WebViews viejos) y **nada crece hacia abajo**
+    (un segundo `<video>` ya empujó una vez la tabla fuera de pantalla). El
+    reporte se lee a pantalla completa porque en una TV **no se puede copiar
+    texto**: se fotografía. La leyenda de teclas es además el botón táctil, para
+    el celular.
+11. **Los valores manuales del operador prevalecen** sobre cualquier automatismo.
     Y **el player JS anterior se mantiene, no crece**: queda como reproductor de
     escritorio y banco de verificación del máster (las 4 páginas + `playloop.js`).
     Única deuda activa ahí: **W-26** (escape `?renderer=` en la raíz).
@@ -114,16 +123,25 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   de la TV box terminó en la adopción del híbrido y este repo. Cuadro de
   evidencia en el REGISTRO; herramientas que quedaron:
   `frontend/tv-video-test.html` y el diagnostic con sección Pantalla/escala.
-- **En curso — fase H.** H-0 cerrada (nace este repo). **H-1..H-3 reemplazadas**
-  por el debate de dirección (el alcance pasó a «formato propio códec-agnóstico»)
-  y **H-4/H-5 reemplazadas** la misma tarde por decisión del operador: la sonda
-  sintética hubiera fijado el formato contra **una sola TV box**; se arranca
-  **emitiendo**. IDs no reusables. Lo vivo, en orden: **H-9** pack v0
-  (**próxima acción**), **H-10** reproducirlo en varios aparatos, **H-11**
-  intervención encima o al lado, **H-6** matriz, **H-12** caché, **H-7** spec
-  `SPEC-ASCLH.md`, **H-8** muxer ES5 + player. **W-26** independiente. Externo:
-  pedir a la app que el WebView reporte el panel real (hoy 3840×2160 sobre
-  1280×720).
+- **En curso — fase H.** H-0 cerrada (nace este repo). **H-1..H-5 REEMPLAZADAS**
+  (H-1..H-3 por el debate de alcance; H-4/H-5 porque una sonda sintética habría
+  fijado el formato contra **una sola TV box** — se arranca **emitiendo**). IDs
+  no reusables. **H-9 CERRADA 2026-09-01**: el pack v0 existe, está medido en
+  bytes y publicado (resumen:
+  [`docs/ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md`](docs/ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md)).
+  Lo vivo, en orden: **H-10** (**próxima acción**: el operador abre
+  `https://iargen.com/player/v0/` en la caja, el celular, el Smart TV y el
+  escritorio, y pasa el reporte — **tecla 95** lo muestra a pantalla completa
+  para fotografiarlo), **H-11** intervención encima o al lado, **H-6** matriz,
+  **H-12** caché, **H-7** spec `SPEC-ASCLH.md`, **H-8** muxer ES5 + player.
+  **H-14** (determinismo de H.264) y **W-26** son independientes. Externo: pedir
+  a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
+- **Herramientas de la fase H, ya hechas — no re-implementar:**
+  `tools/emit_pieces.py` + workflow `emitir-v0` (emiten el pack desde el máster,
+  con los empaquetados HLS/DASH por remux), `frontend/v0.html` (una sola
+  pantalla, sin scroll, un solo `<video>`, mando numérico),
+  `frontend/keypad.js` (el mando **compartido**) y `frontend/ir.html` (lanzador
+  autocontenido que vive en **otro servidor**, no en el bucket).
 - **Las suposiciones del pack v0 están escritas con su refutación** en
   [`docs/EMISION-V0.md`](docs/EMISION-V0.md) §4. Las dos grandes: si YouTube anda
   bien en la caja, esa caja tiene **VP9 por hardware** (VP9 sería su camino más
