@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCILINE-hybrid - pack v0</title>
+<style>
+  html { background: #101014; color: #e8e8ee; font-family: monospace; }
+  body { margin: 0; padding: 0.8em; }
+  h1 { font-size: 1.1em; margin: 0 0 0.4em 0; }
+  p.sub { margin: 0 0 0.8em 0; color: #9aa0b4; font-size: 0.62em; }
+  #stage { position: relative; width: 100%; max-width: 1280px; background: #000; }
+  #stage video { width: 100%; display: block; }
+  #alphaBg { display: none; background: #1f6f3f; }
+  #alphaBg.on { display: block; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.55em; margin-top: 0.6em; }
+  th, td { border: 1px solid #33384a; padding: 0.25em 0.4em; text-align: left; }
+  th { background: #1a1e2c; }
+  td.ok { color: #7ee08a; }
+  td.no { color: #ff8f8f; }
+  button { font: inherit; font-size: 0.6em; margin: 0.2em 0.3em 0.2em 0;
+           background: #2a2f45; color: #e8e8ee; border: 1px solid #4a5170;
+           padding: 0.45em 0.7em; }
+  #report { width: 100%; height: 9em; font-size: 0.5em; background: #0b0d13;
+            color: #cdd3e6; border: 1px solid #33384a; }
+  .env { font-size: 0.55em; color: #b8bed4; margin-top: 0.5em; }
+</style>
+</head>
+<body>
+<h1>pack v0 - por donde entra el video</h1>
+<p class="sub">Cada pieza es una apuesta (docs/EMISION-V0.md). Corre las tres de
+video, mira la de alfa, y pasame el reporte de abajo.</p>
+
+<div id="stage">
+  <div id="alphaBg"><video id="alpha" muted playsinline loop></video></div>
+  <video id="video" muted playsinline></video>
+</div>
+
+<div id="botones">
+  <button id="runAll">correr todo</button>
+  <button id="runAlpha">probar alfa</button>
+  <button id="runBlob">probar blob:</button>
+</div>
+
+<table id="tabla">
+  <thead><tr>
+    <th>pieza</th><th>dice</th><th>arranco</th><th>1er cuadro</th>
+    <th>caidos/total</th><th>deriva</th><th>atascos</th><th>bytes</th>
+  </tr></thead>
+  <tbody id="filas"></tbody>
+</table>
+
+<div class="env" id="env"></div>
+<textarea id="report" readonly></textarea>
+
+<script>
+"use strict";
+
+/* v0.html - H-10: reproduce el pack v0 y REPORTA lo que el aparato hizo.
+ *
+ * Reemplaza a la sonda sintetica que se descarto (H-4): las mismas preguntas
+ * -que codecs, alfa, blob:, MSE, panel real, cuadros caidos- se contestan como
+ * subproducto de reproducir material verdadero, y en varios aparatos. Un
+ * canPlayType dice "probably"; un video que corre sin caer cuadros dice que si.
+ *
+ * ES5.1 estricto (gate tests/test_frontend_compatibility.js): sin fetch, sin
+ * Promise, sin JSON, sin arrow, sin let/const. El manifiesto es texto tabulado
+ * justamente por eso. */
+
+var SECONDS = 10;          /* cuanto se reproduce cada pieza */
+var pieces = [];           /* filas del MANIFEST.tsv */
+var results = {};          /* id -> medicion */
+var base = "";
+
+function byId(id) { return document.getElementById(id); }
+
+function param(name) {
+  var query = window.location.search;
+  var pattern = new RegExp("[?&]" + name + "=([^&]*)");
+  var found = pattern.exec(query);
+  return found ? decodeURIComponent(found[1]) : "";
+}
+
+/* HUD proporcional: la caja le da al WebView una superficie de 3840x2160 sobre
+ * un panel de 1280x720. Sin esto el texto es ilegible ahi. */
+function scaleUI() {
+  var width = window.innerWidth || 1280;
+  document.documentElement.style.fontSize = Math.max(12, Math.round(width / 34)) + "px";
+}
+
+function text(node, value) {
+  while (node.firstChild) { node.removeChild(node.firstChild); }
+  node.appendChild(document.createTextNode(value));
+}
+
+/* --- manifiesto: texto tabulado, nunca JSON --- */
+
+function parseManifest(body) {
+  var lines = body.split("\n");
+  var out = [];
+  var i, line, f;
+  for (i = 0; i < lines.length; i++) {
+    line = lines[i];
+    if (line.length === 0 || line.charAt(0) === "#") { continue; }
+    f = line.split("\t");
+    if (f.length < 6) { continue; }
+    out.push({ id: f[0], role: f[1], mime: f[2], file: f[3],
+               bytes: f[4], sha256: f[5], note: f.length > 6 ? f[6] : "" });
+  }
+  return out;
+}
+
+function get(url, onText, onFail) {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", url, true);
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) { return; }
+    if (xhr.status >= 200 && xhr.status < 300) { onText(xhr.responseText); }
+    else { onFail("HTTP " + xhr.status); }
+  };
+  xhr.send(null);
+}
+
+/* --- medicion --- */
+
+function quality(video) {
+  if (video.getVideoPlaybackQuality) {
+    var q = video.getVideoPlaybackQuality();
+    return { total: q.totalVideoFrames, dropped: q.droppedVideoFrames };
+  }
+  if (typeof video.webkitDecodedFrameCount === "number") {
+    return { total: video.webkitDecodedFrameCount,
+             dropped: video.webkitDroppedFrameCount || 0 };
+  }
+  return null;
+}
+
+function blank(piece) {
+  return { id: piece.id, says: "", started: false, firstMs: -1,
+           total: 0, dropped: 0, driftMs: 0, stalls: 0, bytes: piece.bytes,
+           error: "" };
+}
+
+/* Reproduce una pieza SECONDS segundos y llama a done(medicion). No hay
+ * Promise: se encadena con callbacks, que es lo que este piso permite. */
+function measure(piece, src, done) {
+  var video = byId("video");
+  var row = blank(piece);
+  var t0 = 0, wall0 = 0, media0 = 0, raf = 0, finished = false;
+  var before = quality(video);
+  var baseTotal = before ? before.total : 0;
+  var baseDropped = before ? before.dropped : 0;
+
+  function onStall() { row.stalls++; }
+  function onError() { row.error = "error de carga/decodificacion"; finish(); }
+
+  function cleanup() {
+    video.removeEventListener("waiting", onStall, false);
+    video.removeEventListener("error", onError, false);
+    if (raf) { window.clearTimeout(raf); raf = 0; }
+  }
+
+  function finish() {
+    if (finished) { return; }
+    finished = true;
+    var after = quality(video);
+    if (after) {
+      row.total = after.total - baseTotal;
+      row.dropped = after.dropped - baseDropped;
+      if (row.total < 0) { row.total = after.total; row.dropped = after.dropped; }
+    }
+    if (row.started) {
+      var media = video.currentTime - media0;
+      var wall = (new Date().getTime() - wall0) / 1000;
+      row.driftMs = Math.round((wall - media) * 1000);
+    }
+    video.pause();
+    cleanup();
+    done(row);
+  }
+
+  function tick() {
+    if (finished) { return; }
+    if (!row.started && video.currentTime > 0) {
+      row.started = true;
+      row.firstMs = new Date().getTime() - t0;
+      wall0 = new Date().getTime();
+      media0 = video.currentTime;
+    }
+    if (row.started && (new Date().getTime() - wall0) >= SECONDS * 1000) {
+      finish(); return;
+    }
+    if (!row.started && (new Date().getTime() - t0) > 15000) {
+      row.error = "no arranco en 15 s"; finish(); return;
+    }
+    raf = window.setTimeout(tick, 100);
+  }
+
+  row.says = video.canPlayType(piece.mime) || "no";
+  video.addEventListener("waiting", onStall, false);
+  video.addEventListener("error", onError, false);
+  video.src = src;
+  video.load();
+  t0 = new Date().getTime();
+  video.play();
+  tick();
+}
+
+/* --- tabla y reporte --- */
+
+function cell(row, value, good) {
+  var td = document.createElement("td");
+  if (good === true) { td.className = "ok"; }
+  if (good === false) { td.className = "no"; }
+  text(td, value);
+  row.appendChild(td);
+}
+
+function draw() {
+  var body = byId("filas");
+  while (body.firstChild) { body.removeChild(body.firstChild); }
+  var i, piece, r, tr;
+  for (i = 0; i < pieces.length; i++) {
+    piece = pieces[i];
+    r = results[piece.id];
+    tr = document.createElement("tr");
+    cell(tr, piece.id);
+    cell(tr, r ? r.says : byId("video").canPlayType(piece.mime) || "no");
+    if (!r) {
+      cell(tr, "-"); cell(tr, "-"); cell(tr, "-"); cell(tr, "-"); cell(tr, "-");
+    } else {
+      cell(tr, r.error ? r.error : (r.started ? "si" : "no"), r.started && !r.error);
+      cell(tr, r.firstMs < 0 ? "-" : r.firstMs + " ms");
+      cell(tr, r.total ? (r.dropped + "/" + r.total) : "sin instrumento",
+           r.total ? (r.dropped * 20 <= r.total) : undefined);
+      cell(tr, r.driftMs + " ms");
+      cell(tr, "" + r.stalls);
+    }
+    cell(tr, piece.bytes);
+    body.appendChild(tr);
+  }
+  writeReport();
+}
+
+function environment() {
+  var video = byId("video");
+  var lines = [];
+  lines.push("ua\t" + navigator.userAgent);
+  lines.push("panel\t" + screen.width + "x" + screen.height +
+             "\tdpr " + (window.devicePixelRatio || 1) +
+             "\tsuperficie " + window.innerWidth + "x" + window.innerHeight);
+  lines.push("mse\t" + (window.MediaSource ? "si" : "no"));
+  if (window.MediaSource && window.MediaSource.isTypeSupported) {
+    lines.push("mse.h264\t" +
+      (window.MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01F"') ? "si" : "no") +
+      "\tmse.vp9\t" +
+      (window.MediaSource.isTypeSupported('video/webm; codecs="vp9"') ? "si" : "no"));
+  }
+  lines.push("rvfc\t" + (video.requestVideoFrameCallback ? "si" : "no") +
+             "\tindexeddb\t" + (window.indexedDB ? "si" : "no") +
+             "\tquality\t" + (video.getVideoPlaybackQuality ? "si" : "no"));
+  lines.push("hls\t" + (video.canPlayType("application/vnd.apple.mpegurl") || "no") +
+             "\tdash\t" + (video.canPlayType("application/dash+xml") || "no"));
+  return lines;
+}
+
+function writeReport() {
+  var lines = ["# pack v0 - reporte de aparato"];
+  var i, piece, r;
+  var env = environment();
+  for (i = 0; i < env.length; i++) { lines.push(env[i]); }
+  lines.push("# id\tdice\tarranco\t1er_ms\tcaidos\ttotal\tderiva_ms\tatascos\tnota");
+  for (i = 0; i < pieces.length; i++) {
+    piece = pieces[i];
+    r = results[piece.id];
+    if (!r) { continue; }
+    lines.push(piece.id + "\t" + r.says + "\t" + (r.started ? "si" : "no") +
+               "\t" + r.firstMs + "\t" + r.dropped + "\t" + r.total +
+               "\t" + r.driftMs + "\t" + r.stalls + "\t" + r.error);
+  }
+  byId("report").value = lines.join("\n");
+  text(byId("env"), env.join("   |   "));
+}
+
+/* --- corridas --- */
+
+function baseOnly() {
+  var out = [], i;
+  for (i = 0; i < pieces.length; i++) {
+    if (pieces[i].role === "base") { out.push(pieces[i]); }
+  }
+  return out;
+}
+
+function runSequence(list, index) {
+  if (index >= list.length) { draw(); return; }
+  var piece = list[index];
+  measure(piece, base + piece.file, function (row) {
+    results[piece.id] = row;
+    draw();
+    window.setTimeout(function () { runSequence(list, index + 1); }, 400);
+  });
+}
+
+function runAlpha() {
+  var i, piece = null;
+  for (i = 0; i < pieces.length; i++) {
+    if (pieces[i].role === "alpha") { piece = pieces[i]; }
+  }
+  if (!piece) { return; }
+  /* El fondo es verde a proposito: si el aparato compone el alfa se ve verde
+   * alrededor del disco; si no, se ve negro. El veredicto lo firma el operador. */
+  byId("alphaBg").className = "on";
+  var alpha = byId("alpha");
+  alpha.src = base + piece.file;
+  alpha.load();
+  alpha.play();
+}
+
+/* blob: es el piso de la cache (bajar una vez y reproducir sin red). Se prueba
+ * con la pieza mas chica que haya arrancado. */
+function runBlob() {
+  var list = baseOnly();
+  if (!list.length) { return; }
+  var piece = list[0];
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", base + piece.file, true);
+  xhr.responseType = "blob";
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) { return; }
+    var url = window.URL || window.webkitURL;
+    if (xhr.status < 200 || xhr.status >= 300 || !url || !url.createObjectURL) {
+      results["blob:"] = blank({ id: "blob:", bytes: "-" });
+      results["blob:"].error = "sin blob:";
+      draw();
+      return;
+    }
+    var objectUrl = url.createObjectURL(xhr.response);
+    measure({ id: "blob:" + piece.id, role: "base", mime: piece.mime,
+              file: piece.file, bytes: piece.bytes },
+      objectUrl, function (row) {
+        row.id = "blob:" + piece.id;
+        results[row.id] = row;
+        pieces.push({ id: row.id, role: "blob", mime: piece.mime,
+                      file: "(blob)", bytes: piece.bytes, sha256: "", note: "" });
+        draw();
+      });
+  };
+  xhr.send(null);
+}
+
+/* --- arranque --- */
+
+function start() {
+  scaleUI();
+  base = param("base");
+  if (base && base.charAt(base.length - 1) !== "/") { base += "/"; }
+  byId("runAll").onclick = function () { runSequence(baseOnly(), 0); };
+  byId("runAlpha").onclick = runAlpha;
+  byId("runBlob").onclick = runBlob;
+  get(base + "MANIFEST.tsv", function (body) {
+    pieces = parseManifest(body);
+    draw();
+  }, function (why) {
+    text(byId("env"), "no se pudo leer MANIFEST.tsv: " + why);
+  });
+}
+
+window.onresize = scaleUI;
+start();
+</script>
+</body>
+</html>

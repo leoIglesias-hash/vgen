@@ -32,6 +32,7 @@ JS_SUITES = (
     "test_diagnostic_player_page.js",
     "test_player_page.js",
     "test_live_player_page.js",
+    "test_v0_page.js",
     "test_slots_js.js",
     "test_slots_v2.js",
     "test_overlay_runtime.js",
