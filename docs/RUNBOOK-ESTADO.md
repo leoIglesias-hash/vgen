@@ -39,19 +39,26 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 > decodificó el clip publicado: cuadro más claro = 20,7 % de celdas casi blancas, luma
 > media máxima 160,5, cero saltos bruscos. Encoder y formato descartados.
 >
-> **Segundo corte (Instancia 041): el renderer NO se muere.** Descripción refinada del
-> operador: muestra el primer frame, los 2-4 siguientes (al azar) van en blanco, después
-> muestra **otro frame más adelante**, y así — «no funciona». Que la reproducción **siga
-> avanzando** significa que el JS está vivo y la página nunca se recargó: se cae la
-> **presentación**, no el proceso. La mayoría de los vsyncs el WebView no tiene cuadro
-> válido que componer y se ve el blanco de la app de atrás. **Sospechoso principal: el
-> WebGL de la caja** — `pickRenderer()` elige WebGL si `init()` no falla, y en GPUs
-> viejas el contexto "funciona" por API pero no presenta. **La prueba decisiva ya está
-> publicada, sin tocar código:** `tv-player.html?renderer=canvas2d` vs `tv-player.html`
-> en el mismo WebView. Si el 2D reproduce limpio, la causa es WebGL y la salida es
-> detección/default por entorno.
+> **CAUSA CONFIRMADA (Instancia 041): el camino WebGL de esa GPU no presenta.** La
+> prueba decisiva en el mismo WebView dio: auto (WebGL) = pantallazos; con
+> `?renderer=canvas2d` = **sin pantallazos**. El contexto se crea, `init()` da true,
+> no llega `webglcontextlost`: ningún fallback se entera. **Arreglo pendiente = W-26:**
+> la raíz (`live-player.html`) hoy no acepta `?renderer=` y elige WebGL sin salida —
+> todas las páginas necesitan el escape por URL, y hay que decidir el default para
+> WebViews de TV box.
 >
-> **No cerrar F10 ni empezar F11 hasta tener causa identificada.** El detalle del
+> ### 🔴 DIAG-003 — SIN FLUIDEZ EN LA TV BOX, CON CUALQUIER RENDERER (Instancia 041)
+>
+> Con Canvas2D los blancos desaparecen pero el video sigue **entrecortado**: muestra
+> algunos frames y saltea otros. Es la cadencia de W-20 descartando cuadros tarde →
+> el trabajo por cuadro supera el presupuesto (66,7 ms a 15 fps) en esa CPU. Hipótesis:
+> `inflate` (ya era el 58 % en PC). **Próxima acción: medir, no suponer** —
+> `diagnostic-player.html?renderer=canvas2d` en el mismo WebView (ya está en el
+> servidor del operador) y leer FRAME p50/p95, drops y el costo por etapa del HUD.
+> Con esos números se elige el ataque (fps, resolución, inflate, W-21). Es territorio
+> F8 llegando por el síntoma.
+>
+> **No cerrar F10 ni empezar F11 hasta resolver DIAG-002/003.** El detalle del
 > diagnóstico va en el REGISTRO (Instancia 040) y la tarea en el runbook de
 > implementación.
 

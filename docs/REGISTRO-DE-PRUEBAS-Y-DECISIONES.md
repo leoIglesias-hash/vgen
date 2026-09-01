@@ -2668,3 +2668,42 @@ Mitigacion inmediata sin esperar el resultado, del lado de la app:
 blanco... asi que si se nota"* -- el clip de Telekino es claro, un parpadeo negro se ve
 igual de mal que uno blanco. No re-proponerla: DIAG-002 se cierra solo con la causa
 real arreglada.
+
+#### DIAG-002, tercer corte: CAUSA CONFIRMADA - WebGL de la caja no presenta
+
+El operador corrio la prueba decisiva en el WebView de la TV box, sirviendo
+`frontend/` + `outputs/` desde su propio servidor (mismo clip `dcd6afb6...`,
+verificado por SHA antes de subir):
+
+| Renderer | Pantallazos blancos |
+|---|---|
+| auto (WebGL) | SI |
+| `?renderer=canvas2d` | NO |
+
+**Veredicto: el blanco lo pone el camino WebGL de esa GPU/driver.** El contexto se crea
+e `init()` devuelve true, asi que `pickRenderer()`/`chooseRenderer()` lo eligen; dibuja
+"bien" por API pero la mayoria de los cuadros no llegan compuestos, y no dispara
+`webglcontextlost` ni ningun fallback. Canvas2D (el piso, regla 6) compone siempre.
+Consecuencia de diseno: **"WebGL solo acelera" necesita un escape operable por URL en
+TODAS las paginas** - hoy la raiz (`live-player.html`) no acepta `?renderer=` y elige
+WebGL sin salida. Tarea de arreglo: W-26 (runbook).
+
+#### DIAG-003 abierta: sin fluidez en la TV box, con CUALQUIER renderer
+
+Mismo test, hallazgo nuevo (palabras del operador): *"en ninguno de los dos escenarios
+hay fluidez... ambos muestran un video entrecortado, mostrando algunos frames y otros
+salteandoselos; la unica diferencia es que canvas2d no da pantallazos blancos, pero se
+traba de igual forma"*.
+
+Que se saltee frames y muestre otros es exactamente lo que hace la cadencia de W-20
+cuando el trabajo por cuadro excede el presupuesto (66,7 ms a 15 fps): descarta para no
+atrasarse. En la PC del operador el frame costaba p95 14,90 ms con el cuello en
+`inflate` (58 %); en la CPU de la caja todo es mas lento y la hipotesis natural es que
+`inflate` + decode superan el presupuesto. **Pero se mide, no se supone**: el siguiente
+paso es `diagnostic-player.html?renderer=canvas2d` en el MISMO WebView - ya esta en el
+servidor del operador, carga `./outputs/` solo y publica en pantalla FRAME p50/p95,
+presupuesto, drops, tarde y el costo por etapa (inflate/rgba/draw). Con esa foto se
+decide el ataque (fps del clip, resolucion, optimizar inflate, W-21).
+
+Esto es territorio F8 (p95 en TV real) llegando por la puerta del sintoma: DIAG-003
+queda como el diagnostico puntual; F8 sigue siendo la fase que lo resuelve.
