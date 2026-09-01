@@ -2872,3 +2872,26 @@ decode, 0 caidos. Queda disponible ademas el carril del workflow encode con
 caidos ~0, atascos ~0, deriva estable -> el hibrido es viable y pasa a diseno
 formal (decision de producto: dos layers). Entrecortado o ERROR -> el WebView de
 la app tiene el decode hw capado; la conversacion es con la app.
+
+## DIAG-003: mp4 con el look del producto generado para la prueba del hibrido (2026-09-01)
+
+Resultado de la prueba del operador con el FUENTE crudo (1920x1080 ~24fps) en la
+caja: "aceptable, un poco lento; en 1:1 mucho menos" -> el carril hardware VIVE en
+ese WebView (primera reproduccion aceptable en la caja hasta ahora) y la
+superficie 4K vuelve a cobrar peaje incluso al video por hardware.
+
+Siguiente escalon pedido por el operador ("probemos nuestro modelo procesado de
+1280x720 @ 15 fps"): run `encode` 33532310754 (verde) con preview=true, extra
+"--palette-refit 5 --near-lossless 8 --cols 1280", fps 15, format v3, SIN zopfli y
+tile fijo 16 (esas perillas solo cambian bytes del .asclv, no pixeles: el mp4 tiene
+los MISMOS pixeles que decidiria la receta de producto). El preview.mp4 resultante
+se instalo local como `outputs/producto.mp4` (gitignored) y se verifico en PC:
+1280x720 nativo, ~15 fps de decode, 0 caidos.
+
+**Dato de peso: el mp4 del look producto pesa 4.130.240 B (4,1 MB)** contra
+24.458.884 B del .asclv producto (17 %) y 38.966.462 B del fuente (10,6 %). Si el
+hibrido se adopta, el transporte H.264 de nuestro look es ~6x mas chico que
+nuestro formato (la intervencion seguiria viajando aparte, minima).
+
+Pendiente: foto del HUD de la caja con `?src=./outputs/producto.mp4` (adaptado y
+?view=1:1) para cerrar la evaluacion del carril mp4 con numeros.
