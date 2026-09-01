@@ -73,6 +73,35 @@ partido con `split`. Vale para v0 y para el manifiesto definitivo del `.asclh`.
 **Lo que v0 deja fijo a propósito** (un eje por vez): 1280×720, 15 fps constante,
 sin audio, sin intervención, sin variantes de bitrate.
 
+## 3.b Lo que salió (emisión del 2026-09-01, H-9)
+
+Workflow `emitir-v0`, run 33559631360, desde el máster `dcd6afb6…1632a`
+(1280×720, 15 fps, **231 cuadros** = 15,4 s). 2 min 22 s de runner, RSS 487 MB.
+
+| Pieza | Bytes | vs. Baseline | SHA-256 (12) |
+|---|---:|---:|---|
+| `v0-h264-baseline.mp4` | 9.551.693 | — | `97bb642a6dfc` |
+| `v0-h264-main.mp4` | 8.686.512 | **−9,1 %** | `e1037ead463e` |
+| `v0-vp9.webm` | 4.411.693 | **−53,8 %** | `5be4650747fd` |
+| `v0-vp9-alpha.webm` | 4.664.676 | (lleva plano alfa) | `2b1fe6c3bfde` |
+
+**Dos lecturas, las dos honestas:**
+
+1. **VP9 comprime a menos de la mitad** que H.264 con la misma estructura y el
+   mismo material. Si el aparato lo tiene por hardware (S3), es banda regalada.
+2. **El piso cuesta caro en bytes:** el `producto.mp4` conocido —el que en la
+   caja *«reproduce muy bien»*— pesa 4.130.240 B, o sea **2,3× menos** que
+   nuestro Baseline. La diferencia no es misteriosa y hay que decirla completa:
+   aquel salió con los **defaults de ffmpeg** (calidad más floja, GOP largo,
+   cuadros B, varias referencias) y este lleva a propósito **CRF 20, GOP cerrado
+   de 15, sin B y `refs=1`** — el DPB mínimo se paga en bitrate. Cuál de los dos
+   precios conviene lo dice el aparato, no la tabla: si S2 se refuta (el
+   decodificador es hardware), esa estructura estricta deja de valer lo que
+   cuesta y H-6 la afloja.
+
+Nada de esto se normaliza todavía: son bytes, no fluidez. La fluidez la dice
+H-10.
+
 ## 4. Las suposiciones, con su refutación escrita
 
 Esta tabla es el contrato del método: **cada fila dice qué creemos, por qué, y qué

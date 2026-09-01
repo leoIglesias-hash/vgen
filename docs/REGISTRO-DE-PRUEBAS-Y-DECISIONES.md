@@ -3190,3 +3190,58 @@ reorienta la matriz H-6 entera. Una sonda de capacidades no lo hubiera contestad
 detalle de implementación.
 
 Próxima acción real: **H-9**, el pack v0.
+
+## H-9: emitido el pack v0 — el primer video del formato (2026-09-01)
+
+Workflow `emitir-v0`, run **33559631360** (verde), desde el máster
+`dcd6afb669078a5b0d1bf4e4d42cdd2d8497ea70908a3e283183fe7d2431632a` bajado de la
+copia pineada por contenido que sirve el player en producción y **verificado por
+SHA-256 antes de usarlo**. 1280×720, 15 fps, 231 cuadros (15,4 s). Runner:
+2 min 22 s, RSS 487 MB.
+
+| Pieza | Bytes | vs. Baseline | SHA-256 (12) |
+|---|---:|---:|---|
+| `v0-h264-baseline.mp4` | 9.551.693 | — | `97bb642a6dfc` |
+| `v0-h264-main.mp4` | 8.686.512 | −9,1 % | `e1037ead463e` |
+| `v0-vp9.webm` | 4.411.693 | −53,8 % | `5be4650747fd` |
+| `v0-vp9-alpha.webm` | 4.664.676 | (con plano alfa) | `2b1fe6c3bfde` |
+
+**Cómo se emitió, y por qué así.** `tools/emit_pieces.py` decodifica el máster
+**una sola vez** y alimenta con el mismo cuadro a los cuatro encoders en
+paralelo: así las piezas son comparables **por construcción** (misma entrada
+exacta, no «aproximadamente la misma») y no se paga la decodificación cuatro
+veces. Cada línea de ffmpeg es la apuesta escrita en `EMISION-V0.md` §2-§3:
+Baseline con `bframes=0 ref=1 keyint=15 scenecut=0` (el DPB más chico posible),
+Main con **la misma estructura** y solo CABAC + 8×8 de diferencia (si no es la
+misma estructura, la comparación mide dos cosas), VP9 en calidad constante, y
+VP9 con `yuva420p` + `auto-alt-ref 0` para el plano alfa. Un hilo por encoder y
+muxado bit-exacto, por el invariante de determinismo.
+
+**Lo que ya se puede leer de los bytes (fluidez todavía no: eso es H-10):**
+
+1. **VP9 comprime a menos de la mitad** que H.264 con la misma estructura y el
+   mismo material. Si el aparato lo tiene por hardware (S3), es banda regalada.
+2. **El piso cuesta caro en bytes, y hay que decirlo completo.** El
+   `producto.mp4` que en la caja *«reproduce muy bien»* pesa 4.130.240 B: **2,3×
+   menos** que nuestro Baseline. La diferencia no es un misterio ni un fracaso —
+   aquel salió con los **defaults de ffmpeg** (calidad más floja, GOP largo,
+   cuadros B, varias referencias) y este lleva a propósito CRF 20, GOP cerrado de
+   15, sin B y `refs=1`. **El DPB mínimo se paga en bitrate.** Cuál de los dos
+   precios conviene no lo dice esta tabla: lo dice el aparato. Si S2 se refuta
+   —el decodificador es hardware y la memoria no era el cuello—, esa estructura
+   estricta deja de valer lo que cuesta y H-6 la afloja.
+3. **Main gana 9,1 % sobre Baseline** con idéntica estructura. Ese 9,1 % es el
+   precio que Baseline paga por no usar CABAC. Si además reproduce igual o mejor,
+   Baseline deja de tener sentido salvo como piso de compatibilidad.
+
+**Hallazgo operativo:** el máster tiene **231 cuadros**, no 225 — el dato sale de
+la emisión, no de una estimación. Queda anotado porque cualquier cuenta de fps
+variable (H-6) parte de ahí.
+
+**Herramientas que quedaron:** `tools/emit_pieces.py` (con `--only` y `--frames`
+para corridas de humo, y el stderr de cada encoder guardado en su propio log),
+workflow `emitir-v0`, `tests/test_emit_pieces.py`, y `frontend/v0.html` con
+`tests/test_v0_page.js`. `tools/serve-local.ps1` aprendió `.webm` y `.tsv`.
+
+Próxima acción: **H-10** — abrir `v0.html` en la caja, el celular, el Smart TV y
+el escritorio, y llenar el registro de aparatos.
