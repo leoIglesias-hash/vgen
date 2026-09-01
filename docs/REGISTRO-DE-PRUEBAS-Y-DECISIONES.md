@@ -2836,3 +2836,39 @@ inflate/walk/rgba trabajan sobre el buffer y NO dependen de la superficie; lo qu
 esta prueba mide es la CONTENCION del compositor 4K (blit, `otros`, drops). Si los
 drops caen fuerte -> el APK a 1280 reales vale la pena; si no cambian -> el cuello
 es la CPU y la superficie era secundaria.
+
+## DIAG-003: vista 1:1 medida - la superficie 4K era secundaria; y llega la prueba mp4 (2026-09-01)
+
+**Resultado de `?view=buffer` en la caja** (canvas 1280x720 en CSS, estira x1.00,
+mismo clip producto): FRAME p50 290 -> 233 ms (mejora ~20 %), p95 1193 -> 935,
+drops 731/169 frames (proporcionalmente igual). Veredicto: la superficie 4K roba
+algo pero es SECUNDARIA; el cuello es CPU pura (inflate p50 98 + walk 62 + rgba 30
+ya triplican el presupuesto de 66,7). **Ni un APK que reporte 1280 reales ni la
+optimizacion salvan al player 100 % JS en estas cajas; la calidad no se baja mas
+(decision del operador). Se pasa a evaluar el carril mp4** (dicho por el operador:
+"Vamos a evaluar la opcion mp4 a ver que pasa").
+
+**Herramienta nueva: `frontend/tv-video-test.html`** (ES5, sin dependencias) para
+que la prueba de video por hardware de numeros y no impresiones:
+- Reproduce un mp4 (`?src=`, default `./outputs/preview.mp4`) en `<video>` muted+loop.
+- Publica: tamano de ventana/pantalla, video nativo vs en CSS, frames decodificados
+  y CAIDOS (getVideoPlaybackQuality o webkitDecodedFrameCount), fps de decode
+  efectivo, atascos (eventos waiting/stalled) y deriva reloj-video (si crece, el
+  video atrasa contra el reloj de pared).
+- Dos vistas pedidas por el operador: default ADAPTADA al viewport (object-fit
+  contain) y `?view=1:1` clavada al tamano nativo sin adaptarse; tecla V alterna.
+- HUD proporcional al viewport igual que el diagnostic (`?hud=N`, +/-).
+- `tools/serve-local.ps1` ahora sirve `.mp4` (video/mp4).
+
+**El video de la prueba es el REAL de Telekino** (pedido explicito del operador:
+"el video debe ser el de telekino"): el fuente HQ local `inputs/TKN-2443-GANADOR-
+15seg-.mp4` (1920x1080) copiado a `outputs/preview.mp4` (gitignored, viaja por
+fuera de main como todos los videos). Verificado en PC: reproduce, 24 fps de
+decode, 0 caidos. Queda disponible ademas el carril del workflow encode con
+`preview=true` para generar, cuando se quiera, el mp4 CON EL LOOK DEL PRODUCTO
+(decodificacion del .asclv 1280@15) - ese seria el insumo real del hibrido.
+
+**Como leer el resultado en la caja:** fluido = fps de decode ~cadencia del clip,
+caidos ~0, atascos ~0, deriva estable -> el hibrido es viable y pasa a diseno
+formal (decision de producto: dos layers). Entrecortado o ERROR -> el WebView de
+la app tiene el decode hw capado; la conversacion es con la app.

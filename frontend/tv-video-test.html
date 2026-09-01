@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ASCILINE video-hw test</title>
+<style>
+  html,body{ width:100%; height:100%; margin:0; overflow:hidden; background:#000; }
+  body{ color:#ddd; font-family:Arial,Helvetica,sans-serif; }
+  #vid{ position:absolute; left:0; top:0; width:100%; height:100%;
+    background:#000; object-fit:contain; }
+  #hud{ position:absolute; z-index:5; right:0; top:0; width:430px; max-width:64%;
+    padding:10px 12px; color:#e6e6e6; background:#000; background:rgba(0,0,0,.72);
+    border-left:1px solid #444; font:12px/1.35 "Courier New",Courier,monospace; }
+  #head{ margin-bottom:7px; color:#fff; font-size:13px; }
+  #note{ color:#9c9; }
+  #help{ margin-top:8px; color:#999; }
+  table{ width:100%; border-collapse:collapse; }
+  td{ padding:1px 3px; text-align:left; white-space:nowrap; }
+  td.k{ color:#8ab; }
+  .bad{ color:#f99; }
+  .ok{ color:#9d9; }
+</style>
+</head>
+<body>
+<video id="vid" muted loop playsinline></video>
+<div id="hud">
+  <div id="head">ASCILINE video-hw test</div>
+  <div id="note">Cargando&hellip;</div>
+  <div id="env"></div>
+  <div id="help">click/P play-pausa &middot; V 1:1/adaptado &middot; +/- HUD &middot; ?src=ruta.mp4 &middot; ?view=1:1 &middot; ?hud=N</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* DIAG-003 - prueba del carril de video por hardware. El player 100% JS quedo
+     medido: FRAME p50 233-290 ms contra 66,7 en la TV box, con la superficie 4K
+     como factor secundario. Antes de decidir el hibrido (video hw + canvas de
+     intervencion) hay que saber si un mp4 comun reproduce FLUIDO dentro del
+     MISMO WebView de la app. Esta pagina reproduce un mp4 y publica numeros,
+     no impresiones: fps de decode reales, frames caidos, atascos (waiting) y
+     deriva entre el reloj de pared y currentTime. Sin dependencias, ES5. */
+
+  var HUD_MS = 500;
+  var vid = document.getElementById("vid");
+  var noteNode = document.getElementById("note");
+  var envNode = document.getElementById("env");
+  var hudNode = document.getElementById("hud");
+  var headNode = document.getElementById("head");
+
+  var perf = window.performance;
+  var now = (perf && typeof perf.now === "function") ?
+    function(){ return perf.now(); } :
+    function(){ return Date.now ? Date.now() : new Date().getTime(); };
+
+  function qs(name){
+    var match = new RegExp("[?&]" + name + "=([^&]+)").exec(window.location.search);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  function setNodeText(node, value){
+    value = value || "";
+    if(typeof node.textContent !== "undefined"){ node.textContent = value; }
+    else { node.innerText = value; }
+  }
+
+  function fixed(value, digits){
+    if(!(value > 0) && !(value < 0)){ return (0).toFixed(digits); }
+    return value.toFixed(digits);
+  }
+
+  /* HUD proporcional al viewport, igual que el diagnostic: la app de la caja
+     reporta 3840x2160 sobre un panel de 720p y una fuente fija queda ilegible. */
+  var hudUser = 1, hudFixed = 0, hudScale = 0;
+
+  /* Dos vistas pedidas por el operador (2026-09-01): la default ADAPTA el video
+     al viewport (object-fit contain = pantalla completa); ?view=1:1 lo clava a
+     su tamano NATIVO en CSS, sin adaptarse (se ve mas chico en la caja, como la
+     vista 1:1 del diagnostic). La tecla V alterna. Comparar las dos separa el
+     costo de decodificar del costo de escalar la presentacion. */
+  var viewNative = false;
+
+  function applyFit(){
+    if(viewNative && vid.videoWidth > 0){
+      vid.style.left = "50%";
+      vid.style.top = "50%";
+      vid.style.width = vid.videoWidth + "px";
+      vid.style.height = vid.videoHeight + "px";
+      vid.style.marginLeft = (-Math.round(vid.videoWidth / 2)) + "px";
+      vid.style.marginTop = (-Math.round(vid.videoHeight / 2)) + "px";
+    } else {
+      vid.style.left = "0";
+      vid.style.top = "0";
+      vid.style.width = "100%";
+      vid.style.height = "100%";
+      vid.style.marginLeft = "0";
+      vid.style.marginTop = "0";
+    }
+  }
+
+  function applyHudScale(){
+    var root = document.documentElement;
+    var vw = window.innerWidth || (root ? root.clientWidth : 0) || 1280;
+    var target = (hudFixed > 0 ? hudFixed : vw / 1280) * hudUser;
+    if(target < 0.5){ target = 0.5; }
+    if(target > 8){ target = 8; }
+    if(hudScale > 0 && target > hudScale - 0.01 && target < hudScale + 0.01){ return; }
+    hudScale = target;
+    hudNode.style.fontSize = Math.round(12 * hudScale) + "px";
+    hudNode.style.width = Math.round(430 * hudScale) + "px";
+    hudNode.style.maxWidth = "92%";
+    headNode.style.fontSize = Math.round(13 * hudScale) + "px";
+  }
+
+  /* ------------------------------------------------------------- medicion --- */
+
+  var stalls = 0, playingSince = 0, baseCT = 0;
+  var lastFrames = -1, lastFramesAt = 0, decodeFPS = 0, framesAPI = "";
+
+  function frameStats(){
+    var q;
+    if(typeof vid.getVideoPlaybackQuality === "function"){
+      q = vid.getVideoPlaybackQuality();
+      framesAPI = "quality";
+      return { total: q.totalVideoFrames, dropped: q.droppedVideoFrames };
+    }
+    if(typeof vid.webkitDecodedFrameCount === "number"){
+      framesAPI = "webkit";
+      return { total: vid.webkitDecodedFrameCount,
+        dropped: vid.webkitDroppedFrameCount || 0 };
+    }
+    framesAPI = "";
+    return null;
+  }
+
+  function row(name, value, klass){
+    return "<tr><td class=\"k\">" + name + "</td><td" +
+      (klass ? " class=\"" + klass + "\"" : "") + ">" + value + "</td></tr>";
+  }
+
+  function refresh(){
+    var root = document.documentElement;
+    var vw = window.innerWidth || (root ? root.clientWidth : 0) || 0;
+    var vh = window.innerHeight || (root ? root.clientHeight : 0) || 0;
+    var sw = window.screen ? window.screen.width : 0;
+    var sh = window.screen ? window.screen.height : 0;
+    var dpr = window.devicePixelRatio || 1;
+    var stats = frameStats(), drift = 0, t = now(), html = "";
+    applyHudScale();
+    if(stats && stats.total > 0){
+      if(lastFrames >= 0 && t > lastFramesAt && stats.total >= lastFrames){
+        decodeFPS = (stats.total - lastFrames) / ((t - lastFramesAt) / 1000);
+      }
+      lastFrames = stats.total; lastFramesAt = t;
+    }
+    if(playingSince > 0 && !vid.paused){
+      if(vid.currentTime < baseCT){ playingSince = t; baseCT = vid.currentTime; }
+      drift = ((t - playingSince) / 1000) - (vid.currentTime - baseCT);
+    }
+    html += "<table>";
+    html += row("ventana CSS", vw + "x" + vh + " · dpr " + fixed(dpr, 2));
+    html += row("pantalla", sw + "x" + sh);
+    html += row("video nativo", vid.videoWidth + "x" + vid.videoHeight);
+    html += row("video en CSS", vid.clientWidth + "x" + vid.clientHeight +
+      (viewNative ? " · 1:1 sin adaptar (V vuelve)" : " · adaptado (V = 1:1)"));
+    html += row("tiempo", fixed(vid.currentTime, 1) + " s · readyState " + vid.readyState);
+    if(stats){
+      html += row("frames decodificados", stats.total + " (" + framesAPI + ")");
+      html += row("frames caidos", String(stats.dropped),
+        stats.total > 0 && stats.dropped / stats.total > 0.05 ? "bad" : "ok");
+      html += row("fps de decode", fixed(decodeFPS, 1),
+        decodeFPS > 0 && decodeFPS < 12 ? "bad" : "ok");
+    } else {
+      html += row("frames", "API no disponible en este WebView");
+    }
+    html += row("atascos (waiting)", String(stalls), stalls > 2 ? "bad" : "ok");
+    html += row("deriva reloj-video", fixed(drift, 2) + " s",
+      drift > 0.5 || drift < -0.5 ? "bad" : "ok");
+    html += "</table>";
+    envNode.innerHTML = html;
+  }
+
+  /* --------------------------------------------------------------- eventos --- */
+
+  function on(name, handler){
+    if(vid.addEventListener){ vid.addEventListener(name, handler, false); }
+    else if(vid.attachEvent){ vid.attachEvent("on" + name, handler); }
+  }
+
+  on("playing", function(){
+    playingSince = now();
+    baseCT = vid.currentTime;
+    setNodeText(noteNode, "Reproduciendo " + src);
+  });
+  on("waiting", function(){ stalls++; });
+  on("stalled", function(){ stalls++; });
+  on("error", function(){
+    var code = vid.error ? vid.error.code : 0;
+    setNodeText(noteNode, "ERROR de video (codigo " + code + ") · " + src +
+      (code === 4 ? " · formato no soportado o ruta inexistente" : ""));
+  });
+  on("loadedmetadata", function(){
+    setNodeText(noteNode, "Metadata: " + vid.videoWidth + "x" + vid.videoHeight +
+      " · " + fixed(vid.duration, 1) + " s · " + src);
+  });
+  on("canplay", function(){ if(vid.paused){ tryPlay(); } });
+
+  /* play() devuelve una promesa en WebViews nuevos y undefined en los viejos;
+     el rechazo (autoplay bloqueado, tab de fondo) se silencia si se puede. */
+  function tryPlay(){
+    var result;
+    try { result = vid.play(); } catch(ignoredPlay) { return; }
+    if(result && typeof result["catch"] === "function"){
+      result["catch"](function(){});
+    }
+  }
+
+  function toggle(){
+    if(vid.paused){ tryPlay(); }
+    else { vid.pause(); }
+  }
+
+  document.onclick = toggle;
+
+  function handleKey(event){
+    var code;
+    event = event || window.event;
+    code = event.keyCode || event.which;
+    if(code === 80){ toggle(); }
+    else if(code === 86){ viewNative = !viewNative; applyFit(); refresh(); }
+    else if(code === 187 || code === 107){
+      if(hudUser < 4){ hudUser += 0.25; } refresh();
+    }
+    else if(code === 189 || code === 109){
+      if(hudUser > 0.5){ hudUser -= 0.25; } refresh();
+    }
+    else { return; }
+    if(event.preventDefault){ event.preventDefault(); }
+    else { event.returnValue = false; }
+  }
+
+  if(document.addEventListener){ document.addEventListener("keydown", handleKey, false); }
+  else if(document.attachEvent){ document.attachEvent("onkeydown", handleKey); }
+
+  /* --------------------------------------------------------------- arranque --- */
+
+  var src = qs("src") || "./outputs/preview.mp4";
+  hudFixed = parseFloat(qs("hud") || "");
+  if(!(hudFixed > 0)){ hudFixed = 0; }
+  (function(){
+    var raw = qs("view");
+    viewNative = raw === "1:1" || raw === "buffer" || raw === "native";
+  }());
+  on("loadedmetadata", applyFit);
+  window.onresize = function(){ applyFit(); refresh(); };
+  vid.src = src;
+  setNodeText(noteNode, "Cargando " + src + "…");
+  tryPlay();
+  refresh();
+  window.setInterval(refresh, HUD_MS);
+}());
+</script>
+</body>
+</html>

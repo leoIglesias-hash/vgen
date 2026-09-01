@@ -14,7 +14,7 @@ $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:8123/")
 $listener.Start()
 Write-Host "sirviendo $root (layout plano, sin cache) en http://localhost:8123/"
-$types = @{ ".html"="text/html; charset=utf-8"; ".js"="application/javascript"; ".css"="text/css"; ".asclv"="application/octet-stream"; ".ascl"="application/octet-stream"; ".mp3"="audio/mpeg"; ".png"="image/png"; ".bin"="application/octet-stream"; ".md"="text/plain; charset=utf-8"; ".txt"="text/plain; charset=utf-8" }
+$types = @{ ".html"="text/html; charset=utf-8"; ".js"="application/javascript"; ".css"="text/css"; ".asclv"="application/octet-stream"; ".ascl"="application/octet-stream"; ".mp3"="audio/mpeg"; ".mp4"="video/mp4"; ".png"="image/png"; ".bin"="application/octet-stream"; ".md"="text/plain; charset=utf-8"; ".txt"="text/plain; charset=utf-8" }
 while ($listener.IsListening) {
   try {
     $ctx = $listener.GetContext()
