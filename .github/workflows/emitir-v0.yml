@@ -65,8 +65,8 @@ jobs:
           fi
           /usr/bin/time -v -o time.txt python tools/emit_pieces.py \
             work/master.asclv --out outputs/v0 $FRAMES | tee emision.txt
-          rm -rf outputs/v0/work
           grep -E "Maximum resident|Elapsed" time.txt
+          ls -l outputs/v0
       - name: Resumen
         run: |
           {

@@ -229,13 +229,18 @@ def emit(master_path, out_dir, only=None, max_frames=None, ffmpeg=None,
         (master_sha[:12], width, height, fps, frames))
 
     running = []
+    logs = []
     for variant in variants:
         out_path = os.path.join(out_dir, variant["file"])
         command = build_command(ffmpeg, variant, width, height, fps, out_path)
         log("+ " + variant["id"])
+        # El stderr de cada encoder va a su propio archivo: sin eso, un fallo
+        # solo deja un codigo de salida y no se puede diagnosticar la corrida.
+        stderr = open(os.path.join(out_dir, variant["id"] + ".ffmpeg.log"), "wb")
+        logs.append(stderr)
         running.append((variant, out_path, subprocess.Popen(
             command, stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)))
+            stdout=subprocess.DEVNULL, stderr=stderr)))
 
     # Se decodifica el master UNA sola vez y el mismo cuadro alimenta a todos
     # los encoders: asi las piezas son comparables por construccion (misma
@@ -254,15 +259,17 @@ def emit(master_path, out_dir, only=None, max_frames=None, ffmpeg=None,
             try:
                 process.stdin.write(payload)
             except (IOError, OSError):
-                raise RuntimeError("el encoder de %s murio en el cuadro %d"
-                                   % (variant["id"], index))
+                raise RuntimeError(
+                    "el encoder de %s murio en el cuadro %d (ver %s.ffmpeg.log)"
+                    % (variant["id"], index, variant["id"]))
 
     rows = []
     for variant, out_path, process in running:
         process.stdin.close()
         code = process.wait()
         if code != 0:
-            raise RuntimeError("ffmpeg fallo (%d) emitiendo %s" % (code, variant["id"]))
+            raise RuntimeError("ffmpeg fallo (%d) emitiendo %s (ver %s.ffmpeg.log)"
+                               % (code, variant["id"], variant["id"]))
         size = os.path.getsize(out_path)
         rows.append({
             "id": variant["id"],
@@ -274,6 +281,8 @@ def emit(master_path, out_dir, only=None, max_frames=None, ffmpeg=None,
             "note": variant["note"],
         })
         log("  %-18s %10d B  %s" % (variant["id"], size, variant["file"]))
+    for stream in logs:
+        stream.close()
 
     manifest_path = os.path.join(out_dir, MANIFEST_NAME)
     with open(manifest_path, "w") as stream:
