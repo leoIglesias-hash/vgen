@@ -3425,3 +3425,37 @@ que se verifica no es «que exista la tecla» sino la regla de usabilidad:
 `test_v0_page.js` **falla si algun digito suelto queda demorado** por culpa de un
 codigo compuesto que empieza igual. Es la clase de regresion que nadie nota de
 escritorio y arruina la pagina en el aparato real.
+
+## v0 pasa a UNA SOLA PANTALLA, sin scroll (2026-09-01)
+
+El operador probó la página y encontró el problema real: *«las pruebas deben ser
+secuenciales, porque como baja con scroll me pierdo la visión»*. Tenía razón y el
+diagnóstico de fondo era de diseño, no de teclas: **la página crecía hacia
+abajo**. La prueba de alfa metía un **segundo `<video>`** debajo del primero, y
+eso empujaba la tabla de resultados fuera de pantalla. En una TV, donde el
+scroll se hace con flechas, eso vuelve inservible la medición: se ve el video o
+se ven los números, nunca los dos.
+
+Lo que se cambió:
+
+- **`overflow: hidden` y geometría calculada en JS.** Nada se fija a mano: el
+  recuadro de video toma exactamente 16:9 desde el ancho real de la ventana, sin
+  depender de `object-fit` —que en WebViews viejos no existe—, y **la tabla queda
+  al lado del video**, no debajo. Verificado en el navegador contra la página
+  publicada: a 1280×720 el video mide **768×432** (ratio 1,778) y
+  `scrollHeight <= innerHeight`; en la superficie de la caja (3840×2160) la
+  cuenta cierra igual de exacta (2304×1296, tipografía de 83 px).
+- **Una sola etiqueta `<video>` para todo.** La pieza con alfa se reproduce en el
+  mismo recuadro y el fondo verde va **detrás**, no en un segundo elemento. Esa
+  era la causa del crecimiento.
+- **`1` corre TODO** —progresivas, alfa y empaquetados— en secuencia, con un
+  indicador grande (`3/7 · v0-vp9`) que se lee sin moverse de lugar.
+- **Tecla 95: el reporte a pantalla completa.** En una TV no se puede copiar
+  texto; la forma práctica de que los números lleguen es una foto.
+- **La leyenda de teclas también es botón.** En el celular no hay teclado
+  numérico: se toca. Una sola interfaz para los dos mundos, sin una segunda
+  barra de botones que vuelva a comerse el alto.
+
+La suite `test_v0_page.js` ahora **falla si la página vuelve a poder scrollear**,
+si aparece un segundo `<video>` o si la tabla deja de estar al lado: son las tres
+formas conocidas de romper esto sin darse cuenta.
