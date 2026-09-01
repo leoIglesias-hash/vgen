@@ -58,11 +58,15 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 > medirlo, el diagnostic ahora publica una sección **«Pantalla / escala»** (ventana
 > CSS, físico×dpr, pantalla, canvas buffer vs CSS con el factor de estirado) y el HUD
 > escala solo con el viewport (`?hud=N` lo fija; teclas +/− lo ajustan) porque a 12 px
-> era ilegible en la caja. **Próxima acción: dos datos del operador** —
-> (1) el HUD de `diagnostic-player.html?renderer=canvas2d` en el mismo WebView
-> (FRAME p50/p95, drops, costo por etapa, y ahora los tamaños de pantalla) y (2) probar
+> era ilegible en la caja. **Dato (1) RECIBIDO (2026-09-01, tabla completa en el
+> REGISTRO): FRAME p50 = 290 ms contra 66,7 de presupuesto (4,3×; p95 = 1193 = 18×),
+> `inflate` solo ya come el presupuesto (110 ms p50), drops 324.** Confirmado además:
+> la app da al WebView 3840×2160 sobre un panel físico de 1280×720 (9× de píxeles
+> regalados al compositor). Veredicto: **el player JS no llega a 15 fps en estas cajas
+> por optimización** — el único carril JS es degradar (~640×360 @ 8–10 fps entra
+> justo). **Próxima acción: falta solo el dato (2)** — probar
 > un mp4 en un `<video>` en ese WebView (¿funciona el decode por hardware ahí adentro?).
-> Con esos dos se decide entre
+> Con ese dato se decide entre
 > optimizar el player actual (fps/resolución/inflate/W-21) o el **HÍBRIDO candidato**
 > (REGISTRO 2026-09-01): video base por `<video>` hardware pero renderizado por
 > nuestro encoder desde las celdas decididas + la intervención en el canvas encima

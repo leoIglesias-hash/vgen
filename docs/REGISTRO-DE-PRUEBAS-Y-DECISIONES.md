@@ -2780,3 +2780,47 @@ debe hacer lo mismo". Ahora la escala es proporcional continua (ancho/1280, piso
 a 3840 de ancho la fuente pasa a 36 px y el panel a 1290 px = la misma fraccion de
 pantalla que 12 px/430 px en una ventana de 1280. Verificado en navegador emulando
 399, 1280 y 3840 de ancho. `?hud=N` sigue fijando el factor y +/- multiplica encima.
+
+## DIAG-003: PRIMERA MEDICION REAL EN LA TV BOX - el player JS no llega (2026-09-01)
+
+Llego el dato (1) pendiente: foto del HUD de `diagnostic-player.html?renderer=canvas2d`
+corriendo el clip PRODUCTO (1280x720@15 v3) en el WebView de la caja.
+
+**Pantalla / escala (hallazgo confirmado y cuantificado):**
+- ventana CSS **3840x2160**, dpr 1.00, vv 1.00 -> la app le da al WebView una
+  superficie 4K...
+- ...sobre un **panel fisico de 1280x720** (fila `pantalla`). La caja renderiza a 4K
+  y reduce a 720p: 9x los pixeles necesarios, costo regalado al compositor.
+- canvas buffer 1280x720, canvas en CSS 3840x2160 (estira x3.00).
+
+**Etapas del frame en ms (presupuesto 66,7; 65 frames mostrados, drops 324, tarde 64):**
+
+| etapa   | media | p50   | p95    |
+|---------|-------|-------|--------|
+| inflate | 134,6 | 110,5 | 331,4  |
+| walk    | 85,2  | 36,2  | 485,5  |
+| rgba    | 30,8  | 29,6  | 79,6   |
+| blit    | 14,5  | 11,2  | 21,2   |
+| otros   | 125,3 | 74,1  | 521,8  |
+| decode  | 345,1 | 249,6 | 1130,1 |
+| FRAME   | 390,4 | 290,2 | 1193,3 |
+
+pre-key: 848,3 (una muestra). Paridad GL/2D: OK (delta max 0, camino indexado).
+
+**Veredicto (cierra la pregunta 1 de la Instancia 041):** FRAME p50 = 290 ms contra
+66,7 = **4,3x pasado de presupuesto; p95 18x**. Solo `inflate` (110 ms p50) ya se
+come el presupuesto entero; `rgba` sola se lleva la mitad. Esta CPU es ~20x mas
+lenta que la PC (p95 14,9 alli). **El player actual NO llega a 15 fps en estas cajas
+por optimizacion de codigo**: haria falta acelerar ~5x el camino completo y las
+etapas gordas ya estan optimizadas (W-17/W-18/W-20). El unico carril 100% JS seria
+degradar el producto (~640x360 @ 8-10 fps entra JUSTO, en un panel que es
+exactamente 1280x720).
+
+**Queda UN dato pendiente y ahora decide todo: el mp4 en `<video>` en ese WebView.**
+- Fluido -> el HIBRIDO (video hw renderizado por nuestro encoder + canvas solo de
+  intervencion) pasa de candidato a unica via que conserva 1280@15 en estas cajas.
+- No fluido -> el decode por hardware esta capado en la app; el problema se corre a
+  la app, no al player.
+
+Nota para la app (independiente de la decision): configurar el WebView al tamano del
+panel (1280x720) en vez de 3840x2160 ahorra 9x de pixeles por composicion.
