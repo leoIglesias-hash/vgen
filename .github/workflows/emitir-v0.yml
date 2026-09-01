@@ -1,0 +1,91 @@
+name: emitir-v0
+
+# H-9: emite el PACK V0 desde el master y lo publica como artifact descargable.
+#
+# El pack v0 es "el primer video, por suposicion" (docs/EMISION-V0.md): cuatro
+# piezas que son cuatro apuestas distintas sobre por donde entra el video al
+# hardware del aparato, mas un MANIFEST.tsv. No barre ejes -eso es H-6-: fija un
+# solo punto por codec para poder REPRODUCIRLO en varios aparatos (H-10) y
+# corregir de ahi.
+#
+# El master NO vive en main (politica de .gitignore): se baja de la copia
+# pineada por contenido que ya sirve el player en produccion, y se VERIFICA por
+# SHA-256 antes de usarlo. Si el digest no coincide, el workflow falla: una
+# pieza emitida desde un master desconocido no mide nada.
+
+on:
+  workflow_dispatch:
+    inputs:
+      master_url:
+        description: "URL del master .asclv (pineado por contenido)"
+        default: "https://iargen.com/player/outputs/clip.dcd6afb66907.asclv"
+        required: true
+      master_sha256:
+        description: "SHA-256 esperado del master (receta S-4, 1280x720 @15, v3)"
+        default: "dcd6afb669078a5b0d1bf4e4d42cdd2d8497ea70908a3e283183fe7d2431632a"
+        required: true
+      frames:
+        description: "Cortar en N cuadros (vacio = el clip entero; util para una corrida de humo)"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  emitir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Dependencias
+        run: python -m pip install -r backend/requirements.txt
+      - name: ffmpeg (libx264 + libvpx-vp9)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -encoders | grep -E "libx264|libvpx-vp9"
+      - name: Bajar y verificar el master
+        run: |
+          mkdir -p work outputs
+          curl -fsSL "${{ inputs.master_url }}" -o work/master.asclv
+          echo "${{ inputs.master_sha256 }}  work/master.asclv" | sha256sum -c -
+          ls -l work/master.asclv
+      - name: Emitir el pack v0
+        run: |
+          if [ -n "${{ inputs.frames }}" ]; then
+            FRAMES="--frames ${{ inputs.frames }}"
+          else
+            FRAMES=""
+          fi
+          /usr/bin/time -v -o time.txt python tools/emit_pieces.py \
+            work/master.asclv --out outputs/v0 $FRAMES | tee emision.txt
+          rm -rf outputs/v0/work
+          grep -E "Maximum resident|Elapsed" time.txt
+      - name: Resumen
+        run: |
+          {
+            echo "## Pack v0 emitido"
+            echo ""
+            echo "Master: \`${{ inputs.master_sha256 }}\`"
+            echo ""
+            echo '```'
+            cat outputs/v0/MANIFEST.tsv
+            echo '```'
+            echo ""
+            grep -E "Maximum resident|Elapsed" time.txt || true
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar el pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: pack-v0
+          path: |
+            outputs/v0/
+            emision.txt
+            time.txt
+          retention-days: 14
