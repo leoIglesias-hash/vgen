@@ -117,11 +117,20 @@ REGISTRO, SHAs en `RUNBOOK-ESTADO.md` §Referencias de clips):
 Plan nuevo aprobado por el operador el 2026-08-31 (Instancia 030). Orden:
 **F9 → F10 → F11 → F8 → DIAG-001**.
 
-- **🔴 DIAG-002 — PANTALLAZOS BLANCOS EN TV BOX: es lo próximo, antes que F10.** El
-  operador probó el player en un **WebView de TV box** y ve **flashes blancos entre las
-  imágenes**; lo llamó crítico. Encuadre que no hay que perder: probó lo publicado
-  **antes** del motor único, o sea la raíz **sin** cadencia ni pre-decode. Si el motor
-  nuevo mejora, empeora o no cambia el síntoma **se mide, no se supone**.
+- **🔴 DIAG-002/003 — DIAGNÓSTICO TV BOX COMPLETO (2026-09-01): DECISIÓN DE
+  DIRECCIÓN PENDIENTE DEL OPERADOR, antes que F10.** Medido en la caja real:
+  (a) el WebGL de esa GPU **no presenta** (pantallazos blancos; canvas2d limpio;
+  falta W-26 = escape `?renderer=` en la raíz); (b) el player 100 % JS **no llega
+  a 15 fps ahí** (FRAME p50 233–290 ms vs 66,7; el cuello es CPU, la superficie
+  4K que la app da al WebView —3840×2160 sobre panel de 1280×720— es secundaria);
+  (c) **el carril `<video>` por hardware SÍ vive en ese WebView**: `producto.mp4`
+  (el `.asclv` producto decodificado a H.264 1280@15, 4,1 MB, vía workflow encode
+  `preview=true`) *«reproduce muy bien»* (operador). Herramientas nuevas:
+  `frontend/tv-video-test.html` y el diagnostic con sección Pantalla/escala, HUD
+  proporcional, `?view=`. **Sobre la mesa: el HÍBRIDO** (video hw con nuestro look
+  + canvas solo-intervención; dos capas en vez de una) — *«puede ser que cambie la
+  dirección del proyecto… luego tomaremos decisiones»*. Nada se implementa hasta
+  esa decisión. Evidencia: REGISTRO 2026-09-01 + RUNBOOK-ESTADO §Próxima acción.
 - **F9 (S-8) — CERRADA 2026-08-31** (código, CI verde y publicado). Aceleración del
   frontend sin tocar bytes ni formato. Medido y aprobado: `W-16` (`f1ccfa3`, banco
   `tools/bench_render.js` + `frontend/diagnostic-player.html`), `W-17` (`8cecc7b`, LUT

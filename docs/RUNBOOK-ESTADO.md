@@ -64,19 +64,40 @@ Lo vivo, en orden. El cómo-se-llegó-acá está en la bitácora (al final), en
 > la app da al WebView 3840×2160 sobre un panel físico de 1280×720 (9× de píxeles
 > regalados al compositor). Veredicto: **el player JS no llega a 15 fps en estas cajas
 > por optimización** — el único carril JS es degradar (~640×360 @ 8–10 fps entra
-> justo). **Próxima acción: falta solo el dato (2)** — probar
-> un mp4 en un `<video>` en ese WebView (¿funciona el decode por hardware ahí adentro?).
-> Con ese dato se decide entre
-> optimizar el player actual (fps/resolución/inflate/W-21) o el **HÍBRIDO candidato**
-> (REGISTRO 2026-09-01): video base por `<video>` hardware pero renderizado por
-> nuestro encoder desde las celdas decididas + la intervención en el canvas encima
-> (solo la zona intervenida → entra en cualquier caja). El híbrido toca el invariante
-> de un-solo-layer: **decisión de producto del operador, pendiente.** Es territorio
-> F8 llegando por el síntoma.
+> justo). **Dato (2) RECIBIDO y POSITIVO (2026-09-01): el carril de video por
+> hardware VIVE en ese WebView.** Se midió con `frontend/tv-video-test.html` (página
+> nueva, ES5: fps de decode, frames caídos, atascos, deriva reloj-video; vistas
+> adaptada y `?view=1:1`; HUD proporcional). Dos escalones:
+> 1. **Fuente crudo** (1920×1080 ~24 fps, 38,9 MB): «aceptable, un poco lento; en
+>    1:1 mucho menos» — la superficie 4K cobra peaje hasta al video por hardware.
+> 2. **`producto.mp4`** — el `.asclv` PRODUCTO decodificado a H.264 (1280×720 @15,
+>    mismos píxeles que la receta: run encode 33532310754 con `preview=true`, extra
+>    `--cols 1280`, sin zopfli/sweep porque solo cambian bytes): palabras del
+>    operador, *«realmente esto mejoró muchísimo… reproduce muy bien nuestro
+>    producto»*. **Primera reproducción fluida del producto en la caja.**
 >
-> **No cerrar F10 ni empezar F11 hasta resolver DIAG-002/003.** El detalle del
-> diagnóstico va en el REGISTRO (Instancia 040) y la tarea en el runbook de
-> implementación.
+> Dato económico: `producto.mp4` = **4.130.240 B (4,1 MB)** vs 24,5 MB del `.asclv`
+> (17 %) y 38,9 MB del fuente (10,6 %): el transporte H.264 de nuestro look es ~6×
+> más chico que nuestro formato.
+>
+> **PRÓXIMA ACCIÓN = DECISIÓN DE PRODUCTO DEL OPERADOR (sin tomar, 2026-09-01):**
+> adoptar o no el **HÍBRIDO** — base por `<video>` hardware con el mp4 renderizado
+> por nuestro encoder desde las celdas decididas + la intervención (números, texto,
+> logo, canal de datos) en el canvas encima repintando solo la zona intervenida.
+> El operador dijo: *«puede ser que cambie la dirección del proyecto… luego
+> tomaremos decisiones»*. Qué toca si se adopta: (a) el invariante de un-solo-layer
+> pasa a dos capas (video + canvas de intervención); (b) se abre un diseño formal
+> (DISENO-HIBRIDO) — sincronía intervención↔video, distribución del mp4 (CACHE-001
+> por contenido aplica igual), rol del `.asclv` (¿sigue siendo el máster del que se
+> emite el mp4? el encoder ya lo hace hoy vía `preview=true`); (c) F10/F11 se
+> re-evalúan bajo la nueva dirección. Independiente de la decisión: **W-26 sigue
+> pendiente** (escape `?renderer=` en la raíz) y conviene pedirle a la app que el
+> WebView reporte el tamaño del panel (hoy 3840×2160 sobre panel de 1280×720 = 9×
+> de píxeles regalados).
+>
+> **No cerrar F10 ni empezar F11 hasta que el operador decida la dirección
+> (DIAG-002/003).** El detalle del diagnóstico está en el REGISTRO (Instancias
+> 040-042) y la evidencia local en `outputs/producto.mp4` (gitignored).
 
 **F9 (S-8): CERRADA el 2026-08-31** — código, CI verde y frontend publicado en las cuatro
 carpetas. Orden acordado con el operador (Instancia 030): F9 → F10 → F11 → F8 →

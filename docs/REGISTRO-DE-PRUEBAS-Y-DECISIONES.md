@@ -2895,3 +2895,38 @@ nuestro formato (la intervencion seguiria viajando aparte, minima).
 
 Pendiente: foto del HUD de la caja con `?src=./outputs/producto.mp4` (adaptado y
 ?view=1:1) para cerrar la evaluacion del carril mp4 con numeros.
+
+## DIAG-003: EVALUACION DEL CARRIL MP4 COMPLETA - el producto reproduce fluido en la caja (2026-09-01)
+
+Resultado de la prueba de `producto.mp4` (el .asclv PRODUCTO decodificado a H.264,
+1280x720@15, mismos pixeles que la receta) en el WebView de la TV box, palabras del
+operador: **"realmente esto mejoro muchisimo.. reproduce muy bien nuestro
+producto"**. Es la PRIMERA reproduccion fluida del producto en la caja en todo el
+diagnostico.
+
+Con esto quedan cerradas las DOS preguntas de la evaluacion:
+1. ¿El player 100% JS puede dar 15 fps en estas cajas? **NO** (FRAME p50 233-290 ms
+   vs 66,7; medido, no supuesto; la superficie 4K es secundaria, el cuello es CPU).
+2. ¿El decode de video por hardware vive dentro del WebView de la app? **SI**, y
+   con NUESTRO contenido reproduce muy bien.
+
+Cuadro final de la evidencia (todo 2026-09-01, en la misma caja, mismo WebView):
+
+| prueba                          | resultado                                 |
+|---------------------------------|-------------------------------------------|
+| player JS, WebGL                | pantallazos blancos (GPU no presenta)     |
+| player JS, canvas2d             | sin blancos, entrecortado (290 ms/frame)  |
+| player JS, canvas2d vista 1:1   | mejora ~20%, sigue inviable (233 ms)      |
+| mp4 fuente 1080p en <video>     | aceptable, algo lento (menos en 1:1)      |
+| mp4 PRODUCTO 1280@15 en <video> | **reproduce muy bien**                    |
+
+Tamanos: producto.mp4 4,1 MB / .asclv 24,5 MB / fuente 38,9 MB.
+
+**Estado: la decision de direccion queda EN MANOS DEL OPERADOR** (sus palabras:
+"puede ser que cambie la direccion del proyecto asi que documenta, guarda lo
+necesario y luego tomaremos desiciones"). La opcion sobre la mesa es el HIBRIDO
+(REGISTRO 2026-09-01, "alternativas discutidas"): base <video> hw con el mp4
+renderizado por nuestro encoder + canvas de intervencion repintando solo la zona
+intervenida. La filosofia se conserva (el encoder caro decide todo offline; el TV
+solo ejecuta); cambia el transporte del video base y el invariante de un-solo-layer
+pasa a dos capas. Nada se implementa hasta esa decision.
