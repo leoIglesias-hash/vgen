@@ -19,8 +19,8 @@ Reglas de uso:
 
 > **Leer primero [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md).** Es el norte
 > del proyecto y lo que evita que una sesión post-compact se desvíe. Después,
-> [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md), que es lo que desbloquea todo lo
-> demás.
+> [`EMISION-V0.md`](EMISION-V0.md) (el primer video y sus suposiciones) y
+> [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) (el método).
 
 **Dos cosas pasaron el 2026-09-01, en este orden.** Primero el operador decidió
 la dirección que DIAG-002/003 había dejado pendiente (adoptar el híbrido; nace
@@ -55,33 +55,59 @@ base que permite todo. encoder caro no importa, decoder con poco estrés»*.
   estructural (gratis), N2 composición encima, N3 variantes pre-codificadas, N4
   sub-cuadro (investigación). Tocar un píxel arbitrario del video en vivo es
   imposible y todo diseño que lo necesite está mal planteado.
-- **Nada se normaliza sin medición.** El proyecto ya se equivocó una vez por
-  suponer capacidades (F9 completa, y en la caja 290 ms/cuadro contra 66,7).
+- **Se supone explícito, se reproduce, y recién ahí se normaliza.** El proyecto ya
+  se equivocó una vez por suponer capacidades (F9 completa, y en la caja
+  290 ms/cuadro contra 66,7) — y estuvo a punto de cometer el error simétrico
+  (ver abajo).
+
+**Corrección del método, la misma tarde del 2026-09-01.** El operador leyó el
+plan y frenó la sonda:
+
+> *«el camino de H-4 no es el correcto porque nos basaríamos solo en 1 tv box,
+> mejor tomar las bondades de cada encoder para crear el nuestro y ya. Y empezar
+> con el primer video aunque sea basado en suposiciones: al probarlo podremos ir
+> viendo si vamos en la dirección correcta paso a paso.»*
+
+Tiene razón en las dos cosas: una sonda sintética corrida en una sola caja
+**sobreajusta el formato a ese aparato**, y reproducir material real responde más
+que un cuestionario. Así que la sonda **no se pospone: se disuelve dentro del
+primer video** — la página que reproduce el pack v0 reporta lo mismo, pero sobre
+material verdadero y en varios aparatos. Invariante nuevo:
+**ningún aparato solo define el formato** (refutar sí, consagrar no).
 
 **Lo vivo, en orden** (cuerpos en
-[`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2):
+[`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2; suposiciones y
+refutaciones en [`EMISION-V0.md`](EMISION-V0.md)):
 
-1. **H-4 — sonda de capacidades** (`frontend/probe.html`, nueva): la lista
-   cerrada de [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) §2 — códecs, VP9 por
-   hardware, alfa en WebM, MSE, `blob:`, IndexedDB, instrumentos de medición,
-   videos simultáneos, canvas encima del video, panel real, HLS/DASH nativo.
-   **Es la próxima acción real.**
-2. **H-5 — banco de reproducción** (`frontend/tv-video-test.html` crece): medir
-   con `getVideoPlaybackQuality()` en vez de a ojo.
-3. **H-6 — matriz de emisión multi-códec** desde el máster vigente: códec × fps
-   fijo/variable × bitrate × estructura × zonas estáticas × paleta consciente del
-   4:2:0. Cierra con **una receta por perfil de dispositivo**, no una global.
-4. **H-7 — spec normativa del formato** (`docs/SPEC-ASCLH.md`): solo con la tabla
-   de H-4/H-5/H-6; cierra las filas «gateadas» de
-   [`DISENO-FORMATO-ASCLH.md`](DISENO-FORMATO-ASCLH.md) §10.
-5. **H-8 — muxer ES5 + player híbrido mínimo:** solo con H-7 aprobada.
-6. **W-26** (heredada, independiente): la raíz publicada elige WebGL sin salida.
-7. Externo: pedirle a la app de la caja que el WebView reporte el panel real
+1. **H-9 — el pack v0, el primer video por suposición** (`tools/emit_pieces.py` +
+   workflow): desde el máster `dcd6afb6…1632a`, cuatro piezas y un manifiesto —
+   H.264 **Baseline** (el piso, DPB mínimo: sin B, `refs=1`, GOP cerrado 15),
+   H.264 **Main** (el **detector de hardware vs. software**), **VP9** (banda y el
+   camino que YouTube usa en Android TV), **VP9+alfa** (el personaje sin fondo
+   con CPU ≈ 0) y `MANIFEST.tsv`. **Es la próxima acción real.**
+2. **H-10 — reproducirlo y que él nos diga** (`frontend/v0.html`, ES5): cuál
+   arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, panel
+   real. Se abre en la caja **y** en 2-3 aparatos más del operador.
+3. **H-11 — la bifurcación de layout**: canvas de intervención encima del
+   `<video>`, con y sin, midiendo caídos (suposición S5). Decide **encima o al
+   lado** para todo el producto.
+4. **H-6 — matriz de emisión**, ya con el terreno elegido por v0: cantidad de
+   cuadros (fps variable) × estructura × bitrate × zonas estáticas × paleta
+   consciente del 4:2:0. Cierra con **una receta por perfil**, no una global.
+5. **H-12 — caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido.
+6. **H-7 — spec normativa** (`docs/SPEC-ASCLH.md`): solo con filas reproducidas en
+   ≥2 clases de aparato; cierra las filas «gateadas» de
+   [`DISENO-FORMATO-ASCLH.md`](DISENO-FORMATO-ASCLH.md) §10. **El manifiesto va en
+   texto tabulado, nunca JSON** (el gate ES5 prohíbe `JSON`).
+7. **H-8 — muxer ES5 + player híbrido mínimo:** solo con H-7 aprobada.
+8. **W-26** (heredada, independiente): la raíz publicada elige WebGL sin salida.
+9. Externo: pedirle a la app de la caja que el WebView reporte el panel real
    (hoy da 3840×2160 sobre un panel de 1280×720 = 9× de píxeles regalados).
 
-**H-1, H-2 y H-3 quedaron REEMPLAZADAS** el mismo día por el debate: eran el
-diseño del player híbrido, la investigación de emisión H.264 y el player mínimo;
-su contenido está absorbido y ampliado en H-4..H-8. Esos IDs no se reusan.
+**H-1, H-2 y H-3 quedaron REEMPLAZADAS** por el debate de dirección (eran el
+diseño del player híbrido, la investigación de emisión H.264 y el player mínimo),
+y **H-4 y H-5 quedaron REEMPLAZADAS** por la corrección de método (eran la sonda
+sintética y el banco como paso previo). Ninguno de esos IDs se reusa.
 
 **El porqué de todo esto, medido en la caja real** (REGISTRO, DIAG-002/003,
 2026-08-31..09-01):
@@ -108,7 +134,7 @@ base del contenedor.
 
 **Estado de fases: F0-F9 completas y verificadas (paradigma anterior; resúmenes
 en [`ejecutados/`](ejecutados/README.md)); DIAG-002/003 cerradas con decisión;
-abierta la fase H (H-0 cerrada, H-1..H-3 reemplazadas, H-4 próxima);
+abierta la fase H (H-0 cerrada, H-1..H-5 reemplazadas, H-9 próxima);
 F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla de tareas abajo.
 
 **Receta de producto vigente (2026-08-31, S-4 cerrada):** defaults del workflow
@@ -154,6 +180,7 @@ contenido, aunque `publish-player` la asuma; ese workflow no funcionaría hoy. D
 | F6 (S-4) | 2026-08-30 | `main` en `ae5f574` (post-deploy del player) | arranca la revisión única de formato; orden elegido F6-1 → F6-3 → F6-2 → F6-4 (el barrido definitivo de tile corre sobre el codec v3 final) |
 | fase H (H-0) | 2026-09-01 | clon de `ASCILINE-video` en `f89abcd` (cierre del diagnóstico DIAG-002/003) → repo nuevo `leoIglesias-hash/ASCILINE-hybrid` | historia completa preservada (`main` + `assets`); mismo modelo de trabajo (CI-only, commits directos a `main`) |
 | fase H (debate + documentación objetiva) | 2026-09-01 | `main` de `ASCILINE-hybrid` en `8dae1e5` (H-0 cerrada, CI verde) | debate de dirección con el operador el mismo día: el alcance pasa a un **formato propio códec-agnóstico**. Se escriben `VISION-Y-OBJETIVOS.md`, `DISENO-FORMATO-ASCLH.md` y `PLAN-DE-MEDICION.md`; H-1..H-3 quedan reemplazadas por H-4..H-8. Sin código |
+| fase H (corrección de método) | 2026-09-01 | `main` de `ASCILINE-hybrid` en `0128309` (CI verde) | el operador frena la sonda sintética: hubiera fijado el formato contra una sola TV box. Se arranca **emitiendo** el pack v0 por suposición. Se escribe `EMISION-V0.md`, se reescribe `PLAN-DE-MEDICION.md`, H-4/H-5 quedan reemplazadas por H-9..H-12. Sin código |
 
 > Al iniciar cada sesión de implementación: agregar una fila con el commit o snapshot
 > sobre el que se trabaja. Si el árbol cambió desde el 2026-08-27, localizar las
@@ -167,11 +194,14 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | ID | Fase | Qué | Estado | Δbytes |
 |---|---|---|---|---|
 | H-0 | H | repo `ASCILINE-hybrid` + docs reorganizadas al paradigma mp4/híbrido | **cerrada 2026-09-01** (`8dae1e5`) | no |
-| H-1..H-3 | H | (diseño del player híbrido / emisión H.264 / player mínimo) | **reemplazadas 2026-09-01** por el debate de dirección; absorbidas y ampliadas en H-4..H-8. IDs no reusables | — |
-| H-4 | H | **sonda de capacidades** (`frontend/probe.html`): códecs, VP9 hw, alfa WebM, MSE, `blob:`, IndexedDB, videos simultáneos, canvas encima, panel real | **próxima acción** | no |
-| H-5 | H | **banco de reproducción**: `getVideoPlaybackQuality()` — caídos, arranque, deriva, atascos, con y sin intervención | pendiente | no |
-| H-6 | H | **matriz de emisión multi-códec** desde el máster: códec × fps variable × bitrate × estructura × zonas estáticas × paleta 4:2:0 | pendiente (precondición: H-4) | sí (variantes) |
-| H-7 | H | **spec normativa `SPEC-ASCLH.md`**: contenedor, manifiesto, segmentos, sprites, cues, huecos, perfil → camino de runtime | pendiente (precondición: H-4..H-6) | define bytes |
+| H-1..H-3 | H | (diseño del player híbrido / emisión H.264 / player mínimo) | **reemplazadas 2026-09-01** por el debate de dirección; absorbidas al pasar el alcance a «formato propio». IDs no reusables | — |
+| H-4, H-5 | H | (sonda sintética de capacidades / banco como paso previo) | **reemplazadas 2026-09-01** (misma tarde) por decisión del operador: hubieran fijado el formato contra **una sola TV box**. Disueltas dentro de H-9/H-10. IDs no reusables | — |
+| H-9 | H | **pack v0 — el primer video, por suposición** (`tools/emit_pieces.py` + workflow): Baseline, Main, VP9, VP9+alfa y `MANIFEST.tsv` desde el máster, con parámetros explícitos y hash por pieza | **próxima acción** | sí (piezas nuevas) |
+| H-10 | H | **reproducirlo y que él nos diga** (`frontend/v0.html`): cuál arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, panel real — en la caja **y** 2-3 aparatos más | pendiente (precondición: H-9) | no |
+| H-11 | H | **la bifurcación de layout**: canvas de intervención **encima** del `<video>`, con y sin, midiendo caídos (suposición S5) | pendiente (precondición: H-10) | no |
+| H-6 | H | **matriz de emisión**, ya con el terreno elegido por v0: cantidad de cuadros × estructura × bitrate × zonas estáticas × paleta 4:2:0 | pendiente (precondición: H-10) | sí (variantes) |
+| H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido y borrado de claves viejas | pendiente (precondición: H-10) | no |
+| H-7 | H | **spec normativa `SPEC-ASCLH.md`**: contenedor, manifiesto (texto tabulado, **no JSON**), segmentos, sprites, cues, huecos, perfil → camino de runtime | pendiente (precondición: H-10, H-11, H-6) | define bytes |
 | H-8 | H | **muxer ES5 + player híbrido mínimo** (incluye «cambiar solo la música») | pendiente (precondición: H-7) | no |
 | W-26 | — | escape `?renderer=` en la raíz publicada + default para TV box | pendiente | no |
 
@@ -216,7 +246,7 @@ re-implementa — se extiende. Resumen por carril:
 | S-8 | **F9 — aceleración del frontend** (W-16..W-25) | cerrada | 2026-08-31 | medida y publicada (28 keys). Diseño archivado: [`historico/DISENO-RENDER-INDEXADO.md`](historico/DISENO-RENDER-INDEXADO.md) |
 | S-9 | **F10 — pérdida adaptativa por suavidad** (E-25..E-28) | **suspendida** (cambio de dirección 2026-09-01) | | diseño archivado: [`historico/DISENO-PERDIDA-ADAPTATIVA.md`](historico/DISENO-PERDIDA-ADAPTATIVA.md); si se retoma sigue valiendo — el mp4 hereda los píxeles del máster |
 | S-10 | **F11 — formato v4: LOD por tile + transparencia** (E-30, F11-1..5) | **suspendida** (cambio de dirección 2026-09-01) | | diseño archivado: [`historico/DISENO-FORMATO-V4-LOD-Y-ALPHA.md`](historico/DISENO-FORMATO-V4-LOD-Y-ALPHA.md); su motivación principal (aliviar el decoder JS) desapareció con el híbrido |
-| H | **fase H — formato propio híbrido** (H-0, H-4..H-8, W-26) | en curso | 2026-09-01 | H-0 cerrada (nace este repo). **H-1..H-3 reemplazadas el mismo día** por el debate de dirección: el alcance pasó de «un player híbrido con mp4» a «un formato propio códec-agnóstico». Norte: [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md); cuerpos en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2; lo que desbloquea todo: [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) |
+| H | **fase H — formato propio híbrido** (H-0, H-9..H-12, H-6..H-8, W-26) | en curso | 2026-09-01 | H-0 cerrada (nace este repo). **H-1..H-3 reemplazadas** por el debate de dirección (el alcance pasó a «formato propio códec-agnóstico») y **H-4/H-5 reemplazadas** la misma tarde: la sonda sintética hubiera fijado el formato contra una sola caja, así que se arranca **emitiendo** (pack v0). Norte: [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md); el primer video: [`EMISION-V0.md`](EMISION-V0.md); método: [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md); cuerpos en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2 |
 | S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | cerrada | 2026-08-31 | Instancia 028: tres escalones aprobados a ojo; **producto = 1280 @15 fps** (`2a9201bf…b778`, 63 % de la fuente; el 1920 descartado por fluidez a 10 fps, no por imagen — vuelve a más fps como prueba futura y el front debe procesar cualquier resolución). Hallazgo central: la tasa por celda CAE al subir resolución (0,1451 → 0,1144 → 0,1023 B/celda/frame). Re-encode del producto diferido al cierre de S-4 (v3 + tile ganador) |
 
 ## Referencias de clips (SHA-256)
@@ -301,3 +331,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-08-31 | **DIAG-002 abierta y puesta ADELANTE DE TODO: pantallazos blancos en TV box** (reporte del operador, Instancia 040). Probó el player en un **WebView de TV box** y ve **flashes blancos entre las imágenes**: «eso es algo crítico… es muy grave y deberíamos estudiarlo». Se registra antes de investigar para que el reporte no se pierda | un flash blanco en un televisor rompe el producto: pesa más que cualquier ganancia de bytes o de milisegundos, así que se adelanta a F10. Dato de encuadre que **no** hay que perder: lo que el operador probó es lo que estaba publicado **antes** de esta instancia, o sea la raíz **sin** cadencia ni pre-decode. Si el motor nuevo mejora, empeora o no cambia el síntoma **hay que medirlo, no suponerlo** — y el nuevo `playloop.js` recién ahora está en la raíz |
 | 2026-09-01 | **DECISIÓN DE DIRECCIÓN TOMADA + H-0: nace `ASCILINE-hybrid`** — el operador adoptó el carril mp4/híbrido tras el cuadro final de DIAG-002/003 («el paradigma cambió… necesitamos trabajar con mp4 pero logrando mejoras de reproductividad»). Se creó `leoIglesias-hash/ASCILINE-hybrid` (privado) clonando la historia completa (`main` + `assets`); los diseños/planes del paradigma JS se movieron **verbatim** a `docs/historico/` con README propio; runbooks, índice y CLAUDE.md reescritos para la fase H (H-1 diseño, H-2 investigación mp4, H-3 player híbrido, W-26 heredada); F10/F11/F8/DIAG-001 y opcionales quedan **suspendidas**, recuperables solo con decisión del operador | el repo anterior (`ASCILINE-video`) queda congelado como antecesor con aviso de continuación; conserva su valor como historia y evidencia. La filosofía no cambia: el encoder caro decide offline y el `.asclv` sigue de máster — cambia el transporte (mp4 emitido del máster, decodificado por hardware en el TV) y el invariante de un-solo-layer pasa a dos capas (video + canvas de intervención) por decisión explícita del operador. La rama `feature/quality-optimization` vieja no se migró (estancada; vive en los remotos del repo anterior) |
 | 2026-09-01 | **EL ALCANCE SE AMPLÍA: de «player híbrido» a FORMATO PROPIO** (debate de dirección con el operador, mismo día que H-0, sin código). Sus palabras: «nuestro propio formato de video sería ideal… sacar de estos formatos cada cosa útil: **v9 la compresión, dash la compatibilidad, asciline la base que permite todo. encoder caro no importa, decoder con poco estrés**», y «estamos abiertos a nuevos paradigmas». Lo fijado: (a) **`<video>` es la única puerta al hardware** — todo termina en algo que `<video>` acepta nativo, nada se decodifica en CPU propia; (b) **códec-agnóstico desde el día uno** (piezas etiquetadas, el aparato elige; H.264 Baseline es el piso, no el centro); (c) de **DASH el modelo de datos** (Periods / AdaptationSets / Representations / segmentos por rango), no su runtime; (d) **base 1280×720 con fps variable** (decisión del operador); (e) **escalera de intervención N1–N4** con su límite imposible escrito; (f) **nada se normaliza sin medición**. Documentos nuevos: `VISION-Y-OBJETIVOS.md` (norte), `DISENO-FORMATO-ASCLH.md` (diseño en obra, con tabla de decidido vs. gateado) y `PLAN-DE-MEDICION.md` (sondas, banco, registro de aparatos). H-1..H-3 **reemplazadas** por **H-4..H-8** | tres razones por las que el orden cambió a **medir primero**: (a) el proyecto ya se equivocó una vez por suponer capacidades — F9 completa, medida y publicada, y en la caja real 290 ms/cuadro contra 66,7; (b) la hipótesis más rentable es verificable en minutos: **si YouTube anda bien en la caja, esa caja tiene VP9 por hardware**, o sea que VP9 es su camino más rodado y no el exótico, lo que da vuelta la suposición de que H.264 era «lo compatible»; (c) hay bifurcaciones de diseño que no se pueden resolver escribiendo — si un canvas encima del `<video>` le baja el fps, la intervención va **al lado** y no encima, y eso cambia el layout de todo el producto. Fijar 1280×720 no es estético: es lo que hace **intercambiables** a las piezas (cabecera compartida) y evita que el decodificador se reconfigure a mitad de stream, causa clásica de tildado en SoCs baratos. El fps variable es gratis en el contenedor —la duración de cada cuadro es un dato, no bitstream— y baja el costo de decodificación de forma lineal. El caso «cambiar solo la música» resultó ser **el más fácil** del sistema, no el más difícil: es cambiar de pista de audio, y en su versión inmediata ni siquiera necesita el muxer |
+| 2026-09-01 | **CORRECCIÓN DE MÉTODO: se descarta la sonda sintética y se arranca EMITIENDO** (mismo día, después de la documentación del alcance; sin código). El operador leyó el plan y frenó H-4: «el camino de H-4 no es el correcto porque nos basaríamos solo en 1 tv box, mejor tomar las bondades de cada encoder para crear el nuestro **y ya**. Y empezar con el primer video aunque sea basado en suposiciones: al probarlo podremos ir viendo si vamos en la dirección correcta paso a paso». Tiene razón en dos cosas: (a) medir una sola caja y normalizar contra ella es el **error simétrico** al de F9 —F9 supuso capacidades, esto hubiera sobreajustado a un aparato—; (b) reproducir material real responde más que un cuestionario (`canPlayType` dice «probablemente»; un video que corre 15 s sin caer cuadros dice que sí). **La sonda no se pospone: se disuelve dentro del primer video** — la página de v0 reporta lo mismo como subproducto, sobre material verdadero y en varios aparatos. Se escribe [`EMISION-V0.md`](EMISION-V0.md) (qué le tomamos a cada códec + las suposiciones **S1..S6 con su refutación escrita**) y se reescribe [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) («se mide reproduciendo, y nunca en un solo aparato»). **Invariante nuevo (VISION §8.11): ningún aparato solo define el formato** — puede refutar, no consagrar; para normalizar hacen falta ≥2 clases de aparato o la decisión del operador. **Regla 8 del runbook reformulada:** arrancar suponiendo está permitido y es el método; lo prohibido es **normalizar** una suposición sin haberla reproducido. **H-4/H-5 REEMPLAZADAS** (IDs no reusables); nuevo orden **H-9 → H-10 → H-11 → H-6 → H-12 → H-7 → H-8**. Hallazgo de diseño anotado al pasar: **el manifiesto de runtime no puede ser JSON** —el gate ES5 prohíbe `JSON`—, va en texto tabulado; queda como fila **decidida** en `DISENO-FORMATO-ASCLH.md` §10. Próxima acción real: **H-9**, el pack v0. |

@@ -3111,3 +3111,82 @@ su contenido está absorbido y ampliado) por **H-4** sonda de capacidades, **H-5
 banco de reproducción, **H-6** matriz de emisión multi-códec, **H-7** spec
 normativa del formato y **H-8** muxer ES5 + player híbrido mínimo. Esos IDs no se
 reusan. Próxima acción real: **H-4**.
+
+## Corrección de método: se descarta la sonda sintética; se arranca EMITIENDO (2026-09-01)
+
+**Sin código.** Misma fecha que el debate de alcance, unas horas después: el
+operador leyó la documentación recién escrita y frenó la primera tarea.
+
+> *«el camino de H-4 no es el correcto porque nos basaríamos solo en 1 tv box,
+> mejor tomar las bondades de cada encoder para crear el nuestro y ya. Y empezar
+> con el primer video aunque sea basado en suposiciones: al probarlo podremos ir
+> viendo si vamos en la dirección correcta paso a paso.»*
+
+### Por qué tiene razón
+
+El plan anterior nacía de una lección buena (F9: se aceleró un player 100 % JS
+durante toda una fase y en la caja dio 290 ms/cuadro contra 66,7 — la suposición
+de base estaba mal) pero la aplicaba de una forma que llevaba al **error
+simétrico**: medir **una** TV box con una sonda sintética y normalizar el formato
+contra ella. Un formato que solo sirve donde se lo midió no es un formato; es un
+ajuste a un aparato.
+
+Y hay un segundo argumento, técnico: **reproducir material real responde más que
+un cuestionario.** `canPlayType` devuelve `"probably"` / `"maybe"` / `""` —una
+declaración, no un hecho—; un video que corre 15 segundos sin caer cuadros es el
+hecho. La sonda contestaba «qué caminos existen»; reproducir contesta eso *y*
+«cuánto cuesta», en el mismo gesto.
+
+### Qué se hizo con la sonda
+
+**No se pospuso: se disolvió dentro del primer video.** Todo lo que la sonda iba
+a preguntar (códecs, alfa en WebM, `blob:`, MSE, IndexedDB, `rVFC`, panel real vs.
+superficie, cuadros caídos) lo reporta ahora la página que reproduce el pack v0
+(H-10) **como subproducto**, sobre material verdadero y en todos los aparatos del
+operador, no en uno.
+
+### Lo que se fijó
+
+1. **Invariante nuevo** (`VISION-Y-OBJETIVOS.md` §8.11): **ningún aparato solo
+   define el formato.** Un aparato puede **refutar** (si algo no anda ahí, no
+   anda) pero no puede **consagrar**: para normalizar hace falta que gane en al
+   menos **dos clases** de aparato (caja / celular / Smart TV / escritorio), o que
+   lo fije el operador —cuyos valores manuales siempre prevalecen.
+2. **Regla 8 del runbook reformulada:** «se supone explícito, se reproduce, y
+   recién ahí se normaliza». Arrancar suponiendo **es** el método; lo prohibido es
+   que una suposición entre a la spec sin haberse reproducido. Una suposición
+   escrita como suposición no es deuda: es una hipótesis con refutación. Una
+   suposición escrita como norma sí lo es.
+3. **Documento nuevo `EMISION-V0.md`:** qué le tomamos a cada códec (las
+   «bondades»: Baseline el piso con DPB mínimo; **Main como detector de hardware
+   vs. software**; VP9 por compresión y por alfa real en WebM; AV1 como columna
+   futura; DASH el modelo de datos; ASCILINE los píxeles antes del códec), las
+   cuatro piezas del pack v0 con sus parámetros, y la tabla **S1..S6 de
+   suposiciones con su refutación escrita al lado**.
+4. **`PLAN-DE-MEDICION.md` reescrito:** «se mide reproduciendo, y nunca en un
+   solo aparato». Su §2 ya no es un cuestionario sino la lista de lo que la
+   reproducción de v0 revela; §4 (matriz) pasa a ser posterior a v0.
+5. **H-4 y H-5 REEMPLAZADAS** (IDs no reusables, igual que H-1..H-3). Nuevo
+   orden: **H-9** (pack v0) → **H-10** (reproducirlo en varios aparatos) →
+   **H-11** (canvas encima o al lado) → **H-6** (matriz) → **H-12** (caché) →
+   **H-7** (spec) → **H-8** (muxer + player).
+
+### La apuesta que más información da
+
+De las seis suposiciones, la que más ordena el trabajo posterior es **S2**, y por
+eso el pack v0 lleva una pieza que no está para ganar: **H.264 Main**. Si Main
+—que usa CABAC y transformada 8×8, caras en software y casi gratis en silicio—
+pesa menos y reproduce igual o mejor que Baseline, entonces **el decodificador es
+hardware** y el cuello no es el bitstream: es cantidad de cuadros y ancho de banda
+de memoria. Eso invalida de un saque todo el carril «aliviar el bitstream» y
+reorienta la matriz H-6 entera. Una sonda de capacidades no lo hubiera contestado.
+
+### Hallazgo de diseño anotado al pasar
+
+**El manifiesto de runtime no puede ser JSON.** El gate ES5 del proyecto prohíbe
+`JSON` (los WebViews viejos del parque no lo garantizan), así que el manifiesto
+—el de v0 y el del `.asclh` definitivo— va en **texto tabulado**, partido con
+`split`. Queda como fila **decidida** en `DISENO-FORMATO-ASCLH.md` §10, no como
+detalle de implementación.
+
+Próxima acción real: **H-9**, el pack v0.

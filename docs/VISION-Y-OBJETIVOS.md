@@ -161,6 +161,11 @@ Reemplazan y continúan a los del paradigma anterior. Se verifican, no se supone
    Y **lo que requiere pantalla lo firma el operador**, nadie más.
 10. **Una mejora sin fila registrada no existe** — ahora también para
     reproducción, no solo para bytes.
+11. **Ningún aparato solo define el formato.** Un aparato puede **refutar** (si
+    algo no anda ahí, no anda) pero no puede **consagrar**: para normalizar hace
+    falta que gane en al menos dos clases de aparato, o que lo fije el operador.
+    Es el invariante que evita el error simétrico al de F9: sobreajustar el
+    formato a la única caja que tenemos a mano (operador, 2026-09-01).
 
 ## 9. Qué NO es este proyecto
 
@@ -178,17 +183,25 @@ Escrito para que ninguna sesión futura lo intente:
   (DIAG-002/003).
 - **No hacemos crecer el player JS anterior.** Se mantiene como reproductor de
   escritorio y banco de verificación del máster.
-- **No diseñamos sobre suposiciones de capacidades.** Primero se mide el aparato
-  (§6 de [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md)), después se normaliza.
+- **No *normalizamos* sobre suposiciones.** Arrancar suponiendo sí: es el método
+  (se emite el primer video con las bondades conocidas de cada códec y se corrige
+  reproduciéndolo). Lo prohibido es que una suposición entre a la spec sin
+  haberse reproducido — y sin haberlo hecho en **más de un aparato**. Toda
+  suposición vive con su refutación escrita en [`EMISION-V0.md`](EMISION-V0.md) §4.
+- **No diseñamos el formato contra un solo aparato.** La TV box es el **piso de
+  referencia**, no el objetivo.
 
 ## 10. Cómo se avanza
 
 Un ciclo, repetido:
 
-**medir el aparato → emitir variantes desde el máster → medirlas en el aparato →
-normalizar lo que ganó en el formato → volver a medir.**
+**suponer explícito → emitir desde el máster → reproducirlo en varios aparatos →
+corregir la suposición → normalizar lo que ganó → volver a emitir.**
 
-La primera vuelta está definida en
+La primera vuelta es el **pack v0** ([`EMISION-V0.md`](EMISION-V0.md)): las
+bondades conocidas de cada códec, escritas como apuestas con su refutación al
+lado, y un primer video que se abre en la caja, el celular, el Smart TV y el
+escritorio. Las tareas están en
 [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2 (fase H). El diseño
 del formato que va saliendo de ese ciclo se acumula en
 [`DISENO-FORMATO-ASCLH.md`](DISENO-FORMATO-ASCLH.md), que marca explícitamente

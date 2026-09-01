@@ -26,11 +26,12 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
    lee un solo documento de diseño, es este.
 2. [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) — dónde quedó todo, próxima acción, bitácora.
 3. [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md) — **solo la tarea a ejecutar** (fase H).
-4. [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md) — sondas, banco y registro de aparatos; **es lo que desbloquea al formato**.
-5. [`docs/DISENO-FORMATO-ASCLH.md`](docs/DISENO-FORMATO-ASCLH.md) — el formato en obra, con la tabla de **decidido vs. gateado por medición**.
-6. [`docs/ejecutados/`](docs/ejecutados/) — lo ya cumplido con su evidencia; consultar, no releer.
-7. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
-8. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
+4. [`docs/EMISION-V0.md`](docs/EMISION-V0.md) — **el primer video**: qué le tomamos a cada códec y cuáles son las suposiciones, cada una con su refutación escrita.
+5. [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md) — el método: se mide **reproduciendo**, en varios aparatos, y el registro de aparatos.
+6. [`docs/DISENO-FORMATO-ASCLH.md`](docs/DISENO-FORMATO-ASCLH.md) — el formato en obra, con la tabla de **decidido vs. gateado**.
+7. [`docs/ejecutados/`](docs/ejecutados/) — lo ya cumplido con su evidencia; consultar, no releer.
+8. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
+9. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
 ## Modelo de trabajo (acordado con el operador; heredado sin cambios)
 
@@ -86,9 +87,12 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
    `WASM`/`JSON`/arrow/`let`/`const`/template strings. Las APIs nuevas que
    usamos (IndexedDB, MSE, Blob) son de **eventos**, no de promesas: entran sin
    romper el gate.
-7. **Nada se normaliza sin medición.** Ninguna decisión de formato entra en la
-   spec sin una fila que la sostenga. Nada se estima: si no se midió, la celda
-   queda vacía. **Lo que requiere pantalla lo firma el operador**, textual.
+7. **Se supone explícito, se reproduce, y recién ahí se normaliza.** Arrancar
+   suponiendo es el método (pack v0); lo prohibido es que una suposición entre a
+   la spec sin haberse reproducido. Y **ningún aparato solo define el formato**:
+   uno puede refutar, para consagrar hacen falta dos clases de aparato. Nada se
+   estima: si no se midió, la celda queda vacía. **Lo que requiere pantalla lo
+   firma el operador**, textual.
 8. **Determinismo:** mismo máster + mismos parámetros → mismos bytes emitidos, en
    cualquier códec. Byte-idéntico se verifica, no se supone.
 9. **Validar antes de mutar; corrupción = excepción tipada.** Y **canonicidad
@@ -111,16 +115,21 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   evidencia en el REGISTRO; herramientas que quedaron:
   `frontend/tv-video-test.html` y el diagnostic con sección Pantalla/escala.
 - **En curso — fase H.** H-0 cerrada (nace este repo). **H-1..H-3 reemplazadas**
-  el 2026-09-01 por el debate de dirección: el alcance pasó de «un player híbrido
-  con mp4» a «un formato propio códec-agnóstico»; esos IDs no se reusan. Lo vivo:
-  **H-4** sonda de capacidades (**próxima acción**), **H-5** banco de
-  reproducción, **H-6** matriz de emisión multi-códec, **H-7** spec normativa
-  `SPEC-ASCLH.md`, **H-8** muxer ES5 + player híbrido mínimo; **W-26**
-  independiente. Externo: pedir a la app que el WebView reporte el panel real
-  (hoy 3840×2160 sobre 1280×720).
-- **Hipótesis rectora a verificar en H-4:** si YouTube anda bien en la caja, esa
-  caja tiene **VP9 por hardware** — o sea que VP9 es su camino más rodado, no el
-  exótico. Da vuelta la suposición de que H.264 era «lo compatible».
+  por el debate de dirección (el alcance pasó a «formato propio códec-agnóstico»)
+  y **H-4/H-5 reemplazadas** la misma tarde por decisión del operador: la sonda
+  sintética hubiera fijado el formato contra **una sola TV box**; se arranca
+  **emitiendo**. IDs no reusables. Lo vivo, en orden: **H-9** pack v0
+  (**próxima acción**), **H-10** reproducirlo en varios aparatos, **H-11**
+  intervención encima o al lado, **H-6** matriz, **H-12** caché, **H-7** spec
+  `SPEC-ASCLH.md`, **H-8** muxer ES5 + player. **W-26** independiente. Externo:
+  pedir a la app que el WebView reporte el panel real (hoy 3840×2160 sobre
+  1280×720).
+- **Las suposiciones del pack v0 están escritas con su refutación** en
+  [`docs/EMISION-V0.md`](docs/EMISION-V0.md) §4. Las dos grandes: si YouTube anda
+  bien en la caja, esa caja tiene **VP9 por hardware** (VP9 sería su camino más
+  rodado, no el exótico); y la pieza **H.264 Main es el detector de hardware vs.
+  software** — si la más comprimida no cuesta más, el bitstream no es el cuello y
+  toda la matriz se reorienta a cantidad de cuadros y ancho de banda.
 - **Suspendidas** (recuperables de `docs/historico/` solo con decisión del
   operador): F10 (pérdida adaptativa — ojo: seguiría mejorando el producto, que
   hereda los píxeles del máster), F11 (formato v4), F8, DIAG-001, opcionales.

@@ -111,8 +111,9 @@ elige a mano.
 ## 5. Emisiones de runtime — cómo llega el paquete a `<video>`
 
 Un `.asclh` no se le da al `<video>`: se **traduce** a lo que ese aparato acepte.
-Cuatro caminos, del más compatible al más capaz. La elección la hace la sonda de
-capacidades.
+Cuatro caminos, del más compatible al más capaz. Cuál existe en cada aparato lo
+dice **reproducir el pack v0** ([`EMISION-V0.md`](EMISION-V0.md)), no un
+cuestionario.
 
 | Camino | Cómo | Requiere | Para qué |
 |---|---|---|---|
@@ -174,7 +175,8 @@ y el clip no puede depender de ellas.
   `blob:`. La clave es el hash: paquete nuevo = clave nueva, y las viejas las
   borramos nosotros.
 - **Degradación:** si IndexedDB no persiste, se cae a memoria por sesión; si
-  `blob:` no reproduce, al camino B o a red directa. La sonda decide.
+  `blob:` no reproduce, al camino B o a red directa. Lo decide la reproducción
+  (H-10/H-12), aparato por aparato.
 - **En la app (APK):** el mismo paquete descargado nativamente a disco. **El
   manifiesto es el mismo en los dos casos** — la web es el contrato, el APK es
   una optimización, nunca una dependencia.
@@ -218,11 +220,12 @@ bifurcación de layout, y hay que conocerla antes de dibujar una sola pantalla.
 | fps por segmento derivado del máster | **decidido** (falta cuantificar el ahorro) |
 | Escalera de intervención N1–N3 | **decidido** |
 | Audio: `<audio>` separado primero, muxear solo si hay deriva | **decidido** |
+| **Manifiesto en texto tabulado, nunca JSON** | **decidido** — el gate ES5 prohíbe `JSON`; se parsea con `split` |
 | Nombre `.asclh` / magic `ASCLHYB1` | provisorio — confirma el operador |
-| Qué códecs emitimos y en qué orden de preferencia | **gateado** por la sonda (¿VP9 por hardware?) |
-| Camino de runtime por perfil (A/B/C/D) | **gateado** (¿`blob:`? ¿MSE? ¿WebM alfa?) |
-| Persistencia del paquete | **gateado** (¿IndexedDB persiste y cuánto?) |
-| Intervención encima o al lado del video | **gateado** (¿el canvas encima cuesta fps?) |
+| Qué códecs emitimos y en qué orden de preferencia | **gateado por el pack v0** (H-9/H-10): ¿VP9 existe? ¿Main sale gratis, o sea hardware? |
+| Camino de runtime por perfil (A/B/C/D) | **gateado** (¿`blob:`? ¿MSE? ¿WebM alfa?) — lo responde reproducir v0 |
+| Persistencia del paquete | **gateado** por **H-12** (¿IndexedDB persiste y cuánto?) |
+| Intervención encima o al lado del video | **gateado** por **H-11** (¿el canvas encima cuesta cuadros?) |
 | Techo de planos de video simultáneos | **gateado** (sesiones de decodificación) |
 | Nivel N4 (intercambio sub-cuadro) | **investigación**, no cimiento |
 | Layout binario del contenedor | **H-7**, después de todo lo anterior |

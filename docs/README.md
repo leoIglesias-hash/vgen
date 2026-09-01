@@ -20,8 +20,9 @@ spec de formato → estado de ejecución → diseño en obra → registro de dec
 |---|---|
 | [`../CLAUDE.md`](../CLAUDE.md) | arranque de sesión: identidad del proyecto, modelo de trabajo, ayuda-memoria, estado grueso |
 | [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) | **el archivo vivo**: próxima acción y máster vigente arriba, tabla de tareas de la fase H, referencias de clips por SHA, bitácora al final |
-| [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | reglas de ejecución + las tareas de la fase H (H-4..H-8, W-26) |
-| [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) | **lo que desbloquea al formato**: la sonda de capacidades, el banco de reproducción, los ejes de la matriz de emisión y el registro de aparatos. Mientras su tabla esté vacía, cualquier spec es ficción |
+| [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | reglas de ejecución + las tareas de la fase H (H-9, H-10, H-11, H-6, H-12, H-7, H-8, W-26) |
+| [`EMISION-V0.md`](EMISION-V0.md) | **el primer video**: qué le tomamos a cada códec (las «bondades»), las piezas del pack v0 con sus parámetros, y la tabla de **suposiciones con su refutación escrita**. Es lo que se corrige reproduciendo |
+| [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) | **el método**: se mide **reproduciendo** y **nunca en un solo aparato**; qué reporta la página de v0, las métricas del banco, los ejes de la matriz y el registro de aparatos |
 | [`ejecutados/`](ejecutados/README.md) | resumen por fase cerrada (paradigma anterior) con su evidencia; se consulta, no se relee |
 | [`REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](REGISTRO-DE-PRUEBAS-Y-DECISIONES.md) | bitácora append-only: el porqué de cada decisión y cada medición, incluidos el cambio de dirección y el debate del 2026-09-01 |
 
