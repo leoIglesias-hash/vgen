@@ -38,7 +38,7 @@
   <div id="stages"></div>
   <div class="sec">Grillas medidas</div>
   <div id="history"></div>
-  <div id="help">1/2/3 fuente &middot; P play/pausa &middot; R reinicia medida &middot; C canvas2d &middot; G webgl &middot; +/- HUD</div>
+  <div id="help">1/2/3 fuente &middot; P play/pausa &middot; R reinicia medida &middot; C canvas2d &middot; G webgl &middot; V vista 1:1 &middot; +/- HUD</div>
 </div>
 
 <script src="inflate.js"></script>
@@ -100,6 +100,13 @@
   var clipBuffer = null, clipOffset = 0, clipLength = 0;
   var activeXHR = null, sessions = [], session = null, hudAt = 0;
   var requestedRenderer = null, sourceLabel = "", sourceURL = "", scaleMode = "fit";
+  /* DIAG-003: la app le da al WebView 3840x2160 sobre un panel de 1280x720, y
+     queremos medir cuanto del frame se pierde en componer esa superficie 4K.
+     viewCap limita el canvas EN CSS: {buffer:true} = tamano nativo del clip
+     (1:1 con el buffer, se ve mas chico), {w,h} = tope arbitrario. Simula "que
+     pasaria con un APK que reporte el tamano real" sin tocar el APK.
+     ?view=buffer | ?view=1280x720; la tecla V lo alterna en caliente. */
+  var viewCap = null;
 
   var perf = window.performance;
   var now = (perf && typeof perf.now === "function") ?
@@ -243,6 +250,13 @@
     if(!reader || !cv){ return; }
     var size = viewportSize();
     var cols = reader.header.cols, rows = reader.header.rows;
+    if(viewCap){
+      if(viewCap.buffer){ size = { width: cols, height: rows }; }
+      else {
+        if(size.width > viewCap.w){ size.width = viewCap.w; }
+        if(size.height > viewCap.h){ size.height = viewCap.h; }
+      }
+    }
     var ratio = cols / rows;
     var width = size.width, height = Math.round(width / ratio), factor;
     if(height > size.height){ height = size.height; width = Math.round(height * ratio); }
@@ -467,6 +481,10 @@
     html += envRow("canvas buffer", bw + "x" + bh);
     html += envRow("canvas en CSS", cw + "x" + ch +
       (bw > 0 ? " (estira x" + fixed(cw / bw, 2) + ")" : ""));
+    html += envRow("vista", viewCap ?
+      (viewCap.buffer ? "1:1 con el buffer (V vuelve)" :
+        "tope " + viewCap.w + "x" + viewCap.h) :
+      "llena el viewport (V = 1:1)");
     html += envRow("HUD", "x" + fixed(hudScale, 2) +
       (hudFixed > 0 ? " fijo ?hud=" + hudFixed : " auto (viewport/1280)") +
       (hudUser !== 1 ? " · ajuste x" + fixed(hudUser, 2) : "") + " · +/-");
@@ -841,6 +859,13 @@
     else if(code === 82){ restartMeasurement(); }
     else if(code === 67){ switchRenderer("canvas2d"); }
     else if(code === 71){ switchRenderer("auto"); }
+    else if(code === 86){
+      /* V: alternar vista 1:1. Despues de alternar conviene R para que la
+         comparacion quede en sesiones separadas de la tabla de grillas. */
+      viewCap = viewCap ? null : { buffer: true };
+      fitCanvas();
+      refreshHUD(true);
+    }
     else if(code === 187 || code === 107){
       if(hudUser < 4){ hudUser += 0.25; }
       refreshHUD(true);
@@ -862,6 +887,14 @@
   setNodeText(headNode, "ASCILINE diagnostic · W-16");
   hudFixed = parseFloat(qs("hud") || "");
   if(!(hudFixed > 0)){ hudFixed = 0; }
+  (function(){
+    var raw = qs("view"), match;
+    if(raw === "buffer" || raw === "1:1"){ viewCap = { buffer: true }; }
+    else if(raw){
+      match = /^(\d+)x(\d+)$/.exec(raw);
+      if(match){ viewCap = { w: parseInt(match[1], 10), h: parseInt(match[2], 10) }; }
+    }
+  }());
   refreshHUD(true);
   requestedRenderer = qs("renderer") || "auto";
   scaleMode = qs("scale") === "int" ? "int" : "fit";

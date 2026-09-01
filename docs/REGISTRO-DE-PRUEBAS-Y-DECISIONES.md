@@ -2824,3 +2824,15 @@ exactamente 1280x720).
 
 Nota para la app (independiente de la decision): configurar el WebView al tamano del
 panel (1280x720) en vez de 3840x2160 ahorra 9x de pixeles por composicion.
+
+**Prueba propuesta por el operador (mismo dia): ¿cuanto cuesta la superficie 4K?**
+Idea del operador: antes de encarar un APK que reporte 1280 reales, forzar el
+diagnostic a reproducir al tamano para el que esta hecho (aunque se vea mas chico)
+y medir si mejora. Implementado `?view=` en el diagnostic: `view=buffer` (o `1:1`)
+pone el canvas EN CSS al tamano nativo del clip; `view=AxB` le pone un tope; la
+tecla V lo alterna en caliente (con R despues para separar sesiones). La fila
+`vista` del HUD dice el modo activo. Expectativa honesta, para leer el resultado:
+inflate/walk/rgba trabajan sobre el buffer y NO dependen de la superficie; lo que
+esta prueba mide es la CONTENCION del compositor 4K (blit, `otros`, drops). Si los
+drops caen fuerte -> el APK a 1280 reales vale la pena; si no cambian -> el cuello
+es la CPU y la superficie era secundaria.
