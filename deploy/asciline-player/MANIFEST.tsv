@@ -1,6 +1,6 @@
 # Estado del bucket R2 `asciline-player` al 2026-08-31, ANTES de publicar F9,
-# MAS las 59 keys del prefijo `v0/` publicadas el 2026-09-01 (H-10, pack v0 con
-# los empaquetados HLS/DASH). Las de `v0/` se listan con md5 calculado local.
+# MAS las 60 keys del prefijo `v0/` publicadas el 2026-09-01 (H-10: pack v0,
+# empaquetados HLS/DASH y mando numerico). Las de `v0/` llevan md5 local.
 # Leido con la API de Cloudflare. etag = MD5 (subidas de una sola parte).
 # key	bytes	etag(md5)
 1280-12/cache-refresh.js	5889	32c8be62f2a4107f852c779fec3d1ae6
@@ -128,7 +128,8 @@ v0/hls-ts/seg013.ts	640328	c0744fce25f35bdef07d5d396a34ea80
 v0/hls-ts/seg014.ts	493124	98623833cb18c08e6d7e527153b2fe01
 v0/hls-ts/seg015.ts	209432	b38f9cf1e35abbed29f498a7d747215c
 v0/hls-ts/stream.m3u8	589	6463e426a8a45448018c51480eb76214
-v0/index.html	13224	cc7325d102602df36c21b70bc9a4639d
+v0/index.html	17567	cb6297b54352e611342d2a4b09dca256
+v0/keypad.js	4257	c06ecb23f8075226751e0be2f54bf8e6
 v0/v0-h264-baseline.mp4	9551715	e78ec38a66affa7e00dbfafc4a8fe91f
 v0/v0-h264-main.mp4	8686438	314e0310cefa874a4fa9078e766cc34d
 v0/v0-vp9-alpha.webm	4664676	8f8c27151e48334c3b40fc35f27faa7d

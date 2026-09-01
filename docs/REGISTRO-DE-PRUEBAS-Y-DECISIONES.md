@@ -3374,3 +3374,54 @@ commiteada (`00deb9f`) antes de desplegar; verificado después: `m3u8` →
 26.679 B). **Detalle a no re-descubrir:** la primera comprobación del `m4s` dio
 `octet-stream` por caché de borde; con un parámetro anti-caché salió bien. Hay
 que verificar con cache-buster después de cambiar tipos.
+
+## Ergonomia de control remoto: mando numerico y lanzador suelto (2026-09-01)
+
+Pedido del operador, con el recordatorio de que **esto corre en un TV box a
+priori**: (a) una pagina que solo redirija —el escribe la version y va—, para no
+tipear URLs con el control; (b) que las opciones se activen **por numero** en vez
+de por click, del 0 al 9, y si hacen falta mas, *«una opcion delay y podemos
+poner numeros compuestos de dos unidades como 11»*.
+
+**Por que importa y no es cosmetico:** en un WebView de TV box el click es caro
+—hay que mover un puntero emulado con las flechas— mientras que las teclas
+numericas del control llegan como `keyCode` directo. Una pagina de diagnostico
+que solo se maneja con el mouse es, en la practica, una pagina que no se usa.
+
+### La regla del retardo (mejora sobre lo pedido)
+
+El retardo **no es global**: se espera **solo cuando el digito tecleado puede ser
+el comienzo de un codigo mas largo**. Con teclas 0..8 sueltas y 90..94
+compuestas, el `5` dispara al instante y solo el `9` espera. Ademas **OK dispara
+el buffer sin esperar el reloj** y **Volver/Escape lo limpia**. Sin esas tres
+cosas, un retardo plano de 900 ms haria lenta la accion mas comun del dia.
+
+Se ajusta con `?delay=<ms>` en las dos paginas: los controles remotos no son
+todos igual de rapidos y eso se calibra en el aparato, no de escritorio.
+
+### Reparto
+
+- **`frontend/keypad.js` (nuevo, compartido).** La logica de teclas vive **una
+  sola vez**. Es la leccion de W-22..W-25 aplicada de entrada: cuando el mismo
+  motor se copia en dos paginas, las dos se desincronizan.
+- **`frontend/v0.html`**: `1` correr todo · `2` HLS/DASH · `3` alfa · `4` blob:
+  · `5..8` cada pieza suelta · `0` cortar y limpiar · `9+numero` lo secundario
+  (`90` hls-fmp4, `91` dash, `92` alfa como video, `93` repetir, `94` volver).
+  La leyenda se dibuja en pantalla: en una TV no hay donde ir a consultarla.
+- **`frontend/ir.html`**: el lanzador. **Va en OTRO servidor** (decision del
+  operador: «el que redirije damelo en archivo lo subo a otro servidor, el resto
+  seguimos en cloudflare»), asi que es **autocontenido** —no carga `keypad.js`,
+  no lo tendria al lado— y sus destinos son **URLs absolutas**: desde otro
+  dominio una ruta relativa no llega a ningun lado. Es la unica copia de logica
+  de teclas permitida fuera de `keypad.js`, y el porque quedo escrito en el
+  propio archivo para que nadie lo «arregle». Mudarlo de dominio es editar una
+  linea (`BASE`); tambien acepta `?base=`, `?v=<version>` para saltar directo y
+  el campo de texto para versiones que todavia no tienen numero.
+
+### Prueba que quedo
+
+`tests/test_keypad.js` y `tests/test_ir_page.js`, cableadas en `run_all.py`. Lo
+que se verifica no es «que exista la tecla» sino la regla de usabilidad:
+`test_v0_page.js` **falla si algun digito suelto queda demorado** por culpa de un
+codigo compuesto que empieza igual. Es la clase de regresion que nadie nota de
+escritorio y arruina la pagina en el aparato real.

@@ -125,3 +125,23 @@ las 6 idénticas, con `video/mp4` y `video/webm` correctos. El token se quemó y
 viejo dio `403` en el primer intento.
 
 Queda servido en **`https://iargen.com/player/v0/`**.
+
+## Actualización del 2026-09-01 (mando numérico y lanzador)
+
+**2 keys** más bajo `v0/`: `index.html` (regenerada, ahora con teclas numéricas)
+y **`keypad.js`** (nueva, el mando compartido). El bucket queda con **60 keys**
+en `v0/`. Verificadas bajando y comparando SHA-256 contra el archivo local;
+token efímero quemado (403 al primer intento).
+
+**Lo que NO se publicó acá, a propósito:** `frontend/ir.html`, el lanzador. Por
+decisión del operador va en **otro servidor**, así que se le entregó como archivo
+suelto. Por eso es autocontenido (no carga `keypad.js`) y usa **URLs absolutas**
+hacia `https://iargen.com/player/`: desde otro dominio una ruta relativa no llega
+a ningún lado. Si alguna vez se decide publicarlo también acá, la key natural
+sería `ir/index.html` y habría que subir `ir/keypad.js` al lado **solo** si antes
+se lo convierte en no-autocontenido — hoy no hace falta.
+
+**Cuidado al verificar tipos MIME después de tocar el worker:** la primera
+comprobación de un `.m4s` dio `application/octet-stream` por **caché de borde**;
+con un parámetro anti-caché salió `video/iso.segment`. Verificar siempre con
+cache-buster, o se concluye lo contrario de lo que pasa.
