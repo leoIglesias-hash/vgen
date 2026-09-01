@@ -92,3 +92,36 @@ verificadas byte a byte contra el repo después de subirlas, y el token se quem�
 da `403`). **Ojo con el burn:** el secret tarda unos segundos en propagarse — el primer
 `PUT` con el token viejo puede devolver `200` todavía. Hay que reintentar hasta ver el
 `403`, no darlo por quemado con una sola prueba.
+
+## Actualización del 2026-09-01 (H-10, pack v0)
+
+**El worker se redesplegó** —primera vez desde que existe esta copia— con dos
+agregados y nada más. La copia de `worker.js` de acá se actualizó y se commiteó
+**antes** de desplegar, como manda la directiva:
+
+1. **Tipos de video**: `mp4`, `webm` y `tsv` en la tabla `TYPES`. Antes, toda
+   extensión desconocida salía `application/octet-stream`, y servir el pack v0
+   así habría dado un **falso negativo**: varios WebViews de TV miran el
+   `content-type` antes de decidir si pueden reproducir.
+2. **`Range`**: `206` con `content-range`, `416` fuera de rango y
+   `accept-ranges: bytes` también en las respuestas completas. Hay reproductores
+   de TV que directamente no arrancan un video si el servidor no sirve rangos, y
+   el que arranca no puede buscar. La rama sin `Range` quedó idéntica.
+
+Verificado después del despliegue: la raíz sigue devolviendo el mismo
+`live-player.html` (200, 26.679 B), `playloop.js` sale con su `content-type` de
+siempre, un `Range: bytes=0-99` devuelve `206 · bytes 0-99/10999`, y **el secret
+`UPLOAD_TOKEN` sobrevivió al redeploy** (se envió `keep_bindings:
+["secret_text"]`; las bindings quedaron en `BUCKET` + `UPLOAD_TOKEN`).
+
+**Se subieron 6 keys nuevas bajo el prefijo `v0/`** (pack v0 de H-9):
+`index.html` (copia de `frontend/v0.html`), `MANIFEST.tsv` y las cuatro piezas
+de video. Las cuatro piezas están listadas en `MANIFEST.tsv` pero **no se guardan
+acá**, por la regla de que los videos no van a `main`; se regeneran con el
+workflow `emitir-v0` desde el máster, y sus SHA-256 están en el REGISTRO.
+
+Verificación: se bajaron las 6 y se comparó **SHA-256 contra el archivo local** —
+las 6 idénticas, con `video/mp4` y `video/webm` correctos. El token se quemó y el
+viejo dio `403` en el primer intento.
+
+Queda servido en **`https://iargen.com/player/v0/`**.

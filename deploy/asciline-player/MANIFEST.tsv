@@ -1,4 +1,5 @@
-# Estado del bucket R2 `asciline-player` al 2026-08-31, ANTES de publicar F9.
+# Estado del bucket R2 `asciline-player` al 2026-08-31, ANTES de publicar F9,
+# MAS las 6 keys del prefijo `v0/` publicadas el 2026-09-01 (H-10, pack v0).
 # Leido con la API de Cloudflare. etag = MD5 (subidas de una sola parte).
 # key	bytes	etag(md5)
 1280-12/cache-refresh.js	5889	32c8be62f2a4107f852c779fec3d1ae6
@@ -64,11 +65,17 @@ outputs/clip.dcd6afb66907.asclv	24458884	8db052b896a46bc69d63b08297492fe0
 outputs/logo.png	42553	f46b9b5db4d9b7eb1b745a64695a17ad
 overlay.js	18598	591a08ea70667742a623164267c59ced
 reader-factory.js	1900	bc4bd7c1587e15e9805b6f5a59c3b7a4
-reader.js	27999	1355f088021a77cde4c31db822723dff
 reader-v2.js	42587	5d628470908297f2f993a90d421df288
+reader.js	27999	1355f088021a77cde4c31db822723dff
 render-canvas2d.js	8779	47b7b25e1a2d929822b6f3d77b32a152
 render-webgl.js	11644	001a1eed61702d0af57b444420c9a633
 slots.js	15955	61bf3669de137de0a994cfecc2e5606e
 textfeed.js	4388	ee566da0f12c271ea86caf488e1dfe0d
 textlayer.js	11831	aa1ede55afc8541fc4a68c75eb307826
 tv-controller.js	6069	369e25b369b840bdab4e8daab0654838
+v0/MANIFEST.tsv	923	301e55f5d0935b80b9519c0786dfbee3
+v0/index.html	12631	d43457add8f6855c0b86343f125675f9
+v0/v0-h264-baseline.mp4	9551693	cd75c48b765f6392cfd5c837a3a28141
+v0/v0-h264-main.mp4	8686512	52d782c1345f2466123a9ea539e37cf5
+v0/v0-vp9-alpha.webm	4664676	8f8c27151e48334c3b40fc35f27faa7d
+v0/v0-vp9.webm	4411693	0f0e6c818e88af172dcf10fb0b52d623

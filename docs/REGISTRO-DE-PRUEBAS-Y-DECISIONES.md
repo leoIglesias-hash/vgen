@@ -3245,3 +3245,54 @@ workflow `emitir-v0`, `tests/test_emit_pieces.py`, y `frontend/v0.html` con
 
 Próxima acción: **H-10** — abrir `v0.html` en la caja, el celular, el Smart TV y
 el escritorio, y llenar el registro de aparatos.
+
+## Publicado el pack v0 en `iargen.com/player/v0/` (2026-09-01, H-10)
+
+El operador eligió publicar en vez de servirlo por LAN: es el camino por el que
+la caja ya llega hoy y sirve para los cuatro aparatos sin depender del wifi de
+casa. **Nada de lo ya publicado se tocó**: el prefijo `v0/` es nuevo.
+
+**Hizo falta redesplegar el worker, y la razón importa.** El `asciline-player`
+desplegado no tenía `content-type` para video —toda extensión desconocida salía
+`application/octet-stream`— ni servía `Range`. Publicar así habría producido un
+**falso negativo**: varios WebViews de TV miran el `content-type` antes de
+decidir si pueden reproducir, y hay reproductores que directamente no arrancan un
+video si el servidor no sirve rangos. O sea que el aparato podría haber
+«refutado» S1/S3 por culpa del servidor, no del códec.
+
+Dos agregados, y nada más (la rama sin `Range` quedó idéntica):
+
+1. `mp4`, `webm` y `tsv` en la tabla de tipos.
+2. `Range` → `206` con `content-range`, `416` fuera de rango, y
+   `accept-ranges: bytes` también en las respuestas completas.
+
+Procedimiento, en el orden que exige la directiva del operador («lo desplegado
+tiene que estar guardado en el repo **antes** de actualizarlo»):
+
+1. Se comprobó que el código desplegado coincidía con la copia del repo (misma
+   línea `TYPES`), y se leyeron sus settings: `compatibility_date 2026-08-01`,
+   bindings `BUCKET` (R2) + `UPLOAD_TOKEN` (secret).
+2. Se actualizó `deploy/asciline-player/worker.js` y se commiteó (`bfa931c`).
+3. Redeploy multipart con `main_module`, la binding R2 y **`keep_bindings:
+   ["secret_text"]`** para no perder el secret.
+4. Verificación post-deploy: la raíz sigue sirviendo el mismo `live-player.html`
+   (200, 26.679 B), `playloop.js` con su `content-type` de siempre, un
+   `Range: bytes=0-99` devuelve `206 · bytes 0-99/10999`, y las bindings quedaron
+   en `BUCKET` + `UPLOAD_TOKEN` (**el secret sobrevivió**).
+5. Token efímero acuñado, **6 keys subidas** con `x-sha256` (R2 recalcula el
+   digest del cuerpo recibido), verificadas bajando cada una y comparando
+   **SHA-256 contra el archivo local**: las 6 idénticas, con `video/mp4` y
+   `video/webm` correctos. Token quemado; el viejo dio **403 en el primer
+   intento** (a diferencia del 2026-08-31, donde tardó en propagarse).
+
+| Key | Bytes | etag (md5) |
+|---|---:|---|
+| `v0/index.html` | 12.631 | `d43457add8f6855c0b86343f125675f9` |
+| `v0/MANIFEST.tsv` | 923 | `301e55f5d0935b80b9519c0786dfbee3` |
+| `v0/v0-h264-baseline.mp4` | 9.551.693 | `cd75c48b765f6392cfd5c837a3a28141` |
+| `v0/v0-h264-main.mp4` | 8.686.512 | `52d782c1345f2466123a9ea539e37cf5` |
+| `v0/v0-vp9.webm` | 4.411.693 | `0f0e6c818e88af172dcf10fb0b52d623` |
+| `v0/v0-vp9-alpha.webm` | 4.664.676 | `8f8c27151e48334c3b40fc35f27faa7d` |
+
+Ningún token se persistió, ni acá ni en el repo. Falta lo único que no podemos
+hacer nosotros: **abrirlo en los aparatos**. Eso cierra H-10.
