@@ -122,9 +122,47 @@ var windowStub = {
 var navigatorStub = { userAgent: "fake-tv-box" };
 var screenStub = { width: 1280, height: 720 };
 
+/* El mando numerico vive en keypad.js (cargado con <script src>), asi que aca
+ * se lo suplanta para poder mirar QUE acciones registro la pagina. */
+var registered = null;
+var keypadStub = {
+  create: function (options) { registered = options; return { codes: [] }; }
+};
+global.ASCLKeypad = keypadStub;
+windowStub.ASCLKeypad = keypadStub;
+
 var run = new Function("window", "document", "navigator", "screen",
                        "XMLHttpRequest", inline[1]);
 run(windowStub, documentStub, navigatorStub, screenStub, FakeXHR);
+
+/* El destino real es un TV BOX con control remoto: cada accion tiene que estar
+ * en una tecla numerica, porque el click ahi es caro. */
+assert(registered, "la pagina registra un mando numerico");
+assert.strictEqual(page.indexOf('<script src="keypad.js"></script>') >= 0, true,
+  "el mando se comparte via keypad.js, no se copia en la pagina");
+var codigos = registered.actions.map(function (action) { return action.code; });
+assert.strictEqual(codigos.length, 14);
+["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
+  assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
+});
+["90", "91", "92", "93", "94"].forEach(function (code) {
+  assert(codigos.indexOf(code) >= 0, "falta el codigo compuesto " + code);
+});
+/* Regla de usabilidad: lo comun no debe esperar. Ningun digito suelto usado
+ * puede ser prefijo de un codigo largo, salvo el 9, que es la puerta a los
+ * compuestos y a proposito no tiene accion propia. */
+codigos.forEach(function (code) {
+  if (code.length !== 1) { return; }
+  codigos.forEach(function (other) {
+    if (other.length > 1 && other.charAt(0) === code) {
+      assert.fail("la tecla " + code + " se demora por culpa de " + other);
+    }
+  });
+});
+assert(codigos.indexOf("9") < 0,
+  "el 9 queda reservado como prefijo de los compuestos");
+assert.strictEqual(byId("teclas").childNodes.length, 14,
+  "la leyenda de teclas se dibuja en pantalla: en una TV no hay donde mirarla");
 
 assert.strictEqual(requested.length, 1, "la pagina pide el manifiesto una vez");
 assert(/MANIFEST\.tsv$/.test(requested[0]), "pide MANIFEST.tsv");

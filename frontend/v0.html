@@ -24,6 +24,13 @@
   #report { width: 100%; height: 9em; font-size: 0.5em; background: #0b0d13;
             color: #cdd3e6; border: 1px solid #33384a; }
   .env { font-size: 0.55em; color: #b8bed4; margin-top: 0.5em; }
+  #buffer { font-size: 1.6em; color: #ffd479; min-height: 1.1em;
+            letter-spacing: 0.08em; }
+  #teclas { font-size: 0.55em; margin: 0.2em 0 0.4em 0; }
+  #teclas .op { display: inline-block; width: 31%; margin: 0.12em 1% 0.12em 0; }
+  #teclas .n { display: inline-block; min-width: 1.8em; text-align: center;
+               background: #2a2f45; border: 1px solid #4a5170; color: #ffd479;
+               padding: 0.05em 0.2em; margin-right: 0.35em; }
 </style>
 </head>
 <body>
@@ -43,6 +50,9 @@ video, mira la de alfa, y pasame el reporte de abajo.</p>
   <button id="runBlob">probar blob:</button>
 </div>
 
+<div id="buffer"></div>
+<div id="teclas"></div>
+
 <table id="tabla">
   <thead><tr>
     <th>pieza</th><th>dice</th><th>arranco</th><th>1er cuadro</th>
@@ -54,6 +64,7 @@ video, mira la de alfa, y pasame el reporte de abajo.</p>
 <div class="env" id="env"></div>
 <textarea id="report" readonly></textarea>
 
+<script src="keypad.js"></script>
 <script>
 "use strict";
 
@@ -72,6 +83,8 @@ var SECONDS = 10;          /* cuanto se reproduce cada pieza */
 var pieces = [];           /* filas del MANIFEST.tsv */
 var results = {};          /* id -> medicion */
 var base = "";
+var lastList = null;       /* ultima corrida, para repetirla con una tecla */
+var aborted = false;       /* corta una secuencia en curso */
 
 function byId(id) { return document.getElementById(id); }
 
@@ -303,13 +316,36 @@ function baseOnly() { return withRole("base"); }
 function runStreams() { runSequence(withRole("stream"), 0); }
 
 function runSequence(list, index) {
-  if (index >= list.length) { draw(); return; }
+  if (index === 0) { lastList = list; aborted = false; }
+  if (aborted || index >= list.length) { draw(); return; }
   var piece = list[index];
   measure(piece, base + piece.file, function (row) {
     results[piece.id] = row;
     draw();
     window.setTimeout(function () { runSequence(list, index + 1); }, 400);
   });
+}
+
+function runOnly(id) {
+  var i;
+  for (i = 0; i < pieces.length; i++) {
+    if (pieces[i].id === id) { runSequence([pieces[i]], 0); return; }
+  }
+}
+
+/* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
+ * que el 0 devuelve la pantalla a cero sin salir de ella. */
+function stopAll() {
+  aborted = true;
+  byId("video").pause();
+  byId("alpha").pause();
+  byId("alphaBg").className = "";
+  results = {};
+  draw();
+}
+
+function repeatLast() {
+  if (lastList && lastList.length) { runSequence(lastList, 0); }
 }
 
 function runAlpha() {
@@ -361,6 +397,68 @@ function runBlob() {
 
 /* --- arranque --- */
 
+/* Mando numerico. El destino es un TV BOX con control remoto: el click ahi es
+ * caro y las teclas numericas son gratis.
+ *
+ * Todo lo comun cae en un digito suelto y dispara al instante. Lo secundario
+ * vive detras del 9, que es el unico que espera -porque es el unico que puede
+ * seguir creciendo-: 9 + numero. El retardo se ajusta con ?delay=<ms>, y OK
+ * dispara sin esperar. */
+var TECLAS = [
+  { code: "1", label: "correr todo", detail: "las 3 piezas progresivas",
+    run: function () { runSequence(baseOnly(), 0); } },
+  { code: "2", label: "HLS / DASH", detail: "los 3 empaquetados",
+    run: runStreams },
+  { code: "3", label: "alfa", detail: "transparencia sobre fondo verde",
+    run: runAlpha },
+  { code: "4", label: "blob:", detail: "reproducir desde memoria",
+    run: runBlob },
+  { code: "5", label: "solo baseline", detail: "H.264 Baseline",
+    run: function () { runOnly("v0-h264-baseline"); } },
+  { code: "6", label: "solo main", detail: "H.264 Main (detector de hardware)",
+    run: function () { runOnly("v0-h264-main"); } },
+  { code: "7", label: "solo vp9", detail: "VP9 progresivo",
+    run: function () { runOnly("v0-vp9"); } },
+  { code: "8", label: "solo hls-ts", detail: "HLS con segmentos TS",
+    run: function () { runOnly("v0-hls-ts"); } },
+  { code: "0", label: "cortar y limpiar", detail: "vuelve la pantalla a cero",
+    run: stopAll },
+  { code: "90", label: "solo hls-fmp4", detail: "HLS CMAF",
+    run: function () { runOnly("v0-hls-fmp4"); } },
+  { code: "91", label: "solo dash", detail: "DASH",
+    run: function () { runOnly("v0-dash"); } },
+  { code: "92", label: "alfa como video", detail: "la pieza con alfa, sin fondo",
+    run: function () { runOnly("v0-vp9-alpha"); } },
+  { code: "93", label: "repetir", detail: "la ultima corrida otra vez",
+    run: repeatLast },
+  /* El lanzador vive en OTRO servidor (es un archivo suelto), asi que no se
+   * puede linkear a una ruta fija: se vuelve con el historial, y ?ir=<url>
+   * permite apuntarlo si algun dia conviene. */
+  { code: "94", label: "volver", detail: "al lanzador, o atras en el historial",
+    run: function () {
+      if (param("ir")) { window.location.href = param("ir"); }
+      else if (window.history && window.history.back) { window.history.back(); }
+    } }
+];
+
+function renderKeys() {
+  var box = byId("teclas");
+  var i, row, tag, name;
+  while (box.firstChild) { box.removeChild(box.firstChild); }
+  for (i = 0; i < TECLAS.length; i++) {
+    row = document.createElement("div");
+    row.className = "op";
+    tag = document.createElement("span");
+    tag.className = "n";
+    text(tag, TECLAS[i].code);
+    row.appendChild(tag);
+    name = document.createElement("span");
+    text(name, TECLAS[i].label);
+    row.appendChild(name);
+    box.appendChild(row);
+  }
+}
+
 function start() {
   scaleUI();
   base = param("base");
@@ -369,6 +467,16 @@ function start() {
   byId("runStreams").onclick = runStreams;
   byId("runAlpha").onclick = runAlpha;
   byId("runBlob").onclick = runBlob;
+  renderKeys();
+  if (window.ASCLKeypad) {
+    ASCLKeypad.create({
+      delay: param("delay") ? parseInt(param("delay"), 10) : 900,
+      actions: TECLAS,
+      onBuffer: function (buffer) {
+        text(byId("buffer"), buffer ? buffer + "_" : "");
+      }
+    });
+  }
   get(base + "MANIFEST.tsv", function (body) {
     pieces = parseManifest(body);
     draw();

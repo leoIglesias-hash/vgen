@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ir a</title>
+<style>
+  html { background: #101014; color: #e8e8ee; font-family: monospace; }
+  body { margin: 0; padding: 0.8em; }
+  h1 { font-size: 1.2em; margin: 0 0 0.15em 0; }
+  p.sub { margin: 0 0 0.6em 0; color: #9aa0b4; font-size: 0.6em; }
+  .op { display: inline-block; width: 47%; margin: 0.18em 1% 0.18em 0;
+        font-size: 0.72em; vertical-align: top; }
+  .n { display: inline-block; min-width: 1.9em; text-align: center;
+       background: #2a2f45; border: 1px solid #4a5170; color: #ffd479;
+       padding: 0.1em 0.25em; margin-right: 0.4em; }
+  .d { color: #9aa0b4; font-size: 0.85em; }
+  #buffer { font-size: 2.2em; color: #ffd479; min-height: 1.2em;
+            letter-spacing: 0.08em; }
+  #libre { margin-top: 0.6em; font-size: 0.7em; }
+  input { font: inherit; font-size: 1em; background: #0b0d13; color: #e8e8ee;
+          border: 1px solid #4a5170; padding: 0.3em 0.4em; width: 52%; }
+  button { font: inherit; font-size: 1em; background: #2a2f45; color: #e8e8ee;
+           border: 1px solid #4a5170; padding: 0.32em 0.7em; }
+  #dest { color: #6f7690; font-size: 0.5em; margin-top: 0.6em; }
+</style>
+</head>
+<body>
+<h1>ir a</h1>
+<p class="sub">Apreta el numero. OK dispara sin esperar; Volver borra.</p>
+
+<div id="buffer"></div>
+<div id="ops"></div>
+
+<div id="libre">
+  version: <input id="v" type="text" autocomplete="off" spellcheck="false">
+  <button id="go">ir</button>
+  <div class="d">Escribi solo el nombre (por ejemplo <b>v0</b>). Tambien acepta
+    una ruta o una URL entera.</div>
+</div>
+<div id="dest"></div>
+
+<script>
+"use strict";
+
+/* ir.html - lanzador para TV box.
+ *
+ * ARCHIVO SUELTO Y AUTOCONTENIDO: va en OTRO servidor, no en el bucket del
+ * player. Por eso no carga keypad.js -no lo tendria al lado- y por eso todos
+ * los destinos son URLs ABSOLUTAS: desde otro dominio una ruta relativa no
+ * llega a ningun lado. Es la unica copia de logica de teclas que se permite
+ * fuera de keypad.js, y la razon queda escrita aca para que nadie la arregle.
+ *
+ * LO UNICO QUE HAY QUE EDITAR PARA MUDARLO ES LA LINEA BASE.
+ * Tambien se puede pisar en caliente con ?base=https://otro/lugar/
+ *
+ * Extras: ?v=<version> salta directo sin tocar nada; ?delay=<ms> ajusta la
+ * espera de los codigos de dos digitos.
+ *
+ * ES5.1 estricto: sin fetch, sin promesas, sin plantillas, sin dependencias. */
+
+var BASE = "https://iargen.com/player/";
+
+var DESTINOS = [
+  { code: "1", label: "pack v0", detail: "codecs, alfa y HLS/DASH", to: "v0/" },
+  { code: "2", label: "raiz del player", detail: "producto 1280@15 v3 (JS)",
+    to: "" },
+  { code: "3", label: "1280-15", detail: "variante v2", to: "1280-15/" },
+  { code: "4", label: "1280-12", detail: "variante", to: "1280-12/" },
+  { code: "5", label: "1920-10", detail: "variante", to: "1920-10/" },
+  { code: "90", label: "pack v0 lento", detail: "retardo de tecla 1600 ms",
+    to: "v0/?delay=1600" },
+  { code: "91", label: "pack v0 rapido", detail: "retardo de tecla 400 ms",
+    to: "v0/?delay=400" }
+];
+
+function byId(id) { return document.getElementById(id); }
+
+function text(node, value) {
+  while (node.firstChild) { node.removeChild(node.firstChild); }
+  node.appendChild(document.createTextNode(value));
+}
+
+function param(name) {
+  var pattern = new RegExp("[?&]" + name + "=([^&]*)");
+  var found = pattern.exec(window.location.search);
+  return found ? decodeURIComponent(found[1]) : "";
+}
+
+function scaleUI() {
+  var width = window.innerWidth || 1280;
+  document.documentElement.style.fontSize =
+    Math.max(12, Math.round(width / 30)) + "px";
+}
+
+function baseUrl() {
+  var custom = param("base");
+  var value = custom ? custom : BASE;
+  if (value.charAt(value.length - 1) !== "/" && value.indexOf("?") < 0) {
+    value += "/";
+  }
+  return value;
+}
+
+/* Una version escrita a mano se convierte en URL absoluta. Se acepta una URL
+ * entera por si alguna vez hay que ir a otro lado. */
+function target(value) {
+  var clean = value.replace(/^\s+|\s+$/g, "");
+  if (!clean) { return ""; }
+  if (clean.indexOf("http://") === 0 || clean.indexOf("https://") === 0) {
+    return clean;
+  }
+  while (clean.charAt(0) === "/") { clean = clean.substring(1); }
+  if (clean && clean.charAt(clean.length - 1) !== "/" &&
+      clean.indexOf("?") < 0 && clean.split("/").pop().indexOf(".") < 0) {
+    clean += "/";
+  }
+  return baseUrl() + clean;
+}
+
+function go(where) {
+  if (where) { window.location.href = where; }
+}
+
+/* --- mando numerico (misma regla que keypad.js, en version corta) ---
+ * Se espera SOLO cuando el digito puede ser el comienzo de un codigo mas
+ * largo: con 1..5 y 90/91, el 3 dispara al instante y el 9 espera. */
+var buffer = "";
+var timer = 0;
+var delay = 900;
+
+function codes() {
+  var out = [], i;
+  for (i = 0; i < DESTINOS.length; i++) { out.push(DESTINOS[i].code); }
+  out.push("0");
+  return out;
+}
+
+function isPrefix(value) {
+  var all = codes(), i;
+  for (i = 0; i < all.length; i++) {
+    if (all[i].length > value.length &&
+        all[i].substring(0, value.length) === value) { return true; }
+  }
+  return false;
+}
+
+function showBuffer() { text(byId("buffer"), buffer ? buffer + "_" : ""); }
+
+function clearBuffer() {
+  buffer = "";
+  if (timer) { window.clearTimeout(timer); timer = 0; }
+  showBuffer();
+}
+
+function fire(value) {
+  var i;
+  clearBuffer();
+  if (value === "0") { byId("v").focus(); return; }
+  for (i = 0; i < DESTINOS.length; i++) {
+    if (DESTINOS[i].code === value) { go(target(DESTINOS[i].to)); return; }
+  }
+}
+
+function push(digit) {
+  var value = buffer + digit;
+  if (timer) { window.clearTimeout(timer); timer = 0; }
+  if (isPrefix(value)) {
+    buffer = value;
+    showBuffer();
+    timer = window.setTimeout(function () { fire(buffer); }, delay);
+    return;
+  }
+  fire(value);
+}
+
+function digitOf(event) {
+  var code = event.keyCode || event.which || 0;
+  if (code >= 48 && code <= 57) { return String(code - 48); }
+  if (code >= 96 && code <= 105) { return String(code - 96); }
+  return "";
+}
+
+function onKeyDown(event) {
+  var code = event.keyCode || event.which || 0;
+  var node = event.target || event.srcElement;
+  var tag = node && node.nodeName ? node.nodeName.toUpperCase() : "";
+  var digit;
+  if (tag === "INPUT" || tag === "TEXTAREA") { return; }
+  digit = digitOf(event);
+  if (digit) {
+    if (event.preventDefault) { event.preventDefault(); }
+    push(digit);
+    return;
+  }
+  if (code === 13 && buffer) {
+    if (event.preventDefault) { event.preventDefault(); }
+    fire(buffer);
+    return;
+  }
+  if ((code === 27 || code === 8) && buffer) {
+    if (event.preventDefault) { event.preventDefault(); }
+    clearBuffer();
+  }
+}
+
+function render() {
+  var box = byId("ops");
+  var lista = [], i, row, tag, name, detail;
+  for (i = 0; i < DESTINOS.length; i++) { lista.push(DESTINOS[i]); }
+  lista.push({ code: "0", label: "escribir", detail: "foco en el campo" });
+  while (box.firstChild) { box.removeChild(box.firstChild); }
+  for (i = 0; i < lista.length; i++) {
+    row = document.createElement("div");
+    row.className = "op";
+    tag = document.createElement("span");
+    tag.className = "n";
+    text(tag, lista[i].code);
+    row.appendChild(tag);
+    name = document.createElement("span");
+    text(name, lista[i].label);
+    row.appendChild(name);
+    detail = document.createElement("div");
+    detail.className = "d";
+    text(detail, lista[i].detail);
+    row.appendChild(detail);
+    box.appendChild(row);
+  }
+}
+
+function start() {
+  scaleUI();
+  var directo = param("v");
+  if (directo) { go(target(directo)); return; }
+  if (param("delay")) { delay = parseInt(param("delay"), 10) || 900; }
+  render();
+  text(byId("dest"), "base: " + baseUrl());
+  if (document.addEventListener) {
+    document.addEventListener("keydown", onKeyDown, false);
+  } else {
+    document.onkeydown = onKeyDown;
+  }
+  byId("go").onclick = function () { go(target(byId("v").value)); };
+  byId("v").onkeydown = function (event) {
+    var code = event.keyCode || event.which || 0;
+    if (code === 13) { go(target(byId("v").value)); }
+  };
+}
+
+window.onresize = scaleUI;
+start();
+</script>
+</body>
+</html>
