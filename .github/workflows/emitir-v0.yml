@@ -12,6 +12,13 @@ name: emitir-v0
 # pineada por contenido que ya sirve el player en produccion, y se VERIFICA por
 # SHA-256 antes de usarlo. Si el digest no coincide, el workflow falla: una
 # pieza emitida desde un master desconocido no mide nada.
+#
+# H-14 (determinismo): con `determinismo: true` se emiten SOLO las dos piezas
+# H.264, DOS VECES en la misma corrida (misma maquina, mismo ffmpeg), y se
+# comparan byte a byte. Si coinciden entre si pero no con otra corrida, el
+# encoder depende de la CPU del runner y no es "no determinista"; `x264_extra`
+# permite probar la cura (cpu-independent=1) sin tocar la receta del emisor.
+# Se registra la CPU (lscpu) y la build de x264 para poder leer el resultado.
 
 on:
   workflow_dispatch:
@@ -26,6 +33,13 @@ on:
         required: true
       frames:
         description: "Cortar en N cuadros (vacio = el clip entero; util para una corrida de humo)"
+        default: ""
+      determinismo:
+        description: "H-14: solo H.264, dos veces en la misma corrida, comparadas byte a byte"
+        type: boolean
+        default: false
+      x264_extra:
+        description: "H-14: opciones extra pegadas a -x264-params (p. ej. cpu-independent=1)"
         default: ""
 
 permissions:
@@ -50,6 +64,17 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg
           ffmpeg -hide_banner -encoders | grep -E "libx264|libvpx-vp9"
+      - name: Maquina y builds (H-14)
+        run: |
+          {
+            echo "## Maquina"
+            echo '```'
+            nproc
+            lscpu | grep -E "Model name|Flags" | cut -c1-400
+            ffmpeg -hide_banner -version | head -3
+            dpkg -l | grep -i "libx264" | head -2 || true
+            echo '```'
+          } | tee maquina.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Bajar y verificar el master
         run: |
           mkdir -p work outputs
@@ -57,17 +82,24 @@ jobs:
           echo "${{ inputs.master_sha256 }}  work/master.asclv" | sha256sum -c -
           ls -l work/master.asclv
       - name: Emitir el pack v0
+        if: ${{ !inputs.determinismo }}
         run: |
           if [ -n "${{ inputs.frames }}" ]; then
             FRAMES="--frames ${{ inputs.frames }}"
           else
             FRAMES=""
           fi
+          if [ -n "${{ inputs.x264_extra }}" ]; then
+            EXTRA="--x264-extra ${{ inputs.x264_extra }}"
+          else
+            EXTRA=""
+          fi
           /usr/bin/time -v -o time.txt python tools/emit_pieces.py \
-            work/master.asclv --out outputs/v0 $FRAMES | tee emision.txt
+            work/master.asclv --out outputs/v0 $FRAMES $EXTRA | tee emision.txt
           grep -E "Maximum resident|Elapsed" time.txt
           ls -l outputs/v0
       - name: Resumen
+        if: ${{ !inputs.determinismo }}
         run: |
           {
             echo "## Pack v0 emitido"
@@ -80,7 +112,55 @@ jobs:
             echo ""
             grep -E "Maximum resident|Elapsed" time.txt || true
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: H-14 - las dos piezas H.264, dos veces
+        if: ${{ inputs.determinismo }}
+        run: |
+          if [ -n "${{ inputs.frames }}" ]; then
+            FRAMES="--frames ${{ inputs.frames }}"
+          else
+            FRAMES=""
+          fi
+          if [ -n "${{ inputs.x264_extra }}" ]; then
+            EXTRA="--x264-extra ${{ inputs.x264_extra }}"
+          else
+            EXTRA=""
+          fi
+          for PASADA in 1 2; do
+            /usr/bin/time -v -o time-$PASADA.txt python tools/emit_pieces.py \
+              work/master.asclv --out outputs/pasada-$PASADA --no-segment \
+              --only v0-h264-baseline --only v0-h264-main $FRAMES $EXTRA \
+              | tee emision-$PASADA.txt
+            grep -E "Elapsed" time-$PASADA.txt
+          done
+          ls -l outputs/pasada-1 outputs/pasada-2
+      - name: H-14 - comparar byte a byte
+        if: ${{ inputs.determinismo }}
+        run: |
+          {
+            echo "## H-14 - determinismo H.264 (x264_extra: '${{ inputs.x264_extra }}', frames: '${{ inputs.frames }}')"
+            echo ""
+            echo '```'
+            for P in v0-h264-baseline.mp4 v0-h264-main.mp4; do
+              A=outputs/pasada-1/$P; B=outputs/pasada-2/$P
+              echo "$P  pasada1 $(stat -c %s $A) B  $(sha256sum $A | cut -c1-16)"
+              echo "$P  pasada2 $(stat -c %s $B) B  $(sha256sum $B | cut -c1-16)"
+              if cmp -s $A $B; then
+                echo "$P  IDENTICAS en la misma maquina"
+              else
+                echo "$P  DISTINTAS en la misma maquina; primeros bytes que difieren:"
+                cmp -l $A $B | head -5 || true
+                echo "  total de bytes distintos: $(cmp -l $A $B | wc -l)"
+              fi
+            done
+            echo '```'
+            echo ""
+            echo "SHA-256 completos (para comparar contra OTRA corrida):"
+            echo '```'
+            sha256sum outputs/pasada-1/*.mp4
+            echo '```'
+          } | tee comparacion.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Publicar el pack
+        if: ${{ !inputs.determinismo }}
         uses: actions/upload-artifact@v4
         with:
           name: pack-v0
@@ -88,4 +168,19 @@ jobs:
             outputs/v0/
             emision.txt
             time.txt
+            maquina.txt
+          retention-days: 14
+      - name: Publicar la comparacion (H-14)
+        if: ${{ inputs.determinismo }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: h14-determinismo
+          path: |
+            outputs/pasada-1/*.mp4
+            outputs/pasada-2/*.mp4
+            outputs/pasada-*/*.log
+            emision-*.txt
+            time-*.txt
+            maquina.txt
+            comparacion.txt
           retention-days: 14

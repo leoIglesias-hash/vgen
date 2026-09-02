@@ -188,13 +188,22 @@ def variant_by_id(variant_id):
     raise KeyError(variant_id)
 
 
-def build_command(ffmpeg, variant, width, height, fps, out_path):
+def build_command(ffmpeg, variant, width, height, fps, out_path,
+                  x264_extra=None):
     """Linea de ffmpeg de una pieza. El contenido no se toca: entra RGB crudo
-    decodificado del master y sale la pieza; ningun paso re-cuantiza el look."""
+    decodificado del master y sale la pieza; ningun paso re-cuantiza el look.
+
+    `x264_extra` (H-14) se pega al final de -x264-params de las piezas H.264:
+    es la palanca para probar en CI una opcion del encoder (cpu-independent=1)
+    sin tocar la receta declarada arriba."""
+    args = list(variant["args"])
+    if x264_extra and "-x264-params" in args:
+        at = args.index("-x264-params") + 1
+        args[at] = args[at] + ":" + x264_extra
     return ([ffmpeg, "-y", "-nostdin",
              "-f", "rawvideo", "-pix_fmt", variant["pix_in"],
              "-s", "%dx%d" % (width, height), "-r", str(fps), "-i", "-"]
-            + list(DETERMINISM) + list(variant["args"]) + list(BITEXACT)
+            + list(DETERMINISM) + args + list(BITEXACT)
             + [out_path])
 
 
@@ -343,7 +352,7 @@ def emit_streams(ffmpeg, out_dir, produced, log):
 
 
 def emit(master_path, out_dir, only=None, max_frames=None, ffmpeg=None,
-         work_dir=None, log=None, segment=True):
+         work_dir=None, log=None, segment=True, x264_extra=None):
     log = log or (lambda message: None)
     ffmpeg = ffmpeg or _resolve_ffmpeg()
     variants = [variant_by_id(name) for name in only] if only else list(VARIANTS)
@@ -365,7 +374,8 @@ def emit(master_path, out_dir, only=None, max_frames=None, ffmpeg=None,
     logs = []
     for variant in variants:
         out_path = os.path.join(out_dir, variant["file"])
-        command = build_command(ffmpeg, variant, width, height, fps, out_path)
+        command = build_command(ffmpeg, variant, width, height, fps, out_path,
+                                x264_extra=x264_extra)
         log("+ " + variant["id"])
         # El stderr de cada encoder va a su propio archivo: sin eso, un fallo
         # solo deja un codigo de salida y no se puede diagnosticar la corrida.
@@ -444,10 +454,14 @@ def main(argv=None):
     parser.add_argument("--ffmpeg", default=None, help="ruta a ffmpeg")
     parser.add_argument("--no-segment", action="store_true",
                         help="no empaquetar HLS/DASH (por defecto se empaquetan)")
+    parser.add_argument("--x264-extra", default=None,
+                        help="H-14: opciones extra pegadas a -x264-params "
+                             "(p. ej. cpu-independent=1)")
     args = parser.parse_args(argv)
 
     result = emit(args.master, args.out, only=args.only, max_frames=args.frames,
                   ffmpeg=args.ffmpeg, segment=not args.no_segment,
+                  x264_extra=args.x264_extra,
                   log=lambda message: print(message, flush=True))
     print("-- PACK v0 --  %s" % result["manifest"])
     return 0
