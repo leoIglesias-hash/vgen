@@ -23,7 +23,7 @@ la reprodujo** (2026-09-01): todo lo progresivo fluido por hardware, Main =
 Baseline (decodificador hardware), arranque atado a los bytes por red (517 ms
 desde `blob:`), VP9 reproduce, HLS-TS nativo sí, DASH no, MSE sin probar. El
 rumbo que sale de ahí está en
-[`docs/PLAN-IMPLEMENTACION-ASCLH.md`](docs/PLAN-IMPLEMENTACION-ASCLH.md); el
+[`docs/PLAN-IMPLEMENTACION-VGEN.md`](docs/PLAN-IMPLEMENTACION-VGEN.md); el
 estado vivo en [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md). Una publicación
 pública sigue condicionada por licencia, procedencia y derechos de los videos.
 
@@ -178,7 +178,7 @@ debe validarse nuevamente.
   construimos, de qué linaje sale cada pieza, escalera de intervención, no-objetivos.
 - [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md): estado vivo — próxima acción, una
   fila por tarea cerrada, SHAs de referencia.
-- [`docs/PLAN-IMPLEMENTACION-ASCLH.md`](docs/PLAN-IMPLEMENTACION-ASCLH.md): **el rumbo** —
+- [`docs/PLAN-IMPLEMENTACION-VGEN.md`](docs/PLAN-IMPLEMENTACION-VGEN.md): **el rumbo** —
   evidencia medida, caminos de runtime, gates numéricos, orden de tareas y decisiones
   pendientes del operador.
 - [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md): reglas de ejecución
@@ -188,7 +188,7 @@ debe validarse nuevamente.
   códec y las suposiciones, cada una con su refutación escrita.
 - [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md): sondas, banco de reproducción y
   registro de aparatos — lo que desbloquea al formato.
-- [`docs/DISENO-FORMATO-ASCLH.md`](docs/DISENO-FORMATO-ASCLH.md): el formato en obra, con
+- [`docs/DISENO-FORMATO-VGEN.md`](docs/DISENO-FORMATO-VGEN.md): el formato en obra, con
   la tabla de decidido vs. gateado por medición.
 - [`docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md):
   decisiones append-only, por Instancia.

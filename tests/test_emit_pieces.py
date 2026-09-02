@@ -143,7 +143,7 @@ class AlphaTest(unittest.TestCase):
 
 class ManifestTest(unittest.TestCase):
     """El manifiesto de runtime NO puede ser JSON: el gate ES5 prohibe `JSON`.
-    Va en texto tabulado y se parte con split (DISENO-FORMATO-ASCLH.md S10)."""
+    Va en texto tabulado y se parte con split (DISENO-FORMATO-VGEN.md S10)."""
 
     def rows(self):
         return [{"id": "v0-vp9", "role": "base", "mime": 'video/webm; codecs="vp9"',

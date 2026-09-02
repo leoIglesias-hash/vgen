@@ -204,5 +204,5 @@ lado, y un primer video que se abre en la caja, el celular, el Smart TV y el
 escritorio. Las tareas están en
 [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2 (fase H). El diseño
 del formato que va saliendo de ese ciclo se acumula en
-[`DISENO-FORMATO-ASCLH.md`](DISENO-FORMATO-ASCLH.md), que marca explícitamente
+[`DISENO-FORMATO-VGEN.md`](DISENO-FORMATO-VGEN.md), que marca explícitamente
 qué está **decidido** y qué está **gateado por medición**.

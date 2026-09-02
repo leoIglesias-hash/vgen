@@ -1,4 +1,4 @@
-# Diseño del formato `.asclh` — paquete híbrido intervenible
+# Diseño del formato `.vgen` — paquete híbrido intervenible
 
 > **Estado: EN OBRA.** Este documento acumula el diseño del formato de
 > distribución. Una parte está **decidida** (§10 lo marca fila por fila) y otra
@@ -11,7 +11,7 @@
 
 ---
 
-## 1. Qué es `.asclh`
+## 1. Qué es `.vgen`
 
 **Un contenedor de piezas + un manifiesto + una disciplina de autoría.** No es un
 códec y no es un archivo de video: es una **biblioteca** de la que el dispositivo
@@ -27,13 +27,13 @@ Lleva adentro:
 - **el guion**: qué va cuándo, dónde están los huecos, qué reacciona a datos;
 - **metadatos del máster**: paleta, geometría, procedencia (hash del `.asclv`).
 
-**Nombre y envelope provisorios:** extensión `.asclh`, magic `ASCLHYB1`.
-Pendiente de confirmación del operador; no hay código que dependa de esto todavía.
+**Nombre:** extensión **`.vgen`** — fijado por el operador el 2026-09-01 («la extensión debe ser vgen, queda mejor»; antes provisorio `.asclh`). Magic `VGEN` + versión, provisorio hasta H-7.
+No hay código que dependa de esto todavía.
 
 **Relación con el máster:** el `.ascl`/`.asclv` **no se reemplaza**. Sigue siendo
 el máster determinista offline donde vive la verdad (paleta, trellis, look,
-reproducibilidad byte a byte). `.asclh` es lo que **viaja**, y se emite desde él.
-Un `.asclh` siempre declara de qué máster salió.
+reproducibilidad byte a byte). `.vgen` es lo que **viaja**, y se emite desde él.
+Un `.vgen` siempre declara de qué máster salió.
 
 ## 2. Modelo de datos (tomado de DASH)
 
@@ -42,7 +42,7 @@ intervenible. Los nombres se conservan a propósito, para poder razonar con
 material ajeno.
 
 ```
-Paquete (.asclh)
+Paquete (.vgen)
 ├── Cabecera        magic, versión, hash del máster, resolución base, paleta
 ├── Init            cabeceras de códec compartidas (una por códec presente)
 ├── Period[]        tramo temporal — LA UNIDAD DE INTERVENCIÓN ESTRUCTURAL
@@ -110,7 +110,7 @@ elige a mano.
 
 ## 5. Emisiones de runtime — cómo llega el paquete a `<video>`
 
-Un `.asclh` no se le da al `<video>`: se **traduce** a lo que ese aparato acepte.
+Un `.vgen` no se le da al `<video>`: se **traduce** a lo que ese aparato acepte.
 Cuatro caminos, del más compatible al más capaz. Cuál existe en cada aparato lo
 dice **reproducir el pack v0** ([`EMISION-V0.md`](EMISION-V0.md)), no un
 cuestionario.
@@ -131,7 +131,7 @@ decodificar.
 
 Componente nuevo, en el frontend, **ES5 estricto**. Responsabilidades:
 
-- leer el manifiesto del `.asclh` y resolver qué piezas corresponden;
+- leer el manifiesto del `.vgen` y resolver qué piezas corresponden;
 - armar las estructuras del contenedor de salida (tablas de muestras, duraciones,
   offsets) — **sin tocar el contenido de las piezas**;
 - entregar un `Blob` (camino A) o fragmentos (camino B);
@@ -215,13 +215,13 @@ bifurcación de layout, y hay que conocerla antes de dibujar una sola pantalla.
 | Resolución base 1280×720, fps variable | **decidido** (operador, 2026-09-01) |
 | Formato códec-agnóstico desde el diseño | **decidido** (operador, 2026-09-01) |
 | Modelo de datos tomado de DASH (Period / AdaptationSet / Representation / Segment) | **decidido** |
-| `.asclh` envuelve, no reemplaza, al máster `.asclv` | **decidido** |
+| `.vgen` envuelve, no reemplaza, al máster `.asclv` | **decidido** |
 | Piezas con cabecera compartida y cuadro clave propio | **decidido** |
 | fps por segmento derivado del máster | **decidido** (falta cuantificar el ahorro) |
 | Escalera de intervención N1–N3 | **decidido** |
 | Audio: `<audio>` separado primero, muxear solo si hay deriva | **decidido** |
 | **Manifiesto en texto tabulado, nunca JSON** | **decidido** — el gate ES5 prohíbe `JSON`; se parsea con `split` |
-| Nombre `.asclh` / magic `ASCLHYB1` | provisorio — confirma el operador |
+| Nombre `.vgen` | **decidido** (operador, 2026-09-01); el magic se fija en H-7 |
 | Qué códecs emitimos y en qué orden de preferencia | **gateado por el pack v0** (H-9/H-10): ¿VP9 existe? ¿Main sale gratis, o sea hardware? |
 | Camino de runtime por perfil (A/B/C/D) | **gateado** (¿`blob:`? ¿MSE? ¿WebM alfa?) — lo responde reproducir v0 |
 | Camino **D** (HLS/DASH nativo) | **gateado por el pack v0**: lleva `hls-ts/`, `hls-fmp4/` y `dash/` emitidos **por remux**. Donde D exista, el muxer ES5 puede sobrar en ese perfil |

@@ -3083,7 +3083,7 @@ color (4:2:0), lo cual es veneno para arte plano con bordes duros y podría
 explicar parte del escalonado que se venía persiguiendo (DIAG-001). Elegir la
 paleta de modo que los colores se separen sobre todo en **luma** haría que el
 submuestreo casi no dañe. Es una restricción nueva para el K-means y no la aplica
-nadie más. Anotada en `DISENO-FORMATO-ASCLH.md` §11 y como eje de H-6.
+nadie más. Anotada en `DISENO-FORMATO-VGEN.md` §11 y como eje de H-6.
 
 **El caso «cambiar solo la música» resultó ser el más fácil del sistema**, no el
 más difícil: es elegir otra Representation del AdaptationSet de audio, y en su
@@ -3102,7 +3102,7 @@ JS anterior; no diseñamos sobre suposiciones de capacidades.
 empezar a lo loco… creá documentación que nos permita luego hacer compacts y
 seguir sin perdernos la línea de trabajo»): `docs/VISION-Y-OBJETIVOS.md` (el
 norte: filosofía, linajes, objetivos macro, escalera de intervención, perfiles,
-invariantes, no-objetivos), `docs/DISENO-FORMATO-ASCLH.md` (el formato en obra,
+invariantes, no-objetivos), `docs/DISENO-FORMATO-VGEN.md` (el formato en obra,
 con **tabla explícita de decidido vs. gateado por medición**) y
 `docs/PLAN-DE-MEDICION.md` (sondas, banco, matriz de emisión y registro de
 aparatos vacío). Runbooks actualizados: **H-1..H-3 quedan REEMPLAZADAS** (eran el
@@ -3186,7 +3186,7 @@ reorienta la matriz H-6 entera. Una sonda de capacidades no lo hubiera contestad
 **El manifiesto de runtime no puede ser JSON.** El gate ES5 del proyecto prohíbe
 `JSON` (los WebViews viejos del parque no lo garantizan), así que el manifiesto
 —el de v0 y el del `.asclh` definitivo— va en **texto tabulado**, partido con
-`split`. Queda como fila **decidida** en `DISENO-FORMATO-ASCLH.md` §10, no como
+`split`. Queda como fila **decidida** en `DISENO-FORMATO-VGEN.md` §10, no como
 detalle de implementación.
 
 Próxima acción real: **H-9**, el pack v0.
@@ -3573,4 +3573,64 @@ clase o decisión manual del operador.
 
 Todo lo anterior ordenado como rumbo, con gates numéricos propuestos y la lista
 de decisiones que necesita el operador:
-[`PLAN-IMPLEMENTACION-ASCLH.md`](PLAN-IMPLEMENTACION-ASCLH.md).
+[`PLAN-IMPLEMENTACION-VGEN.md`](PLAN-IMPLEMENTACION-VGEN.md).
+
+## Respuestas del operador al primer reporte, y el nombre del formato: `.vgen` (2026-09-01)
+
+Textuales, a las siete preguntas de [`PLAN-IMPLEMENTACION-VGEN.md`](PLAN-IMPLEMENTACION-VGEN.md) §6:
+
+1. **Alfa:** *«aparece el verde alrededor, y dentro del círculo el video, pero
+   cuando el video pasa más allá de lo verde aparece el símbolo play (puede ser
+   un tema de que había otro video debajo o no sé)»*. → **El alfa compone en la
+   caja (S4 sostenida)**: el navegador transparenta el WebM. No hay otro video
+   debajo (la página tiene un solo `<video>`; el verde es un `div` detrás). El
+   símbolo de play es, con toda probabilidad, **el control nativo del WebView
+   sobre un video pausado**: la página pausa la pieza al terminar los 10 s de
+   medición. En el producto nada se pausa; H-13 deja de pausar al terminar.
+2. **VP9 y HLS-TS a ojo:** *«v9 salió perfecto, hasta más fluido; hls-ts salió
+   más o menos, reprodujo una vez, pero se traba mucho al iniciar, por eso la
+   última medición no salió»*. → **VP9 firmado por el ojo (S3)**. **HLS-TS es
+   irregular**: la fila del reporte (2.012 ms, sin atascos) fue la única vez que
+   arrancó bien. El camino D queda **fuera del producto en esta clase**.
+3. **Clase que consagra:** *«de momento el tv box es la base, porque en PC
+   seguramente corra todo, y otros smart más pedorro no tengo»*. → **Decisión
+   manual: la TV box es la clase principal del formato** y lo que gana en ella
+   queda consagrado (VISION §8.11 lo prevé). La PC, cuando se pruebe, es
+   **refutadora**, no consagradora.
+4. **Audio:** *«no entendí lo del audio, igual las pruebas las hice en
+   silencio»*. → Pendiente; se le explica en simple (abajo).
+5. **Contenido real:** *«vamos a tener diversidad: un contenido en loop, alguna
+   publicidad que reemplace eso temporalmente y luego volvería al loop; el loop
+   es el intervenido con los números seguramente; luego incentivadores tipo
+   ruleta que tiene otra intervención pero es un video que entra y sale de
+   acuerdo a lo que el usuario pida»*. → **Son los casos de uso del producto**, y
+   calzan uno a uno con el modelo del formato: **loop** = pieza base con
+   intervención de números (N2); **publicidad** = pieza que reemplaza y vuelve
+   (N1 programado); **incentivador** = pieza que entra y sale **a demanda del
+   usuario**, con su propia intervención (N1 a demanda + N2). Consecuencias
+   escritas en el plan §2.7: todas las piezas residentes (caché), **latencia de
+   cambio a demanda** como métrica de primera clase, vuelta al loop sin corte, y
+   un solo canvas con cues **por pieza**. H-13 suma «cambio de pieza a demanda y
+   vuelta al loop» a lo que prueba.
+6. **Gates:** *«¿qué son los gates?»* → Pendiente; se le explica en simple.
+7. **Nombre:** *«la extensión debe ser vgen, queda mejor»*. → **`.vgen`**,
+   decidido. Se renombran `DISENO-FORMATO-ASCLH.md` → `DISENO-FORMATO-VGEN.md`,
+   `PLAN-IMPLEMENTACION-ASCLH.md` → `PLAN-IMPLEMENTACION-VGEN.md` y la futura
+   spec pasa a `SPEC-VGEN.md`; el nombre viejo se reemplaza en los documentos
+   vigentes y **se deja tal cual en este registro y en la bitácora** (son
+   historia). El magic del contenedor se fija en H-7.
+
+**Lo que esto cierra:** S1, S3, S4 y S8 pasan de «sostenida en la caja» a
+**consagradas en la clase principal** por la decisión manual del punto 3; S7
+queda como «HLS-TS irregular, fMP4/DASH refutados» y el camino D sale del
+producto. VP9 es el **camino principal** en la caja; H.264 Baseline, el piso.
+
+**Explicación en simple, para que pueda responder 4 y 6** (transcripta de la
+respuesta al operador): *audio* = si el televisor de la caja suena en el local,
+la música o locución viaja como pista aparte —igual que el mp3 dentro del
+`.asclv`— y cambiar la música no toca el video; si las cajas van mudas, el audio
+sale del plan por ahora. *Gates* = umbrales de aprobación: los números mínimos
+que una pieza o un camino tienen que cumplir para darlos por buenos; si no los
+cumple, no entra al formato. En sus términos: ¿cuánto puede tardar en aparecer
+la ruleta desde que el usuario la pide?, ¿cuánto tolera de espera al encender la
+caja por primera vez?

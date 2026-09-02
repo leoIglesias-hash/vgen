@@ -25,11 +25,11 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
    construimos, de qué linaje sale cada pieza, invariantes y no-objetivos. Si se
    lee un solo documento de diseño, es este.
 2. [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) — dónde quedó todo, próxima acción, bitácora.
-3. [`docs/PLAN-IMPLEMENTACION-ASCLH.md`](docs/PLAN-IMPLEMENTACION-ASCLH.md) — **el rumbo**: evidencia medida, caminos de runtime, gates numéricos, orden de tareas y decisiones pendientes del operador. Vigente desde el primer reporte de aparato (2026-09-01).
+3. [`docs/PLAN-IMPLEMENTACION-VGEN.md`](docs/PLAN-IMPLEMENTACION-VGEN.md) — **el rumbo**: evidencia medida, caminos de runtime, gates numéricos, orden de tareas y decisiones pendientes del operador. Vigente desde el primer reporte de aparato (2026-09-01).
 4. [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md) — **solo la tarea a ejecutar** (fase H).
 5. [`docs/EMISION-V0.md`](docs/EMISION-V0.md) — **el primer video**: qué le tomamos a cada códec y cuáles son las suposiciones, cada una con su refutación escrita y su veredicto por aparato (§4.b/§4.c).
 6. [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md) — el método: se mide **reproduciendo**, en varios aparatos, y el registro de aparatos.
-7. [`docs/DISENO-FORMATO-ASCLH.md`](docs/DISENO-FORMATO-ASCLH.md) — el formato en obra, con la tabla de **decidido vs. gateado**.
+7. [`docs/DISENO-FORMATO-VGEN.md`](docs/DISENO-FORMATO-VGEN.md) — el formato en obra, con la tabla de **decidido vs. gateado**.
 8. [`docs/ejecutados/`](docs/ejecutados/) — lo ya cumplido con su evidencia; consultar, no releer.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
@@ -133,11 +133,11 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   **H-10 tiene la TV box medida (2026-09-01)** — reporte transcripto en el
   REGISTRO — y queda abierta para las otras clases o la decisión manual del
   operador. Lo vivo, en orden (rumbo completo en
-  [`docs/PLAN-IMPLEMENTACION-ASCLH.md`](docs/PLAN-IMPLEMENTACION-ASCLH.md)):
+  [`docs/PLAN-IMPLEMENTACION-VGEN.md`](docs/PLAN-IMPLEMENTACION-VGEN.md)):
   **H-13** (**próxima**: por dónde entra el paquete — MSE, `init + segmentos`
   concatenados en un Blob, intercambio de orden, bucle; cero emisión nueva),
   **H-11** intervención encima o al lado, **H-12** caché, **H-6** matriz por
-  bytes a igual look, **H-7** spec `SPEC-ASCLH.md`, **H-8** muxer ES5 + player.
+  bytes a igual look, **H-7** spec `SPEC-VGEN.md`, **H-8** muxer ES5 + player.
   **H-14** (determinismo de H.264) y **W-26** son independientes. Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
 - **Lo que la caja dijo (2026-09-01, Android 9 / Chromium 70):** todo lo
@@ -148,8 +148,13 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   (el contador no lo ve: su fluidez la firma el ojo); **HLS-TS nativo sí**,
   HLS-fMP4 inservible, DASH no; **MSE declarado y sin probar**; IndexedDB sí;
   sin rVFC. Consecuencia: **la fluidez es un gate, los bytes y el arranque son
-  el objetivo**; VP9 al frente donde reproduzca, H.264 Baseline de piso. Nada
-  consagrado con un solo aparato.
+  el objetivo**; VP9 al frente donde reproduzca, H.264 Baseline de piso.
+  **Ojo del operador (mismo día):** VP9 «perfecto, hasta más fluido»; el alfa
+  **compone**; HLS-TS «se traba mucho al iniciar» (camino D fuera del producto).
+  **«De momento el tv box es la base»** → la caja es la **clase principal** y
+  consagra; la PC refuta. Contenido real = **loop intervenido + publicidad que
+  reemplaza y vuelve + incentivadores a demanda** (plan §2.7). Nombre del
+  formato: **`.vgen`**. Pendientes del operador: audio y gates (plan §6).
 - **Herramientas de la fase H, ya hechas — no re-implementar:**
   `tools/emit_pieces.py` + workflow `emitir-v0` (emiten el pack desde el máster,
   con los empaquetados HLS/DASH por remux), `frontend/v0.html` (una sola

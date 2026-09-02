@@ -1,4 +1,4 @@
-# Plan de implementación — `.asclh` sobre el `<video>` de los WebViews de TV box
+# Plan de implementación — `.vgen` sobre el `<video>` de los WebViews de TV box
 
 > **Estado: vigente desde el 2026-09-01, escrito con el primer reporte de aparato
 > en la mano** (la TV box del operador; transcripción textual en el
@@ -8,7 +8,7 @@
 >
 > Reparto con los demás documentos: el norte y los invariantes están en
 > [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md); el diseño del formato en
-> [`DISENO-FORMATO-ASCLH.md`](DISENO-FORMATO-ASCLH.md); las suposiciones con su
+> [`DISENO-FORMATO-VGEN.md`](DISENO-FORMATO-VGEN.md); las suposiciones con su
 > refutación en [`EMISION-V0.md`](EMISION-V0.md) §4; la tarea a ejecutar (archivo,
 > acción, cierre) en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md); el
 > estado vivo en [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md). Este documento no
@@ -22,7 +22,7 @@
 
 ## 0. El rumbo en una página
 
-**Qué construimos.** Un paquete **`.asclh`** = **piezas de video ya codificadas**
+**Qué construimos.** Un paquete **`.vgen`** = **piezas de video ya codificadas**
 (H.264 y VP9, 1280×720, cada una decodificable por sí sola y cortada en
 segmentos de 1 s sobre cuadros clave) + **un manifiesto en texto tabulado** (qué
 pieza va cuándo, con qué audio, dónde están los huecos) + **la capa de
@@ -42,11 +42,19 @@ JS; el aparato solo ejecuta.
    2.985 ms por red y **517 ms desde memoria**; VP9, con la mitad de bytes,
    931 ms. La caché y la compresión son las dos palancas del arranque.
 4. **VP9 reproduce** y es el camino de banda (−53,8 %). El contador de cuadros
-   no lo ve, así que su fluidez la firma el ojo del operador.
-5. **HLS-TS nativo funciona** (2,0 s); HLS-fMP4 nativo es inservible (14,2 s);
-   DASH nativo no existe. **MSE está declarado y sin probar.**
+   no lo ve; **el ojo del operador lo firmó**: «salió perfecto, hasta más
+   fluido». Es el **camino principal** en la caja.
+5. **HLS-TS nativo es irregular** (una vez 2,0 s; después «se traba mucho al
+   iniciar»); HLS-fMP4 nativo es inservible (14,2 s); DASH nativo no existe.
+   **MSE está declarado y sin probar.**
 6. `blob:` reproduce → existe el camino A (perfil P0 confirmado). IndexedDB sí.
    Sin `requestVideoFrameCallback` ni `getVideoPlaybackQuality`: es Chromium 70.
+7. **El alfa compone**: «aparece el verde alrededor, y dentro del círculo el
+   video». El personaje sin fondo puede ir por video.
+
+**La TV box es la clase principal** (decisión manual del operador, 2026-09-01:
+«de momento el tv box es la base»). Lo que ganó en ella queda consagrado; la PC,
+cuando se pruebe, es refutadora. Nombre del formato: **`.vgen`** (operador).
 
 **Lo que sigue, en orden:** **H-13** (por dónde entra *el paquete*: MSE,
 concatenación CMAF, intercambio de piezas y costura del bucle — con el pack ya
@@ -71,18 +79,19 @@ bytes y el arranque son el objetivo.**
 | **E9** | Segmentos `hls-fmp4/` y `dash/` byte-idénticos uno a uno; remux CMAF +0,04 %, TS +2,6 % | H-9, run 33566441576 | un juego de piezas, N manifiestos: la tesis del formato, en bytes |
 | **E10** | VP9 −53,8 % **y** byte-idéntico entre corridas; H.264 no determinista (+22 / −74 B) | H-9 / H-14 | VP9 es hoy el único carril que cumple el invariante 7 |
 | **E11** | Superficie 3840×2160 sobre panel 1280×720 | DIAG-003 + reporte | externo (la app). El canvas de intervención se dimensiona **al panel**, nunca a la superficie |
+| **E12** | Ojo del operador: VP9 «perfecto, hasta más fluido»; el alfa **compone** (verde alrededor, video en el círculo); HLS-TS «se traba mucho al iniciar» | respuestas del operador, REGISTRO 2026-09-01 | consagra VP9 y el alfa por video; saca el camino D del producto en esta clase |
+| **E13** | «De momento el tv box es la base»; contenido = loop intervenido + publicidad que reemplaza y vuelve + incentivadores a demanda; nombre `.vgen` | decisiones del operador, REGISTRO 2026-09-01 | la caja **consagra**; los casos de uso de §2.7; el nombre del formato |
 
-**Lo que el reporte NO dice** —y por eso no se afirma—: si el alfa **compuso**
-(verde o negro alrededor de la figura), si VP9 y HLS-TS **cayeron cuadros**,
-cómo se ve la **costura** entre segmentos y en el bucle, cuánto cuesta el
-**canvas encima**, si **MSE** reproduce, cuánto **persiste** IndexedDB. Cada uno
-tiene su tarea en §4.
+**Lo que todavía no se sabe** —y por eso no se afirma—: cómo se ve la
+**costura** entre segmentos y en el bucle, cuánto tarda un **cambio de pieza a
+demanda**, cuánto cuesta el **canvas encima**, si **MSE** reproduce, cuánto
+**persiste** IndexedDB. Cada uno tiene su tarea en §4.
 
 ## 2. Definición del producto
 
 ### 2.1 El paquete
 
-Lo decidido en [`DISENO-FORMATO-ASCLH.md`](DISENO-FORMATO-ASCLH.md) §1–§4, con
+Lo decidido en [`DISENO-FORMATO-VGEN.md`](DISENO-FORMATO-VGEN.md) §1–§4, con
 lo que la caja agregó:
 
 - **Piezas de video**, una columna por códec: **H.264 Baseline** (el piso, y el
@@ -118,29 +127,30 @@ Cinco responsabilidades, en este orden, y ninguna más:
 | **A — `blob:`** | archivo entero en memoria (de caché o de red) → `URL.createObjectURL` → `src` | ✓ **517 ms**, 2/155 | **el piso y el camino de la caché.** Con **S10** es también el de la intervención N1 *offline*: concatenar las piezas elegidas antes de crear el Blob | memoria: el paquete entero vive en RAM; techo a medir en H-12 |
 | **B — MSE** | `MediaSource` + un `SourceBuffer` por códec; segmentos anexados por XHR | declarado, **sin probar** | **la intervención estructural en vivo** (cambiar la próxima pieza sin bajar todo ni recrear el Blob); clips largos | si no reproduce o atasca (**S9**) → N1 se hace por A o por D |
 | **C — progresivo por red** | `src` directo a la pieza | ✓ 2.985 ms H.264 / 931 ms VP9 | primer uso sin caché; el más simple | el arranque: se mitiga con VP9, desaparece con A |
-| **D — HLS-TS nativo** | playlist `.m3u8` + segmentos TS; **la plataforma cose** | ✓ 2.012 ms, contador ciego | reserva **sin JS** para H.264 en esta clase; N1 = reescribir la playlist | solo H.264, +2,6 % bytes, tubería opaca (sin contadores), sin VP9 |
+| **D — HLS-TS nativo** | playlist `.m3u8` + segmentos TS; **la plataforma cose** | **irregular**: 2.012 ms una vez; después «se traba mucho al iniciar» (operador) | **fuera del producto en esta clase**; queda como columna para otras | solo H.264, +2,6 % bytes, tubería opaca (sin contadores), sin VP9, y arranque no confiable |
 | ~~HLS-fMP4 nativo~~ | | ✗ 14,2 s, atascos | **refutado en la caja** | — |
 | ~~DASH nativo~~ | | ✗ error | **refutado en la caja** (esperable: DASH vive sobre MSE) | — |
 
 **Orden de preferencia del runtime (regla, no gusto):** con caché → **A**. Sin
 caché → **C** (VP9 si reproduce, si no Baseline) mientras se baja para la
 próxima vez. **B** cuando exista y la intervención N1 lo necesite en vivo. **D**
-solo como reserva donde A y B fallen.
+no se usa en esta clase (irregular); queda como columna para otras.
 
 ### 2.4 Códec
 
 **VP9 al frente donde reproduzca** (banda, arranque y determinismo: E4, E5,
 E10); **H.264 Baseline como piso** y único carril de D. **Doble emisión
-siempre**: el formato es códec-agnóstico y el aparato elige. Consagrar VP9
-requiere el veredicto del ojo (E5) y una segunda clase de aparato o la decisión
-del operador (§3.3).
+siempre**: el formato es códec-agnóstico y el aparato elige. VP9 quedó
+**consagrado en la clase principal** el 2026-09-01: el ojo lo firmó («salió
+perfecto, hasta más fluido», E12) y el operador fijó la caja como clase
+principal (§3.3).
 
 ### 2.5 Intervención
 
 - **N1 (elegir piezas)** por A, B o D. Es lo primero que el formato promete y lo
   que H-13 pone a prueba en hardware.
 - **N2 (canvas encima)** sujeto a H-11 (encima o al lado). El alfa por video
-  sujeto al veredicto del ojo (S4).
+  **compone en la caja** (S4): el personaje sin fondo puede ir por video.
 - **Sincronía:** sin rVFC en esta clase, el loop lee `currentTime` (no
   `timeupdate`, que va a ~4 Hz). Tolerancia declarada: **≥ 1 cuadro (66 ms a
   15 fps)** para toda intervención «de evento»; la «de cuadro» se hornea en el
@@ -150,6 +160,34 @@ del operador (§3.3).
 
 `<audio>` separado del `<video>` (decidido en DISENO §7). Entra cuando el
 operador diga qué lleva el producto (§6).
+
+### 2.7 Casos de uso del producto (operador, 2026-09-01)
+
+> *«Vamos a tener diversidad: un contenido en loop, alguna publicidad que
+> reemplace eso temporalmente y luego volvería al loop; el loop es el intervenido
+> con los números seguramente; luego incentivadores tipo ruleta que tiene otra
+> intervención pero es un video que entra y sale de acuerdo a lo que el usuario
+> pida.»*
+
+Calzan uno a uno con el modelo del formato:
+
+| Caso | Qué es en el paquete | Nivel | Qué exige |
+|---|---|---|---|
+| **Loop** | la pieza base, en bucle todo el día, con los **números** encima | N2 sobre N1 | costura del bucle invisible (S12); canvas encima sin costar cuadros (H-11) |
+| **Publicidad** | otra pieza que **reemplaza** al loop un rato y **vuelve** | N1 programado | cambio de pieza sin corte visible; vuelta al loop en el punto correcto |
+| **Incentivador** (ruleta) | una pieza que **entra y sale a demanda del usuario**, con **su propia** intervención | N1 a demanda + N2 | **latencia de cambio a demanda acotada** (gate nuevo, §3.1); cues por pieza en el manifiesto |
+
+Consecuencias que se vuelven requisitos:
+
+1. **Todas las piezas residentes** en el aparato (H-12): el cambio a demanda no
+   puede esperar a la red.
+2. **La latencia de cambio de pieza** es métrica de primera clase, junto al
+   arranque. H-13 la mide (cambio a demanda y vuelta al loop) con lo ya
+   publicado.
+3. **Un solo canvas, contenido por pieza**: el manifiesto lleva las cues de cada
+   pieza; al cambiar de pieza cambia lo que el canvas dibuja, no el canvas.
+4. Con VP9 consagrado y HLS-TS irregular, **los caminos del producto son A y
+   B**; H-13 decide cuál hace el cambio de pieza.
 
 ## 3. Reglas de decisión
 
@@ -166,6 +204,7 @@ una variante *pasa* en un aparato si, en 10 s de reproducción:
 | atascos reales (`waiting` **después** del arranque) | 0 | todo lo que anduvo: 0; HLS-fMP4: 2 |
 | deriva reloj − media | ≤ 50 ms / 10 s | 38 pasa, 95 falla |
 | congelados (muestras de 100 ms sin avance) | 0 | nuevo en H-13: para los caminos que el contador no ve |
+| cambio de pieza a demanda (pedido → primer cuadro de la otra pieza) | ≤ 1.000 ms, **a confirmar por el operador** (§6) | el incentivador entra «de acuerdo a lo que el usuario pida»; `blob:` arranca en 517 ms |
 | ojo del operador | «fluido» / «sin costura» / «verde» | lo que ningún contador mide |
 
 ### 3.2 Qué se optimiza
@@ -177,8 +216,9 @@ optimización es de **bytes a igual look** y de **arranque**, con los gates de
 ### 3.3 Normalización
 
 Un aparato **refuta**; dos clases **consagran**; el operador **fija** (VISION
-§8.11). Lo que consagre la caja sola queda escrito como «sostenida en la caja»
-hasta que haya segunda clase o decisión manual.
+§8.11). **Decisión del operador, 2026-09-01: la TV box es la clase principal**
+(«de momento el tv box es la base, porque en PC seguramente corra todo»). Lo que
+gana en la caja queda **consagrado**; la PC, cuando se pruebe, es refutadora.
 
 ### 3.4 Una visita a la caja, un lote de preguntas
 
@@ -203,12 +243,12 @@ en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | Tarea | Pregunta que le hace al aparato | Entrega | Cierra cuando |
 |---|---|---|---|
 | **H-10** (queda abierta para las otras clases) | lo mismo que ya contestó la caja | filas de celular / Smart TV / escritorio | el operador las corre, **o** fija a mano la caja como clase que consagra (§6) |
-| **H-13 — por dónde entra el paquete** | ¿MSE reproduce los segmentos CMAF ya publicados (**S9**)? ¿`init + segmentos` concatenados en un Blob reproduce como archivo (**S10**)? ¿las piezas se **intercambian** sin costura (**S12**)? ¿el **bucle** cose sin `waiting`? ¿existe `SourceBuffer.changeType`? | `v0.html` crece con teclas `9x`: MSE H.264, Blob concatenado, intercambio de orden, bucle de 60 s; columna «congelados»; «atascos» descuenta el `waiting` inicial; fila marcada «contador ciego» cuando corresponde. **Cero emisión nueva**: todo sale del pack publicado | filas en el REGISTRO por camino con las columnas de §3.1; S9/S10/S12 marcadas; gate ES5 verde; y **queda escrito qué camino implementa el muxer (H-8)** |
+| **H-13 — por dónde entra el paquete** | ¿MSE reproduce los segmentos CMAF ya publicados (**S9**)? ¿`init + segmentos` concatenados en un Blob reproduce como archivo (**S10**)? ¿las piezas se **intercambian** sin costura (**S12**)? ¿el **bucle** cose sin `waiting`? ¿cuánto tarda un **cambio de pieza a demanda** y la vuelta al loop (§2.7)? ¿existe `SourceBuffer.changeType`? | `v0.html` crece con teclas `9x`: MSE H.264, Blob concatenado, intercambio de orden, bucle de 60 s, cambio a demanda entre dos piezas (VP9 ↔ Baseline) y vuelta; columna «congelados»; «atascos» descuenta el `waiting` inicial; fila marcada «contador ciego» cuando corresponde; **no pausa al terminar la medición** (el símbolo de play que vio el operador). **Cero emisión nueva**: todo sale del pack publicado | filas en el REGISTRO por camino con las columnas de §3.1; S9/S10/S12 marcadas; gate ES5 verde; y **queda escrito qué camino implementa el muxer (H-8)** |
 | **H-11 — encima o al lado** | ¿un canvas que repinta encima del `<video>` le cuesta cuadros (**S5**)? | misma página: canvas de intervención con tres cargas (nada / rectángulo chico a 15 fps / pantalla completa una vez), sobre Baseline y VP9 | caídos con y sin canvas en la tabla; la decisión **encima / al lado** escrita en DISENO §9 |
 | **H-12 — caché** | ¿IndexedDB persiste tras reiniciar? ¿hasta qué tamaño? ¿arranca en ≤ 1 s desde ahí? | XHR con progreso → `Blob` → IndexedDB → `blob:`; pineo por hash; borrado de claves viejas; prueba de techo (10 / 25 / 50 MB) | el pack sobrevive a un reinicio y arranca dentro del gate; techo y degradación escritos |
 | **H-6 — matriz por bytes a igual look** | ¿cuántos bytes menos a igual gate? por eje: VP9 (CRF, `cpu-used`), **fps variable por segmento** (S6 → bytes, ya no fluidez), H.264 piso relajado (Main/High, `refs`, B dentro del GOP cerrado), zonas estáticas, paleta 4:2:0. Incluye una fila de **referencia** con los defaults de ffmpeg (el `producto.mp4`) bajo los mismos contadores | emisión **v1**: cada variante con sus segmentos (CMAF para H.264, WebM segmentado para VP9 → **S11**) | tabla en el REGISTRO con medición por aparato; **receta por perfil**, firmada por el operador |
 | **H-14 — determinismo H.264** | (no es del aparato) ¿el encoder es no determinista o depende de la máquina? | la misma pieza dos veces en la misma corrida; `lscpu` en el log | causa establecida con evidencia; invariante 7 cumplido o redefinido por escrito |
-| **H-7 — spec `SPEC-ASCLH.md`** | — | contenedor, manifiesto tabulado, segmentos, sprites, cues, huecos, mapa perfil → camino | aprobada por el operador; cada decisión trazable a una fila |
+| **H-7 — spec `SPEC-VGEN.md`** | — | contenedor, manifiesto tabulado, segmentos, sprites, cues, huecos, mapa perfil → camino | aprobada por el operador; cada decisión trazable a una fila |
 | **H-8 — muxer ES5 + player mínimo** | ¿reproduce el paquete real con intervención activa en la caja? | **lo que H-13 haya dejado en pie**: concatenador CMAF (A), alimentador MSE (B), generador de playlist (D); `<audio>` separado; canvas de intervención | veredicto del operador en la caja; gate ES5 verde |
 | **W-26** | — | `?renderer=` en la raíz publicada | gate ES5 verde |
 
@@ -226,31 +266,34 @@ operador tiene visitas a la caja disponibles (§3.4).
 | **MSE sin probar**; `changeType` desconocido | H-13 | si no hay `changeType`, cambiar de códec exige recrear el `MediaSource`; A y D son el respaldo |
 | **Camino A retiene el paquete en RAM** | H-12 | techo medido, no supuesto; B es la salida si no cabe |
 | **Superficie 4K sobre panel 720p** | externo (la app) | el canvas se dimensiona al panel; el `<video>` ya demostró absorberla |
-| **Un solo aparato medido** | H-10 | nada consagrado sin segunda clase o decisión del operador |
+| **Un solo aparato medido** | H-10 | el operador fijó la caja como clase principal (consagra); la PC, cuando se pruebe, refuta |
 | **Audio fuera de alcance hasta que se defina** | §6 | `<audio>` separado decidido; se muxea solo si hay deriva perceptible |
 | **`producto.mp4` (defaults) nunca se midió con contadores** | H-6, fila de referencia | la comparación 2,3× hoy es de bytes, no de fluidez |
 
 ## 6. Decisiones que necesita el operador
 
-Ninguna bloquea H-13. Las cuatro primeras cambian lo que se escribe en la spec;
-las otras, el orden.
+**Respondidas el 2026-09-01** (textuales en el REGISTRO, entrada «Respuestas del
+operador al primer reporte»): **1** alfa → compone (S4); **2** VP9 «perfecto,
+hasta más fluido», HLS-TS «se traba mucho al iniciar» (D fuera del producto);
+**3** la TV box es la clase principal (consagra); **5** contenido = loop
+intervenido + publicidad que reemplaza y vuelve + incentivadores a demanda
+(§2.7); **7** nombre **`.vgen`**.
 
-1. **Alfa:** en `v0-vp9-alpha`, ¿se vio **verde** alrededor de la figura (el
-   navegador compuso) o **negro**? Decide si el personaje sin fondo va por video
-   (S4) o por sprite en el canvas.
-2. **Fluidez a ojo de VP9 y de HLS-TS:** ¿se vieron tan fluidas como el H.264?
-   El contador no las vio (E5).
-3. **Clase que consagra:** ¿fija la TV box como clase principal del formato
-   (decisión manual, que prevalece) o esperamos celular / Smart TV / escritorio?
-   Recomendación: fijarla como **principal** ahora —es el destino real— y correr
-   las otras cuando se pueda, como **refutadoras**.
-4. **Audio:** ¿el producto lleva audio en la caja? ¿desde cuándo? Cambia H-6
-   (pistas) y H-8 (`<audio>`).
-5. **Contenido real:** ¿es un bucle continuo de ~15 s todo el día? ¿La primera
-   intervención es **números/texto encima** (N2 → H-11 primero) o **cambio de
-   pieza** (N1 → H-13 primero)? Hoy el orden es H-13 → H-11.
-6. **Gates de §3.1:** ¿los firma o los cambia?
-7. **Nombre** `.asclh` / magic `ASCLHYB1` (pendiente desde el diseño).
+**Pendientes, en simple:**
+
+4. **Audio.** La pregunta es: ¿el televisor de la caja **suena** en el local?
+   Si el loop, la publicidad o la ruleta llevan música o locución, el sonido
+   viaja como **pista aparte** (como el mp3 dentro del `.asclv`) y cambiar la
+   música no toca el video. Si las cajas van mudas, el audio sale del plan por
+   ahora. Respuesta que hace falta: *con sonido / sin sonido*, y para qué piezas.
+6. **Gates** = umbrales de aprobación: los **números mínimos** que una pieza o
+   un camino tienen que cumplir para darlos por buenos; si no los cumple, no
+   entra al formato. Los propuestos en §3.1, dichos en simple: arranca en ≤ 1 s
+   desde la caché y ≤ 3 s por red la primera vez; no se traba; no cae más del
+   2 % de los cuadros; el reloj no deriva; y lo que el contador no ve lo firma
+   el ojo. Respuestas que hacen falta, en sus términos: *¿cuánto puede tardar
+   en aparecer la ruleta desde que el usuario la pide?* y *¿cuánto tolera de
+   espera al encender la caja la primera vez, por red?*
 
 ## 7. Cómo se mantiene este documento
 

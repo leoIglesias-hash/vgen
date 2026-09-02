@@ -12,7 +12,7 @@
 >
 > **Primer reporte de aparato: la TV box, 2026-09-01** → veredicto de cada
 > suposición en **§4.b**, suposiciones nuevas S9..S12 en **§4.c**, y el rumbo
-> que sale de ahí en [`PLAN-IMPLEMENTACION-ASCLH.md`](PLAN-IMPLEMENTACION-ASCLH.md).
+> que sale de ahí en [`PLAN-IMPLEMENTACION-VGEN.md`](PLAN-IMPLEMENTACION-VGEN.md).
 
 ---
 
@@ -90,7 +90,7 @@ el empaquetado.
 **Restricción de formato que aparece acá y no es negociable:** el manifiesto de
 runtime **no puede ser JSON** — el gate ES5 del proyecto prohíbe `JSON` porque
 los WebViews viejos del parque no lo garantizan. Va en **texto tabulado**,
-partido con `split`. Vale para v0 y para el manifiesto definitivo del `.asclh`.
+partido con `split`. Vale para v0 y para el manifiesto definitivo del `.vgen`.
 
 **Lo que v0 deja fijo a propósito** (un eje por vez): 1280×720, 15 fps constante,
 sin audio, sin intervención, sin variantes de bitrate.
@@ -182,18 +182,19 @@ reproducido.
 
 Primer reporte de aparato (transcripción textual en el REGISTRO, entrada «H-10:
 primer reporte de aparato»). Por el invariante VISION §8.11, «sostenida» acá
-significa **sostenida en la caja**: falta una segunda clase de aparato o la
-decisión manual del operador para normalizar.
+significa **sostenida en la caja**. **El operador fijó ese mismo día la TV box
+como clase principal** («de momento el tv box es la base»), así que lo sostenido
+en la caja queda **consagrado**; la PC, cuando se pruebe, refuta.
 
 | # | Veredicto en la caja | Qué falta |
 |---|---|---|
 | **S1** | **sostenida**: Baseline 0/156 caídos, 2.985 ms de arranque por red | segunda clase |
 | **S2** | **el detector se resolvió: decodificador por hardware** (Main 1/153 con −9,1 % bytes). La suposición en sí (que el DPB chico alivie) **no se midió**: el Main de v0 lleva los mismos `refs=1` y sin B que Baseline, así que el par aísla la entropía. Y en esta caja no hay déficit de fluidez que aliviar → S2 **se reclasifica a bytes** (H-6) | fila de H-6 con `refs`/B relajados, medida por bytes con la fluidez como gate |
-| **S3** | **sostenida a medias**: VP9 arranca en 931 ms y sostiene el reloj, pero el contador de cuadros no lo vio (`total 0`) | el **ojo** del operador; segunda clase |
-| **S4** | **pendiente del ojo**: la pieza reprodujo (1/155) pero el reporte no dice si el fondo verde se vio | ¿verde o negro alrededor de la figura? |
+| **S3** | **consagrada en la clase principal**: VP9 arranca en 931 ms, sostiene el reloj, y el ojo del operador lo firmó — «salió perfecto, hasta más fluido» (contador ciego, `total 0`) | — (la caja es la clase principal por decisión del operador, 2026-09-01) |
+| **S4** | **sostenida — compone**: «aparece el verde alrededor, y dentro del círculo el video» (1/155). El símbolo de play que vio al final es, con toda probabilidad, el control nativo del WebView sobre el video que la página **pausa** al terminar los 10 s; H-13 deja de pausar | la PC como refutadora, cuando se pruebe |
 | **S5** | sin probar | H-11 |
 | **S6** | sin probar; **su valor cambia**: en esta caja los cuadros de menos ya no compran fluidez, compran bytes | H-6 |
-| **S7** | **sostenida en la caja para HLS-TS** (2.012 ms, sin atascos) — la apuesta débil ganó justo donde se esperaba que perdiera. **Refutada para HLS-fMP4** (14.223 ms, 2 atascos) y **para DASH** (error) | segunda clase; en esta, el camino D = HLS-TS y nada más |
+| **S7** | **HLS-TS irregular**: la fila del reporte (2.012 ms, sin atascos) fue la única vez que arrancó bien — «se traba mucho al iniciar, por eso la última medición no salió» (operador). **Refutada para HLS-fMP4** (14.223 ms, 2 atascos) y **para DASH** (error). El camino D queda **fuera del producto en esta clase** | nada para la caja; otras clases, si aparecen |
 | **S8** | **sostenida en la caja**: 16 segmentos TS cosidos por la plataforma sin `waiting`; los CMAF decodifican desde el init compartido (154 cuadros) | la **costura visual** la firma el ojo; H-13 prueba el intercambio de orden |
 
 ### 4.c Suposiciones nuevas que salen del reporte (para H-13)
