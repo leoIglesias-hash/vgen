@@ -1,13 +1,16 @@
 "use strict";
 
-/* H-10: la pagina que reproduce el pack v0 y reporta lo que el aparato hizo.
- * Se ejecuta su script inline contra un DOM minimo. Lo que se verifica no es
- * "que exista un boton" sino las dos reglas que la hacen usable en un TV BOX:
- * una sola pantalla sin scroll, y una accion por tecla numerica. */
+/* H-10 + H-13: la pagina que reproduce el pack v0 y reporta lo que el aparato
+ * hizo. Se ejecuta su script inline contra un DOM minimo. Lo que se verifica
+ * no es "que exista un boton" sino las reglas que la hacen usable en un TV
+ * BOX: una sola pantalla sin scroll, una accion por tecla numerica, y (H-13)
+ * que las cinco pruebas de paquete existan, que la medicion tenga la columna
+ * congel, que no pause al terminar y que ningun digito suelto se demore. */
 
 var assert = require("assert");
 var fs = require("fs");
 var path = require("path");
+var VGenFeed = require("../frontend/vgenfeed.js");
 
 var pagePath = path.join(__dirname, "..", "frontend", "v0.html");
 var page = fs.readFileSync(pagePath, "utf8");
@@ -28,7 +31,30 @@ assert.strictEqual((page.match(/<video\s+id=/g) || []).length, 1,
 assert(page.indexOf('<div id="side">') >= 0,
   "la tabla va AL LADO del video, no debajo, o hay que scrollear para verla");
 assert(page.indexOf("function everything()") >= 0,
-  "correr todo tiene que incluir progresivas, alfa y empaquetados");
+  "correr todo tiene que incluir progresivas, alfa, empaquetados y paquete");
+
+/* --- H-13: la medicion --- */
+
+assert(page.indexOf('<script src="vgenfeed.js"></script>') >= 0,
+  "las puertas del paquete viven en vgenfeed.js (lo reusa H-8), no en la pagina");
+assert(/<th>congel<\/th>/.test(page), "existe la columna congel en la tabla");
+assert(/\tcongel\tcambio_ms\t/.test(inline[1]),
+  "el reporte lleva las columnas congel y cambio_ms");
+assert(/if \(row\.started\) \{ row\.stalls\+\+; \}/.test(inline[1]),
+  "atascos cuenta el waiting solo despues de arrancar");
+assert.strictEqual((inline[1].match(/\.pause\(\)/g) || []).length, 1,
+  "no se pausa al terminar una medicion: la unica pausa es la del 0 (cortar)");
+assert(inline[1].indexOf('"ciego"') >= 0,
+  "la fila dice ciego cuando el contador de cuadros no se movio");
+assert(inline[1].indexOf("dash/init.m4s") >= 0 && inline[1].indexOf("dash/chunk-") >= 0,
+  "las pruebas de paquete usan los segmentos CMAF ya publicados: cero emision nueva");
+assert(/hasChangeType\(\)/.test(inline[1]),
+  "la cabecera del reporte detecta SourceBuffer.changeType");
+["function stepMse", "function stepBlob", "function stepSwitch",
+ "function stepLoop", "function orderSteps", "function packageSteps"]
+  .forEach(function (name) {
+    assert(inline[1].indexOf(name) >= 0, "falta " + name);
+  });
 
 var MANIFEST = [
   "# pack v0 - ASCILINE-hybrid - docs/EMISION-V0.md",
@@ -54,7 +80,8 @@ var MANIFEST = [
 function makeNode(name) {
   var node = {
     nodeName: name, childNodes: [], style: {}, className: "", value: "",
-    firstChild: null, onclick: null, currentTime: 0, src: ""
+    firstChild: null, onclick: null, currentTime: 0, src: "", loop: false,
+    paused: true, ended: false, duration: NaN
   };
   node.appendChild = function (child) {
     node.childNodes.push(child);
@@ -73,8 +100,8 @@ function makeNode(name) {
     return mime.indexOf("vp9") >= 0 ? "" : "probably";
   };
   node.load = function () {};
-  node.play = function () {};
-  node.pause = function () {};
+  node.play = function () { node.paused = false; };
+  node.pause = function () { node.paused = true; };
   return node;
 }
 
@@ -137,8 +164,8 @@ global.ASCLKeypad = keypadStub;
 windowStub.ASCLKeypad = keypadStub;
 
 var run = new Function("window", "document", "navigator", "screen",
-                       "XMLHttpRequest", inline[1]);
-run(windowStub, documentStub, navigatorStub, screenStub, FakeXHR);
+                       "XMLHttpRequest", "VGenFeed", inline[1]);
+run(windowStub, documentStub, navigatorStub, screenStub, FakeXHR, VGenFeed);
 
 assert.strictEqual(requested.length, 1, "la pagina pide el manifiesto una vez");
 assert(/MANIFEST\.tsv$/.test(requested[0]), "pide MANIFEST.tsv");
@@ -146,6 +173,8 @@ assert(/MANIFEST\.tsv$/.test(requested[0]), "pide MANIFEST.tsv");
 var filas = byId("filas");
 assert.strictEqual(filas.childNodes.length, 7,
   "una fila por pieza del pack: 3 progresivas + alfa + 3 empaquetados");
+assert.strictEqual(filas.childNodes[0].childNodes.length, 6,
+  "seis columnas: pieza, ok, caidos/total, 1er, congel, cambio");
 
 var reporte = byId("report").value;
 assert(reporte.indexOf("# pack v0") === 0, "el reporte arranca identificandose");
@@ -153,6 +182,8 @@ assert(reporte.indexOf("panel\t1280x720") >= 0,
   "el reporte distingue el panel real de la superficie del WebView");
 assert(reporte.indexOf("superficie 3840x2160") >= 0,
   "la superficie que el WebView entrega es parte del diagnostico");
+assert(reporte.indexOf("changeType\tno") >= 0,
+  "la cabecera dice si existe SourceBuffer.changeType");
 assert(reporte.indexOf("{") < 0 && reporte.indexOf("[") < 0,
   "el reporte es texto plano: se lee y se copia desde una TV");
 
@@ -171,16 +202,33 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 15);
+assert.strictEqual(codigos.length, 19);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
-["90", "91", "92", "93", "94", "95"].forEach(function (code) {
+["90", "91", "92", "93", "94", "95", "96", "97", "98", "99"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta el codigo compuesto " + code);
 });
 assert.strictEqual(registered.actions[0].code, "1");
 assert.strictEqual(registered.actions[0].label, "correr todo",
   "el 1 es correr todo: es la accion que mas se usa");
+
+function action(code) {
+  var i;
+  for (i = 0; i < registered.actions.length; i++) {
+    if (registered.actions[i].code === code) { return registered.actions[i]; }
+  }
+  return null;
+}
+
+/* Las cinco pruebas de paquete (H-13), cada una con su tecla, y el 5 que las
+ * corre juntas. El 8 dejo de ser "solo hls-ts" (sigue dentro del 4). */
+assert(/paquete/.test(action("5").label), "el 5 corre las cinco de paquete");
+assert(/MSE/.test(action("96").label), "96 = MSE H.264");
+assert(/blob/i.test(action("97").label), "97 = Blob concatenado");
+assert(/orden/.test(action("98").label), "98 = intercambio de orden");
+assert(/cambio/.test(action("8").label), "8 = cambio a demanda");
+assert(/bucle/.test(action("99").label), "99 = bucle 60 s");
 
 /* Regla de usabilidad: lo comun no debe esperar. Ningun digito suelto usado
  * puede ser prefijo de un codigo largo, salvo el 9, que es la puerta a los
@@ -195,7 +243,7 @@ codigos.forEach(function (code) {
 });
 assert(codigos.indexOf("9") < 0,
   "el 9 queda reservado como prefijo de los compuestos");
-assert.strictEqual(byId("teclas").childNodes.length, 15,
+assert.strictEqual(byId("teclas").childNodes.length, 19,
   "la leyenda de teclas se dibuja en pantalla: en una TV no hay donde mirarla");
 
 /* La misma leyenda es el boton: en el celular no hay teclado numerico. */
@@ -203,7 +251,21 @@ var conClick = 0;
 byId("teclas").childNodes.forEach(function (row) {
   if (typeof row.onclick === "function") { conClick++; }
 });
-assert.strictEqual(conClick, 15,
+assert.strictEqual(conClick, 19,
   "cada entrada de la leyenda tiene que poder tocarse en un celular");
+
+/* --- Correr el 5 en un aparato sin MSE: la fila aparece con su error y el
+ * resto no explota; el 0 la limpia. --- */
+action("5").run();
+assert.strictEqual(filas.childNodes.length, 8,
+  "la primera prueba de paquete agrega su fila sintetica");
+reporte = byId("report").value;
+assert(/\nmse:h264\t.*sin MSE/.test(reporte),
+  "sin MediaSource la fila mse:h264 dice por que no corrio");
+assert(/\n# id\tdice\tarranco\t1er_ms\tcaidos\ttotal\tderiva_ms\tatascos\tcongel\tcambio_ms\tnota\n/.test(reporte),
+  "cabecera de columnas del reporte (PLAN-IMPLEMENTACION-VGEN §3.1)");
+action("0").run();
+assert.strictEqual(filas.childNodes.length, 7, "el 0 limpia las filas sinteticas");
+assert.strictEqual(byId("video").loop, false, "el 0 apaga el loop del bucle");
 
 console.log("v0 page tests: OK");

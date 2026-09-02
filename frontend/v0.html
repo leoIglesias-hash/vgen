@@ -15,7 +15,7 @@
   #alphaBg.on { display: block; }
   #video { position: absolute; background: #000; }
   #side { position: absolute; overflow: hidden; }
-  table { border-collapse: collapse; width: 100%; font-size: 0.62em; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.58em; }
   th, td { border: 1px solid #33384a; padding: 0.18em 0.3em; text-align: left;
            white-space: nowrap; }
   th { background: #1a1e2c; }
@@ -24,7 +24,7 @@
   #keys { position: absolute; left: 0; right: 0; padding: 0 0.6em; }
   #buffer { font-size: 1.3em; color: #ffd479; height: 1.15em;
             letter-spacing: 0.08em; }
-  #teclas .op { display: inline-block; width: 24%; font-size: 0.62em;
+  #teclas .op { display: inline-block; width: 24%; font-size: 0.58em;
                 margin: 0.06em 0; cursor: pointer; }
   #teclas .n { display: inline-block; min-width: 1.7em; text-align: center;
                background: #2a2f45; border: 1px solid #4a5170; color: #ffd479;
@@ -41,7 +41,7 @@
 <body>
 
 <div id="head">
-  <span id="titulo">pack v0 - por donde entra el video</span>
+  <span id="titulo">pack v0 - por donde entra el video, y por donde entra el paquete</span>
   <span id="estado">listo</span>
 </div>
 
@@ -49,7 +49,8 @@
 <video id="video" muted playsinline></video>
 <div id="side">
   <table>
-    <thead><tr><th>pieza</th><th>ok</th><th>caidos/total</th><th>1er</th></tr></thead>
+    <thead><tr><th>pieza</th><th>ok</th><th>caidos/total</th><th>1er</th>
+               <th>congel</th><th>cambio</th></tr></thead>
     <tbody id="filas"></tbody>
   </table>
 </div>
@@ -64,15 +65,23 @@
 <div id="full"><textarea id="report" readonly></textarea></div>
 
 <script src="keypad.js"></script>
+<script src="vgenfeed.js"></script>
 <script>
 "use strict";
 
-/* v0.html - H-10: reproduce el pack v0 y REPORTA lo que el aparato hizo.
+/* v0.html - H-10 + H-13: reproduce el pack v0 y REPORTA lo que el aparato hizo.
  *
  * Reemplaza a la sonda sintetica que se descarto (H-4): las mismas preguntas
  * -que codecs, alfa, blob:, MSE, panel real, cuadros caidos- se contestan como
  * subproducto de reproducir material verdadero, y en varios aparatos. Un
  * canPlayType dice "probably"; un video que corre sin caer cuadros dice que si.
+ *
+ * H-13 (2026-09-01) suma "por donde entra el PAQUETE": con los mismos
+ * segmentos CMAF ya publicados (dash/init.m4s + chunk-*.m4s) y cero emision
+ * nueva, se prueba MSE (96), el Blob concatenado (97), el intercambio de orden
+ * (98), el cambio de pieza a demanda (8) y el bucle de 60 s (99). El 5 corre
+ * las cinco; el 1 corre TODO. Las puertas viven en vgenfeed.js, que el muxer
+ * de H-8 va a reusar.
  *
  * PANTALLA FIJA, SIN SCROLL (pedido del operador, 2026-09-01): en una TV el
  * scroll se hace con flechas y se pierde de vista lo que importa. Todo entra en
@@ -82,16 +91,30 @@
  * recuadro respeta 16:9 sin depender de object-fit, que en WebViews viejos no
  * existe.
  *
+ * MEDICION (H-13): "atascos" cuenta `waiting` solo DESPUES de arrancar (el
+ * inicial es carga, no atasco); "congel" cuenta muestras de 100 ms sin avance
+ * de currentTime estando en play (para los caminos donde el contador de cuadros
+ * es ciego); la fila dice "ciego" cuando el contador no se movio; y NO se pausa
+ * al terminar: el simbolo de play que el operador vio era la pausa nuestra, no
+ * el aparato. La pieza siguiente reemplaza el src; la ultima queda sonando.
+ *
  * ES5.1 estricto (gate tests/test_frontend_compatibility.js): sin fetch, sin
  * Promise, sin JSON, sin arrow, sin let/const. El manifiesto es texto tabulado
  * justamente por eso. */
 
 var SECONDS = 10;          /* cuanto se reproduce cada pieza */
+var SWITCH_SECONDS = 4;    /* cuanto se mira cada pieza tras un cambio a demanda */
+var LOOP_SECONDS = 60;     /* el bucle */
+var MSE_MIME = 'video/mp4; codecs="avc1.42C01F"';   /* el init de dash/ */
+var SEGMENTS = 16;         /* chunk-00001 .. chunk-00016 */
 var pieces = [];           /* filas del MANIFEST.tsv */
+var extras = [];           /* filas sinteticas: blob:, mse:, cambio:, bucle: */
 var results = {};          /* id -> medicion */
 var base = "";
-var lastList = null;       /* ultima corrida, para repetirla con una tecla */
+var lastSteps = null;      /* ultima corrida, para repetirla con una tecla */
 var aborted = false;       /* corta una secuencia en curso */
+var feeding = null;        /* mango del feedMse en curso, para cortarlo */
+var lastObjectUrl = "";    /* blob: vivo, se libera al crear el siguiente */
 
 function byId(id) { return document.getElementById(id); }
 
@@ -123,11 +146,11 @@ function layout() {
   document.documentElement.style.fontSize =
     Math.max(11, Math.round(w / 46)) + "px";
   headH = Math.round(h * 0.13);
-  keysH = Math.round(h * 0.20);
-  footH = Math.round(h * 0.07);
+  keysH = Math.round(h * 0.22);
+  footH = Math.round(h * 0.06);
   midTop = headH;
   midH = h - headH - keysH - footH;
-  stageW = Math.round(w * 0.60);
+  stageW = Math.round(w * 0.56);
   /* Las piezas son 16:9: el recuadro toma esa forma para que el video no se
    * deforme, y la tabla se queda con lo que sobra a la derecha. */
   vw = stageW;
@@ -174,6 +197,30 @@ function get(url, onText, onFail) {
   xhr.send(null);
 }
 
+function findPiece(id) {
+  var i;
+  for (i = 0; i < pieces.length; i++) {
+    if (pieces[i].id === id) { return pieces[i]; }
+  }
+  return null;
+}
+
+/* Fila sintetica: una medicion que no sale de una linea del manifiesto. Si ya
+ * existe una con ese id (repetir), se reemplaza en vez de duplicarse. */
+function addExtra(piece) {
+  var i;
+  for (i = 0; i < extras.length; i++) {
+    if (extras[i].id === piece.id) { extras[i] = piece; return piece; }
+  }
+  extras.push(piece);
+  return piece;
+}
+
+function fake(id, role, mime, file, note) {
+  return { id: id, role: role, mime: mime, file: file, bytes: "", sha256: "",
+           note: note || "" };
+}
+
 /* --- medicion --- */
 
 function quality(video) {
@@ -190,26 +237,43 @@ function quality(video) {
 
 function blank(piece) {
   return { id: piece.id, says: "", started: false, firstMs: -1,
-           total: 0, dropped: 0, driftMs: 0, stalls: 0, bytes: piece.bytes,
+           total: 0, dropped: 0, driftMs: 0, stalls: 0, frozen: 0,
+           switchMs: -1, laps: 0, duration: -1, bytes: piece.bytes,
            error: "" };
 }
 
-/* Reproduce una pieza SECONDS segundos y llama a done(medicion). No hay
- * Promise: se encadena con callbacks, que es lo que este piso permite.
- * Siempre en el MISMO <video>: la de alfa tambien, con el fondo verde detras. */
-function measure(piece, src, done) {
+function stopFeeding() {
+  if (feeding && feeding.abort) { feeding.abort(); }
+  feeding = null;
+}
+
+/* Reproduce una pieza y llama a done(medicion). No hay Promise: se encadena
+ * con callbacks, que es lo que este piso permite. Siempre en el MISMO <video>:
+ * la de alfa tambien, con el fondo verde detras.
+ *
+ * opts.feed(video, row)  en vez de poner src: quien alimenta (MSE, cambio)
+ * opts.seconds           cuanto medir (SECONDS por defecto)
+ * opts.loop              video.loop = true y se cuentan las vueltas (seeking)
+ *
+ * La medicion NO pausa al terminar (ver cabecera). */
+function measure(piece, src, done, opts) {
   var video = byId("video");
   var row = blank(piece);
-  var t0 = 0, wall0 = 0, media0 = 0, raf = 0, finished = false;
+  var o = opts || {};
+  var seconds = o.seconds > 0 ? o.seconds : SECONDS;
+  var t0 = 0, wall0 = 0, lastTime = 0, played = 0, raf = 0, finished = false;
   var before = quality(video);
   var baseTotal = before ? before.total : 0;
   var baseDropped = before ? before.dropped : 0;
 
-  function onStall() { row.stalls++; }
+  /* El waiting inicial es carga, no atasco: solo cuenta despues de arrancar. */
+  function onStall() { if (row.started) { row.stalls++; } }
+  function onLap() { if (row.started) { row.laps++; } }
   function onError() { row.error = "error de carga/decodificacion"; finish(); }
 
   function cleanup() {
     video.removeEventListener("waiting", onStall, false);
+    video.removeEventListener("seeking", onLap, false);
     video.removeEventListener("error", onError, false);
     if (raf) { window.clearTimeout(raf); raf = 0; }
   }
@@ -224,28 +288,41 @@ function measure(piece, src, done) {
       if (row.total < 0) { row.total = after.total; row.dropped = after.dropped; }
     }
     if (row.started) {
-      var media = video.currentTime - media0;
       var wall = (new Date().getTime() - wall0) / 1000;
-      row.driftMs = Math.round((wall - media) * 1000);
+      row.driftMs = Math.round((wall - played) * 1000);
     }
-    video.pause();
+    if (typeof video.duration === "number" && isFinite(video.duration)) {
+      row.duration = Math.round(video.duration * 10) / 10;
+    }
+    /* Sin pausa: la pieza sigue hasta que la proxima la reemplace. Solo se
+     * corta el alimentador, que ya no tiene a quien darle. */
+    stopFeeding();
     cleanup();
     done(row);
   }
 
   function tick() {
+    var ct, now;
     if (finished) { return; }
     if (aborted) { finish(); return; }
-    if (!row.started && video.currentTime > 0) {
+    if (row.error) { finish(); return; }
+    ct = video.currentTime;
+    now = new Date().getTime();
+    if (!row.started && ct > 0) {
       row.started = true;
-      row.firstMs = new Date().getTime() - t0;
-      wall0 = new Date().getTime();
-      media0 = video.currentTime;
+      row.firstMs = now - t0;
+      wall0 = now;
+      lastTime = ct;
+    } else if (row.started) {
+      /* Tiempo de media reproducido, robusto al bucle (ct vuelve a 0). */
+      if (ct >= lastTime) { played += ct - lastTime; } else { played += ct; }
+      if (ct === lastTime && !video.paused && !video.ended) { row.frozen++; }
+      lastTime = ct;
     }
-    if (row.started && (new Date().getTime() - wall0) >= SECONDS * 1000) {
+    if (row.started && (now - wall0) >= seconds * 1000) {
       finish(); return;
     }
-    if (!row.started && (new Date().getTime() - t0) > 15000) {
+    if (!row.started && (now - t0) > 15000) {
       row.error = "no arranco en 15 s"; finish(); return;
     }
     raf = window.setTimeout(tick, 100);
@@ -255,12 +332,19 @@ function measure(piece, src, done) {
    * compone, se ve verde alrededor de la figura; si no, se ve negro. */
   byId("alphaBg").className = piece.role === "alpha" ? "on" : "";
   row.says = video.canPlayType(piece.mime) || "no";
+  video.loop = o.loop ? true : false;
   video.addEventListener("waiting", onStall, false);
+  video.addEventListener("seeking", onLap, false);
   video.addEventListener("error", onError, false);
-  video.src = src;
-  video.load();
+  stopFeeding();
   t0 = new Date().getTime();
-  video.play();
+  if (o.feed) {
+    o.feed(video, row);
+  } else {
+    video.src = src;
+    video.load();
+    video.play();
+  }
   tick();
 }
 
@@ -274,37 +358,53 @@ function cell(row, value, good) {
   row.appendChild(td);
 }
 
+function blind(r) { return r.started && !r.error && r.total === 0; }
+
+function drawRow(body, piece) {
+  var r = results[piece.id];
+  var tr = document.createElement("tr");
+  cell(tr, piece.id);
+  if (!r) {
+    cell(tr, "-"); cell(tr, "-"); cell(tr, "-"); cell(tr, "-"); cell(tr, "-");
+  } else {
+    cell(tr, r.error ? "ERR" : (r.started ? "si" : "no"),
+         r.started && !r.error);
+    if (blind(r)) {
+      cell(tr, "ciego");
+    } else {
+      /* Gate aprobado: caidos <= 3 % de los contados. */
+      cell(tr, r.total ? (r.dropped + "/" + r.total) : "-",
+           r.total ? (r.dropped * 100 <= r.total * 3) : undefined);
+    }
+    cell(tr, r.firstMs < 0 ? "-" : r.firstMs + "ms");
+    cell(tr, r.started ? String(r.frozen) : "-",
+         r.started ? (r.frozen === 0) : undefined);
+    cell(tr, r.switchMs < 0 ? "-" : r.switchMs + "ms",
+         r.switchMs < 0 ? undefined : (r.switchMs <= 1000));
+  }
+  body.appendChild(tr);
+}
+
 function draw() {
   var body = byId("filas");
   while (body.firstChild) { body.removeChild(body.firstChild); }
-  var i, piece, r, tr;
-  for (i = 0; i < pieces.length; i++) {
-    piece = pieces[i];
-    r = results[piece.id];
-    tr = document.createElement("tr");
-    cell(tr, piece.id);
-    if (!r) {
-      cell(tr, "-"); cell(tr, "-"); cell(tr, "-");
-    } else {
-      cell(tr, r.error ? "ERR" : (r.started ? "si" : "no"),
-           r.started && !r.error);
-      cell(tr, r.total ? (r.dropped + "/" + r.total) : "-",
-           r.total ? (r.dropped * 20 <= r.total) : undefined);
-      cell(tr, r.firstMs < 0 ? "-" : r.firstMs + "ms");
-    }
-    body.appendChild(tr);
-  }
+  var i;
+  for (i = 0; i < pieces.length; i++) { drawRow(body, pieces[i]); }
+  for (i = 0; i < extras.length; i++) { drawRow(body, extras[i]); }
   writeReport();
 }
 
 function environment() {
   var video = byId("video");
   var lines = [];
+  var url = window.URL || window.webkitURL;
   lines.push("ua\t" + navigator.userAgent);
   lines.push("panel\t" + screen.width + "x" + screen.height +
              "\tdpr " + (window.devicePixelRatio || 1) +
              "\tsuperficie " + window.innerWidth + "x" + window.innerHeight);
-  lines.push("mse\t" + (window.MediaSource ? "si" : "no"));
+  lines.push("mse\t" + (window.MediaSource ? "si" : "no") +
+             "\tchangeType\t" + (VGenFeed.hasChangeType() ? "si" : "no") +
+             "\tblob\t" + ((window.Blob && url && url.createObjectURL) ? "si" : "no"));
   if (window.MediaSource && window.MediaSource.isTypeSupported) {
     lines.push("mse.h264\t" +
       (window.MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01F"') ? "si" : "no") +
@@ -319,19 +419,39 @@ function environment() {
   return lines;
 }
 
+function noteOf(piece, r) {
+  var parts = [];
+  if (r.error) { parts.push(r.error); }
+  if (blind(r)) { parts.push("ciego"); }
+  if (r.laps) { parts.push("vueltas " + r.laps); }
+  if (piece.role === "paquete" && r.duration >= 0) { parts.push("dur " + r.duration + "s"); }
+  if (piece.note) { parts.push(piece.note); }
+  return parts.join("; ");
+}
+
+function reportLine(piece) {
+  var r = results[piece.id];
+  if (!r) { return ""; }
+  return piece.id + "\t" + r.says + "\t" + (r.started ? "si" : "no") +
+         "\t" + r.firstMs + "\t" + r.dropped + "\t" + r.total +
+         "\t" + r.driftMs + "\t" + r.stalls + "\t" + r.frozen +
+         "\t" + r.switchMs + "\t" + noteOf(piece, r);
+}
+
 function writeReport() {
   var lines = ["# pack v0 - reporte de aparato"];
-  var i, piece, r;
+  var i, line;
   var env = environment();
   for (i = 0; i < env.length; i++) { lines.push(env[i]); }
-  lines.push("# id\tdice\tarranco\t1er_ms\tcaidos\ttotal\tderiva_ms\tatascos\tnota");
+  lines.push("# atascos = waiting despues de arrancar; congel = muestras de 100 ms sin avance");
+  lines.push("# id\tdice\tarranco\t1er_ms\tcaidos\ttotal\tderiva_ms\tatascos\tcongel\tcambio_ms\tnota");
   for (i = 0; i < pieces.length; i++) {
-    piece = pieces[i];
-    r = results[piece.id];
-    if (!r) { continue; }
-    lines.push(piece.id + "\t" + r.says + "\t" + (r.started ? "si" : "no") +
-               "\t" + r.firstMs + "\t" + r.dropped + "\t" + r.total +
-               "\t" + r.driftMs + "\t" + r.stalls + "\t" + r.error);
+    line = reportLine(pieces[i]);
+    if (line) { lines.push(line); }
+  }
+  for (i = 0; i < extras.length; i++) {
+    line = reportLine(extras[i]);
+    if (line) { lines.push(line); }
   }
   byId("report").value = lines.join("\n");
   text(byId("env"), "panel " + screen.width + "x" + screen.height +
@@ -339,7 +459,7 @@ function writeReport() {
        " · 95 para ver el reporte entero");
 }
 
-/* --- corridas --- */
+/* --- pasos: cada tecla arma una lista de pasos y se corren en secuencia --- */
 
 function withRole(role) {
   var out = [], i;
@@ -351,88 +471,273 @@ function withRole(role) {
 
 function baseOnly() { return withRole("base"); }
 
-/* "Correr todo" es TODO: las progresivas, la de alfa y los empaquetados, una
- * atras de otra y en el mismo recuadro. Con la pantalla fija ya no hace falta
- * ir tecla por tecla. */
-function everything() {
-  var all = [], i, list = [withRole("base"), withRole("alpha"),
-                           withRole("stream")];
-  for (i = 0; i < list.length; i++) {
-    all = all.concat(list[i]);
-  }
-  return all;
+function finishRow(id, done) {
+  return function (row) {
+    results[id] = row;
+    draw();
+    done();
+  };
 }
 
-function runSequence(list, index) {
-  if (index === 0) { lastList = list; aborted = false; }
-  if (aborted || index >= list.length) {
+function pieceStep(piece) {
+  return { id: piece.id, go: function (done) {
+    measure(piece, base + piece.file, finishRow(piece.id, done));
+  } };
+}
+
+function pieceSteps(list) {
+  var out = [], i;
+  for (i = 0; i < list.length; i++) { out.push(pieceStep(list[i])); }
+  return out;
+}
+
+function runSteps(steps, index) {
+  var step;
+  if (index === 0) { lastSteps = steps; aborted = false; }
+  if (aborted || index >= steps.length) {
     say(aborted ? "cortado" : "listo");
     draw();
     return;
   }
-  var piece = list[index];
-  say((index + 1) + "/" + list.length + "  " + piece.id);
-  measure(piece, base + piece.file, function (row) {
-    results[piece.id] = row;
-    draw();
-    window.setTimeout(function () { runSequence(list, index + 1); }, 400);
+  step = steps[index];
+  say((index + 1) + "/" + steps.length + "  " + step.id);
+  step.go(function () {
+    window.setTimeout(function () { runSteps(steps, index + 1); }, 400);
   });
 }
 
 function runOnly(id) {
-  var i;
-  for (i = 0; i < pieces.length; i++) {
-    if (pieces[i].id === id) { runSequence([pieces[i]], 0); return; }
-  }
+  var piece = findPiece(id);
+  if (piece) { runSteps([pieceStep(piece)], 0); return; }
   say("no esta la pieza " + id);
+}
+
+/* --- H-13: por donde entra el paquete --- */
+
+/* Los segmentos CMAF publicados por el pack, en el orden pedido. `order` es
+ * una lista de numeros 1..16; sin orden, 1..16. El init va siempre primero. */
+function dashUrls(order) {
+  var urls = [base + "dash/init.m4s"];
+  var i, n, list = order;
+  if (!list) {
+    list = [];
+    for (i = 1; i <= SEGMENTS; i++) { list.push(i); }
+  }
+  for (i = 0; i < list.length; i++) {
+    n = "0000" + list[i];
+    urls.push(base + "dash/chunk-" + n.slice(n.length - 5) + ".m4s");
+  }
+  return urls;
+}
+
+/* 1..8, 13..16, 9..12: si el aparato cose eso sin costura, las piezas se
+ * pueden intercambiar (S12) con solo cambiar el orden de anexo. */
+function swappedOrder() {
+  var out = [], i;
+  for (i = 1; i <= 8; i++) { out.push(i); }
+  for (i = 13; i <= 16; i++) { out.push(i); }
+  for (i = 9; i <= 12; i++) { out.push(i); }
+  return out;
+}
+
+function orderLabel(order) {
+  return order ? "orden 1-8,13-16,9-12" : "orden 1-16";
+}
+
+/* 96 / 98: camino B. Un SourceBuffer, anexo encadenado por updateend. En modo
+ * "sequence" el buffer reescribe los tiempos en orden de anexo: eso es lo que
+ * un intercambio de piezas necesita, y por eso el 98 lo pide. */
+function stepMse(id, order) {
+  return { id: id, go: function (done) {
+    var piece = addExtra(fake(id, "paquete", MSE_MIME, "dash/*", orderLabel(order)));
+    var row;
+    if (VGenFeed.mseSupport(MSE_MIME) !== "si") {
+      row = blank(piece); row.says = VGenFeed.mseSupport(MSE_MIME);
+      row.error = "sin MSE para " + MSE_MIME;
+      finishRow(id, done)(row);
+      return;
+    }
+    measure(piece, "", finishRow(id, done), { feed: function (video, r) {
+      feeding = VGenFeed.feedMse(video, MSE_MIME, dashUrls(order), {
+        mode: order ? "sequence" : "segments",
+        onWarn: function (why) { piece.note += "; " + why; },
+        onError: function (why) { r.error = why; }
+      });
+      if (!feeding) { r.error = "sin MediaSource"; }
+    } });
+  } };
+}
+
+/* 97 / 98: camino A. init + segmentos pegados en un Blob y reproducidos como
+ * archivo. La bajada no cuenta en 1er_ms: A es "desde cache". */
+function stepBlob(id, order) {
+  return { id: id, go: function (done) {
+    var piece = addExtra(fake(id, "paquete", MSE_MIME, "dash/* (blob)",
+                              orderLabel(order)));
+    var urls = dashUrls(order);
+    var row;
+    say("bajando " + urls.length + " pedazos: " + id);
+    VGenFeed.getAll(urls, function (error, parts) {
+      var blob, url, total = 0, i;
+      if (error) {
+        row = blank(piece); row.error = error;
+        finishRow(id, done)(row);
+        return;
+      }
+      for (i = 0; i < parts.length; i++) { total += parts[i].byteLength || 0; }
+      piece.bytes = String(total);
+      blob = VGenFeed.concat(parts, MSE_MIME);
+      url = blob ? VGenFeed.objectUrl(blob) : "";
+      if (!url) {
+        row = blank(piece); row.error = "sin Blob/URL";
+        finishRow(id, done)(row);
+        return;
+      }
+      VGenFeed.revoke(lastObjectUrl);
+      lastObjectUrl = url;
+      say(id);
+      measure(piece, url, finishRow(id, done));
+    });
+  } };
+}
+
+/* 8: cambio a demanda. La pieza que esta sonando se reemplaza por otra por
+ * `src`; cambio_ms = pedido -> primer avance de currentTime. Es el numero que
+ * el usuario siente cuando pide la ruleta. Gate: <= 1000 ms. */
+function stepSwitch(id, toId) {
+  return { id: id, go: function (done) {
+    var to = findPiece(toId);
+    var piece, row;
+    if (!to) {
+      piece = addExtra(fake(id, "paquete", "", "", ""));
+      row = blank(piece); row.error = "no esta la pieza " + toId;
+      finishRow(id, done)(row);
+      return;
+    }
+    piece = addExtra(fake(id, "paquete", to.mime, to.file, "a " + toId));
+    measure(piece, "", finishRow(id, done), {
+      seconds: SWITCH_SECONDS,
+      feed: function (video, r) {
+        VGenFeed.switchTo(video, base + to.file, {}, function (ms) {
+          r.switchMs = ms;
+        });
+      }
+    });
+  } };
+}
+
+/* Arranque previo al cambio: la pieza de la que se sale, sonando. */
+function stepWarm(id, fromId) {
+  return { id: id, go: function (done) {
+    var from = findPiece(fromId);
+    var piece, row;
+    if (!from) {
+      piece = addExtra(fake(id, "paquete", "", "", ""));
+      row = blank(piece); row.error = "no esta la pieza " + fromId;
+      finishRow(id, done)(row);
+      return;
+    }
+    piece = addExtra(fake(id, "paquete", from.mime, from.file, "sale de " + fromId));
+    measure(piece, base + from.file, finishRow(id, done), { seconds: SWITCH_SECONDS });
+  } };
+}
+
+/* 99: bucle. VP9 con loop durante 60 s: cada vuelta es un seeking; un waiting
+ * en la costura es un atasco. */
+function stepLoop(id, pieceId) {
+  return { id: id, go: function (done) {
+    var src = findPiece(pieceId);
+    var piece, row;
+    if (!src) {
+      piece = addExtra(fake(id, "paquete", "", "", ""));
+      row = blank(piece); row.error = "no esta la pieza " + pieceId;
+      finishRow(id, done)(row);
+      return;
+    }
+    piece = addExtra(fake(id, "paquete", src.mime, src.file, "loop " + LOOP_SECONDS + " s"));
+    measure(piece, base + src.file, finishRow(id, done),
+            { seconds: LOOP_SECONDS, loop: true });
+  } };
+}
+
+function mseSteps() { return [stepMse("mse:h264", null)]; }
+function blobSteps() { return [stepBlob("blob:cmaf", null)]; }
+function orderSteps() {
+  return [stepMse("mse:orden", swappedOrder()), stepBlob("blob:orden", swappedOrder())];
+}
+function switchSteps() {
+  return [stepWarm("cambio0:vp9", "v0-vp9"),
+          stepSwitch("cambio1:base", "v0-h264-baseline"),
+          stepSwitch("cambio2:vp9", "v0-vp9"),
+          stepSwitch("cambio3:base", "v0-h264-baseline")];
+}
+function loopSteps() { return [stepLoop("bucle:vp9", "v0-vp9")]; }
+
+/* Las cinco pruebas de paquete, en secuencia. */
+function packageSteps() {
+  return mseSteps().concat(blobSteps(), orderSteps(), switchSteps(), loopSteps());
+}
+
+/* "Correr todo" es TODO: las progresivas, la de alfa, los empaquetados y las
+ * pruebas de paquete, una atras de otra y en el mismo recuadro. */
+function everything() {
+  return pieceSteps(withRole("base").concat(withRole("alpha"), withRole("stream")))
+    .concat(packageSteps());
 }
 
 /* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
  * que el 0 devuelve la pantalla a cero sin salir de ella. */
 function stopAll() {
+  var video = byId("video");
   aborted = true;
-  byId("video").pause();
+  stopFeeding();
+  video.pause();
+  video.loop = false;
   byId("alphaBg").className = "";
   byId("full").className = "";
   results = {};
+  extras = [];
   say("listo");
   draw();
 }
 
 function repeatLast() {
-  if (lastList && lastList.length) { runSequence(lastList, 0); }
+  if (lastSteps && lastSteps.length) { runSteps(lastSteps, 0); }
 }
 
 /* blob: es el piso de la cache (bajar una vez y reproducir sin red). Se prueba
  * con la primera pieza progresiva. */
 function runBlob() {
   var list = baseOnly();
+  var piece, id;
   if (!list.length) { return; }
-  var piece = list[0];
-  var xhr = new XMLHttpRequest();
-  say("bajando a memoria: " + piece.id);
-  xhr.open("GET", base + piece.file, true);
-  xhr.responseType = "blob";
-  xhr.onreadystatechange = function () {
-    if (xhr.readyState !== 4) { return; }
-    var url = window.URL || window.webkitURL;
-    if (xhr.status < 200 || xhr.status >= 300 || !url || !url.createObjectURL) {
-      say("sin blob:");
-      return;
-    }
-    var objectUrl = url.createObjectURL(xhr.response);
-    var fake = { id: "blob:" + piece.id, role: "blob", mime: piece.mime,
-                 file: piece.file, bytes: piece.bytes, sha256: "", note: "" };
-    say("blob: " + piece.id);
-    measure(fake, objectUrl, function (row) {
-      results[fake.id] = row;
-      pieces.push({ id: fake.id, role: "blob", mime: piece.mime,
-                    file: "(blob)", bytes: piece.bytes, sha256: "", note: "" });
-      say("listo");
-      draw();
+  piece = list[0];
+  id = "blob:" + piece.id;
+  runSteps([{ id: id, go: function (done) {
+    var row;
+    var extra = addExtra(fake(id, "blob", piece.mime, "(blob)", ""));
+    extra.bytes = piece.bytes;
+    say("bajando a memoria: " + piece.id);
+    VGenFeed.getBytes(base + piece.file, function (error, bytes) {
+      var blob, url;
+      if (error) {
+        row = blank(extra); row.error = error;
+        finishRow(id, done)(row);
+        return;
+      }
+      blob = VGenFeed.concat([bytes], piece.mime);
+      url = blob ? VGenFeed.objectUrl(blob) : "";
+      if (!url) {
+        row = blank(extra); row.error = "sin Blob/URL";
+        finishRow(id, done)(row);
+        return;
+      }
+      VGenFeed.revoke(lastObjectUrl);
+      lastObjectUrl = url;
+      say("blob: " + piece.id);
+      measure(extra, url, finishRow(id, done));
     });
-  };
-  xhr.send(null);
+  } }], 0);
 }
 
 /* En una TV no se puede copiar texto: el reporte se lee a pantalla completa y
@@ -450,22 +755,22 @@ function toggleReport() {
  * seguir creciendo-: 9 + numero. El retardo se ajusta con ?delay=<ms>, y OK
  * dispara sin esperar. */
 var TECLAS = [
-  { code: "1", label: "correr todo", detail: "progresivas, alfa y empaquetados",
-    run: function () { runSequence(everything(), 0); } },
+  { code: "1", label: "correr todo", detail: "v0 entero + las 5 de paquete",
+    run: function () { runSteps(everything(), 0); } },
   { code: "2", label: "progresivas", detail: "las 3 piezas sueltas",
-    run: function () { runSequence(baseOnly(), 0); } },
+    run: function () { runSteps(pieceSteps(baseOnly()), 0); } },
   { code: "3", label: "alfa", detail: "transparencia sobre fondo verde",
-    run: function () { runSequence(withRole("alpha"), 0); } },
+    run: function () { runSteps(pieceSteps(withRole("alpha")), 0); } },
   { code: "4", label: "HLS / DASH", detail: "los 3 empaquetados",
-    run: function () { runSequence(withRole("stream"), 0); } },
-  { code: "5", label: "solo baseline", detail: "H.264 Baseline",
-    run: function () { runOnly("v0-h264-baseline"); } },
+    run: function () { runSteps(pieceSteps(withRole("stream")), 0); } },
+  { code: "5", label: "paquete (5)", detail: "MSE, Blob, orden, cambio, bucle",
+    run: function () { runSteps(packageSteps(), 0); } },
   { code: "6", label: "solo main", detail: "H.264 Main (detector de hardware)",
     run: function () { runOnly("v0-h264-main"); } },
   { code: "7", label: "solo vp9", detail: "VP9 progresivo",
     run: function () { runOnly("v0-vp9"); } },
-  { code: "8", label: "solo hls-ts", detail: "HLS con segmentos TS",
-    run: function () { runOnly("v0-hls-ts"); } },
+  { code: "8", label: "cambio a demanda", detail: "VP9 > Baseline > VP9 > Baseline",
+    run: function () { runSteps(switchSteps(), 0); } },
   { code: "0", label: "cortar y limpiar", detail: "vuelve la pantalla a cero",
     run: stopAll },
   { code: "90", label: "solo hls-fmp4", detail: "HLS CMAF",
@@ -476,8 +781,6 @@ var TECLAS = [
     run: runBlob },
   { code: "93", label: "repetir", detail: "la ultima corrida otra vez",
     run: repeatLast },
-  { code: "95", label: "reporte", detail: "a pantalla completa, para la foto",
-    run: toggleReport },
   /* El lanzador vive en OTRO servidor (es un archivo suelto), asi que no se
    * puede linkear a una ruta fija: se vuelve con el historial, y ?ir=<url>
    * permite apuntarlo si algun dia conviene. */
@@ -485,7 +788,17 @@ var TECLAS = [
     run: function () {
       if (param("ir")) { window.location.href = param("ir"); }
       else if (window.history && window.history.back) { window.history.back(); }
-    } }
+    } },
+  { code: "95", label: "reporte", detail: "a pantalla completa, para la foto",
+    run: toggleReport },
+  { code: "96", label: "MSE h264", detail: "init + 16 segmentos por SourceBuffer",
+    run: function () { runSteps(mseSteps(), 0); } },
+  { code: "97", label: "blob concat", detail: "init + 16 segmentos en un Blob",
+    run: function () { runSteps(blobSteps(), 0); } },
+  { code: "98", label: "orden", detail: "1-8,13-16,9-12 por MSE y por Blob",
+    run: function () { runSteps(orderSteps(), 0); } },
+  { code: "99", label: "bucle 60 s", detail: "VP9 con loop",
+    run: function () { runSteps(loopSteps(), 0); } }
 ];
 
 function renderKeys() {
