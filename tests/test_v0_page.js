@@ -38,7 +38,7 @@ assert(page.indexOf("function everything()") >= 0,
 assert(page.indexOf('<script src="vgenfeed.js"></script>') >= 0,
   "las puertas del paquete viven en vgenfeed.js (lo reusa H-8), no en la pagina");
 assert(/<th>congel<\/th>/.test(page), "existe la columna congel en la tabla");
-assert(/\tcongel\tcambio_ms\t/.test(inline[1]),
+assert(inline[1].indexOf("\\tatascos\\tcongel\\tcambio_ms\\tnota") >= 0,
   "el reporte lleva las columnas congel y cambio_ms");
 assert(/if \(row\.started\) \{ row\.stalls\+\+; \}/.test(inline[1]),
   "atascos cuenta el waiting solo despues de arrancar");
