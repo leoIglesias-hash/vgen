@@ -104,18 +104,23 @@ nada.
    otras dos: **audio sí** («tipo radio» + hablado con sincronía en momentos →
    diseño en plan §2.6, S13/S14) y **gates aprobados** con caídos ≤ 3 %.
    **No queda ninguna decisión pendiente del operador.**
-2. **H-13 está ejecutada hasta donde se puede sin pantalla** (`85eebd1` → `b3d5837`,
-   CI verde, publicado en `v0/`): `frontend/vgenfeed.js` (MSE encadenado por
-   `updateend`, Blob concatenado, cambio por `src`) y las cinco pruebas en
-   `v0.html` (`96` MSE, `97` Blob, `98` orden, `8` cambio a demanda, `99` bucle;
-   `5` = las cinco, `1` = todo). Probada en PC (refuta, no consagra): S9 y S10
-   sostenidas (el Blob `init+16` es un archivo con duración 15,4 s), S12 solo
-   por MSE `sequence` (por Blob el orden no es transparente), bucle por `loop`
-   con un `waiting` por vuelta, cambio por `src` 390–556 ms. Entrada «H-13
-   implementada» en el REGISTRO. **Lo único que falta es la visita del operador
-   a la caja: tecla `5`, después `95`, foto.** Con la foto: transcribir al
-   REGISTRO, marcar S9/S10/S12 en EMISION-V0 §4.c, escribir en el plan §4 qué
-   camino implementa el muxer (H-8), cerrar H-13 y seguir con **H-11**.
+2. **H-13 CERRADA** (código `85eebd1`→`b3d5837`, docs `0589dc9`, publicado en
+   `v0/`, y la **foto de la caja** transcripta en el REGISTRO, «H-13: reporte de
+   la caja»). Lo que quedó decidido: **S9 consagrada** (MSE 2.033 ms por red,
+   156 cuadros, 0 atascos, `changeType` sí); **S10 en dos clases** (el Blob
+   `init+16` es un archivo → el muxer A es `concat()`; arranque 1.286 ms a
+   re-medir contra un mp4 clásico); **S12 por MSE `sequence` sí, por Blob no,
+   en dos clases** («blob orden se tilda en una parte», operador); **bucle por
+   `loop` refutado** (3 `waiting`/60 s) → el bucle del producto va por MSE;
+   cambio por `src` 305 ms a VP9 y 1.468/1.180 a Baseline → el incentivador es
+   VP9 y residente (H-12). El camino del muxer está escrito en el plan §2.3 y
+   §4 (H-8). Las filas `cambio*` miden 4 s a propósito (65 cuadros), no es un
+   timer roto.
+3. **La próxima tarea es H-11** (canvas de intervención encima del `<video>`,
+   S5), cuerpo en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
+   En su visita a la caja se suman dos cosas: `92` y `97` seguidos (arranque
+   desde memoria: mp4 clásico contra fMP4) y preguntarle al operador si volvió
+   a ver el símbolo de play ahora que no se pausa.
 4. **La caja consagra por decisión manual del operador** (VISION §8.11 lo
    prevé): lo sostenido en ella queda consagrado; la PC, cuando se pruebe, es
    refutadora, no consagradora.
