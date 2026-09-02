@@ -37,9 +37,9 @@
   #teclas .op { display: inline-block; margin: 0.06em 0; cursor: pointer;
                 line-height: 1.25;
                 white-space: nowrap; overflow: hidden; vertical-align: top; }
-  #teclas .now { width: 24%; font-size: 0.85em; color: #ffffff; }
+  #teclas .now { width: 24%; font-size: 0.8em; color: #ffffff; }
   #teclas .tool { width: 19%; font-size: 0.62em; }
-  #teclas .done { width: 19%; font-size: 0.5em; color: #8d93a8; }
+  #teclas .done { width: 14%; font-size: 0.5em; color: #8d93a8; }
   #teclas .n { display: inline-block; min-width: 1.7em; text-align: center;
                background: #2a2f45; border: 1px solid #4a5170; color: #ffd479;
                margin-right: 0.3em; }
@@ -85,6 +85,7 @@
 
 <script src="keypad.js"></script>
 <script src="vgenfeed.js"></script>
+<script src="vgencache.js"></script>
 <script>
 "use strict";
 
@@ -110,6 +111,13 @@
  * pregunta es S5: si el canvas saca al video de su plano de hardware, los
  * caidos suben con la capa y la intervencion va AL LADO, no encima. El canvas
  * se dimensiona AL PANEL (screen), nunca a la superficie del WebView.
+ *
+ * H-12 (2026-09-02) suma LA CACHE: el paquete residente en IndexedDB (84 baja
+ * con progreso, guarda pineado por contenido y poda lo viejo; 85 reproduce
+ * desde ahi sin red -la tecla de despues de REINICIAR-; 86 borra) y la prueba
+ * de techo con 10/25/50 MB de ruido, cuya respuesta es el nombre del error.
+ * La puerta a la base vive en vgencache.js. La cabecera del reporte dice que
+ * hay guardado al cargar: eso, tras un reinicio, es la prueba de persistencia.
  *
  * PANTALLA FIJA, SIN SCROLL (pedido del operador, 2026-09-01): en una TV el
  * scroll se hace con flechas y se pierde de vista lo que importa. Todo entra en
@@ -271,7 +279,7 @@ function blank(piece) {
   return { id: piece.id, says: "", started: false, firstMs: -1,
            total: 0, dropped: 0, driftMs: 0, stalls: 0, frozen: 0,
            switchMs: -1, laps: 0, duration: -1, hidden: 0, bytes: piece.bytes,
-           error: "" };
+           noVideo: false, error: "" };
 }
 
 function stopFeeding() {
@@ -393,7 +401,8 @@ function cell(row, value, good) {
   row.appendChild(td);
 }
 
-function blind(r) { return r.started && !r.error && r.total === 0; }
+/* noVideo: la fila mide otra cosa (guardar, techo) y no tiene cuadros. */
+function blind(r) { return r.started && !r.error && r.total === 0 && !r.noVideo; }
 
 function drawRow(body, piece) {
   var r = results[piece.id];
@@ -412,8 +421,8 @@ function drawRow(body, piece) {
            r.total ? (r.dropped * 100 <= r.total * 3) : undefined);
     }
     cell(tr, r.firstMs < 0 ? "-" : r.firstMs + "ms");
-    cell(tr, r.started ? String(r.frozen) : "-",
-         r.started ? (r.frozen === 0) : undefined);
+    cell(tr, (r.started && !r.noVideo) ? String(r.frozen) : "-",
+         (r.started && !r.noVideo) ? (r.frozen === 0) : undefined);
     cell(tr, r.switchMs < 0 ? "-" : r.switchMs + "ms",
          r.switchMs < 0 ? undefined : (r.switchMs <= 1000));
   }
@@ -450,6 +459,9 @@ function environment() {
   lines.push("rvfc\t" + (video.requestVideoFrameCallback ? "si" : "no") +
              "\tindexeddb\t" + (window.indexedDB ? "si" : "no") +
              "\tquality\t" + (video.getVideoPlaybackQuality ? "si" : "no"));
+  lines.push("cache\t" + cacheInfo.says + "\tguardadas " + cacheInfo.n +
+             "\t" + cacheInfo.bytes + " B" +
+             (cacheInfo.quota ? "\tcuota " + cacheInfo.quota : ""));
   lines.push("hls\t" + (video.canPlayType("application/vnd.apple.mpegurl") || "no") +
              "\tdash\t" + (video.canPlayType("application/dash+xml") || "no"));
   return lines;
@@ -851,7 +863,7 @@ function packageSteps() {
  * pruebas de paquete, una atras de otra y en el mismo recuadro. */
 function everything() {
   return pieceSteps(withRole("base").concat(withRole("alpha"), withRole("stream")))
-    .concat(packageSteps(), capaAll());
+    .concat(packageSteps(), capaAll(), cacheBatch());
 }
 
 /* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
@@ -873,6 +885,249 @@ function stopAll() {
 
 function repeatLast() {
   if (lastSteps && lastSteps.length) { runSteps(lastSteps, 0); }
+}
+
+/* --- H-12: la cache, el paquete residente en el aparato --- */
+
+/* Lo que se guarda: las dos piezas que el producto necesita residentes (el
+ * loop y el incentivador; H-13 dijo que el arranque lo mandan los bytes). Se
+ * pinean por contenido (id + sha12 del manifiesto) y lo que no este en el
+ * manifiesto vigente se borra al guardar. El techo se mide con ruido, no con
+ * video: la pregunta es cuanto deja guardar el aparato, no que guarda. */
+var CACHE_PIECES = ["v0-h264-baseline", "v0-vp9"];
+var TECHO_MB = [10, 25, 50];
+var cacheDb = null;                       /* conexion abierta, se reusa */
+var cacheInfo = { says: "?", n: 0, bytes: 0, quota: "" };   /* cabecera */
+
+function cacheOpen(cb) {
+  if (cacheDb) { cb(null, cacheDb); return; }
+  VGenCache.open({}, function (error, db) {
+    if (!error) { cacheDb = db; }
+    cb(error, db);
+  });
+}
+
+function shortOf(pieceId) {
+  return pieceId === "v0-h264-baseline" ? "base" : pieceId.replace(/^v0-/, "");
+}
+
+/* Cabecera del reporte: que hay guardado y cuanto lugar dice tener el aparato,
+ * sin bajar nada. Se refresca al cargar y tras cada guardado o borrado: es lo
+ * que, DESPUES DE REINICIAR, dice si la base persistio. */
+function refreshCacheInfo(then) {
+  function end() { draw(); if (then) { then(); } }
+  cacheInfo.says = VGenCache.available();
+  if (cacheInfo.says !== "si") { end(); return; }
+  cacheOpen(function (error, db) {
+    if (error) { cacheInfo.says = error; end(); return; }
+    VGenCache.list(db, function (e2, rows) {
+      var i, total = 0;
+      if (e2) { cacheInfo.says = e2; end(); return; }
+      cacheInfo.n = rows.length;
+      for (i = 0; i < rows.length; i++) { total += rows[i].bytes || 0; }
+      cacheInfo.bytes = total;
+      VGenCache.quota({}, function (e3, used, granted) {
+        if (!e3) {
+          cacheInfo.quota = Math.round(used / 1048576) + "/" +
+                            Math.round(granted / 1048576) + " MB";
+        }
+        end();
+      });
+    });
+  });
+}
+
+function manifestKeys() {
+  var keys = [], i;
+  for (i = 0; i < pieces.length; i++) {
+    keys.push(VGenCache.keyFor(pieces[i].id, pieces[i].sha256));
+  }
+  return keys;
+}
+
+function failRow(piece, id, done, why) {
+  var row = blank(piece);
+  row.error = why;
+  finishRow(id, done)(row);
+}
+
+/* 84: bajar con progreso y guardar, pineado por contenido; despues podar lo
+ * que no este en el manifiesto. La fila no reproduce nada: 1er = ms que tardo
+ * el guardado; la nota lleva la bajada, los bytes y cuantas claves viejas se
+ * fueron. */
+function stepCacheStore(pieceId) {
+  var id = "cache:guardar:" + shortOf(pieceId);
+  return { id: id, go: function (done) {
+    var src = findPiece(pieceId);
+    var piece, row;
+    if (!src) {
+      failRow(addExtra(fake(id, "cache", "", "", "")), id, done,
+              "no esta la pieza " + pieceId);
+      return;
+    }
+    piece = addExtra(fake(id, "cache", src.mime, src.file, "guardar"));
+    row = blank(piece);
+    row.noVideo = true;
+    cacheOpen(function (error, db) {
+      if (error) { row.error = error; finishRow(id, done)(row); return; }
+      VGenCache.download(base + src.file, {
+        onProgress: function (loaded, total) {
+          say("bajando " + pieceId + " " +
+              (total ? Math.round(loaded * 100 / total) + " %"
+                     : Math.round(loaded / 1024) + " KB"));
+        }
+      }, function (e2, bytes, downloadMs) {
+        var t0;
+        if (e2) { row.error = e2; finishRow(id, done)(row); return; }
+        say("guardando " + pieceId);
+        t0 = new Date().getTime();
+        VGenCache.put(db, {
+          key: VGenCache.keyFor(src.id, src.sha256), id: src.id,
+          sha: src.sha256, mime: src.mime, bytes: bytes.byteLength,
+          data: bytes, at: t0
+        }, function (e3) {
+          var putMs = new Date().getTime() - t0;
+          if (e3) {
+            row.error = "guardar: " + e3;
+            piece.note = "no entro; " + bytes.byteLength + " B; " + putMs + " ms";
+            finishRow(id, done)(row);
+            return;
+          }
+          row.started = true;
+          row.firstMs = putMs;
+          piece.bytes = String(bytes.byteLength);
+          VGenCache.prune(db, manifestKeys(), function (e4, removed) {
+            piece.note = "bajada " + downloadMs + " ms; guardado " + putMs +
+                         " ms; " + bytes.byteLength + " B" +
+                         (removed.length ? "; borradas " + removed.length + " viejas" : "");
+            refreshCacheInfo(function () { finishRow(id, done)(row); });
+          });
+        });
+      });
+    });
+  } };
+}
+
+/* 85: reproducir desde la cache, sin red. Es la tecla de DESPUES DE REINICIAR:
+ * si la fila dice "no esta", IndexedDB no persistio en este aparato. 1er =
+ * arranque desde blob: (gate <= 1 s), comparable con blob: y blob concat. */
+function stepCachePlay(pieceId) {
+  var id = "cache:" + shortOf(pieceId);
+  return { id: id, go: function (done) {
+    var src = findPiece(pieceId);
+    var piece;
+    if (!src) {
+      failRow(addExtra(fake(id, "cache", "", "", "")), id, done,
+              "no esta la pieza " + pieceId);
+      return;
+    }
+    piece = addExtra(fake(id, "cache", src.mime, src.file, "desde cache"));
+    cacheOpen(function (error, db) {
+      if (error) { failRow(piece, id, done, error); return; }
+      VGenCache.get(db, VGenCache.keyFor(src.id, src.sha256), function (e2, record) {
+        var blob, url;
+        if (e2) { failRow(piece, id, done, "leer: " + e2); return; }
+        if (!record) {
+          failRow(piece, id, done,
+                  "no esta en la cache (84 la guarda; si ya estaba, no persistio)");
+          return;
+        }
+        blob = VGenFeed.concat([record.data], src.mime);
+        url = blob ? VGenFeed.objectUrl(blob) : "";
+        if (!url) { failRow(piece, id, done, "sin Blob/URL"); return; }
+        VGenFeed.revoke(lastObjectUrl);
+        lastObjectUrl = url;
+        piece.bytes = String(record.bytes || 0);
+        piece.note = "desde cache; " + (record.bytes || 0) + " B";
+        say(id);
+        measure(piece, url, finishRow(id, done));
+      });
+    });
+  } };
+}
+
+/* El techo: un registro de N MB de ruido, guardado, releido y borrado. El
+ * nombre del error (QuotaExceededError) es la respuesta, no una falla de la
+ * pagina. Se borra al terminar para no comerle lugar al pack. */
+function stepTecho(mb) {
+  var id = "cache:techo:" + mb + "MB";
+  return { id: id, go: function (done) {
+    var piece = addExtra(fake(id, "cache", "", "", mb + " MB de ruido"));
+    var row = blank(piece);
+    var key = "techo." + mb;
+    row.noVideo = true;
+    cacheOpen(function (error, db) {
+      var data, t0;
+      if (error) { row.error = error; finishRow(id, done)(row); return; }
+      say("techo " + mb + " MB: armando");
+      data = VGenCache.fill(mb);
+      if (!data) { row.error = "sin Uint8Array"; finishRow(id, done)(row); return; }
+      say("techo " + mb + " MB: guardando");
+      t0 = new Date().getTime();
+      VGenCache.put(db, { key: key, id: "techo", sha: "", mime: "",
+                          bytes: data.byteLength, data: data, at: t0 }, function (e2) {
+        var putMs = new Date().getTime() - t0, t1;
+        data = null;
+        if (e2) {
+          row.error = e2;
+          piece.note += "; no entro (" + putMs + " ms)";
+          refreshCacheInfo(function () { finishRow(id, done)(row); });
+          return;
+        }
+        t1 = new Date().getTime();
+        VGenCache.get(db, key, function (e3, record) {
+          var readMs = new Date().getTime() - t1;
+          var ok = !e3 && record && record.data &&
+                   record.data.byteLength === mb * 1048576;
+          VGenCache.remove(db, key, function () {
+            if (!ok) {
+              row.error = e3 ? "leer: " + e3 : "volvio distinto";
+            } else {
+              row.started = true;
+              row.firstMs = putMs;
+              piece.note += "; guardo " + putMs + " ms; leyo " + readMs + " ms";
+            }
+            refreshCacheInfo(function () { finishRow(id, done)(row); });
+          });
+        });
+      });
+    });
+  } };
+}
+
+function cacheStoreSteps() {
+  var out = [], i;
+  for (i = 0; i < CACHE_PIECES.length; i++) { out.push(stepCacheStore(CACHE_PIECES[i])); }
+  return out;
+}
+
+function cachePlaySteps() {
+  var out = [], i;
+  for (i = 0; i < CACHE_PIECES.length; i++) { out.push(stepCachePlay(CACHE_PIECES[i])); }
+  return out;
+}
+
+function techoSteps() {
+  var out = [], i;
+  for (i = 0; i < TECHO_MB.length; i++) { out.push(stepTecho(TECHO_MB[i])); }
+  return out;
+}
+
+/* 84: guardar las dos piezas, reproducirlas desde la cache y medir el techo:
+ * todo lo que la visita de H-12 tiene que traer antes de reiniciar. */
+function cacheBatch() {
+  return cacheStoreSteps().concat(cachePlaySteps(), techoSteps());
+}
+
+/* 86: vaciar la base. Tambien prueba que se puede limpiar desde la TV. */
+function clearCache() {
+  cacheOpen(function (error, db) {
+    if (error) { say("cache: " + error); return; }
+    VGenCache.clear(db, function (e2) {
+      say(e2 ? "borrar: " + e2 : "cache vacia");
+      refreshCacheInfo();
+    });
+  });
 }
 
 /* blob: es el piso de la cache (bajar una vez y reproducir sin red). Se prueba
@@ -948,8 +1203,17 @@ var TECLAS = [
   { code: "83", label: "capa a ojo", tier: "now",
     detail: "alterna el rect sobre lo que suena",
     run: toggleCapa },
+  { code: "84", label: "cache: guardar", tier: "now",
+    detail: "H-12: baja y guarda baseline + vp9, las reproduce desde ahi y mide el techo 10/25/50 MB",
+    run: function () { runSteps(cacheBatch(), 0); } },
+  { code: "85", label: "desde cache", tier: "now",
+    detail: "tras REINICIAR la caja: siguen ahi? arranque sin red",
+    run: function () { runSteps(cachePlaySteps(), 0); } },
+  { code: "86", label: "borrar cache", tier: "now",
+    detail: "vacia la base",
+    run: clearCache },
   { code: "1", label: "correr todo", tier: "tool",
-    detail: "v0 entero + las 5 de paquete + las 6 de capa",
+    detail: "v0 entero + las 5 de paquete + las 6 de capa + la cache",
     run: function () { runSteps(everything(), 0); } },
   { code: "95", label: "reporte", tier: "tool",
     detail: "a pantalla completa, para la foto",
@@ -1046,6 +1310,7 @@ function start() {
   if (base && base.charAt(base.length - 1) !== "/") { base += "/"; }
   renderKeys();
   draw();
+  refreshCacheInfo();
   if (window.ASCLKeypad) {
     ASCLKeypad.create({
       delay: param("delay") ? parseInt(param("delay"), 10) : 900,

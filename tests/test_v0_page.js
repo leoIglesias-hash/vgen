@@ -7,12 +7,16 @@
  * que las cinco pruebas de paquete existan, que la medicion tenga la columna
  * congel, que no pause al terminar y que ningun digito suelto se demore.
  * H-11: que exista UN canvas encima del video, dimensionado al panel y no a
- * la superficie, con sus teclas y apagado por defecto. */
+ * la superficie, con sus teclas y apagado por defecto.
+ * H-12: que la cache viva en vgencache.js, que sus teclas existan, que las
+ * filas que no reproducen no se marquen ciegas y que sin IndexedDB la fila
+ * diga por que. */
 
 var assert = require("assert");
 var fs = require("fs");
 var path = require("path");
 var VGenFeed = require("../frontend/vgenfeed.js");
+var VGenCache = require("../frontend/vgencache.js");
 
 var pagePath = path.join(__dirname, "..", "frontend", "v0.html");
 var page = fs.readFileSync(pagePath, "utf8");
@@ -166,8 +170,9 @@ global.ASCLKeypad = keypadStub;
 windowStub.ASCLKeypad = keypadStub;
 
 var run = new Function("window", "document", "navigator", "screen",
-                       "XMLHttpRequest", "VGenFeed", inline[1]);
-run(windowStub, documentStub, navigatorStub, screenStub, FakeXHR, VGenFeed);
+                       "XMLHttpRequest", "VGenFeed", "VGenCache", inline[1]);
+run(windowStub, documentStub, navigatorStub, screenStub, FakeXHR, VGenFeed,
+    VGenCache);
 
 assert.strictEqual(requested.length, 1, "la pagina pide el manifiesto una vez");
 assert(/MANIFEST\.tsv$/.test(requested[0]), "pide MANIFEST.tsv");
@@ -204,11 +209,11 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 23);
+assert.strictEqual(codigos.length, 26);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
-["80", "81", "82", "83",
+["80", "81", "82", "83", "84", "85", "86",
  "90", "91", "92", "93", "94", "95", "96", "97", "98", "99"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta el codigo compuesto " + code);
 });
@@ -263,8 +268,8 @@ registered.actions.forEach(function (item) {
 var ahora = registered.actions.filter(function (item) {
   return item.tier === "now";
 }).map(function (item) { return item.code; }).sort();
-assert.deepStrictEqual(ahora, ["80", "81", "82", "83"],
-  "lo pendiente de probar es la capa de H-11, y nada mas");
+assert.deepStrictEqual(ahora, ["80", "81", "82", "83", "84", "85", "86"],
+  "lo pendiente de probar es la capa de H-11 y la cache de H-12, y nada mas");
 
 function emDe(sel) {
   var m = page.match(new RegExp("#teclas \\." + sel +
@@ -277,7 +282,7 @@ assert(emDe("now") > emDe("tool") && emDe("tool") > emDe("done"),
 assert(/#keys\s*\{[^}]*overflow:\s*hidden/.test(page),
   "la franja de teclas no puede desbordar sobre el zocalo");
 
-assert.strictEqual(byId("teclas").childNodes.length, 23,
+assert.strictEqual(byId("teclas").childNodes.length, 26,
   "la leyenda de teclas se dibuja en pantalla: en una TV no hay donde mirarla");
 
 /* La misma leyenda es el boton: en el celular no hay teclado numerico. */
@@ -285,7 +290,7 @@ var conClick = 0;
 byId("teclas").childNodes.forEach(function (row) {
   if (typeof row.onclick === "function") { conClick++; }
 });
-assert.strictEqual(conClick, 23,
+assert.strictEqual(conClick, 26,
   "cada entrada de la leyenda tiene que poder tocarse en un celular");
 
 /* Se dibuja agrupada por tier, no en el orden del arreglo. */
@@ -346,8 +351,8 @@ assert(byId("report").value.indexOf("\ncapa\t" + byId("capa").width + "x" +
 assert(/fillText\(/.test(inline[1]),
   "la capa dibuja numero y texto con la API nativa de Canvas2D (INT-004)");
 assert(/\.arc\(/.test(inline[1]), "la capa dibuja la ruleta");
-assert(/packageSteps\(\), capaAll\(\)/.test(inline[1]),
-  "correr todo (1) incluye las seis mediciones de capa");
+assert(/packageSteps\(\), capaAll\(\), cacheBatch\(\)/.test(inline[1]),
+  "correr todo (1) incluye las seis mediciones de capa y la cache");
 /* Las cuatro teclas de la capa, ya en dos cifras detras del 8. */
 assert(/lote/.test(action("80").label), "80 = el lote de la visita H-11");
 assert(/H-11/.test(action("80").detail) && /blob/.test(action("80").detail),
@@ -369,5 +374,52 @@ assert.strictEqual(byId("capa").className, "off", "83 otra vez lo apaga");
 action("83").run();
 action("0").run();
 assert.strictEqual(byId("capa").className, "off", "el 0 apaga la capa");
+
+/* --- H-12: la cache, el paquete residente --- */
+
+assert(page.indexOf('<script src="vgencache.js"></script>') >= 0,
+  "la puerta a IndexedDB vive en vgencache.js (lo reusa H-8), no en la pagina");
+assert(page.indexOf('src="vgenfeed.js"') < page.indexOf('src="vgencache.js"'),
+  "la cache se carga despues de las puertas del paquete");
+["function stepCacheStore", "function stepCachePlay", "function stepTecho",
+ "function cacheBatch", "function refreshCacheInfo", "function clearCache",
+ "function manifestKeys"]
+  .forEach(function (name) {
+    assert(inline[1].indexOf(name) >= 0, "falta " + name);
+  });
+assert(/VGenCache\.keyFor\(src\.id, src\.sha256\)/.test(inline[1]),
+  "la clave de cada pieza lleva su sha: pineo por contenido (CACHE-001)");
+assert(/VGenCache\.prune\(db, manifestKeys\(\)/.test(inline[1]),
+  "al guardar se borra lo que no este en el manifiesto vigente");
+assert(/onProgress: function \(loaded, total\)/.test(inline[1]),
+  "la bajada muestra progreso: en la TV una bajada muda parece colgada");
+assert(/TECHO_MB = \[10, 25, 50\]/.test(inline[1]),
+  "la prueba de techo es 10 / 25 / 50 MB (PLAN-IMPLEMENTACION-VGEN §4)");
+assert(/VGenCache\.remove\(db, key/.test(inline[1]),
+  "el ruido del techo se borra despues de medir");
+assert(/r\.total === 0 && !r\.noVideo/.test(inline[1]),
+  "una fila que no reproduce (guardar, techo) no puede decir ciego");
+
+/* Las tres teclas, detras del 8 como las de la capa. */
+assert(/guardar/.test(action("84").label), "84 = bajar y guardar (+ desde cache + techo)");
+assert(/techo/.test(action("84").detail) && /H-12/.test(action("84").detail));
+assert(/desde cache/.test(action("85").label), "85 = reproducir desde la cache");
+assert(/REINICIAR/.test(action("85").detail),
+  "el 85 es la tecla de despues de reiniciar: la leyenda lo dice");
+assert(/borrar/.test(action("86").label), "86 = borrar la cache");
+
+/* Sin IndexedDB (este stub no la tiene), la cabecera lo dice y la fila del 85
+ * explica por que no corrio, sin explotar. */
+reporte = byId("report").value;
+assert(reporte.indexOf("\ncache\tno\tguardadas 0\t0 B") >= 0,
+  "la cabecera del reporte dice si hay IndexedDB y cuanto hay guardado");
+action("85").run();
+assert.strictEqual(filas.childNodes.length, 8,
+  "la primera fila de cache aparece aunque no haya base");
+reporte = byId("report").value;
+assert(/\ncache:base\t.*sin indexedDB/.test(reporte),
+  "sin IndexedDB la fila cache:base dice por que");
+action("0").run();
+assert.strictEqual(filas.childNodes.length, 7);
 
 console.log("v0 page tests: OK");
