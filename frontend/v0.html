@@ -23,14 +23,30 @@
   th { background: #1a1e2c; }
   td.ok { color: #7ee08a; }
   td.no { color: #ff8f8f; }
-  #keys { position: absolute; left: 0; right: 0; padding: 0 0.6em; }
-  #buffer { font-size: 1.3em; color: #ffd479; height: 1.15em;
+  #keys { position: absolute; left: 0; right: 0; padding: 0 0.6em;
+          overflow: hidden; }
+  #buffer { font-size: 1em; color: #ffd479; height: 1.15em;
             letter-spacing: 0.08em; }
-  #teclas .op { display: inline-block; width: 24%; font-size: 0.58em;
-                margin: 0.06em 0; cursor: pointer; }
+  /* La leyenda entra entera o no sirve: por eso hay tres tamanos y el tamano
+   * es el mensaje. Lo que hay que probar ahora va grande y arriba; lo ya
+   * medido se achica hasta ocupar lo minimo y deja de competir por la vista. */
+  /* El alto de cada renglon lo tiene que poner la tecla, no el contenedor: con
+   * el interlineado del #teclas mandando, una fila de las chicas ocupaba lo
+   * mismo que una de las grandes y la leyenda no entraba. */
+  #teclas { line-height: 0; }
+  #teclas .op { display: inline-block; margin: 0.06em 0; cursor: pointer;
+                line-height: 1.25;
+                white-space: nowrap; overflow: hidden; vertical-align: top; }
+  #teclas .now { width: 24%; font-size: 0.85em; color: #ffffff; }
+  #teclas .tool { width: 19%; font-size: 0.62em; }
+  #teclas .done { width: 19%; font-size: 0.5em; color: #8d93a8; }
   #teclas .n { display: inline-block; min-width: 1.7em; text-align: center;
                background: #2a2f45; border: 1px solid #4a5170; color: #ffd479;
                margin-right: 0.3em; }
+  #teclas .now .n { background: #ffd479; border-color: #ffd479;
+                    color: #101014; }
+  #teclas .done .n { background: #1a1e2c; border-color: #33384a;
+                     color: #b9a06a; }
   #foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 0.6em;
           font-size: 0.55em; color: #8d93a8; overflow: hidden; }
   #full { position: absolute; left: 0; top: 0; right: 0; bottom: 0;
@@ -90,7 +106,7 @@
  * -numero, ruleta y texto dibujados con la API nativa de Canvas2D- con tres
  * cargas: nada (el canvas no existe: display none), un rectangulo chico
  * repintado a 15 fps, y la pantalla completa pintada UNA vez. Se mide sobre
- * Baseline y sobre VP9 (931 / 932; 930 es el lote entero de la visita). La
+ * Baseline y sobre VP9 (81 / 82; el 80 es el lote entero de la visita). La
  * pregunta es S5: si el canvas saca al video de su plano de hardware, los
  * caidos suben con la capa y la intervencion va AL LADO, no encima. El canvas
  * se dimensiona AL PANEL (screen), nunca a la superficie del WebView.
@@ -158,7 +174,9 @@ function layout() {
   document.documentElement.style.fontSize =
     Math.max(11, Math.round(w / 46)) + "px";
   headH = Math.round(h * 0.13);
-  keysH = Math.round(h * 0.22);
+  /* La franja de teclas empieza mas arriba que en H-10: con tres tamanos
+   * entra toda la leyenda sin pisar el zocalo (pedido del operador). */
+  keysH = Math.round(h * 0.26);
   footH = Math.round(h * 0.06);
   midTop = headH;
   midH = h - headH - keysH - footH;
@@ -804,7 +822,7 @@ function capaAll() {
   return capaSteps("v0-h264-baseline", "base").concat(capaSteps("v0-vp9", "vp9"));
 }
 
-/* 930: todo lo que la visita de H-11 a la caja tiene que traer: las seis de
+/* 80: todo lo que la visita de H-11 a la caja tiene que traer: las seis de
  * capa y, seguidos, blob: (mp4 clasico) y blob concat (fMP4), para comparar
  * el arranque desde memoria de los dos (1.286 ms vs 517 en H-13/H-10). */
 function h11Batch() {
@@ -859,7 +877,7 @@ function repeatLast() {
 
 /* blob: es el piso de la cache (bajar una vez y reproducir sin red). Se prueba
  * con la primera pieza progresiva. Devuelve el paso para poder encadenarlo
- * (930 lo corre seguido del blob concat). */
+ * (el 80 lo corre seguido del blob concat). */
 function blobClassicSteps() {
   var list = baseOnly();
   var piece, id;
@@ -905,85 +923,120 @@ function toggleReport() {
 /* Mando numerico. El destino es un TV BOX con control remoto: el click ahi es
  * caro y las teclas numericas son gratis.
  *
- * Todo lo comun cae en un digito suelto y dispara al instante. Lo secundario
- * vive detras del 9, que es el unico que espera -porque es el unico que puede
- * seguir creciendo-: 9 + numero. El retardo se ajusta con ?delay=<ms>, y OK
- * dispara sin esperar. */
+ * DOS CIFRAS COMO TECHO (decision del operador, 2026-09-02): antes de llegar a
+ * tres cifras hay cien numeros. Lo comun cae en un digito suelto y dispara al
+ * instante; lo demas vive detras de una PUERTA, y hay dos: el 9 (secundario ya
+ * medido, sin accion propia) y el 8 (la capa de H-11; conserva su accion, asi
+ * que el 8 solo espera 900 ms u OK antes de correr "cambio a demanda"). El
+ * retardo se ajusta con ?delay=<ms>.
+ *
+ * Cada tecla declara ademas su TIER, que es lo que la leyenda usa para elegir
+ * el tamano: "now" = lo que hay que probar en esta visita (grande y arriba),
+ * "tool" = herramientas de siempre, "done" = lo ya medido (chico y apagado).
+ * El tamano es el mensaje: el operador tiene que ver de un vistazo que se le
+ * esta pidiendo, y todo tiene que entrar sin pisar el zocalo. */
 var TECLAS = [
-  { code: "1", label: "correr todo", detail: "v0 entero + las 5 de paquete",
-    run: function () { runSteps(everything(), 0); } },
-  { code: "2", label: "progresivas", detail: "las 3 piezas sueltas",
-    run: function () { runSteps(pieceSteps(baseOnly()), 0); } },
-  { code: "3", label: "alfa", detail: "transparencia sobre fondo verde",
-    run: function () { runSteps(pieceSteps(withRole("alpha")), 0); } },
-  { code: "4", label: "HLS / DASH", detail: "los 3 empaquetados",
-    run: function () { runSteps(pieceSteps(withRole("stream")), 0); } },
-  { code: "5", label: "paquete (5)", detail: "MSE, Blob, orden, cambio, bucle",
-    run: function () { runSteps(packageSteps(), 0); } },
-  { code: "6", label: "solo main", detail: "H.264 Main (detector de hardware)",
-    run: function () { runOnly("v0-h264-main"); } },
-  { code: "7", label: "solo vp9", detail: "VP9 progresivo",
-    run: function () { runOnly("v0-vp9"); } },
-  { code: "8", label: "cambio a demanda", detail: "VP9 > Baseline > VP9 > Baseline",
-    run: function () { runSteps(switchSteps(), 0); } },
-  { code: "0", label: "cortar y limpiar", detail: "vuelve la pantalla a cero",
-    run: stopAll },
-  { code: "90", label: "solo hls-fmp4", detail: "HLS CMAF",
-    run: function () { runOnly("v0-hls-fmp4"); } },
-  { code: "91", label: "solo dash", detail: "DASH",
-    run: function () { runOnly("v0-dash"); } },
-  { code: "92", label: "blob:", detail: "reproducir desde memoria",
-    run: runBlob },
-  { code: "93", label: "repetir", detail: "la ultima corrida otra vez",
-    run: repeatLast },
-  { code: "930", label: "H-11 lote", detail: "capa x6 + blob: + blob concat",
+  { code: "80", label: "lote capa", tier: "now",
+    detail: "H-11: capa x6 + blob: + blob concat",
     run: function () { runSteps(h11Batch(), 0); } },
-  { code: "931", label: "capa / baseline", detail: "sin, rect 15 fps, pantalla",
+  { code: "81", label: "capa / baseline", tier: "now",
+    detail: "sin, rect 15 fps, pantalla",
     run: function () { runSteps(capaSteps("v0-h264-baseline", "base"), 0); } },
-  { code: "932", label: "capa / vp9", detail: "sin, rect 15 fps, pantalla",
+  { code: "82", label: "capa / vp9", tier: "now",
+    detail: "sin, rect 15 fps, pantalla",
     run: function () { runSteps(capaSteps("v0-vp9", "vp9"), 0); } },
-  { code: "933", label: "capa a ojo", detail: "alterna el rect sobre lo que suena",
+  { code: "83", label: "capa a ojo", tier: "now",
+    detail: "alterna el rect sobre lo que suena",
     run: toggleCapa },
+  { code: "1", label: "correr todo", tier: "tool",
+    detail: "v0 entero + las 5 de paquete + las 6 de capa",
+    run: function () { runSteps(everything(), 0); } },
+  { code: "95", label: "reporte", tier: "tool",
+    detail: "a pantalla completa, para la foto",
+    run: toggleReport },
+  { code: "93", label: "repetir", tier: "tool",
+    detail: "la ultima corrida otra vez",
+    run: repeatLast },
+  { code: "0", label: "cortar", tier: "tool",
+    detail: "vuelve la pantalla a cero",
+    run: stopAll },
   /* El lanzador vive en OTRO servidor (es un archivo suelto), asi que no se
    * puede linkear a una ruta fija: se vuelve con el historial, y ?ir=<url>
    * permite apuntarlo si algun dia conviene. */
-  { code: "94", label: "volver", detail: "al lanzador, o atras en el historial",
+  { code: "94", label: "volver", tier: "tool",
+    detail: "al lanzador, o atras en el historial",
     run: function () {
       if (param("ir")) { window.location.href = param("ir"); }
       else if (window.history && window.history.back) { window.history.back(); }
     } },
-  { code: "95", label: "reporte", detail: "a pantalla completa, para la foto",
-    run: toggleReport },
-  { code: "96", label: "MSE h264", detail: "init + 16 segmentos por SourceBuffer",
+  { code: "2", label: "progresivas", tier: "done",
+    detail: "las 3 piezas sueltas",
+    run: function () { runSteps(pieceSteps(baseOnly()), 0); } },
+  { code: "3", label: "alfa", tier: "done",
+    detail: "transparencia sobre fondo verde",
+    run: function () { runSteps(pieceSteps(withRole("alpha")), 0); } },
+  { code: "4", label: "HLS / DASH", tier: "done",
+    detail: "los 3 empaquetados",
+    run: function () { runSteps(pieceSteps(withRole("stream")), 0); } },
+  { code: "5", label: "paquete (5)", tier: "done",
+    detail: "MSE, Blob, orden, cambio, bucle",
+    run: function () { runSteps(packageSteps(), 0); } },
+  { code: "6", label: "solo main", tier: "done",
+    detail: "H.264 Main (detector de hardware)",
+    run: function () { runOnly("v0-h264-main"); } },
+  { code: "7", label: "solo vp9", tier: "done",
+    detail: "VP9 progresivo",
+    run: function () { runOnly("v0-vp9"); } },
+  { code: "8", label: "cambio", tier: "done",
+    detail: "VP9 > Baseline > VP9 > Baseline; espera 900 ms u OK (es puerta)",
+    run: function () { runSteps(switchSteps(), 0); } },
+  { code: "90", label: "hls-fmp4", tier: "done", detail: "HLS CMAF",
+    run: function () { runOnly("v0-hls-fmp4"); } },
+  { code: "91", label: "dash", tier: "done", detail: "DASH",
+    run: function () { runOnly("v0-dash"); } },
+  { code: "92", label: "blob:", tier: "done", detail: "reproducir desde memoria",
+    run: runBlob },
+  { code: "96", label: "MSE h264", tier: "done",
+    detail: "init + 16 segmentos por SourceBuffer",
     run: function () { runSteps(mseSteps(), 0); } },
-  { code: "97", label: "blob concat", detail: "init + 16 segmentos en un Blob",
+  { code: "97", label: "blob concat", tier: "done",
+    detail: "init + 16 segmentos en un Blob",
     run: function () { runSteps(blobSteps(), 0); } },
-  { code: "98", label: "orden", detail: "1-8,13-16,9-12 por MSE y por Blob",
+  { code: "98", label: "orden", tier: "done",
+    detail: "1-8,13-16,9-12 por MSE y por Blob",
     run: function () { runSteps(orderSteps(), 0); } },
-  { code: "99", label: "bucle 60 s", detail: "VP9 con loop",
+  { code: "99", label: "bucle 60 s", tier: "done", detail: "VP9 con loop",
     run: function () { runSteps(loopSteps(), 0); } }
 ];
 
+/* La leyenda se dibuja por tier, no en el orden del arreglo: primero lo que hay
+ * que probar, despues las herramientas, al final lo ya medido. */
+var TIERS = ["now", "tool", "done"];
+
 function renderKeys() {
   var box = byId("teclas");
-  var i, row, tag, name;
+  var t, i, item, row, tag, name;
   while (box.firstChild) { box.removeChild(box.firstChild); }
-  for (i = 0; i < TECLAS.length; i++) {
-    row = document.createElement("div");
-    row.className = "op";
-    tag = document.createElement("span");
-    tag.className = "n";
-    text(tag, TECLAS[i].code);
-    row.appendChild(tag);
-    name = document.createElement("span");
-    text(name, TECLAS[i].label);
-    row.appendChild(name);
-    /* La misma leyenda es el boton: en el celular y en el escritorio se toca,
-     * en la TV se aprieta el numero. Una sola interfaz para los dos mundos. */
-    row.onclick = (function (action) {
-      return function () { if (action.run) { action.run(); } };
-    })(TECLAS[i]);
-    box.appendChild(row);
+  for (t = 0; t < TIERS.length; t++) {
+    for (i = 0; i < TECLAS.length; i++) {
+      item = TECLAS[i];
+      if ((item.tier || "done") !== TIERS[t]) { continue; }
+      row = document.createElement("div");
+      row.className = "op " + TIERS[t];
+      tag = document.createElement("span");
+      tag.className = "n";
+      text(tag, item.code);
+      row.appendChild(tag);
+      name = document.createElement("span");
+      text(name, item.label);
+      row.appendChild(name);
+      /* La misma leyenda es el boton: en el celular y en el escritorio se toca,
+       * en la TV se aprieta el numero. Una sola interfaz para los dos mundos. */
+      row.onclick = (function (action) {
+        return function () { if (action.run) { action.run(); } };
+      })(item);
+      box.appendChild(row);
+    }
   }
 }
 

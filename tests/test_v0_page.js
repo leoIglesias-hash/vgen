@@ -208,13 +208,12 @@ assert.strictEqual(codigos.length, 23);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
-["90", "91", "92", "93", "94", "95", "96", "97", "98", "99",
- "930", "931", "932", "933"].forEach(function (code) {
+["80", "81", "82", "83",
+ "90", "91", "92", "93", "94", "95", "96", "97", "98", "99"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta el codigo compuesto " + code);
 });
-assert.strictEqual(registered.actions[0].code, "1");
-assert.strictEqual(registered.actions[0].label, "correr todo",
-  "el 1 es correr todo: es la accion que mas se usa");
+assert.strictEqual(action("1").label, "correr todo",
+  "el 1 sigue siendo correr todo: es la accion que mas se usa");
 
 function action(code) {
   var i;
@@ -233,19 +232,51 @@ assert(/orden/.test(action("98").label), "98 = intercambio de orden");
 assert(/cambio/.test(action("8").label), "8 = cambio a demanda");
 assert(/bucle/.test(action("99").label), "99 = bucle 60 s");
 
-/* Regla de usabilidad: lo comun no debe esperar. Ningun digito suelto usado
- * puede ser prefijo de un codigo largo, salvo el 9, que es la puerta a los
- * compuestos y a proposito no tiene accion propia. */
+/* Techo de dos cifras (decision del operador, 2026-09-02): antes de llegar a
+ * tres hay cien numeros. Las puertas son el 9 (sin accion propia) y el 8 (que
+ * conserva la suya y por eso espera). Ningun otro digito suelto se demora. */
+codigos.forEach(function (code) {
+  assert(code.length <= 2, "la tecla " + code + " tiene tres cifras");
+});
+var PUERTAS = ["8", "9"];
 codigos.forEach(function (code) {
   if (code.length !== 1) { return; }
   codigos.forEach(function (other) {
-    if (other.length > 1 && other.charAt(0) === code) {
+    if (other.length > 1 && other.charAt(0) === code &&
+        PUERTAS.indexOf(code) < 0) {
       assert.fail("la tecla " + code + " se demora por culpa de " + other);
     }
   });
 });
 assert(codigos.indexOf("9") < 0,
   "el 9 queda reservado como prefijo de los compuestos");
+assert(codigos.indexOf("8") >= 0,
+  "el 8 es puerta pero conserva su accion: espera, no se pierde");
+
+/* La leyenda ordena y dimensiona por tier: lo que hay que probar va primero y
+ * grande, lo ya medido al final y chico. El tamano es el mensaje. */
+var TIERS_OK = ["now", "tool", "done"];
+registered.actions.forEach(function (item) {
+  assert(TIERS_OK.indexOf(item.tier) >= 0,
+    "la tecla " + item.code + " no declara tier");
+});
+var ahora = registered.actions.filter(function (item) {
+  return item.tier === "now";
+}).map(function (item) { return item.code; }).sort();
+assert.deepStrictEqual(ahora, ["80", "81", "82", "83"],
+  "lo pendiente de probar es la capa de H-11, y nada mas");
+
+function emDe(sel) {
+  var m = page.match(new RegExp("#teclas \\." + sel +
+                                "\\s*\\{[^}]*font-size:\\s*([0-9.]+)em"));
+  assert(m, "la leyenda no define el tamano de ." + sel);
+  return parseFloat(m[1]);
+}
+assert(emDe("now") > emDe("tool") && emDe("tool") > emDe("done"),
+  "lo ya probado tiene que verse mas chico que lo que falta probar");
+assert(/#keys\s*\{[^}]*overflow:\s*hidden/.test(page),
+  "la franja de teclas no puede desbordar sobre el zocalo");
+
 assert.strictEqual(byId("teclas").childNodes.length, 23,
   "la leyenda de teclas se dibuja en pantalla: en una TV no hay donde mirarla");
 
@@ -256,6 +287,21 @@ byId("teclas").childNodes.forEach(function (row) {
 });
 assert.strictEqual(conClick, 23,
   "cada entrada de la leyenda tiene que poder tocarse en un celular");
+
+/* Se dibuja agrupada por tier, no en el orden del arreglo. */
+var pintadas = byId("teclas").childNodes.map(function (row) {
+  return row.className;
+});
+assert.strictEqual(pintadas[0], "op now",
+  "la primera de la leyenda es lo que hay que probar");
+assert.strictEqual(
+  byId("teclas").childNodes[0].childNodes[0].childNodes[0].data, "80",
+  "y esa primera es el lote de la visita");
+var orden = pintadas.join(" ");
+assert(orden.indexOf("op tool") > orden.lastIndexOf("op now"),
+  "las herramientas van despues de lo que hay que probar");
+assert(orden.indexOf("op done") > orden.lastIndexOf("op tool"),
+  "lo ya medido va al final");
 
 /* --- Correr el 5 en un aparato sin MSE: la fila aparece con su error y el
  * resto no explota; el 0 la limpia. --- */
@@ -302,24 +348,25 @@ assert(/fillText\(/.test(inline[1]),
 assert(/\.arc\(/.test(inline[1]), "la capa dibuja la ruleta");
 assert(/packageSteps\(\), capaAll\(\)/.test(inline[1]),
   "correr todo (1) incluye las seis mediciones de capa");
-assert(/H-11/.test(action("930").label), "930 = el lote de la visita H-11");
-assert(/blob/.test(action("930").detail),
+/* Las cuatro teclas de la capa, ya en dos cifras detras del 8. */
+assert(/lote/.test(action("80").label), "80 = el lote de la visita H-11");
+assert(/H-11/.test(action("80").detail) && /blob/.test(action("80").detail),
   "el lote lleva blob: y blob concat seguidos (arranque desde memoria)");
-assert(/capa/.test(action("931").label) && /baseline/.test(action("931").label),
-  "931 = capa sobre Baseline");
-assert(/capa/.test(action("932").label) && /vp9/.test(action("932").label),
-  "932 = capa sobre VP9");
-assert(/ojo/.test(action("933").label), "933 = la capa a ojo, para el operador");
+assert(/capa/.test(action("81").label) && /baseline/.test(action("81").label),
+  "81 = capa sobre Baseline");
+assert(/capa/.test(action("82").label) && /vp9/.test(action("82").label),
+  "82 = capa sobre VP9");
+assert(/ojo/.test(action("83").label), "83 = la capa a ojo, para el operador");
 
 /* Sin medir, el canvas no existe (display none): la linea de base es sin capa.
- * El 933 la alterna y el 0 la apaga. */
+ * El 83 la alterna y el 0 la apaga. */
 assert.strictEqual(byId("capa").className, "off",
   "antes de medir el canvas no existe: la linea de base es sin capa");
-action("933").run();
-assert.strictEqual(byId("capa").className, "", "933 enciende el rectangulo");
-action("933").run();
-assert.strictEqual(byId("capa").className, "off", "933 otra vez lo apaga");
-action("933").run();
+action("83").run();
+assert.strictEqual(byId("capa").className, "", "83 enciende el rectangulo");
+action("83").run();
+assert.strictEqual(byId("capa").className, "off", "83 otra vez lo apaga");
+action("83").run();
 action("0").run();
 assert.strictEqual(byId("capa").className, "off", "el 0 apaga la capa");
 
