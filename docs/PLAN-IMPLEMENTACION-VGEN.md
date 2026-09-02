@@ -156,10 +156,33 @@ principal (§3.3).
   15 fps)** para toda intervención «de evento»; la «de cuadro» se hornea en el
   encoder, nunca se persigue en el TV.
 
-### 2.6 Audio
+### 2.6 Audio (operador, 2026-09-01: «va con audio… tipo radio… publicidades o contenido hablado intercediendo… sincronicidad en algunos momentos»)
 
-`<audio>` separado del `<video>` (decidido en DISENO §7). Entra cuando el
-operador diga qué lleva el producto (§6).
+Dos clases de audio, porque piden sincronías distintas:
+
+| Clase | Dónde vive | Sincronía | Ejemplo |
+|---|---|---|---|
+| **Ambiente («radio»)** | `<audio>` aparte, continuo, independiente de la pieza de video; cambiar la música = cambiar un `src` | ninguna | música de fondo, radio |
+| **Propio de una pieza** | **muxeado dentro de la pieza** (video + audio en el mismo mp4/webm); mientras suena, la ambiente baja con una rampa | exacta, la hace el mismo `<video>` | publicidad hablada, ruleta con locución |
+| **Cue sobre el loop** | clip de audio disparado por el manifiesto cuando `currentTime` pasa por t | ≥ 1 cuadro (66 ms) — «de evento» | una locución en el segundo t del loop; si hiciera falta más fino, se muxea en una variante (N3) |
+
+Suposiciones nuevas **S13** (pieza con audio muxeado reproduce sin perder
+fluidez) y **S14** (`<audio>` + `<video>` simultáneos sin deriva perceptible):
+se miden con la emisión v1 (H-6), que suma la pista del máster a las piezas.
+
+### 2.8 Qué aporta el máster ASCILINE al `.vgen` (pregunta del operador: «¿aplicamos las compresiones de ASCILINE antes del formato vgen?»)
+
+**Ya se aplican, y no se pueden no aplicar:** toda pieza se emite **desde el
+máster `.asclv`**; paleta, trellis, near-lossless y cortes están decididos antes
+de que el códec vea un píxel. Lo que cambió es **qué compran**: en el paradigma
+JS aceleraban el decoder; en el híbrido el decodificador es hardware y en la
+caja la fluidez ya está saturada (E2), así que ahí no hay velocidad que ganar.
+Compran **bytes** (una imagen de paleta estable y zonas planas se codifica
+mucho más chica), y bytes es **arranque y caché** (E4). Y compran **información
+que ningún encoder genérico tiene**: cortes (cuadros clave ahí), zonas que no
+cambian (bytes casi nulos), huecos para lo vivo. H-6 explota eso eje por eje.
+F10 (pérdida adaptativa) sigue suspendida; mejoraría el look igual, porque el
+video hereda los píxeles del máster.
 
 ### 2.7 Casos de uso del producto (operador, 2026-09-01)
 
@@ -193,19 +216,21 @@ Consecuencias que se vuelven requisitos:
 
 ### 3.1 Gates de reproducción
 
-**Propuestos con los números de la caja; los firma el operador.** Un camino o
-una variante *pasa* en un aparato si, en 10 s de reproducción:
+**Aprobados por el operador el 2026-09-01** («apruebo tus gates… el de los
+cuadros ponelo un poquito más flexible, solo poquito; si yo veo que se ve feo
+aviso»). Un camino o una variante *pasa* en un aparato si, en 10 s de
+reproducción:
 
 | Métrica | Pasa si | De dónde sale el umbral |
 |---|---|---|
 | arranque desde caché (A) | ≤ 1.000 ms | `blob:` 517 ms |
 | arranque por red (C / D) | ≤ 3.000 ms | Baseline 2.985 (al límite), VP9 931, HLS-TS 2.012; HLS-fMP4 14.223 **falla** |
-| cuadros caídos | ≤ 2 % de los contados | máximo observado 2/155 = 1,3 % |
+| cuadros caídos | ≤ **3 %** de los contados | máximo observado 2/155 = 1,3 %; el operador pidió «un poquito más flexible» que el 2 % propuesto |
 | atascos reales (`waiting` **después** del arranque) | 0 | todo lo que anduvo: 0; HLS-fMP4: 2 |
 | deriva reloj − media | ≤ 50 ms / 10 s | 38 pasa, 95 falla |
 | congelados (muestras de 100 ms sin avance) | 0 | nuevo en H-13: para los caminos que el contador no ve |
-| cambio de pieza a demanda (pedido → primer cuadro de la otra pieza) | ≤ 1.000 ms, **a confirmar por el operador** (§6) | el incentivador entra «de acuerdo a lo que el usuario pida»; `blob:` arranca en 517 ms |
-| ojo del operador | «fluido» / «sin costura» / «verde» | lo que ningún contador mide |
+| cambio de pieza a demanda (pedido → primer cuadro de la otra pieza) | ≤ 1.000 ms | el incentivador entra «de acuerdo a lo que el usuario pida»; `blob:` arranca en 517 ms |
+| ojo del operador | «fluido» / «sin costura» / «verde» | lo que ningún contador mide — y el gate último: «si veo que se ve feo aviso» |
 
 ### 3.2 Qué se optimiza
 
@@ -267,7 +292,7 @@ operador tiene visitas a la caja disponibles (§3.4).
 | **Camino A retiene el paquete en RAM** | H-12 | techo medido, no supuesto; B es la salida si no cabe |
 | **Superficie 4K sobre panel 720p** | externo (la app) | el canvas se dimensiona al panel; el `<video>` ya demostró absorberla |
 | **Un solo aparato medido** | H-10 | el operador fijó la caja como clase principal (consagra); la PC, cuando se pruebe, refuta |
-| **Audio fuera de alcance hasta que se defina** | §6 | `<audio>` separado decidido; se muxea solo si hay deriva perceptible |
+| **Audio sin probar en la caja** (pack v0 mudo) | H-6 v1 (S13, S14) | dos clases definidas en §2.6: ambiente en `<audio>` aparte; el propio de una pieza, muxeado en ella |
 | **`producto.mp4` (defaults) nunca se midió con contadores** | H-6, fila de referencia | la comparación 2,3× hoy es de bytes, no de fluidez |
 
 ## 6. Decisiones que necesita el operador
@@ -279,21 +304,14 @@ hasta más fluido», HLS-TS «se traba mucho al iniciar» (D fuera del producto)
 intervenido + publicidad que reemplaza y vuelve + incentivadores a demanda
 (§2.7); **7** nombre **`.vgen`**.
 
-**Pendientes, en simple:**
+**Respondidas también (misma tarde):** **4** audio → sí, «tipo radio» +
+publicidades/contenido hablado con sincronía en algunos momentos (diseño en
+§2.6); **6** gates aprobados, con caídos «un poquito más flexible» → 3 %
+(§3.1). Y una pregunta más, respondida en §2.8: las compresiones ASCILINE se
+aplican **siempre**, porque toda pieza sale del máster.
 
-4. **Audio.** La pregunta es: ¿el televisor de la caja **suena** en el local?
-   Si el loop, la publicidad o la ruleta llevan música o locución, el sonido
-   viaja como **pista aparte** (como el mp3 dentro del `.asclv`) y cambiar la
-   música no toca el video. Si las cajas van mudas, el audio sale del plan por
-   ahora. Respuesta que hace falta: *con sonido / sin sonido*, y para qué piezas.
-6. **Gates** = umbrales de aprobación: los **números mínimos** que una pieza o
-   un camino tienen que cumplir para darlos por buenos; si no los cumple, no
-   entra al formato. Los propuestos en §3.1, dichos en simple: arranca en ≤ 1 s
-   desde la caché y ≤ 3 s por red la primera vez; no se traba; no cae más del
-   2 % de los cuadros; el reloj no deriva; y lo que el contador no ve lo firma
-   el ojo. Respuestas que hacen falta, en sus términos: *¿cuánto puede tardar
-   en aparecer la ruleta desde que el usuario la pide?* y *¿cuánto tolera de
-   espera al encender la caja la primera vez, por red?*
+**No queda ninguna decisión pendiente del operador.** Lo que sigue es ejecutar
+H-13 (§4).
 
 ## 7. Cómo se mantiene este documento
 

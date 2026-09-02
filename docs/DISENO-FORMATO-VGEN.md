@@ -159,8 +159,19 @@ Es el caso más fácil de todo el sistema, no el más difícil.
   junto al video. Cuesta más muxer y se justifica solo si hace falta sincronía
   fina (que la música de fondo no necesita).
 
-**Decisión de diseño:** arrancar con el camino separado. Muxear el audio solo si
-la medición muestra deriva perceptible.
+**Decisión de diseño (refinada el 2026-09-01 con el operador — «va con audio,
+tipo radio… publicidades o contenido hablado intercediendo… sincronicidad en
+algunos momentos»):** los dos caminos conviven, cada uno para lo suyo.
+
+| Clase | Camino | Sincronía |
+|---|---|---|
+| **Ambiente («radio»)** | `<audio>` separado, continuo, independiente de la pieza de video; cambiar la música = cambiar un `src` | ninguna |
+| **Propio de una pieza** (publicidad hablada, ruleta con locución) | **muxeado dentro de la pieza**; mientras suena, la ambiente baja con una rampa de volumen | exacta, la hace el mismo `<video>` |
+| **Cue sobre el loop** (una locución en el segundo t) | clip disparado por el manifiesto al pasar `currentTime` por t | ≥ 1 cuadro (66 ms); si hiciera falta más fino, se muxea en una variante (N3) |
+
+Suposiciones **S13** (pieza con audio muxeado, sin perder fluidez) y **S14**
+(`<audio>` + `<video>` simultáneos sin deriva) en `EMISION-V0.md` §4.c; se
+miden con la emisión v1 (H-6).
 
 ## 8. Caché y distribución
 
@@ -219,7 +230,7 @@ bifurcación de layout, y hay que conocerla antes de dibujar una sola pantalla.
 | Piezas con cabecera compartida y cuadro clave propio | **decidido** |
 | fps por segmento derivado del máster | **decidido** (falta cuantificar el ahorro) |
 | Escalera de intervención N1–N3 | **decidido** |
-| Audio: `<audio>` separado primero, muxear solo si hay deriva | **decidido** |
+| Audio: ambiente en `<audio>` separado; el propio de una pieza muxeado en ella; cues para lo hablado sobre el loop | **decidido** (operador, 2026-09-01); S13/S14 gateadas por la emisión v1 |
 | **Manifiesto en texto tabulado, nunca JSON** | **decidido** — el gate ES5 prohíbe `JSON`; se parsea con `split` |
 | Nombre `.vgen` | **decidido** (operador, 2026-09-01); el magic se fija en H-7 |
 | Qué códecs emitimos y en qué orden de preferencia | **gateado por el pack v0** (H-9/H-10): ¿VP9 existe? ¿Main sale gratis, o sea hardware? |

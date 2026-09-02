@@ -3634,3 +3634,68 @@ que una pieza o un camino tienen que cumplir para darlos por buenos; si no los
 cumple, no entra al formato. En sus términos: ¿cuánto puede tardar en aparecer
 la ruleta desde que el usuario la pide?, ¿cuánto tolera de espera al encender la
 caja por primera vez?
+
+## Audio, gates aprobados y el lugar de las compresiones ASCILINE (2026-09-01)
+
+Últimas dos respuestas del operador, textuales:
+
+- **Audio:** *«va con audio, tenemos pensado hacer tipo radio en algún momento y
+  además luego publicidades o contenido hablado intercediendo, así que
+  necesitamos que haya sincronicidad en algunos momentos»*.
+- **Gates:** *«apruebo tus gates, me queda duda con lo de no pierde más de 2 de
+  cada 100 cuadros, parece algo estricto, pero suena bien, ese ponelo un poquito
+  más flexible… solo poquito, si yo veo que se ve feo aviso»*. → **caídos
+  ≤ 3 %**; el resto queda como estaba (arranque ≤ 1 s desde caché / ≤ 3 s por
+  red, atascos 0, deriva ≤ 50 ms/10 s, congelados 0, cambio a demanda ≤ 1 s).
+  Su ojo sigue siendo el gate último: «si veo que se ve feo aviso».
+
+### Diseño del audio que sale de eso (plan §2.6, DISENO §7)
+
+Dos clases de audio, porque piden sincronías distintas:
+
+1. **Pista ambiente («radio»)** — continua, independiente de qué pieza de video
+   esté sonando, cambiable en cualquier momento. Va en un **`<audio>` aparte**
+   (decidido ya en DISENO §7): no se corta cuando el video cambia de pieza, y
+   «cambiar la música» es cambiar un `src`. Sincronía: ninguna, no la necesita.
+2. **Audio propio de una pieza** (publicidad hablada, ruleta con locución) — va
+   **muxeado dentro de la pieza** (video + audio en el mismo mp4/webm). Así la
+   sincronía la hace el mismo `<video>`, exacta y gratis; mientras esa pieza
+   suena, la ambiente baja o se silencia con una rampa de volumen (barato).
+3. **«Contenido hablado intercediendo» sobre el loop** (una locución en el
+   segundo t del loop) — es una **cue** del manifiesto: el runtime dispara un
+   clip de audio cuando `currentTime` pasa por t, con tolerancia de ≥ 1 cuadro
+   (66 ms a 15 fps). Para voz sobre un loop alcanza; si alguna vez hiciera falta
+   más fino, esa locución se muxea en una variante de la pieza (N3).
+
+Lo que esto **no** está probado todavía y entra como suposiciones nuevas
+(EMISION-V0 §4.c): **S13** — la caja reproduce una pieza con audio muxeado (AAC
+en mp4, Opus en WebM) sin perder fluidez; **S14** — `<audio>` y `<video>`
+simultáneos (dos decodificadores) sin deriva perceptible entre ellos. Las dos se
+miden con la emisión **v1** (H-6), que suma la pista de audio del máster (el
+`.asclv` ya la lleva) a las piezas; H-13 no las toca porque el pack v0 no tiene
+audio.
+
+### «¿Aplicamos las compresiones de ASCILINE antes del formato vgen?»
+
+Pregunta del operador: *«nos suele ayudar mucho a la velocidad final de
+reproducción»*. Respuesta, y queda escrita en el plan §2.8:
+
+- **Ya se aplican, y no se pueden no aplicar:** toda pieza `.vgen` se emite
+  **desde el máster `.asclv`**, así que la paleta, el trellis, el near-lossless
+  y los cortes ya están decididos antes de que el códec vea un solo píxel.
+- **Lo que cambió es qué compran.** En el paradigma JS aceleraban el decoder
+  (menos trabajo por cuadro). En el híbrido el decodificador es hardware y en la
+  caja **ya está saturado de fluidez**: ahí no hay velocidad que ganar. Lo que
+  compran ahora es **bytes** —una imagen con paleta estable y zonas planas se
+  codifica mucho más chica— y bytes es **arranque y caché** (E4: 2.985 ms por red
+  contra 517 desde memoria).
+- **Y compran información que ningún encoder genérico tiene:** el máster sabe
+  dónde están los cortes (cuadros clave ahí), qué zonas no cambian (bytes casi
+  nulos), dónde va lo vivo (huecos). H-6 explota eso eje por eje.
+- **F10 (pérdida adaptativa) sigue suspendida** pero mejoraría el look del
+  producto igual, porque el video hereda los píxeles del máster; se retoma solo
+  por decisión del operador.
+
+Con esto **todas las decisiones del plan §6 están respondidas**. Lo que sigue:
+**H-13**, con el cuerpo afilado en el runbook para que la próxima sesión la
+ejecute sin preguntar.

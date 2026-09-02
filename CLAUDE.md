@@ -154,7 +154,13 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   **«De momento el tv box es la base»** → la caja es la **clase principal** y
   consagra; la PC refuta. Contenido real = **loop intervenido + publicidad que
   reemplaza y vuelve + incentivadores a demanda** (plan §2.7). Nombre del
-  formato: **`.vgen`**. Pendientes del operador: audio y gates (plan §6).
+  formato: **`.vgen`**. **Audio sí** («tipo radio» + hablado con sincronía en
+  momentos → ambiente en `<audio>` aparte, el propio de una pieza muxeado en
+  ella; plan §2.6). **Gates aprobados** (caídos ≤ 3 %; plan §3.1). Las
+  compresiones ASCILINE se aplican **siempre** (toda pieza sale del máster) y
+  compran bytes, no velocidad de decodificación (plan §2.8). **No hay
+  decisiones pendientes: la próxima sesión ejecuta H-13** tal como está en el
+  runbook.
 - **Herramientas de la fase H, ya hechas — no re-implementar:**
   `tools/emit_pieces.py` + workflow `emitir-v0` (emiten el pack desde el máster,
   con los empaquetados HLS/DASH por remux), `frontend/v0.html` (una sola
