@@ -3904,3 +3904,68 @@ principal: lo que se sostiene acá **queda consagrado**):
 
 **H-13 CERRADA.** Sigue **H-11** (canvas encima del `<video>`), y en su visita
 a la caja se aprovecha para `92` + `97` seguidos y la pregunta del play.
+
+## 2026-09-01 (noche, después de H-13) — H-11 implementada hasta la pantalla: la capa encima del `<video>`
+
+**Qué se construyó** (`fd9a7ab`, `frontend/v0.html` + `tests/test_v0_page.js`;
+cero emisión nueva, cero bytes nuevos del pack). Un **`<canvas id="capa">`**
+encima del `<video>`, en el mismo recuadro, después en el DOM (encima, no
+debajo). El buffer del canvas se dimensiona **al panel**: recuadro CSS ×
+(`screen.width` / `innerWidth`), tope 1 — en la caja eso es 1280/3840, así que
+sobre un recuadro de 2150 px CSS el buffer es 717×403, no 2150×1209. Dibuja lo
+que la intervención real va a dibujar: un **número** que avanza, una **ruleta**
+(círculo + aguja que gira) y el texto **ASCILINE**, con la API nativa de
+Canvas2D (INT-004). Tres cargas, por pieza:
+
+| carga | id de fila | qué hace |
+|---|---|---|
+| nada | `capa0:<pieza>` | el canvas **no existe** (`display: none`); es la línea de base en la misma sesión |
+| rect 15 fps | `capa1:<pieza>` | un rectángulo del 26 % × 30 % del recuadro, borrado y repintado cada 66 ms |
+| pantalla una vez | `capa2:<pieza>` | todo el canvas pintado **una** vez y dejado quieto (velo al 25 % + número, ruleta, texto) |
+
+Sobre **Baseline** y **VP9**: seis filas. La nota de cada fila con canvas dice
+**`pintadas N (WxH)`**, para saber que la capa realmente trabajó y a qué tamaño
+de buffer. Teclas nuevas (compuestas, detrás del `93`, que por eso ahora espera
+900 ms u OK): **`931`** capa sobre Baseline, **`932`** capa sobre VP9, **`933`**
+la capa **a ojo** (alterna el rectángulo sobre lo que esté sonando, sin medir),
+y **`930` = el lote de la visita**: las seis de capa y, seguidos, `blob:` (mp4
+clásico desde memoria) y `blob concat` (fMP4 `init+16` desde memoria), que es la
+comparación de arranque que H-13 dejó pendiente. El `1` (correr todo) ahora
+incluye las seis. Cabecera del reporte: línea `capa <WxH> k <escala>`.
+
+**Contador nuevo, `oculto`.** Al medir en la PC, la segunda corrida dio
+`capa0:base 0/6, 1er 1.993 ms, deriva 9.856 ms` sin canvas, y el rectángulo
+repintó 16 veces en 10 s. No era el canvas: **la pestaña estaba oculta para
+Chromium** (`document.hidden = true`, aunque la herramienta seguía sacando
+capturas). Con la página oculta Chromium **pausa el video mudo** y **frena los
+timers a 1 Hz**, y eso se leía como cuadros perdidos y como capa lenta. Ahora
+cada fila cuenta las muestras de 100 ms con `document.hidden` y lo dice en la
+nota (`oculto 10`). Vale también para la caja: si el WebView se va a segundo
+plano durante una medición, la fila lo va a decir en vez de culpar al aparato.
+
+**Lo que la PC dijo (Chromium 148, refutadora, no consagradora).** La única
+corrida con la pestaña visible: `capa0:base` **0/156, 1er 522 ms, congel 0**
+(idéntico a la línea de base de H-10/H-13 en la PC) y `capa1:base` repintando
+en vivo (número 39 a los ~3,5 s, 0 caídos parciales). Las seis filas completas
+con la pestaña visible **no se pudieron obtener** en esta sesión: la pestaña
+quedó oculta para el navegador y todas las corridas siguientes salieron con
+`oculto 10`. No hace falta insistir: la PC refuta, no consagra, y el número que
+decide S5 es el de la caja.
+
+**Qué tiene que traer la visita a la caja (una sola, regla 3.4 del plan):**
+
+1. `930` y esperar (≈ 1,5–2 min: seis piezas de 10 s + dos bajadas a memoria).
+2. `95` y **foto** del reporte.
+3. Mientras algo suena, `933` y mirar: ¿el rectángulo con el número y la
+   ruleta se ve encima del video? ¿el video sigue fluido a ojo?
+4. Decir si **volvió a aparecer el símbolo de play** ahora que nada pausa.
+
+**Cómo se lee (S5):** si `capa1` y `capa2` caen dentro del gate (≤ 3 % de
+caídos, `congel 0`) igual que `capa0`, la intervención va **encima** y queda
+escrito en DISENO §9. Si con el canvas los caídos suben o aparecen congelados,
+la intervención va **al lado** del video: bifurcación de layout de todo el
+producto. Y `blob:` contra `blob concat` seguidos dice si los 1.286 ms del fMP4
+desde memoria (H-13) eran del contenedor o del momento.
+
+**Estado: H-11 EJECUTADA hasta la pantalla.** Falta la foto de la caja. Se
+publica en `v0/` con la copia previa en `deploy/` (segmento siguiente).

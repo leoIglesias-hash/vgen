@@ -161,3 +161,15 @@ token viejo, reintentando hasta verlo).
 
 Nada nuevo que emitir: las cinco pruebas usan `v0/dash/init.m4s` +
 `v0/dash/chunk-*.m4s`, que ya estaban publicados.
+
+## Actualización del 2026-09-01, noche (H-11, la capa encima del video)
+
+Una key reemplazada bajo `v0/` (el resto del prefijo queda igual; siguen siendo
+61 keys):
+
+| key | bytes | md5 | qué cambia |
+|---|---|---|---|
+| `v0/index.html` | 37981 | `050c910fb354e184f9f8804dd345ee09` | H-11: `<canvas id="capa">` encima del `<video>` dimensionado al panel; cargas nada / rect 15 fps / pantalla una vez sobre Baseline y VP9; teclas `930` (lote de la visita: capa ×6 + `blob:` + `blob concat`), `931`, `932`, `933` (a ojo); contador `oculto`; el `1` incluye las seis |
+
+Verificación tras subir: `GET https://iargen.com/player/v0/index.html?x=<nonce>`
+→ SHA-256 igual al del archivo local; token de subida quemado después.

@@ -139,7 +139,7 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   `init+16` = archivo, intercambio de orden solo por MSE `sequence`, bucle por
   `loop` refutado, cambio a demanda 305 ms a VP9 y >1 s a Baseline → muxer A =
   concatenación, B = MSE `sequence`; REGISTRO «H-13: reporte de la caja»),
-  **H-11** (**próxima**) canvas de intervención encima del `<video>`, **H-12** caché, **H-6** matriz por
+  **H-11** (**ejecutada hasta la pantalla** `fd9a7ab`; falta la foto de la caja: `930` + `95`) canvas de intervención encima del `<video>`, **H-12** caché, **H-6** matriz por
   bytes a igual look, **H-7** spec `SPEC-VGEN.md`, **H-8** muxer ES5 + player.
   **H-14** (determinismo de H.264) y **W-26** son independientes. Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
