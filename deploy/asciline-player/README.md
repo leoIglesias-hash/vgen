@@ -145,3 +145,19 @@ se lo convierte en no-autocontenido — hoy no hace falta.
 comprobación de un `.m4s` dio `application/octet-stream` por **caché de borde**;
 con un parámetro anti-caché salió `video/iso.segment`. Verificar siempre con
 cache-buster, o se concluye lo contrario de lo que pasa.
+
+## Actualización del 2026-09-01, noche (H-13, por dónde entra el paquete)
+
+**2 keys** bajo `v0/`: `index.html` (regenerada = `frontend/v0.html` con las
+teclas `96`/`97`/`98`/`8`/`99` y el `5`, columnas `congel`/`cambio_ms`, sin pausa
+al terminar) y **`vgenfeed.js`** (nueva: MSE, Blob concatenado y cambio por
+`src`; el módulo que H-8 reusa). `keypad.js` no se tocó (`md5` igual). El bucket
+queda con **61 keys** en `v0/`. Orden respetado: las dos estaban commiteadas en
+`main` (`b3d5837`, CI verde) **antes** de subir. Verificadas bajando con
+cache-buster y comparando SHA-256 contra el archivo local: idénticas, con
+`text/html` y `application/javascript`. Token efímero acuñado por la API,
+usado para las dos subidas y quemado en la misma sesión (403 comprobado con el
+token viejo, reintentando hasta verlo).
+
+Nada nuevo que emitir: las cinco pruebas usan `v0/dash/init.m4s` +
+`v0/dash/chunk-*.m4s`, que ya estaban publicados.

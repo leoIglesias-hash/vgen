@@ -3699,3 +3699,98 @@ reproducción»*. Respuesta, y queda escrita en el plan §2.8:
 Con esto **todas las decisiones del plan §6 están respondidas**. Lo que sigue:
 **H-13**, con el cuerpo afilado en el runbook para que la próxima sesión la
 ejecute sin preguntar.
+
+## H-13 implementada: por dónde entra el paquete (2026-09-01, noche)
+
+**Qué se hizo (commits `85eebd1` + dos correcciones de test):** existe
+`frontend/vgenfeed.js`, el módulo ES5 que abre las tres puertas del paquete y
+que el muxer de H-8 va a reusar: `getBytes`/`getAll` (XHR `arraybuffer`, uno a
+la vez y en orden), `concat` (`init + segmentos` → `Blob`), `feedMse` (un
+`SourceBuffer`, anexo encadenado por `updateend`, modo `sequence` opcional,
+`endOfStream` al final), `switchTo` (cambio de pieza por `src` midiendo pedido →
+primer avance de `currentTime`), y la detección `mseSupport`/`hasChangeType`.
+`v0.html` creció con las cinco pruebas del runbook —`96` MSE H.264, `97` Blob
+concatenado, `98` intercambio de orden (1-8, 13-16, 9-12 por MSE en modo
+`sequence` y por Blob), `8` cambio a demanda (VP9 → Baseline → VP9 → Baseline,
+columna `cambio_ms`), `99` bucle de 60 s (VP9 con `loop`, contando vueltas)—,
+el `5` corre las cinco y el `1` corre todo. **Cero emisión nueva:** todo sale de
+`dash/init.m4s` + `chunk-00001..16.m4s`, ya publicados. Medición: columna
+`congel` (muestras de 100 ms sin avance estando en `play`), «atascos» cuenta el
+`waiting` **solo después de arrancar**, la fila dice «ciego» cuando el contador
+no se movió, y **no se pausa al terminar** (la pieza siguiente reemplaza el
+`src`; la última queda sonando). `changeType` en la cabecera del reporte.
+Tests: `test_vgenfeed.js` (nuevo, cableado en `run_all.py`: encadenado por
+`updateend` con un `SourceBuffer` falso que lanza si se anexa mientras
+`updating`, orden de anexo, `sequence`/`abort`, errores por URL, `switchTo` con
+reloj falso) y `test_v0_page.js` (19 teclas sin dígito suelto demorado, las 5
+pruebas de paquete, columna `congel`, una sola pausa —la del `0`—, el `5` en un
+aparato sin MSE deja su fila con el porqué y el `0` la limpia).
+
+**Antes de mandarlo a la caja se corrió en una PC** (navegador embebido de la
+sesión, Chromium 148 sobre Windows 11, panel angosto de 399×635 dentro de un
+escritorio de 1280×800 @1,5; sirviendo `frontend/` local y el pack desde
+`iargen.com/player/v0/`). La PC **refuta, no consagra** (regla del operador),
+y esta corrida además tenía la máquina ocupada; los caídos de acá no valen como
+gate. Lo que sí vale es que **las cinco puertas funcionan como código** y qué
+números dan de referencia:
+
+| id | dice | arrancó | 1er_ms | caídos/total | deriva_ms | atascos | congel | cambio_ms | nota |
+|---|---|---|---|---|---|---|---|---|---|
+| mse:h264 | probably | sí | 812 | 10/157 | 0 | 1 | 0 | – | dur 15,4 s; orden 1-16 |
+| blob:cmaf | probably | sí | **109** | 8/157 | 0 | 0 | 0 | – | **dur 15,4 s**; orden 1-16 |
+| mse:orden | probably | sí | 537 | 8/156 | 1 | 0 | 0 | – | dur 15,4 s; `sequence`; orden 1-8,13-16,9-12 |
+| blob:orden | probably | sí | 102 | 7/**123** | 1 | 0 | 0 | – | **dur 14,5 s**; orden 1-8,13-16,9-12 |
+| cambio0:vp9 | probably | sí | 539 | 3/65 | 1 | 0 | 0 | – | sale de v0-vp9 |
+| cambio1:base | probably | sí | 463 | 3/66 | 0 | 0 | 0 | **446** | a v0-h264-baseline |
+| cambio2:vp9 | probably | sí | 618 | 3/67 | 0 | 0 | 0 | **556** | a v0-vp9 |
+| cambio3:base | probably | sí | 410 | 4/67 | 0 | 0 | 0 | **390** | a v0-h264-baseline |
+| bucle:vp9 | probably | sí | 434 | 40/759 | **210** | **3** | 0 | – | **vueltas 3**; loop 60 s |
+
+**Lectura (para la PC; la caja dirá lo suyo):**
+
+1. **S9 sostenida en PC:** los segmentos CMAF publicados entran por MSE con el
+   mime del init (`avc1.42C01F`) y arrancan en 812 ms bajando de a uno por red.
+   El `waiting` después de arrancar (1) es el anexo secuencial alcanzando al
+   cursor: el alimentador baja el segmento siguiente recién cuando el buffer
+   digirió el anterior. Para el producto eso se resuelve con la caché (H-12) o
+   con más de un segmento adelantado; no es un defecto de MSE.
+2. **S10 sostenida en PC, y con la propiedad que importa:** el Blob
+   `init + 16 segmentos` **es un archivo**: reproduce como progresivo, arranca en
+   109 ms y **reporta duración 15,4 s** (no «desconocida»), o sea que el bucle
+   por `loop` funciona sobre él. **Si la caja lo repite, el muxer del camino A
+   es una concatenación** —la línea `concat()` de `vgenfeed.js`— y no hay que
+   rearmar `moov` en ES5.
+3. **S12, dos resultados distintos según la puerta.** Por **MSE en modo
+   `sequence`** el orden 1-8, 13-16, 9-12 se cose limpio: 156 cuadros contados,
+   0 atascos, duración 15,4 (el buffer reescribe los tiempos en orden de anexo).
+   Por **Blob** reproduce sin error pero **cuenta 123 cuadros en 10 s y declara
+   14,5 s de duración**: el demuxer de Chromium no trata como transparente una
+   concatenación con `tfdt` no monótonos. Conclusión que ya vale aunque la caja
+   no la confirme: **intercambiar piezas cambiando el orden de anexo es cosa de
+   MSE (camino B) o de reescribir los tiempos al concatenar (camino A, muxer con
+   `tfdt` propio)**; concatenar «a ciegas» en otro orden no.
+4. **Cambio a demanda por `src`: 390–556 ms por red** en la PC, dentro del gate
+   de 1 s aun bajando de internet. La caja tiene 517 ms de arranque desde
+   `blob:` para H.264 y 931 ms por red para VP9; la expectativa es que quede en
+   el orden de 1 s por red y bien abajo desde caché. Lo mide el `8`.
+5. **El bucle por `loop` tiene costura medible:** 3 vueltas en 60 s con **un
+   `waiting` por vuelta** y deriva acumulada de 210 ms (≈ 70 ms por costura). En
+   la PC no se ve, pero está: el instrumento sí la registra. Si la caja muestra
+   lo mismo o peor, el bucle del producto va por **MSE en `sequence`** (sin
+   costura, punto 3) o por dos `<video>` alternados (solo si H-11 muestra que el
+   segundo no cuesta).
+6. **Sin pausa al terminar, en la PC no aparece ningún control** del navegador
+   sobre el video; la hipótesis del símbolo de play (control nativo sobre un
+   video pausado por la página) se confirma o refuta en la caja con el mismo
+   cambio.
+
+**Una observación de herramienta, no del formato:** durante la primera corrida
+del `97`, al terminar, la pestaña del navegador embebido pasó sola a la raíz
+del servidor local (`live-player.html`). No se repitió al volver a correr el
+`97` ni en el resto; no hay código en `v0.html` que navegue salvo el `94`. Se
+anota por si vuelve a pasar en la caja.
+
+**Lo que sigue:** publicar (`v0/index.html` regenerada + `v0/vgenfeed.js`,
+copia en el repo antes) y pedirle al operador **una** visita a la caja: tecla
+`5`, después `95`, foto. Con esa foto se marcan S9/S10/S12 en EMISION-V0 §4.c
+y se escribe qué camino implementa el muxer (H-8).

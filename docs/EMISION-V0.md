@@ -210,6 +210,16 @@ Mismo contrato: qué creemos, por qué, y qué hacemos si el aparato nos desmien
 | **S14** | **`<audio>` y `<video>` simultáneos** (la ambiente + una pieza) reproducen sin deriva perceptible entre sí | dos decodificadores independientes; la ambiente no pide sincronía | el aparato no sostiene dos sesiones o derivan → la ambiente se muxea en las piezas (más emisión, menos flexibilidad). H-6 v1 |
 | **S12** | **Las piezas se intercambian sin costura visible**: anexar los segmentos en otro orden (o concatenarlos en otro orden) reproduce sin `waiting` ni salto; y el **bucle** (`ended` → `play()` o `loop`) cose sin atasco | cada segmento arranca en cuadro clave cerrado y comparte init | se ve la costura o hay `waiting` en el corte → hay que revisar la estructura (GOP, init, `sidx`) antes de escribir H-7; el bucle se resuelve con dos elementos alternados **solo si** H-11 muestra que un segundo `<video>` no cuesta |
 
+**Lo que la PC dijo el 2026-09-01 a la noche (H-13 corrida en Chromium 148; la PC
+refuta, no consagra):** **S9** sostenida (MSE con el init `avc1.42C01F`, 812 ms);
+**S10** sostenida y con duración conocida (Blob `init + 16` = archivo de 15,4 s,
+109 ms); **S12** sostenida **por MSE en modo `sequence`** (156 cuadros, 0
+atascos) y **refutada por Blob** (123 cuadros en 10 s, duración 14,5: el demuxer
+no acepta `tfdt` no monótonos → intercambiar por concatenación exige reescribir
+tiempos); el bucle por `loop` cose con **un `waiting` por vuelta** (≈ 70 ms de
+deriva por costura). Cambio de pieza por `src`: 390–556 ms por red. Las marcas
+definitivas las pone la caja (REGISTRO, «H-13 implementada»).
+
 ## 5. Lo que v0 **no** prueba
 
 Para que nadie sobre-lea el resultado: v0 no dice nada todavía sobre escalones de

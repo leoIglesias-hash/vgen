@@ -77,7 +77,7 @@ material verdadero y en varios aparatos. Invariante nuevo:
 
 ---
 
-### ⏵ LO PRIMERO AL RETOMAR (actualizado con el reporte de la caja, 2026-09-01)
+### ⏵ LO PRIMERO AL RETOMAR (actualizado al cierre de código de H-13, 2026-09-01 noche)
 
 **La TV box ya está medida.** El operador corrió `https://iargen.com/player/v0/`
 en la caja y mandó la foto del reporte; está **transcripto textual** en el
@@ -104,15 +104,18 @@ nada.
    otras dos: **audio sí** («tipo radio» + hablado con sincronía en momentos →
    diseño en plan §2.6, S13/S14) y **gates aprobados** con caídos ≤ 3 %.
    **No queda ninguna decisión pendiente del operador.**
-2. **La próxima tarea es H-13** (por dónde entra el *paquete*: MSE, Blob
-   concatenado, intercambio de orden, cambio a demanda, bucle) — **cero emisión
-   nueva**, todo sale del pack publicado. **El cuerpo está afilado para
-   ejecutarlo sin preguntar** en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md)
-   §2: módulo `frontend/vgenfeed.js`, teclas `96`/`97`/`98`/`8`/`99` + `5`,
-   columnas `congel` y `cambio_ms`, tests `test_vgenfeed.js` y
-   `test_v0_page.js`, publicación en `v0/` con copia en `deploy/` antes. Al
-   terminar: pedirle al operador **una** visita a la caja (tecla `5`, después
-   `95`, foto).
+2. **H-13 está ejecutada hasta donde se puede sin pantalla** (`85eebd1` → `b3d5837`,
+   CI verde, publicado en `v0/`): `frontend/vgenfeed.js` (MSE encadenado por
+   `updateend`, Blob concatenado, cambio por `src`) y las cinco pruebas en
+   `v0.html` (`96` MSE, `97` Blob, `98` orden, `8` cambio a demanda, `99` bucle;
+   `5` = las cinco, `1` = todo). Probada en PC (refuta, no consagra): S9 y S10
+   sostenidas (el Blob `init+16` es un archivo con duración 15,4 s), S12 solo
+   por MSE `sequence` (por Blob el orden no es transparente), bucle por `loop`
+   con un `waiting` por vuelta, cambio por `src` 390–556 ms. Entrada «H-13
+   implementada» en el REGISTRO. **Lo único que falta es la visita del operador
+   a la caja: tecla `5`, después `95`, foto.** Con la foto: transcribir al
+   REGISTRO, marcar S9/S10/S12 en EMISION-V0 §4.c, escribir en el plan §4 qué
+   camino implementa el muxer (H-8), cerrar H-13 y seguir con **H-11**.
 3. **La caja consagra por decisión manual del operador** (VISION §8.11 lo
    prevé): lo sostenido en ella queda consagrado; la PC, cuando se pruebe, es
    refutadora, no consagradora.
@@ -146,7 +149,9 @@ refutaciones en [`EMISION-V0.md`](EMISION-V0.md)):
    emisión nueva**): MSE con los segmentos CMAF ya publicados (S9), `init +
    segmentos` concatenados en un Blob (S10 — si se sostiene, el muxer del camino
    A es una concatenación), intercambio de orden (S12), bucle de 60 s, columna
-   «congelados» para los caminos con contador ciego. **Es la próxima tarea.**
+   «congelados» para los caminos con contador ciego. **Código, tests, CI y
+   publicación hechos (2026-09-01 noche); probada en PC; falta la foto de la
+   caja.**
 4. **H-11 — la bifurcación de layout**: canvas de intervención encima del
    `<video>`, con tres cargas, sobre Baseline y VP9, contra la línea de base ya
    medida (S5). Decide **encima o al lado** para todo el producto.
@@ -200,7 +205,7 @@ base del contenedor.
 **Estado de fases: F0-F9 completas y verificadas (paradigma anterior; resúmenes
 en [`ejecutados/`](ejecutados/README.md)); DIAG-002/003 cerradas con decisión;
 abierta la fase H (H-0 y H-9 cerradas, H-1..H-5 reemplazadas, H-10 con la caja
-medida, **H-13 próxima**); F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla
+medida, **H-13 con código, CI y publicación hechos — falta la foto de la caja**); F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla
 de tareas abajo.
 
 **Receta de producto vigente (2026-08-31, S-4 cerrada):** defaults del workflow
@@ -266,7 +271,7 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | H-4, H-5 | H | (sonda sintética de capacidades / banco como paso previo) | **reemplazadas 2026-09-01** (misma tarde) por decisión del operador: hubieran fijado el formato contra **una sola TV box**. Disueltas dentro de H-9/H-10. IDs no reusables | — |
 | H-9 | H | **pack v0 — el primer video, por suposición** (`tools/emit_pieces.py` + workflow `emitir-v0`): 4 piezas + `hls-ts/`, `hls-fmp4/`, `dash/` por remux, y `MANIFEST.tsv` | **cerrada 2026-09-01** (run `33566441576` verde). Resumen: [`ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md`](ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md); SHAs abajo en «Referencias de clips» | sí (piezas nuevas) |
 | H-10 | H | **reproducirlo y que él nos diga** (`frontend/v0.html` + `keypad.js`): cuál arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, HLS/DASH, panel real — en la caja **y** 2-3 aparatos más | **en curso — la TV box está medida (2026-09-01)**: reporte transcripto en el REGISTRO, fila en PLAN-DE-MEDICION §5, veredictos en EMISION-V0 §4.b. Faltan el ojo del operador (alfa; VP9 y HLS-TS con contador ciego) y las otras clases, o su decisión manual. **No bloquea** | no |
-| H-13 | H | **por dónde entra el paquete** (`frontend/v0.html` crece, cero emisión nueva): MSE con los segmentos CMAF publicados (S9), `init + segmentos` concatenados en un Blob (S10), intercambio de orden (S12), bucle de 60 s, `changeType`, columna «congelados», «atascos» sin el `waiting` inicial, fila «contador ciego» | **pendiente — próxima** (abierta 2026-09-01 por el reporte de la caja; ninguna decisión del operador la bloquea) | no |
+| H-13 | H | **por dónde entra el paquete** (`frontend/v0.html` crece, cero emisión nueva): MSE con los segmentos CMAF publicados (S9), `init + segmentos` concatenados en un Blob (S10), intercambio de orden (S12), bucle de 60 s, `changeType`, columna «congelados», «atascos» sin el `waiting` inicial, fila «contador ciego» | **en curso — código, tests, CI verde y publicación hechos** (2026-09-01 noche; `85eebd1`…`b3d5837`; `frontend/vgenfeed.js` + teclas `96`/`97`/`98`/`8`/`99` + `5`). Probada en PC: S9/S10 sostenidas, S12 solo por MSE `sequence`, bucle con costura, cambio 390–556 ms. **Falta la visita del operador a la caja** (`5` → `95` → foto) para marcar S9/S10/S12 y escribir el camino del muxer | no |
 | H-11 | H | **la bifurcación de layout**: canvas de intervención **encima** del `<video>`, con tres cargas, sobre Baseline y VP9, contra la línea de base medida (suposición S5) | pendiente (precondición: H-13, o antes si el operador prioriza N2) | no |
 | H-6 | H | **matriz por bytes a igual look, con la fluidez como gate** (reorientada por el reporte): VP9 × fps variable por segmento × H.264 piso relajado × zonas estáticas × paleta 4:2:0; emisión v1 con segmentos (WebM segmentado para VP9 → S11) + fila de referencia con los defaults | pendiente (precondición: H-13, H-11) | sí (variantes) |
 | H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido, borrado de claves viejas y techo medido (10/25/50 MB). Vale 2,5 s de arranque en la caja | pendiente (precondición: H-13) | no |
@@ -425,3 +430,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-09-01 | **PRIMER REPORTE DE APARATO: la TV box** (foto del operador, transcripta textual al REGISTRO). Android 9, WebView Chromium 70, panel 1280×720 con superficie 3840×2160. **Todo lo progresivo reproduce fluido por hardware** (0–2 caídos de ~155 en 10 s, deriva ≤ 2 ms, cero atascos reales, con la superficie 4K activa); **Main = Baseline → decodificador hardware** (el par de v0 aísla la entropía, no el DPB: los dos llevan `refs=1` sin B); **el arranque lo manda la cantidad de bytes por red** (H.264 2.985 ms por red contra **517 ms** desde `blob:`; VP9 931 ms); **VP9 y HLS-TS reproducen pero el contador de cuadros no los ve** (`total 0`) — su fluidez la firma el ojo; **HLS-TS nativo sí** (2.012 ms), **HLS-fMP4 nativo inservible** (14.223 ms, 2 atascos), **DASH nativo no**; MSE declarado para `avc1` y `vp9` **sin probar**; IndexedDB sí; sin rVFC ni `getVideoPlaybackQuality`. Suposiciones: S1, S8 sostenidas en la caja; el detector de S2 resuelto (hardware) y S2 reclasificada a bytes; S3 a medias (ojo); S4 pendiente del ojo; S7 sostenida para HLS-TS y refutada para fMP4/DASH; nuevas **S9..S12** (MSE, Blob concatenado, VP9 por MSE, intercambio/bucle). Se escribe **`PLAN-IMPLEMENTACION-VGEN.md`** y se abre **H-13** | tres cambios de rumbo que salen de los números y no de una opinión: (a) **la fluidez en esta clase está saturada** a 720p@15, así que pasa a ser un **gate** y la optimización es de **bytes a igual look y arranque**; (b) **VP9 al frente** donde reproduzca, H.264 Baseline de piso y único carril de HLS-TS; (c) **MSE es la próxima prueba y no requiere emitir nada** — los segmentos CMAF ya están publicados, y de paso se prueba si `init + segmentos` concatenados es un archivo que `<video>` reproduce (si sí, el muxer del camino A es una concatenación). Nada se consagra con un solo aparato (VISION §8.11): todo queda «sostenido en la caja» hasta segunda clase o decisión del operador. Las decisiones que él debe tomar están listadas en el plan, §6 |
 | 2026-09-01 | **Respuestas del operador al primer reporte + nombre `.vgen`** (textuales en el REGISTRO). El alfa **compone** (S4); VP9 «perfecto, hasta más fluido» (S3 firmada por el ojo); HLS-TS «se traba mucho al iniciar» → el camino D sale del producto en esta clase; **«de momento el tv box es la base»** → decisión manual: la caja es la **clase principal** y lo que gana en ella queda consagrado (S1, S3, S4, S8), la PC refuta cuando se pruebe; contenido = **loop intervenido + publicidad que reemplaza y vuelve + incentivadores a demanda** → plan §2.7 con sus requisitos (piezas residentes, latencia de cambio a demanda como gate nuevo ≤ 1 s a confirmar, cues por pieza) y H-13 suma «cambio de pieza a demanda y vuelta al loop»; nombre **`.vgen`** → `DISENO-FORMATO-ASCLH.md` → `DISENO-FORMATO-VGEN.md`, `PLAN-IMPLEMENTACION-ASCLH.md` → `PLAN-IMPLEMENTACION-VGEN.md`, futura `SPEC-VGEN.md`; el nombre viejo se reemplaza solo en los documentos vigentes (registro y bitácora quedan como historia). Audio y gates: pendientes, explicados en simple | las respuestas cierran lo que un solo aparato no podía cerrar: el invariante §8.11 prevé la decisión manual y el operador la tomó. El símbolo de play que vio en la pieza con alfa se lee como el control nativo del WebView sobre un video **pausado** por la página al terminar los 10 s (hipótesis; H-13 deja de pausar y lo confirma). Los caminos del producto quedan en **A y B**; H-13 decide cuál hace el cambio de pieza |
 | 2026-09-01 | **Audio, gates y compresiones ASCILINE — cierre de todas las decisiones del plan §6.** Operador: «va con audio… tipo radio… publicidades o contenido hablado intercediendo… sincronicidad en algunos momentos» → **dos clases de audio** (ambiente en `<audio>` aparte, continua; el propio de una pieza **muxeado en ella**; cues para lo hablado sobre el loop, tolerancia ≥ 1 cuadro), suposiciones **S13/S14** para la emisión v1. «Apruebo tus gates… el de cuadros un poquito más flexible» → **caídos ≤ 3 %**, el resto igual. «¿Aplicamos las compresiones de ASCILINE antes del vgen?» → **siempre se aplican** (toda pieza sale del máster); en el híbrido compran **bytes** (arranque, caché) e información para el emisor, no velocidad de decodificación (hardware, saturada). **H-13 afilada** en el runbook: módulo `vgenfeed.js`, teclas, columnas, tests, cierre | con esto no queda ninguna decisión pendiente y la próxima sesión (post-compact) ejecuta H-13 sin preguntar. El pedido del operador fue explícito: documentar todo antes del compact, y que la próxima tarea esté lista para «laburar» |
+| 2026-09-01 (noche) | **H-13 EJECUTADA hasta la pantalla** (`85eebd1` + `6c81078` + `b3d5837`, CI verde 3/3): `frontend/vgenfeed.js` (MSE encadenado por `updateend`, Blob concatenado, `switchTo`), cinco pruebas en `v0.html` (`96`/`97`/`98`/`8`/`99`; `5` = las cinco, `1` = todo), columna `congel`, atascos solo tras arrancar, fila «ciego», sin pausa al terminar, `changeType` en la cabecera; tests cableados en `run_all.py`. Probada en PC (Chromium 148, refuta) contra el pack publicado: MSE 812 ms; Blob `init+16` = archivo con duración 15,4 s (109 ms); orden 1-8,13-16,9-12 limpio por MSE `sequence` y **no** por Blob (123 cuadros, dur 14,5); cambio por `src` 390–556 ms; bucle por `loop` con 1 `waiting` por vuelta y 210 ms de deriva en 60 s. **Publicado** en `v0/` (2 keys: `index.html` regenerada + `vgenfeed.js`; copia commiteada antes; SHA-256 verificado; token quemado, 403 al primer intento). Detalle en el REGISTRO | lo que decide el muxer de H-8 ya asoma: si la caja repite S10, el camino A es `concat()`; el intercambio de piezas es cosa de MSE `sequence` (o de reescribir `tfdt`); el bucle del producto probablemente por MSE. **Falta la visita del operador a la caja** (`5` → `95` → foto): una sola, como manda la regla 3.4 del plan |

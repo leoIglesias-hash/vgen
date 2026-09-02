@@ -113,13 +113,14 @@ y ninguna fila sola alcanza para normalizar nada (§1).
 | **TV box** (la de DIAG-002/003) — **medida 2026-09-01** | Android 9, WebView **Chromium 70** (`TVBOX Build/PPR1.180610.011; wv`) | ✓ 0/156, 2.985 ms | ✓ 1/153, 2.813 ms | ✓ arranca en **931 ms**, deriva −1 ms; **contador ciego**; ojo: «perfecto, hasta más fluido» | ✓ **compone** («el verde alrededor, y dentro del círculo el video»); 1/155, 1.052 ms | ✓ **517 ms**, 2/155 | declarado `avc1` + `vp9`; **sin probar** (H-13) | sí (declarado; persistencia en H-12) | 0–2 de ~155 en 10 s donde el contador cuenta | ✗ | (H-11) | 1280×720 / 3840×2160 | **P0 y P1 confirmados** (clase principal por decisión del operador); P2 pendiente de H-13/H-12 |
 | _(celular del operador)_ | | | | | | | | | | | | | |
 | _(Smart TV del operador)_ | | | | | | | | | | | | | |
-| _(escritorio)_ | | | | | | | | | | | | | |
+| **escritorio** (navegador embebido de la sesión, Chromium 148 / Windows 11) — **refuta, no consagra**; H-13, 2026-09-01 noche | Chromium 148 | ✓ (llega por cambio a demanda en 446 y 390 ms) | – | ✓ (cambio 556 ms; bucle 60 s: 3 vueltas, 1 `waiting` por vuelta) | – | ✓ Blob CMAF `init+16` = archivo, 109 ms, dur 15,4 | ✓ **probado**: 812 ms; `sequence` cose 1-8,13-16,9-12 sin atasco; `changeType` sí | sí | no válidos (máquina ocupada) | sí | (H-11) | 1280×800 ,5 / 399×635 (panel angosto) | refutadora |
 
 El carril segmentado (camino D y suposiciones S7/S8), misma caja, mismo día:
 
 | Aparato | HLS-TS nativo | HLS-fMP4 nativo | DASH nativo | Segmentos CMAF decodifican |
 |---|---|---|---|---|
 | **TV box** | **irregular**: 2.012 ms y 0 atascos la única vez que arrancó bien; después «se traba mucho al iniciar» (operador) | ✗ **inservible**: 14.223 ms, 2 atascos reales, deriva 95 ms | ✗ error de carga | ✓ 154 cuadros contados desde el init compartido |
+| **escritorio** (Chromium 148) | – | – | – | ✓ por MSE (157 cuadros); concatenados en un Blob = archivo con duración 15,4 s; **en otro orden por Blob NO** (123 cuadros, dur 14,5) |
 
 Transcripción textual del reporte y su lectura: REGISTRO, entrada «H-10: primer
 reporte de aparato — la TV box (2026-09-01)». Lo que esa fila cambia en el rumbo
