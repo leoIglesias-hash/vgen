@@ -3794,3 +3794,113 @@ anota por si vuelve a pasar en la caja.
 copia en el repo antes) y pedirle al operador **una** visita a la caja: tecla
 `5`, después `95`, foto. Con esa foto se marcan S9/S10/S12 en EMISION-V0 §4.c
 y se escribe qué camino implementa el muxer (H-8).
+
+## H-13: reporte de la caja — el paquete entra por A y por B (2026-09-01, noche)
+
+El operador corrió la tecla `5` en la TV box y mandó la foto del `95`
+(`outputs/evidencia/2026-09-01-tvbox-reporte-h13.jpg`, local). Transcripción
+**textual**:
+
+```
+ua      Mozilla/5.0 (Linux; Android 9; TVBOX Build/PPR1.180610.011; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/70.0.3538.80 Safari/537.36
+panel   1280x720   dpr 1   superficie 3840x2160
+mse     si   changeType  si   blob  si
+mse.h264   si   mse.vp9  si
+rvfc    no   indexeddb   si   quality  no
+hls     maybe   dash  no
+# atascos = waiting despues de arrancar; congel = muestras de 100 ms sin avance
+# id          dice      arranco 1er_ms caidos total deriva_ms atascos congel cambio_ms nota
+mse:h264      probably  si      2033   1      156   1         0       0      -1        orden 1-16
+blob:cmaf     probably  si      1286   1      155   0         0       0      -1        dur 15.4s; orden 1-16
+mse:orden     probably  si      1246   1      155   -1        0       0      -1        dur 15.4s; orden 1-8,13-16,9-12
+blob:orden    probably  si      1397   1      123   1         0       0      -1        dur 15.3s; orden 1-8,13-16,9-12
+cambio0:vp9   probably  si      1651   1      64    0         0       0      -1        dur 15.4s; sale de v0-vp9
+cambio1:base  probably  si      1509   1      65    0         0       0      1468      dur 15.4s; a v0-h264-baseline
+cambio2:vp9   probably  si      305    1      65    0         0       0      305       dur 15.4s; a v0-vp9
+cambio3:base  probably  si      1179   1      65    1         0       0      1180      dur 15.4s; a v0-h264-baseline
+bucle:vp9     probably  si      371    0      827   497       3       1      -1        vueltas 3; dur 15.4s; loop 60 s
+```
+
+Y después de repetir algunas a mano, el ojo: **«blob orden se tilda en una
+parte»**.
+
+**Sobre la duda del operador** («creo que el timer estaba mal… vas a tener de
+156 a 64, los de 64 se cortaron antes»): **no se cortaron, es a propósito.** Las
+cuatro filas `cambio*` miden **4 s** cada una (`SWITCH_SECONDS = 4` en
+`v0.html`): lo que importa ahí es `cambio_ms`, no diez segundos de reproducción,
+y así la visita entera dura dos minutos y medio en vez de cuatro. 65 cuadros
+son exactamente 4 s a 15 fps más el arranque. Las de 10 s dan 155–156 (15,4 s de
+pieza) y el bucle de 60 s da 827. El instrumento midió lo que tenía que medir.
+
+**Contra los gates del plan §3.1**, fila por fila (la caja es la clase
+principal: lo que se sostiene acá **queda consagrado**):
+
+| Fila | Gate que toca | Pasa |
+|---|---|---|
+| mse:h264 | arranque por red ≤ 3.000 → **2.033**; caídos 1/156; atascos 0; deriva 1; congel 0 | **sí, todos** |
+| blob:cmaf | arranque desde caché ≤ 1.000 → **1.286**; caídos 1/155; 0/0/0 | **fluidez sí; arranque NO, por 286 ms** (lectura 2) |
+| mse:orden | 155 cuadros, atascos 0, deriva −1, congel 0 | **sí** |
+| blob:orden | 123 cuadros, dur 15,3; ojo: «se tilda en una parte» | **no** (lectura 3) |
+| cambio1/3:base | cambio ≤ 1.000 → **1.468 / 1.180** | **no** |
+| cambio2:vp9 | cambio ≤ 1.000 → **305** | **sí** |
+| bucle:vp9 | atascos 0 → **3**; deriva ≤ 50/10 s → **497/60 s ≈ 83/10 s**; congel 0 → **1**; caídos 0/827 | **no: la costura del `loop` se ve en los números** |
+
+**Lectura, y lo que queda decidido:**
+
+1. **S9 SOSTENIDA Y CONSAGRADA:** MSE reproduce los segmentos CMAF publicados en
+   la caja, bajando de a uno por red, con 156 cuadros, un caído y cero atascos.
+   `changeType` existe. La fila no trae `dur` porque a los 10 s el alimentador
+   todavía no había anexado el último segmento (sin `endOfStream` la duración es
+   infinita); no es defecto. **El camino B existe en la clase principal.**
+2. **S10 SOSTENIDA en dos clases** (caja y PC): `init + 16 segmentos` pegados en
+   un Blob **es un archivo**, con duración conocida (15,4 s) y sin atascos.
+   **El muxer del camino A es una concatenación** en orden canónico; no hay que
+   rearmar `moov`. El punto flojo es el arranque: **1.286 ms desde memoria**
+   contra los **517** del `blob:` del Baseline progresivo (H-10). Una sola
+   medición, con 9,5 MB de fMP4 de 16 fragmentos contra un mp4 con `moov`
+   clásico: puede ser que el demuxer recorra los `moof` antes de arrancar, o
+   ruido de esa corrida. **No se decide con una fila**: en la próxima visita
+   (H-11 o H-12) se corren `92` y `97` seguidos y se compara; si el fMP4
+   cuesta de verdad, el muxer A emite la pieza entera con `moov` clásico (el
+   máster lo permite) y reserva CMAF para B.
+3. **S12 SOSTENIDA POR MSE, REFUTADA POR BLOB, en dos clases** —esto ya se
+   puede normalizar—: por MSE en modo `sequence` el orden 1-8, 13-16, 9-12 se
+   cose limpio (155 cuadros, 0 atascos, deriva −1); por Blob **se tilda en una
+   parte** (el ojo del operador) y cuenta 123 cuadros: el demuxer no trata como
+   transparente una concatenación con `tfdt` no monótonos —se traba donde el
+   tiempo retrocede— ni en Chrome 70 ni en 148. **Intercambiar piezas cambiando
+   el orden es cosa del camino B**; por A solo en orden canónico.
+4. **El bucle por `loop` progresivo queda REFUTADO en la caja:** un `waiting`
+   por vuelta, 497 ms de deriva en 60 s (≈ 165 ms por costura, más del doble
+   que en la PC) y una muestra congelada. Cero caídos: el decodificador no
+   sufre, la costura es del elemento. **El bucle del producto va por MSE en
+   `sequence`** (S12), que cosió sin atasco. Los dos `<video>` alternados quedan
+   como reserva, condicionados a H-11.
+5. **Cambio a demanda por `src`: los bytes mandan otra vez.** A VP9 (4,4 MB)
+   305 ms; a Baseline (9,5 MB) 1.468 y 1.180 ms, por red. Con el gate en 1 s,
+   **el incentivador tiene que ser VP9 y estar residente** (caché de H-12,
+   `blob:`); la alternativa de cambiar por MSE con `changeType` (existe) se
+   prueba en H-8 si hace falta.
+6. **El contador ahora ve VP9** (64–65 cuadros en 4 s, 827 en 60 s), cuando en
+   el reporte de H-10 la fila `v0-vp9` decía `total 0`. Misma caja, mismo
+   contador (`webkitDecodedFrameCount`). Sin explicación firme; se anota, y si
+   vuelve a dar cero en alguna fila se mira ahí.
+7. **Falta un dato del ojo:** el operador no dijo si volvió a aparecer el
+   símbolo de play al terminar (ahora no se pausa). Se pregunta en la próxima
+   visita; no bloquea.
+
+**Qué implementa el muxer (H-8), escrito como lo pedía el cierre de H-13:**
+
+- **Camino A — concatenación.** `concat(init, segmentos…)` en orden canónico →
+  `Blob` → `blob:`. Para piezas enteras desde caché. Sin rearmar `moov`. Con
+  la salvedad del arranque (lectura 2), a re-medir contra un mp4 clásico.
+- **Camino B — alimentador MSE.** Un `SourceBuffer` por códec, modo
+  `sequence`, anexo encadenado por `updateend`. Es **el camino del bucle y del
+  intercambio de piezas** (la intervención N1 en vivo). `changeType` disponible
+  para mezclar VP9 y H.264 sin recrear el buffer.
+- **Cambio a demanda:** por `src` con la pieza residente (VP9), o por B con
+  `changeType`; se elige en H-8 midiendo.
+- **Camino D (playlist HLS-TS): no se implementa** en esta clase.
+
+**H-13 CERRADA.** Sigue **H-11** (canvas encima del `<video>`), y en su visita
+a la caja se aprovecha para `92` + `97` seguidos y la pregunta del play.

@@ -220,6 +220,17 @@ tiempos); el bucle por `loop` cose con **un `waiting` por vuelta** (≈ 70 ms de
 deriva por costura). Cambio de pieza por `src`: 390–556 ms por red. Las marcas
 definitivas las pone la caja (REGISTRO, «H-13 implementada»).
 
+**Lo que la caja dijo, misma noche (REGISTRO, «H-13: reporte de la caja»; la
+caja consagra):** **S9 ✓ consagrada** (MSE 2.033 ms por red, 156 cuadros, 0
+atascos, `changeType` sí). **S10 ✓ en dos clases** (Blob `init + 16` = archivo
+de 15,4 s; arranque 1.286 ms desde memoria, a re-medir contra un mp4 clásico).
+**S12 ✓ por MSE `sequence` y ✗ por Blob, en dos clases** («blob orden se tilda
+en una parte», operador) → normalizado: el intercambio de piezas es del camino
+B; **el bucle por `loop` progresivo ✗ en la caja** (3 `waiting`, 497 ms de
+deriva en 60 s) → el bucle del producto va por MSE. Cambio por `src`: 305 ms a
+VP9, 1.468/1.180 ms a Baseline → los bytes mandan; el incentivador es VP9 y
+residente. **H-13 cerrada.**
+
 ## 5. Lo que v0 **no** prueba
 
 Para que nadie sobre-lea el resultado: v0 no dice nada todavía sobre escalones de

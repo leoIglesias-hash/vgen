@@ -134,11 +134,12 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   REGISTRO — y queda abierta para las otras clases o la decisión manual del
   operador. Lo vivo, en orden (rumbo completo en
   [`docs/PLAN-IMPLEMENTACION-VGEN.md`](docs/PLAN-IMPLEMENTACION-VGEN.md)):
-  **H-13** (**código, CI y publicación hechos el 2026-09-01 a la noche; falta la
-  foto de la caja** — `frontend/vgenfeed.js` + teclas `96`/`97`/`98`/`8`/`99`;
-  en PC: S9/S10 sostenidas, S12 solo por MSE `sequence`, bucle por `loop` con
-  costura; cero emisión nueva),
-  **H-11** intervención encima o al lado, **H-12** caché, **H-6** matriz por
+  **H-13 CERRADA 2026-09-01 noche** (`frontend/vgenfeed.js` + teclas
+  `96`/`97`/`98`/`8`/`99`; la caja dijo: MSE sí —2.033 ms, 0 atascos—, Blob
+  `init+16` = archivo, intercambio de orden solo por MSE `sequence`, bucle por
+  `loop` refutado, cambio a demanda 305 ms a VP9 y >1 s a Baseline → muxer A =
+  concatenación, B = MSE `sequence`; REGISTRO «H-13: reporte de la caja»),
+  **H-11** (**próxima**) canvas de intervención encima del `<video>`, **H-12** caché, **H-6** matriz por
   bytes a igual look, **H-7** spec `SPEC-VGEN.md`, **H-8** muxer ES5 + player.
   **H-14** (determinismo de H.264) y **W-26** son independientes. Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
@@ -161,9 +162,9 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   ella; plan §2.6). **Gates aprobados** (caídos ≤ 3 %; plan §3.1). Las
   compresiones ASCILINE se aplican **siempre** (toda pieza sale del máster) y
   compran bytes, no velocidad de decodificación (plan §2.8). **No hay
-  decisiones pendientes. H-13 está ejecutada hasta donde se puede sin pantalla:
-  lo que falta es la visita del operador a la caja (`5` → `95` → foto)**; con
-  la foto se cierra H-13 y sigue H-11.
+  decisiones pendientes. H-13 cerrada con la foto de la caja; la próxima sesión
+  ejecuta H-11** (en su visita a la caja: `92` + `97` seguidos, y preguntar si
+  volvió a aparecer el símbolo de play ahora que no se pausa).
 - **Herramientas de la fase H, ya hechas — no re-implementar:**
   `tools/emit_pieces.py` + workflow `emitir-v0` (emiten el pack desde el máster,
   con los empaquetados HLS/DASH por remux), `frontend/v0.html` (una sola
@@ -177,8 +178,8 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   §4.b: el detector de Main **ya habló** (hardware → la matriz se reorienta a
   bytes y arranque); VP9 reproduce pero falta el ojo; el alfa está pendiente del
   ojo; nuevas S9..S12 (MSE, Blob concatenado, VP9 por MSE, intercambio/bucle)
-  en §4.c; H-13 ya las corrió en PC (S9/S10 sí, S12 solo por MSE `sequence`) y
-  espera la caja.
+  en §4.c, **ya juzgadas por H-13** (S9 consagrada, S10 en dos clases, S12 por
+  MSE sí / por Blob no, bucle por `loop` refutado).
 - **Suspendidas** (recuperables de `docs/historico/` solo con decisión del
   operador): F10 (pérdida adaptativa — ojo: seguiría mejorando el producto, que
   hereda los píxeles del máster), F11 (formato v4), F8, DIAG-001, opcionales.
