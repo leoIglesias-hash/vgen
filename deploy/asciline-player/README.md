@@ -195,8 +195,8 @@ subirlas.
 
 | key | bytes | md5 | qué es |
 |---|---|---|---|
-| `v0/index.html` | 50859 | `d53f3c9c1efc4d4a912752ddb68f2db8` | H-12: `84` guardar + desde caché + techo, `85` desde caché (tras reiniciar), `86` borrar; filas sin video no son «ciegas» |
-| `v0/vgencache.js` | 10278 | `2928be086427495379d23bff840ffc12` | IndexedDB: bajada con progreso, pineo por contenido, poda, techo, cuota |
+| `v0/index.html` | 50860 | `ecd7849b29ff8277b4c5986af05b4e3b` | H-12: `84` guardar + desde caché + techo, `85` desde caché (tras reiniciar), `86` borrar; filas sin video no son «ciegas» |
+| `v0/vgencache.js` | 10281 | `a427ea837d9760ad02cf63a813b8e33d` | IndexedDB: bajada con progreso, pineo por contenido, poda, techo, cuota |
 
 Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
 → SHA-256 igual al del archivo local en las dos; token de subida quemado.

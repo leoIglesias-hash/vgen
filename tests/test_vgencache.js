@@ -312,15 +312,15 @@ function buffer(n) { return { byteLength: n, tag: "buf" + n }; }
 
 /* --- relleno para el techo --- */
 
-(function testFillIsNoisyAndSized() {
-  var buf = Cache.fill(2);
+(function testNoiseIsNoisyAndSized() {
+  var buf = Cache.noise(2);
   var view, i, zeros = 0, half = 1048576;
   assert.strictEqual(buf.byteLength, 2 * 1048576, "2 MB exactos");
   view = new Uint8Array(buf);
   for (i = 0; i < 4096; i++) { if (view[i] === 0) { zeros++; } }
   assert(zeros < 64, "ruido, no ceros: la base comprime y 50 MB de ceros no miden nada");
   assert.strictEqual(view[half + 7], view[7], "un megabyte de ruido repetido");
-  assert.strictEqual(Cache.fill(0), null);
+  assert.strictEqual(Cache.noise(0), null);
 }());
 
 /* --- cuota --- */

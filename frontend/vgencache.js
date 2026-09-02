@@ -14,7 +14,7 @@
  *   put / get / remove / list / clear / prune
  *   keyFor(id, sha256)         id + "." + sha12: dos versiones de la misma
  *                              pieza nunca comparten clave (CACHE-001)
- *   fill(mb)                   bytes pseudoaleatorios para la prueba de techo
+ *   noise(mb)                  bytes pseudoaleatorios para la prueba de techo
  *   quota(hooks, cb)           lo que el aparato dice tener (API con callback)
  *
  * Se guardan ArrayBuffers, no Blobs: el clon estructurado de un ArrayBuffer lo
@@ -235,7 +235,7 @@ var VGenCache = (function () {
    * comprime lo que guarda (LevelDB + Snappy en Chromium), y 50 MB de ceros
    * entrarian donde 50 MB de video no entran. Un megabyte de ruido repetido
    * mb veces alcanza: la compresion trabaja por bloques mucho mas chicos. */
-  function fill(mb) {
+  function noise(mb) {
     var MB = 1048576;
     var chunk, big, i, x = 2463534242;
     if (typeof Uint8Array === "undefined" || !(mb > 0)) { return null; }
@@ -282,7 +282,7 @@ var VGenCache = (function () {
     clear: clear,
     prune: prune,
     keyFor: keyFor,
-    fill: fill,
+    noise: noise,
     quota: quota
   };
 })();

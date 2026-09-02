@@ -1060,7 +1060,7 @@ function stepTecho(mb) {
       var data, t0;
       if (error) { row.error = error; finishRow(id, done)(row); return; }
       say("techo " + mb + " MB: armando");
-      data = VGenCache.fill(mb);
+      data = VGenCache.noise(mb);
       if (!data) { row.error = "sin Uint8Array"; finishRow(id, done)(row); return; }
       say("techo " + mb + " MB: guardando");
       t0 = new Date().getTime();

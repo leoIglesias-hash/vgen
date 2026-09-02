@@ -4037,7 +4037,7 @@ sobrevive a un reinicio. La única memoria que persiste dentro del piso ES5 es
   `get`, `list` (metadatos sin bytes, para la cabecera), `remove`, `clear`,
   `prune` (borra lo que no esté en el manifiesto vigente), `keyFor` (`id` +
   `sha12`: **pineo por contenido**, CACHE-001 — una re-emisión es otra clave),
-  `fill` (ruido para el techo) y `quota` (`webkitTemporaryStorage.
+  `noise` (ruido para el techo) y `quota` (`webkitTemporaryStorage.
   queryUsageAndQuota`, la única API de cuota con callback; la moderna es
   `Promise` y queda fuera del piso). Se guardan **`ArrayBuffer`, no `Blob`**:
   el clon estructurado de un ArrayBuffer lo soporta toda IndexedDB que exista,
