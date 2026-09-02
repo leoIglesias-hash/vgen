@@ -203,6 +203,14 @@ assert(page.indexOf("ptr.onerror=function(){ startDownload(CLIP_URL); }") >= 0,
 
 /* W-14: robustez heredada del player tradicional */
 assert(page.indexOf("renderer.dispose(true)") >= 0);
+
+/* W-26: la raiz publicada tiene que aceptar ?renderer=canvas2d como las demas
+ * paginas: en la caja real WebGL no presenta (DIAG-002) y sin escape la raiz
+ * quedaba en blanco. */
+assert(inline[1].indexOf('qs("renderer")!=="canvas2d"') >= 0,
+  "la raiz respeta ?renderer=canvas2d (W-26)");
+assert(/if\(!textLayer && qs\("renderer"\)!=="canvas2d"\)\{\s*try\{\s*var w=new window\.WebGLRenderer/.test(inline[1]),
+  "el escape se decide ANTES de crear el contexto WebGL: un canvas que lo creo no vuelve a 2D");
 assert(page.indexOf("w.dispose(true)") >= 0);
 assert(page.indexOf("nativeRequestFrame && nativeCancelFrame") >= 0);
 assert(page.indexOf("nativeRequestFrame.call(window,fn)") >= 0 &&

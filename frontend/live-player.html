@@ -216,7 +216,11 @@
     if(renderer && renderer.dispose){ try{ renderer.dispose(true); }catch(e1){} }
     /* INT-004 / regla 6: con texto nativo declarado el renderer ES Canvas2D
      * (WebGL no gana funciones; strokeText/fillText no existen alli) */
-    if(!textLayer){
+    /* W-26: en la caja real esta pagina elegia WebGL y la GPU no presentaba
+     * (pantallazos blancos, DIAG-002). ?renderer=canvas2d la fuerza al piso;
+     * cualquier otro valor deja el automatico. WebGL solo acelera, nunca
+     * agrega funcion, asi que forzar el piso no pierde nada. */
+    if(!textLayer && qs("renderer")!=="canvas2d"){
       try{
         var w=new window.WebGLRenderer(cv);
         if(w.init(reader,cellPx,"nearest")){ r=w; } else if(w.dispose){ w.dispose(true); }
