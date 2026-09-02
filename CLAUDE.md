@@ -25,13 +25,14 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
    construimos, de qué linaje sale cada pieza, invariantes y no-objetivos. Si se
    lee un solo documento de diseño, es este.
 2. [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) — dónde quedó todo, próxima acción, bitácora.
-3. [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md) — **solo la tarea a ejecutar** (fase H).
-4. [`docs/EMISION-V0.md`](docs/EMISION-V0.md) — **el primer video**: qué le tomamos a cada códec y cuáles son las suposiciones, cada una con su refutación escrita.
-5. [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md) — el método: se mide **reproduciendo**, en varios aparatos, y el registro de aparatos.
-6. [`docs/DISENO-FORMATO-ASCLH.md`](docs/DISENO-FORMATO-ASCLH.md) — el formato en obra, con la tabla de **decidido vs. gateado**.
-7. [`docs/ejecutados/`](docs/ejecutados/) — lo ya cumplido con su evidencia; consultar, no releer.
-8. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
-9. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
+3. [`docs/PLAN-IMPLEMENTACION-ASCLH.md`](docs/PLAN-IMPLEMENTACION-ASCLH.md) — **el rumbo**: evidencia medida, caminos de runtime, gates numéricos, orden de tareas y decisiones pendientes del operador. Vigente desde el primer reporte de aparato (2026-09-01).
+4. [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md) — **solo la tarea a ejecutar** (fase H).
+5. [`docs/EMISION-V0.md`](docs/EMISION-V0.md) — **el primer video**: qué le tomamos a cada códec y cuáles son las suposiciones, cada una con su refutación escrita y su veredicto por aparato (§4.b/§4.c).
+6. [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md) — el método: se mide **reproduciendo**, en varios aparatos, y el registro de aparatos.
+7. [`docs/DISENO-FORMATO-ASCLH.md`](docs/DISENO-FORMATO-ASCLH.md) — el formato en obra, con la tabla de **decidido vs. gateado**.
+8. [`docs/ejecutados/`](docs/ejecutados/) — lo ya cumplido con su evidencia; consultar, no releer.
+9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
+10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
 ## Modelo de trabajo (acordado con el operador; heredado sin cambios)
 
@@ -129,13 +130,26 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   no reusables. **H-9 CERRADA 2026-09-01**: el pack v0 existe, está medido en
   bytes y publicado (resumen:
   [`docs/ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md`](docs/ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md)).
-  Lo vivo, en orden: **H-10** (**próxima acción**: el operador abre
-  `https://iargen.com/player/v0/` en la caja, el celular, el Smart TV y el
-  escritorio, y pasa el reporte — **tecla 95** lo muestra a pantalla completa
-  para fotografiarlo), **H-11** intervención encima o al lado, **H-6** matriz,
-  **H-12** caché, **H-7** spec `SPEC-ASCLH.md`, **H-8** muxer ES5 + player.
+  **H-10 tiene la TV box medida (2026-09-01)** — reporte transcripto en el
+  REGISTRO — y queda abierta para las otras clases o la decisión manual del
+  operador. Lo vivo, en orden (rumbo completo en
+  [`docs/PLAN-IMPLEMENTACION-ASCLH.md`](docs/PLAN-IMPLEMENTACION-ASCLH.md)):
+  **H-13** (**próxima**: por dónde entra el paquete — MSE, `init + segmentos`
+  concatenados en un Blob, intercambio de orden, bucle; cero emisión nueva),
+  **H-11** intervención encima o al lado, **H-12** caché, **H-6** matriz por
+  bytes a igual look, **H-7** spec `SPEC-ASCLH.md`, **H-8** muxer ES5 + player.
   **H-14** (determinismo de H.264) y **W-26** son independientes. Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
+- **Lo que la caja dijo (2026-09-01, Android 9 / Chromium 70):** todo lo
+  progresivo reproduce **fluido por hardware** a 720p@15 con la superficie 4K
+  activa (0–2 caídos de ~155 en 10 s); **Main = Baseline → decodificador
+  hardware**; **el arranque lo manda la cantidad de bytes por red** (H.264
+  2.985 ms por red, **517 ms** desde `blob:`, VP9 931 ms); **VP9 reproduce**
+  (el contador no lo ve: su fluidez la firma el ojo); **HLS-TS nativo sí**,
+  HLS-fMP4 inservible, DASH no; **MSE declarado y sin probar**; IndexedDB sí;
+  sin rVFC. Consecuencia: **la fluidez es un gate, los bytes y el arranque son
+  el objetivo**; VP9 al frente donde reproduzca, H.264 Baseline de piso. Nada
+  consagrado con un solo aparato.
 - **Herramientas de la fase H, ya hechas — no re-implementar:**
   `tools/emit_pieces.py` + workflow `emitir-v0` (emiten el pack desde el máster,
   con los empaquetados HLS/DASH por remux), `frontend/v0.html` (una sola
@@ -143,11 +157,11 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   `frontend/keypad.js` (el mando **compartido**) y `frontend/ir.html` (lanzador
   autocontenido que vive en **otro servidor**, no en el bucket).
 - **Las suposiciones del pack v0 están escritas con su refutación** en
-  [`docs/EMISION-V0.md`](docs/EMISION-V0.md) §4. Las dos grandes: si YouTube anda
-  bien en la caja, esa caja tiene **VP9 por hardware** (VP9 sería su camino más
-  rodado, no el exótico); y la pieza **H.264 Main es el detector de hardware vs.
-  software** — si la más comprimida no cuesta más, el bitstream no es el cuello y
-  toda la matriz se reorienta a cantidad de cuadros y ancho de banda.
+  [`docs/EMISION-V0.md`](docs/EMISION-V0.md) §4, y su veredicto en la caja en
+  §4.b: el detector de Main **ya habló** (hardware → la matriz se reorienta a
+  bytes y arranque); VP9 reproduce pero falta el ojo; el alfa está pendiente del
+  ojo; nuevas S9..S12 (MSE, Blob concatenado, VP9 por MSE, intercambio/bucle)
+  en §4.c, todas para H-13.
 - **Suspendidas** (recuperables de `docs/historico/` solo con decisión del
   operador): F10 (pérdida adaptativa — ojo: seguiría mejorando el producto, que
   hereda los píxeles del máster), F11 (formato v4), F8, DIAG-001, opcionales.

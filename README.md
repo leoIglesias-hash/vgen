@@ -18,10 +18,14 @@ primera reproducción fluida del producto en la TV box real (DIAG-002/003). Fase
 F0-F9 del paradigma anterior cerradas y verificadas; en curso la **fase H**. El
 **pack v0** ya está emitido y publicado (`https://iargen.com/player/v0/`): cuatro
 piezas —H.264 Baseline y Main, VP9 y VP9 con alfa— más los empaquetados **HLS y
-DASH** obtenidos por remux, y la página que las reproduce y mide. Lo que sigue es
-abrirla en aparatos reales y, con esa tabla, la matriz de emisión y la spec del
-formato — ver [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md). Una publicación pública sigue
-condicionada por licencia, procedencia y derechos de los videos.
+DASH** obtenidos por remux, y la página que las reproduce y mide. **La TV box ya
+la reprodujo** (2026-09-01): todo lo progresivo fluido por hardware, Main =
+Baseline (decodificador hardware), arranque atado a los bytes por red (517 ms
+desde `blob:`), VP9 reproduce, HLS-TS nativo sí, DASH no, MSE sin probar. El
+rumbo que sale de ahí está en
+[`docs/PLAN-IMPLEMENTACION-ASCLH.md`](docs/PLAN-IMPLEMENTACION-ASCLH.md); el
+estado vivo en [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md). Una publicación
+pública sigue condicionada por licencia, procedencia y derechos de los videos.
 
 La compatibilidad legacy es un objetivo verificado por sintaxis/API y fallbacks:
 frontend ES5, XHR, Canvas2D como piso. El player 100 % JS anterior se mantiene
@@ -174,8 +178,12 @@ debe validarse nuevamente.
   construimos, de qué linaje sale cada pieza, escalera de intervención, no-objetivos.
 - [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md): estado vivo — próxima acción, una
   fila por tarea cerrada, SHAs de referencia.
+- [`docs/PLAN-IMPLEMENTACION-ASCLH.md`](docs/PLAN-IMPLEMENTACION-ASCLH.md): **el rumbo** —
+  evidencia medida, caminos de runtime, gates numéricos, orden de tareas y decisiones
+  pendientes del operador.
 - [`docs/RUNBOOK-IMPLEMENTACION.md`](docs/RUNBOOK-IMPLEMENTACION.md): reglas de ejecución
-  y tareas de la fase H (H-9 cerrada; H-10, H-11, H-6, H-12, H-7, H-8, H-14, W-26).
+  y tareas de la fase H (H-9 cerrada; H-10 abierta con la caja medida; H-13, H-11, H-12,
+  H-6, H-7, H-8, H-14, W-26).
 - [`docs/EMISION-V0.md`](docs/EMISION-V0.md): el primer video — qué le tomamos a cada
   códec y las suposiciones, cada una con su refutación escrita.
 - [`docs/PLAN-DE-MEDICION.md`](docs/PLAN-DE-MEDICION.md): sondas, banco de reproducción y

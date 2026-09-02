@@ -77,25 +77,42 @@ material verdadero y en varios aparatos. Invariante nuevo:
 
 ---
 
-### ⏵ LO PRIMERO AL RETOMAR (escrito antes del compact del 2026-09-01)
+### ⏵ LO PRIMERO AL RETOMAR (actualizado con el reporte de la caja, 2026-09-01)
 
-**Todo lo que dependía de nosotros está hecho, publicado y verificado. Lo que
-falta lo hace el operador y nadie más: abrir la página en los aparatos.**
+**La TV box ya está medida.** El operador corrió `https://iargen.com/player/v0/`
+en la caja y mandó la foto del reporte; está **transcripto textual** en el
+REGISTRO (entrada «H-10: primer reporte de aparato»), volcado en
+[`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) §5 y con veredicto por suposición en
+[`EMISION-V0.md`](EMISION-V0.md) §4.b. Lo que salió, en seis líneas: todo lo
+progresivo reproduce **fluido por hardware** (0–2 caídos/155, con la superficie
+4K activa); **Main = Baseline → decodificador hardware**; el arranque lo manda la
+cantidad de bytes (H.264 2.985 ms por red, **517 ms** desde `blob:`; VP9
+931 ms); **VP9 reproduce** (contador ciego, falta el ojo); **HLS-TS nativo sí**,
+HLS-fMP4 inservible, DASH no; **MSE declarado y sin probar**.
 
-1. Pedirle el reporte de `https://iargen.com/player/v0/` — abre, aprieta **1**
-   (corre las 7 piezas seguidas, ~70 s) y después **95** (el reporte a pantalla
-   completa, para fotografiarlo: en una TV no se puede copiar texto). Hace falta
-   en la **TV box** y en **2-3 aparatos más** (celular, Smart TV, escritorio).
-   El lanzador `ir.html` ya lo tiene él, en su propio servidor, y **funciona**.
-2. Con eso: volcar la tabla de [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) §5,
-   marcar **S1..S5, S7 y S8** como sostenidas o refutadas en
-   [`EMISION-V0.md`](EMISION-V0.md) §4, y recién ahí elegir el camino.
-3. **Nada se normaliza con un solo aparato** (invariante §8.11 de la visión).
+**El rumbo está ordenado en
+[`PLAN-IMPLEMENTACION-ASCLH.md`](PLAN-IMPLEMENTACION-ASCLH.md)** (evidencia,
+caminos, gates numéricos, orden y decisiones pendientes). Leerlo antes de tocar
+nada.
 
-**Si el operador ya lo corrió y hay números, van al REGISTRO antes que a
-cualquier otra cosa.** Si dice «anduvo bien» sin números, pedirle el reporte:
-`canPlayType` y las impresiones no cuentan como evidencia — esa es justamente la
-regla que este proyecto se dio.
+1. **Lo primero es cerrar con el operador las decisiones de su §6** — en
+   especial: ¿se vio **verde** en la pieza con alfa?, ¿VP9 y HLS-TS se vieron
+   fluidas a ojo?, ¿fija la caja como clase que consagra o esperamos otra
+   clase?, ¿audio?, ¿bucle continuo?, ¿firma los gates? Sus respuestas van al
+   REGISTRO **textuales** y ajustan §0/§4 del plan en el mismo commit.
+2. **La próxima tarea es H-13** (por dónde entra el *paquete*: MSE, Blob
+   concatenado, intercambio de orden, bucle) — **cero emisión nueva**, todo
+   sale del pack publicado. Cuerpo en
+   [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2. Ninguna
+   respuesta del §6 la bloquea; solo la de «contenido real» podría anteponer
+   H-11.
+3. **Nada se consagra con un solo aparato** (VISION §8.11): lo de la caja queda
+   escrito como «sostenida en la caja» hasta que haya segunda clase o decisión
+   manual del operador.
+
+**Si llegan reportes de otros aparatos, van al REGISTRO antes que a cualquier
+otra cosa**, transcriptos de la foto, nunca de memoria; y una fila nueva en
+PLAN-DE-MEDICION §5.
 
 ---
 
@@ -112,29 +129,38 @@ refutaciones en [`EMISION-V0.md`](EMISION-V0.md)):
    VP9 pesa **53,8 % menos** que Baseline; Main **9,1 % menos** con idéntica
    estructura; y el Baseline de DPB mínimo cuesta **2,3× más bytes** que el
    `producto.mp4` de defaults —el DPB mínimo se paga en bitrate—. Fluidez: H-10.
-2. **H-10 — reproducirlo y que él nos diga** (`frontend/v0.html`, ES5): cuál
-   arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, panel
-   real. Se abre en la caja **y** en 2-3 aparatos más del operador.
-   **Es la próxima acción real** — la página está **publicada y verificada en
-   `https://iargen.com/player/v0/`** (59 keys). Incluye el carril segmentado
-   (`hls-ts/`, `hls-fmp4/`, `dash/`, emitidos por remux) con su propio botón:
-   **S7** = camino D, **S8** = piezas intercambiables sin recodificar. Falta lo
-   único que no podemos hacer nosotros: **que el operador la abra**.
-3. **H-11 — la bifurcación de layout**: canvas de intervención encima del
-   `<video>`, con y sin, midiendo caídos (suposición S5). Decide **encima o al
-   lado** para todo el producto.
-4. **H-6 — matriz de emisión**, ya con el terreno elegido por v0: cantidad de
-   cuadros (fps variable) × estructura × bitrate × zonas estáticas × paleta
-   consciente del 4:2:0. Cierra con **una receta por perfil**, no una global.
-5. **H-12 — caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido.
-6. **H-7 — spec normativa** (`docs/SPEC-ASCLH.md`): solo con filas reproducidas en
-   ≥2 clases de aparato; cierra las filas «gateadas» de
+2. **H-10 — reproducirlo y que él nos diga** (`frontend/v0.html`, ES5).
+   **La TV box está medida (2026-09-01)**: reporte transcripto en el REGISTRO;
+   fila en PLAN-DE-MEDICION §5; veredictos en EMISION-V0 §4.b. Faltan el ojo del
+   operador (alfa; fluidez de VP9 y HLS-TS, que el contador no vio) y las otras
+   clases de aparato — o su decisión manual de fijar la caja como clase que
+   consagra. **Abierta, no bloquea.**
+3. **H-13 — por dónde entra el paquete** (`frontend/v0.html` crece; **cero
+   emisión nueva**): MSE con los segmentos CMAF ya publicados (S9), `init +
+   segmentos` concatenados en un Blob (S10 — si se sostiene, el muxer del camino
+   A es una concatenación), intercambio de orden (S12), bucle de 60 s, columna
+   «congelados» para los caminos con contador ciego. **Es la próxima tarea.**
+4. **H-11 — la bifurcación de layout**: canvas de intervención encima del
+   `<video>`, con tres cargas, sobre Baseline y VP9, contra la línea de base ya
+   medida (S5). Decide **encima o al lado** para todo el producto.
+5. **H-12 — caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido
+   y techo medido. Vale **2,5 s de arranque** en la caja (E4).
+6. **H-6 — matriz por bytes a igual look, con la fluidez como gate** (reorientada:
+   en la caja la fluidez está saturada y el decodificador es hardware): VP9 ×
+   fps variable por segmento × H.264 piso relajado × zonas estáticas × paleta
+   4:2:0, emisión v1 con segmentos (WebM segmentado para VP9 → S11) y fila de
+   referencia con los defaults. Cierra con **una receta por perfil**.
+7. **H-7 — spec normativa** (`docs/SPEC-ASCLH.md`): solo con H-13 y H-11
+   cerradas y filas reproducidas en ≥2 clases de aparato (o decisión del
+   operador); cierra las filas «gateadas» de
    [`DISENO-FORMATO-ASCLH.md`](DISENO-FORMATO-ASCLH.md) §10. **El manifiesto va en
    texto tabulado, nunca JSON** (el gate ES5 prohíbe `JSON`).
-7. **H-8 — muxer ES5 + player híbrido mínimo:** solo con H-7 aprobada.
-8. **W-26** (heredada, independiente): la raíz publicada elige WebGL sin salida.
-9. Externo: pedirle a la app de la caja que el WebView reporte el panel real
-   (hoy da 3840×2160 sobre un panel de 1280×720 = 9× de píxeles regalados).
+8. **H-8 — muxer ES5 + player híbrido mínimo:** lo que H-13 deje en pie
+   (concatenador CMAF / alimentador MSE / playlist), solo con H-7 aprobada.
+9. **H-14** (determinismo H.264) y **W-26** (`?renderer=` en la raíz):
+   independientes.
+10. Externo: pedirle a la app de la caja que el WebView reporte el panel real
+    (hoy da 3840×2160 sobre un panel de 1280×720 = 9× de píxeles regalados).
 
 **H-1, H-2 y H-3 quedaron REEMPLAZADAS** por el debate de dirección (eran el
 diseño del player híbrido, la investigación de emisión H.264 y el player mínimo),
@@ -166,8 +192,9 @@ base del contenedor.
 
 **Estado de fases: F0-F9 completas y verificadas (paradigma anterior; resúmenes
 en [`ejecutados/`](ejecutados/README.md)); DIAG-002/003 cerradas con decisión;
-abierta la fase H (H-0 cerrada, H-1..H-5 reemplazadas, H-9 próxima);
-F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla de tareas abajo.
+abierta la fase H (H-0 y H-9 cerradas, H-1..H-5 reemplazadas, H-10 con la caja
+medida, **H-13 próxima**); F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla
+de tareas abajo.
 
 **Receta de producto vigente (2026-08-31, S-4 cerrada):** defaults del workflow
 `encode` + **`format=v3`** + **`tile=sweep`** + **`--cols 1280`** en extra —
@@ -214,6 +241,7 @@ contenido, aunque `publish-player` la asuma; ese workflow no funcionaría hoy. D
 | fase H (debate + documentación objetiva) | 2026-09-01 | `main` de `ASCILINE-hybrid` en `8dae1e5` (H-0 cerrada, CI verde) | debate de dirección con el operador el mismo día: el alcance pasa a un **formato propio códec-agnóstico**. Se escriben `VISION-Y-OBJETIVOS.md`, `DISENO-FORMATO-ASCLH.md` y `PLAN-DE-MEDICION.md`; H-1..H-3 quedan reemplazadas por H-4..H-8. Sin código |
 | fase H (corrección de método) | 2026-09-01 | `main` de `ASCILINE-hybrid` en `0128309` (CI verde) | el operador frena la sonda sintética: hubiera fijado el formato contra una sola TV box. Se arranca **emitiendo** el pack v0 por suposición. Se escribe `EMISION-V0.md`, se reescribe `PLAN-DE-MEDICION.md`, H-4/H-5 quedan reemplazadas por H-9..H-12. Sin código |
 | fase H (H-9 + herramientas + publicación) | 2026-09-01 | `main` de `ASCILINE-hybrid`, de `5ea6459` a `eef9e45` (CI verde en cada push) | **H-9 cerrada**: emisor `tools/emit_pieces.py` + workflow `emitir-v0`, pack v0 con los empaquetados HLS/DASH por remux, `frontend/v0.html` (una pantalla, sin scroll, mando numérico), `frontend/keypad.js` compartido y `frontend/ir.html` (lanzador autocontenido, va en otro servidor). Worker redesplegado dos veces (MIME de video + `Range`, y los tipos del carril segmentado), 60 keys publicadas y verificadas por SHA-256. Se abre **H-14**. Resumen: `ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md` |
+| fase H (primer reporte de aparato + plan de implementación) | 2026-09-01 | `main` de `ASCILINE-hybrid` en `1f12044` (CI verde) | el operador manda la **foto del reporte de la TV box**; se transcribe textual al REGISTRO, se llena la fila de PLAN-DE-MEDICION §5 y el veredicto por suposición (EMISION-V0 §4.b, nuevas S9..S12 en §4.c). Se escribe **`PLAN-IMPLEMENTACION-ASCLH.md`** (rumbo: evidencia, caminos, gates, orden H-13 → H-11 → H-12 → H-6 → H-7 → H-8, decisiones pendientes) y se abre **H-13**. Sin código |
 
 > Al iniciar cada sesión de implementación: agregar una fila con el commit o snapshot
 > sobre el que se trabaja. Si el árbol cambió desde el 2026-08-27, localizar las
@@ -230,10 +258,11 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | H-1..H-3 | H | (diseño del player híbrido / emisión H.264 / player mínimo) | **reemplazadas 2026-09-01** por el debate de dirección; absorbidas al pasar el alcance a «formato propio». IDs no reusables | — |
 | H-4, H-5 | H | (sonda sintética de capacidades / banco como paso previo) | **reemplazadas 2026-09-01** (misma tarde) por decisión del operador: hubieran fijado el formato contra **una sola TV box**. Disueltas dentro de H-9/H-10. IDs no reusables | — |
 | H-9 | H | **pack v0 — el primer video, por suposición** (`tools/emit_pieces.py` + workflow `emitir-v0`): 4 piezas + `hls-ts/`, `hls-fmp4/`, `dash/` por remux, y `MANIFEST.tsv` | **cerrada 2026-09-01** (run `33566441576` verde). Resumen: [`ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md`](ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md); SHAs abajo en «Referencias de clips» | sí (piezas nuevas) |
-| H-10 | H | **reproducirlo y que él nos diga** (`frontend/v0.html` + `keypad.js`): cuál arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, HLS/DASH, panel real — en la caja **y** 2-3 aparatos más | **en curso — falta SOLO el operador.** La página está publicada y verificada en `https://iargen.com/player/v0/` (una pantalla, sin scroll, mando numérico, tecla 95 = reporte a pantalla completa). Lo pendiente es abrirla en los aparatos y volcar la tabla | no |
-| H-11 | H | **la bifurcación de layout**: canvas de intervención **encima** del `<video>`, con y sin, midiendo caídos (suposición S5) | pendiente (precondición: H-10) | no |
-| H-6 | H | **matriz de emisión**, ya con el terreno elegido por v0: cantidad de cuadros × estructura × bitrate × zonas estáticas × paleta 4:2:0 | pendiente (precondición: H-10) | sí (variantes) |
-| H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido y borrado de claves viejas | pendiente (precondición: H-10) | no |
+| H-10 | H | **reproducirlo y que él nos diga** (`frontend/v0.html` + `keypad.js`): cuál arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, HLS/DASH, panel real — en la caja **y** 2-3 aparatos más | **en curso — la TV box está medida (2026-09-01)**: reporte transcripto en el REGISTRO, fila en PLAN-DE-MEDICION §5, veredictos en EMISION-V0 §4.b. Faltan el ojo del operador (alfa; VP9 y HLS-TS con contador ciego) y las otras clases, o su decisión manual. **No bloquea** | no |
+| H-13 | H | **por dónde entra el paquete** (`frontend/v0.html` crece, cero emisión nueva): MSE con los segmentos CMAF publicados (S9), `init + segmentos` concatenados en un Blob (S10), intercambio de orden (S12), bucle de 60 s, `changeType`, columna «congelados», «atascos» sin el `waiting` inicial, fila «contador ciego» | **pendiente — próxima** (abierta 2026-09-01 por el reporte de la caja; ninguna decisión del operador la bloquea) | no |
+| H-11 | H | **la bifurcación de layout**: canvas de intervención **encima** del `<video>`, con tres cargas, sobre Baseline y VP9, contra la línea de base medida (suposición S5) | pendiente (precondición: H-13, o antes si el operador prioriza N2) | no |
+| H-6 | H | **matriz por bytes a igual look, con la fluidez como gate** (reorientada por el reporte): VP9 × fps variable por segmento × H.264 piso relajado × zonas estáticas × paleta 4:2:0; emisión v1 con segmentos (WebM segmentado para VP9 → S11) + fila de referencia con los defaults | pendiente (precondición: H-13, H-11) | sí (variantes) |
+| H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido, borrado de claves viejas y techo medido (10/25/50 MB). Vale 2,5 s de arranque en la caja | pendiente (precondición: H-13) | no |
 | H-7 | H | **spec normativa `SPEC-ASCLH.md`**: contenedor, manifiesto (texto tabulado, **no JSON**), segmentos, sprites, cues, huecos, perfil → camino de runtime | pendiente (precondición: H-10, H-11, H-6) | define bytes |
 | H-8 | H | **muxer ES5 + player híbrido mínimo** (incluye «cambiar solo la música») | pendiente (precondición: H-7) | no |
 | H-14 | H | **determinismo del carril H.264** (deuda contra el invariante 7): dos corridas dieron Baseline +22 B y Main −74 B con **misma ffmpeg y mismas opciones de x264**; VP9 salió byte-idéntico. Separar «no determinista» de «depende de la máquina» | pendiente (abierta 2026-09-01 **por evidencia**, no por sospecha) | define bytes |
@@ -280,7 +309,7 @@ re-implementa — se extiende. Resumen por carril:
 | S-8 | **F9 — aceleración del frontend** (W-16..W-25) | cerrada | 2026-08-31 | medida y publicada (28 keys). Diseño archivado: [`historico/DISENO-RENDER-INDEXADO.md`](historico/DISENO-RENDER-INDEXADO.md) |
 | S-9 | **F10 — pérdida adaptativa por suavidad** (E-25..E-28) | **suspendida** (cambio de dirección 2026-09-01) | | diseño archivado: [`historico/DISENO-PERDIDA-ADAPTATIVA.md`](historico/DISENO-PERDIDA-ADAPTATIVA.md); si se retoma sigue valiendo — el mp4 hereda los píxeles del máster |
 | S-10 | **F11 — formato v4: LOD por tile + transparencia** (E-30, F11-1..5) | **suspendida** (cambio de dirección 2026-09-01) | | diseño archivado: [`historico/DISENO-FORMATO-V4-LOD-Y-ALPHA.md`](historico/DISENO-FORMATO-V4-LOD-Y-ALPHA.md); su motivación principal (aliviar el decoder JS) desapareció con el híbrido |
-| H | **fase H — formato propio híbrido** (H-0, H-9..H-12, H-6..H-8, W-26) | en curso | 2026-09-01 | H-0 cerrada (nace este repo). **H-1..H-3 reemplazadas** por el debate de dirección (el alcance pasó a «formato propio códec-agnóstico») y **H-4/H-5 reemplazadas** la misma tarde: la sonda sintética hubiera fijado el formato contra una sola caja, así que se arranca **emitiendo** (pack v0). Norte: [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md); el primer video: [`EMISION-V0.md`](EMISION-V0.md); método: [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md); cuerpos en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2 |
+| H | **fase H — formato propio híbrido** (H-0, H-9..H-14, H-6..H-8, W-26) | en curso | 2026-09-01 | H-0 cerrada (nace este repo). **H-1..H-3 reemplazadas** por el debate de dirección (el alcance pasó a «formato propio códec-agnóstico») y **H-4/H-5 reemplazadas** la misma tarde: la sonda sintética hubiera fijado el formato contra una sola caja, así que se arranca **emitiendo** (pack v0). Norte: [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md); el primer video: [`EMISION-V0.md`](EMISION-V0.md); método: [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md); cuerpos en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2 |
 | S-7 | barrido de resolución 768 → 1280 → 1920 con el stack completo | cerrada | 2026-08-31 | Instancia 028: tres escalones aprobados a ojo; **producto = 1280 @15 fps** (`2a9201bf…b778`, 63 % de la fuente; el 1920 descartado por fluidez a 10 fps, no por imagen — vuelve a más fps como prueba futura y el front debe procesar cualquier resolución). Hallazgo central: la tasa por celda CAE al subir resolución (0,1451 → 0,1144 → 0,1023 B/celda/frame). Re-encode del producto diferido al cierre de S-4 (v3 + tile ganador) |
 
 ## Referencias de clips (SHA-256)
@@ -386,3 +415,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-09-01 | **EL PACK V0 SUMA HLS Y DASH, y aparece una deuda de determinismo.** El operador preguntó si HLS/DASH estaba contemplado: lo estaba **a medias** —DASH como modelo de datos (decidido), pero el pack eran cuatro archivos progresivos y lo único que la página decía era `canPlayType`, que para m3u8 no vale como evidencia—. Se agregaron `hls-ts/`, `hls-fmp4/` (CMAF) y `dash/`, todos por **remux `-c copy`** desde la pieza Baseline: prueban **S7** (camino D: donde haya HLS/DASH nativo, el muxer ES5 de H-8 puede sobrar en ese perfil — por eso no podía ir después del muxer) y **S8** (piezas intercambiables sin recodificar). Sobrecarga: TS +2,6 %, CMAF y DASH **+0,04 %**. **Hallazgo:** los 16 segmentos de `hls-fmp4/` y los 16 de `dash/` son **byte-idénticos uno a uno** — un solo juego de piezas, dos manifiestos: la tesis del formato comprobada sin escribir muxer. **⚠ Deuda abierta (H-14):** la re-emisión mostró que el **invariante 7 no se cumple en H.264** — VP9 y VP9+alfa salieron byte-idénticos, pero Baseline (+22 B) y Main (−74 B) no, con **misma versión de ffmpeg y misma línea de opciones de x264** (`threads=1`); el primer byte distinto cae en las tablas de muestras, o sea que difiere el bitstream. Hipótesis sin comprobar: `mbtree` en punto flotante sobre runners con CPU distinto. **59 keys** publicadas y verificadas por SHA-256 (0 diferencias); hizo falta un **segundo redeploy del worker** para `m3u8`/`mpd`/`ts`/`m4s` (con HLS el tipo de la playlist es lo primero que mira el reproductor), guardado antes en `00deb9f`, raíz del player intacta. Detalle: verificar tipos con cache-buster — la caché de borde miente. |
 | 2026-09-01 | **Ergonomia de control remoto** (pedido del operador, recordando que esto corre en un TV box): las paginas de diagnostico pasan a manejarse **por numero**, no por click —en un WebView de TV el click exige mover un puntero emulado, y las teclas numericas llegan directo—. Nuevo `frontend/keypad.js` **compartido** (la leccion de W-22..W-25 aplicada de entrada: el motor no se copia). **La regla del retardo es mejor que lo pedido:** se espera **solo** cuando el digito puede ser el comienzo de un codigo mas largo, asi que lo comun dispara al instante y solo los compuestos (`9+numero`) esperan; ademas OK dispara sin esperar y Volver limpia. Calibrable con `?delay=<ms>`. En `v0.html`: `1` correr todo, `2` HLS/DASH, `3` alfa, `4` blob:, `5..8` cada pieza, `0` cortar, `90..94` lo secundario, con la leyenda dibujada en pantalla. Nuevo **`frontend/ir.html`**: lanzador **autocontenido** que el operador sube a **otro servidor** (decision suya), por eso sin dependencias al lado y con **URLs absolutas**; se muda editando una linea (`BASE`), y acepta `?v=` para saltar directo. Suites nuevas `test_keypad.js` y `test_ir_page.js`; `test_v0_page.js` **falla si un digito comun queda demorado** por un compuesto que empieza igual. |
 | 2026-09-01 | **`v0.html` pasa a UNA SOLA PANTALLA, sin scroll** (el operador: «como baja con scroll me pierdo la visión»). El problema era de diseño: la prueba de alfa metía un **segundo `<video>`** que empujaba la tabla fuera de pantalla, así que o se veía el video o se veían los números. Ahora: `overflow:hidden`, geometría en JS (16:9 exacto sin `object-fit`, que no existe en WebViews viejos), **tabla al lado del video**, **un solo `<video>`** para todas las piezas —la de alfa incluida, con el fondo verde detrás—, el `1` corre TODO en secuencia con indicador `3/7`, y la tecla **95** muestra el reporte a pantalla completa para fotografiarlo (en una TV no se puede copiar texto). La leyenda de teclas es además el botón táctil, para el celular. **Verificado contra la página publicada:** a 1280×720 el video mide 768×432 (ratio 1,778) y no hay scroll; a 3840×2160 la cuenta cierra igual. `test_v0_page.js` falla si vuelve el scroll, si aparece un segundo `<video>` o si la tabla deja de estar al lado. |
+| 2026-09-01 | **PRIMER REPORTE DE APARATO: la TV box** (foto del operador, transcripta textual al REGISTRO). Android 9, WebView Chromium 70, panel 1280×720 con superficie 3840×2160. **Todo lo progresivo reproduce fluido por hardware** (0–2 caídos de ~155 en 10 s, deriva ≤ 2 ms, cero atascos reales, con la superficie 4K activa); **Main = Baseline → decodificador hardware** (el par de v0 aísla la entropía, no el DPB: los dos llevan `refs=1` sin B); **el arranque lo manda la cantidad de bytes por red** (H.264 2.985 ms por red contra **517 ms** desde `blob:`; VP9 931 ms); **VP9 y HLS-TS reproducen pero el contador de cuadros no los ve** (`total 0`) — su fluidez la firma el ojo; **HLS-TS nativo sí** (2.012 ms), **HLS-fMP4 nativo inservible** (14.223 ms, 2 atascos), **DASH nativo no**; MSE declarado para `avc1` y `vp9` **sin probar**; IndexedDB sí; sin rVFC ni `getVideoPlaybackQuality`. Suposiciones: S1, S8 sostenidas en la caja; el detector de S2 resuelto (hardware) y S2 reclasificada a bytes; S3 a medias (ojo); S4 pendiente del ojo; S7 sostenida para HLS-TS y refutada para fMP4/DASH; nuevas **S9..S12** (MSE, Blob concatenado, VP9 por MSE, intercambio/bucle). Se escribe **`PLAN-IMPLEMENTACION-ASCLH.md`** y se abre **H-13** | tres cambios de rumbo que salen de los números y no de una opinión: (a) **la fluidez en esta clase está saturada** a 720p@15, así que pasa a ser un **gate** y la optimización es de **bytes a igual look y arranque**; (b) **VP9 al frente** donde reproduzca, H.264 Baseline de piso y único carril de HLS-TS; (c) **MSE es la próxima prueba y no requiere emitir nada** — los segmentos CMAF ya están publicados, y de paso se prueba si `init + segmentos` concatenados es un archivo que `<video>` reproduce (si sí, el muxer del camino A es una concatenación). Nada se consagra con un solo aparato (VISION §8.11): todo queda «sostenido en la caja» hasta segunda clase o decisión del operador. Las decisiones que él debe tomar están listadas en el plan, §6 |

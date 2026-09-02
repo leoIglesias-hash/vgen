@@ -3459,3 +3459,118 @@ Lo que se cambió:
 La suite `test_v0_page.js` ahora **falla si la página vuelve a poder scrollear**,
 si aparece un segundo `<video>` o si la tabla deja de estar al lado: son las tres
 formas conocidas de romper esto sin darse cuenta.
+
+## H-10: primer reporte de aparato — la TV box (2026-09-01)
+
+El operador corrió `https://iargen.com/player/v0/` en la caja (tecla `1` → las 7
+piezas en secuencia, `92` → `blob:`, `95` → reporte a pantalla completa) y
+mandó la **foto** del reporte. Transcripción **textual** (foto guardada local,
+no commiteada: `outputs/evidencia/2026-09-01-tvbox-reporte-v0.jpg`, 5,96 MB):
+
+```
+ua        Mozilla/5.0 (Linux; Android 9; TVBOX Build/PPR1.180610.011; wv)
+          AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0
+          Chrome/70.0.3538.80 Safari/537.36
+panel     1280x720   dpr 1   superficie 3840x2160
+mse       si
+mse.h264  si         mse.vp9 si
+rvfc      no         indexeddb si        quality no
+hls       maybe      dash no
+```
+
+| id | dice | arrancó | 1er_ms | caídos | total | deriva_ms | atascos | nota |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| `v0-h264-baseline` | probably | sí | 2985 | 0 | 156 | −1 | 1 | |
+| `v0-h264-main` | probably | sí | 2813 | 1 | 153 | −1 | 1 | |
+| `v0-vp9` | probably | sí | 931 | 0 | **0** | −1 | 1 | |
+| `v0-vp9-alpha` | probably | sí | 1052 | 1 | 155 | −2 | 1 | |
+| `v0-hls-ts` | maybe | sí | 2012 | 0 | **0** | 38 | 1 | |
+| `v0-hls-fmp4` | maybe | sí | **14223** | 1 | 154 | **95** | **3** | |
+| `v0-dash` | no | **no** | −1 | 0 | 0 | 0 | 1 | error de carga/decodificacion |
+| `blob:v0-h264-baseline` | probably | sí | **517** | 2 | 155 | −1 | 1 | |
+
+Cómo se lee cada columna (del código de `frontend/v0.html`, no de memoria):
+`dice` = `canPlayType`; `arrancó` = `currentTime` avanzó; `1er_ms` = de
+`play()` al primer avance; `caídos`/`total` = delta de
+`webkitDroppedFrameCount`/`webkitDecodedFrameCount` (la caja no tiene
+`getVideoPlaybackQuality`); `deriva_ms` = (reloj − media) en los 10 s medidos;
+`atascos` = eventos `waiting`, **incluido el de la carga inicial** (por eso las 8
+filas tienen al menos 1, hasta la que nunca arrancó: 1 = cero atascos reales).
+
+### Lo que dice, hecho por hecho
+
+1. **Todo lo progresivo reproduce fluido por hardware, con la superficie de
+   3840×2160 activa.** 0–2 caídos de ~155 en 10 s (≤ 1,3 %), deriva ≤ 2 ms en
+   10 s, cero atascos reales. Los ~155 cuadros en 10 s son 15 fps más el
+   sobrante de la ventana: el contador es confiable donde cuenta.
+2. **El decodificador es hardware.** Main (CABAC + 8×8) = Baseline en fluidez
+   (1/153 contra 0/156) con −9,1 % de bytes y 172 ms menos de arranque. Precisión
+   que hay que escribir: el Main de v0 lleva **los mismos `refs=1` y sin B** que
+   Baseline (`X264_MAIN = X264_BASELINE + cabac=1`), así que el par aísla la
+   **entropía**, no el tamaño del DPB. Lo que queda establecido es el detector;
+   la pregunta S2 propiamente dicha (si el DPB chico alivia) sigue sin medir — y
+   en esta caja **no hay déficit de fluidez que aliviar**, así que deja de ser
+   una pregunta de fluidez y pasa a ser una de bytes (H-6).
+3. **El arranque lo manda la cantidad de bytes por red.** El mismo archivo
+   Baseline: **2.985 ms por red, 517 ms desde memoria** (`blob:`). VP9, con la
+   mitad de bytes, 931 ms. Demuxer y decodificador se configuran en ≤ 0,5 s; el
+   resto es transferencia y buffer. Consecuencia directa: la caché (H-12) vale
+   **2,5 s de arranque** y VP9 vale **2 s**, en esta caja y en esta red.
+4. **VP9 reproduce y arranca 3,2× más rápido que Baseline, pero el contador no
+   lo vio** (`total 0`). Lo mismo con HLS-TS. Lo que sí sabemos de esas dos:
+   arrancaron, sostuvieron el reloj 10 s (deriva −1 y 38 ms) y no esperaron
+   datos. Lo que **no** sabemos: cuadros caídos. Lectura (no medición): el
+   contador `webkitDecodedFrameCount` cuenta lo que pasa por la tubería de
+   Chromium; HLS en un WebView de Android lo maneja el reproductor de la
+   plataforma, y que VP9 sin alfa tampoco cuente —mientras VP9 **con** alfa sí
+   contó 155— es consistente con que fue por otra tubería. **Su fluidez la
+   firma el ojo del operador**; H-13 agrega un indicador que no dependa del
+   contador (muestras de 100 ms sin avance) y marca la fila como «contador
+   ciego».
+5. **`blob:` reproduce** → existe el camino A; el perfil P0 queda confirmado en
+   la caja.
+6. **HLS-TS nativo funciona** (2.012 ms, 0 atascos reales, deriva 38 ms: la
+   mayor de las que anduvieron, aceptable). **HLS-fMP4 nativo es inservible**:
+   técnicamente reprodujo, pero 14.223 ms al primer cuadro, 2 atascos reales y
+   95 ms de deriva. **DASH nativo no existe** (esperable: DASH vive sobre MSE).
+   En esta clase, el camino D es **HLS-TS y nada más**.
+7. **Las piezas se intercambian sin recodificar (S8) hasta donde esto llega:**
+   los 16 segmentos TS remuxeados se reprodujeron cosidos por la plataforma sin
+   `waiting`, y los CMAF decodificaron desde el init compartido (154 cuadros
+   contados) aunque el reproductor HLS de la plataforma los sirviera mal. Lo que
+   falla en fMP4 es el *reproductor nativo*, no las piezas. La costura **visual**
+   la firma el ojo.
+8. **Capacidades de la clase:** MSE declarado para `avc1` y `vp9` (**sin
+   probar** — es la puerta que más falta), IndexedDB sí, rVFC no,
+   `getVideoPlaybackQuality` no. Es **Chromium 70 (2018) sobre Android 9**, y ese
+   es el piso de APIs contra el que se escribe el runtime.
+
+### Qué cambia en el rumbo
+
+- **La fluidez, en esta clase, está saturada a 720p@15.** Deja de ser el
+  objetivo de la matriz y pasa a ser un **gate**: lo que se optimiza son
+  **bytes a igual look** y **arranque**. El eje «aliviar el bitstream» se
+  abandona (hardware); la estructura estricta (GOP 15 cerrado, `refs=1`, sin B)
+  se conserva **solo** porque es lo que hace segmentables a las piezas.
+- **VP9 pasa al frente** como camino de banda y arranque donde reproduzca; H.264
+  Baseline queda de piso y de único carril de HLS-TS. Doble emisión siempre.
+- **MSE es la próxima prueba, y no requiere emitir nada:** los segmentos CMAF de
+  `dash/` ya están publicados. Se abre **H-13** («por dónde entra el paquete»),
+  que además prueba la **suposición nueva S10**: que `init + segmentos`
+  concatenados en un Blob sea un archivo que `<video>` reproduce — si se
+  sostiene, **el muxer del camino A es una concatenación**, no un armador de
+  tablas.
+- **La caché sube de prioridad** (2,5 s de arranque medidos).
+
+Suposiciones: S1 y S8 **sostenidas en la caja**; el detector de S2 **resuelto**
+(hardware) y S2 en sí reclasificada a bytes; S3 **sostenida a medias** (falta el
+ojo); S4 **pendiente del ojo**; S7 **sostenida en la caja para HLS-TS** —la
+apuesta «débil a propósito» ganó justo donde se esperaba que perdiera—,
+refutada para HLS-fMP4 y DASH; S5, S6 sin probar. Nuevas **S9..S12** en
+[`EMISION-V0.md`](EMISION-V0.md) §4.c. **Nada se consagra con un solo aparato**
+(VISION §8.11): queda todo escrito como «en la caja» hasta que haya segunda
+clase o decisión manual del operador.
+
+Todo lo anterior ordenado como rumbo, con gates numéricos propuestos y la lista
+de decisiones que necesita el operador:
+[`PLAN-IMPLEMENTACION-ASCLH.md`](PLAN-IMPLEMENTACION-ASCLH.md).

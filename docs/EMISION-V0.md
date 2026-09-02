@@ -9,6 +9,10 @@
 > Norte: [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md). Método:
 > [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md). Tareas: **H-9** (emisión) y
 > **H-10** (reproducirlo) en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md).
+>
+> **Primer reporte de aparato: la TV box, 2026-09-01** → veredicto de cada
+> suposición en **§4.b**, suposiciones nuevas S9..S12 en **§4.c**, y el rumbo
+> que sale de ahí en [`PLAN-IMPLEMENTACION-ASCLH.md`](PLAN-IMPLEMENTACION-ASCLH.md).
 
 ---
 
@@ -173,6 +177,35 @@ reproducido.
 | **S6** | Menos cuadros = menos trabajo, lineal (fps variable por segmento) | en el contenedor la duración del cuadro es un dato, no bitstream | no baja el costo proporcionalmente → el ahorro está en otro eje (se prueba en H-6) |
 | **S7** | Algún aparato del parque reproduce **HLS o DASH nativo** | HLS es nativo en Safari/iOS y en muchos Smart TV; el WebView de la caja es Android, donde lo normal es que **no** lo sea. La apuesta es débil a propósito | ninguno lo reproduce → el camino D no existe en el parque y **el muxer ES5 (H-8) es obligatorio**, no opcional. Si alguno sí → en ese perfil el muxer se puede saltear entero |
 | **S8** | Las piezas se **intercambian sin recodificar**: segmentar es un remux | es la afirmación central del formato, y `-c copy` la ejecuta sin tocar un píxel | los segmentos no reproducen o se ve la costura → el modelo «piezas Lego» se cae y hay que revisar la estructura (GOP, init compartido) antes de seguir |
+
+### 4.b Veredicto en la TV box (2026-09-01) — un aparato refuta, no consagra
+
+Primer reporte de aparato (transcripción textual en el REGISTRO, entrada «H-10:
+primer reporte de aparato»). Por el invariante VISION §8.11, «sostenida» acá
+significa **sostenida en la caja**: falta una segunda clase de aparato o la
+decisión manual del operador para normalizar.
+
+| # | Veredicto en la caja | Qué falta |
+|---|---|---|
+| **S1** | **sostenida**: Baseline 0/156 caídos, 2.985 ms de arranque por red | segunda clase |
+| **S2** | **el detector se resolvió: decodificador por hardware** (Main 1/153 con −9,1 % bytes). La suposición en sí (que el DPB chico alivie) **no se midió**: el Main de v0 lleva los mismos `refs=1` y sin B que Baseline, así que el par aísla la entropía. Y en esta caja no hay déficit de fluidez que aliviar → S2 **se reclasifica a bytes** (H-6) | fila de H-6 con `refs`/B relajados, medida por bytes con la fluidez como gate |
+| **S3** | **sostenida a medias**: VP9 arranca en 931 ms y sostiene el reloj, pero el contador de cuadros no lo vio (`total 0`) | el **ojo** del operador; segunda clase |
+| **S4** | **pendiente del ojo**: la pieza reprodujo (1/155) pero el reporte no dice si el fondo verde se vio | ¿verde o negro alrededor de la figura? |
+| **S5** | sin probar | H-11 |
+| **S6** | sin probar; **su valor cambia**: en esta caja los cuadros de menos ya no compran fluidez, compran bytes | H-6 |
+| **S7** | **sostenida en la caja para HLS-TS** (2.012 ms, sin atascos) — la apuesta débil ganó justo donde se esperaba que perdiera. **Refutada para HLS-fMP4** (14.223 ms, 2 atascos) y **para DASH** (error) | segunda clase; en esta, el camino D = HLS-TS y nada más |
+| **S8** | **sostenida en la caja**: 16 segmentos TS cosidos por la plataforma sin `waiting`; los CMAF decodifican desde el init compartido (154 cuadros) | la **costura visual** la firma el ojo; H-13 prueba el intercambio de orden |
+
+### 4.c Suposiciones nuevas que salen del reporte (para H-13)
+
+Mismo contrato: qué creemos, por qué, y qué hacemos si el aparato nos desmiente.
+
+| # | Suposición | Por qué la creemos | Qué la refuta → qué hacemos |
+|---|---|---|---|
+| **S9** | **MSE reproduce los segmentos CMAF ya publicados** (`dash/init.m4s` + `chunk-*.m4s`) anexados a un `SourceBuffer` de `avc1.42E01F`, y sostiene los gates | `isTypeSupported` lo declara; los mismos segmentos ya decodificaron desde el init compartido (E7) | no reproduce o atasca → el camino B no existe en esta clase: la intervención N1 se hace por A (S10) o por D (playlist), y el muxer de H-8 no alimenta MSE |
+| **S10** | **`init + segmentos` concatenados en un solo Blob es un archivo que `<video>` reproduce** como progresivo (un fMP4 es exactamente eso) | es la definición del contenedor fragmentado; el camino A ya reproduce Blobs (517 ms) | no reproduce, o reporta duración desconocida y rompe el bucle → el muxer de A tiene que rearmar `moov` (tablas de muestras) en ES5, que es más caro pero conocido; o A se limita a piezas enteras |
+| **S11** | **VP9 también entra por MSE** con segmentos WebM (init + clusters), con el mismo modelo de init compartido | `isTypeSupported('video/webm; codecs="vp9"')` = sí; WebM segmentado es lo que DASH usa con VP9 | no reproduce → VP9 queda como pieza entera (A/C) y la intervención N1 en vivo va solo por H.264. Requiere emitir los segmentos WebM (H-6, emisión v1) |
+| **S12** | **Las piezas se intercambian sin costura visible**: anexar los segmentos en otro orden (o concatenarlos en otro orden) reproduce sin `waiting` ni salto; y el **bucle** (`ended` → `play()` o `loop`) cose sin atasco | cada segmento arranca en cuadro clave cerrado y comparte init | se ve la costura o hay `waiting` en el corte → hay que revisar la estructura (GOP, init, `sidx`) antes de escribir H-7; el bucle se resuelve con dos elementos alternados **solo si** H-11 muestra que un segundo `<video>` no cuesta |
 
 ## 5. Lo que v0 **no** prueba
 

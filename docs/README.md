@@ -20,7 +20,8 @@ spec de formato → estado de ejecución → diseño en obra → registro de dec
 |---|---|
 | [`../CLAUDE.md`](../CLAUDE.md) | arranque de sesión: identidad del proyecto, modelo de trabajo, ayuda-memoria, estado grueso |
 | [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) | **el archivo vivo**: próxima acción y máster vigente arriba, tabla de tareas de la fase H, referencias de clips por SHA, bitácora al final |
-| [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | reglas de ejecución + las tareas de la fase H (H-9, H-10, H-11, H-6, H-12, H-7, H-8, W-26) |
+| [`PLAN-IMPLEMENTACION-ASCLH.md`](PLAN-IMPLEMENTACION-ASCLH.md) | **el rumbo** (vigente desde el primer reporte de aparato, 2026-09-01): evidencia medida fila por fila, los caminos de runtime con lo que la caja dijo de cada uno, **gates numéricos** de reproducción, el orden H-13 → H-11 → H-12 → H-6 → H-7 → H-8 y las decisiones que necesita el operador |
+| [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) | reglas de ejecución + las tareas de la fase H (H-9 cerrada; H-10 abierta con la caja medida; H-13, H-11, H-12, H-6, H-7, H-8, H-14, W-26) |
 | [`EMISION-V0.md`](EMISION-V0.md) | **el primer video**: qué le tomamos a cada códec (las «bondades»), las piezas del pack v0 con sus parámetros, y la tabla de **suposiciones con su refutación escrita**. Es lo que se corrige reproduciendo |
 | [`PLAN-DE-MEDICION.md`](PLAN-DE-MEDICION.md) | **el método**: se mide **reproduciendo** y **nunca en un solo aparato**; qué reporta la página de v0, las métricas del banco, los ejes de la matriz y el registro de aparatos |
 | [`ejecutados/`](ejecutados/README.md) | resumen por fase cerrada (paradigma anterior) con su evidencia; se consulta, no se relee |
@@ -31,7 +32,7 @@ spec de formato → estado de ejecución → diseño en obra → registro de dec
 | Documento | Función |
 |---|---|
 | [`DISENO-FORMATO-ASCLH.md`](DISENO-FORMATO-ASCLH.md) | el formato de distribución `.asclh`: modelo de datos tomado de DASH, piezas intercambiables, fps variable, caminos de runtime, muxer, caché, capa de intervención. **§10 marca fila por fila qué está decidido y qué está gateado por medición**; §11 guarda las ideas anotadas sin tarea |
-| `SPEC-ASCLH.md` | **H-7, todavía no existe**: la spec normativa (layout binario, manifiesto, segmentos, sprites, cues). Se escribe recién con la tabla de H-4/H-5/H-6 |
+| `SPEC-ASCLH.md` | **H-7, todavía no existe**: la spec normativa (layout binario, manifiesto, segmentos, sprites, cues). Se escribe recién con H-13 y H-11 cerradas y filas en ≥2 clases de aparato (o decisión del operador) |
 
 ## Referencia técnica (sigue vigente en el híbrido)
 
