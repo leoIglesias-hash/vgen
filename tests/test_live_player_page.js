@@ -79,8 +79,8 @@ assert(/if\(it\.shadow\)\{\s*if\(x>0\)\{x--;w\+\+;\}/.test(inline[1]),
 
 /* INT-004 / regla 6: con texto declarado el renderer ES Canvas2D y su
  * backing store escala (pixelScale) para texto nitido */
-assert(/if\(!textLayer\)\{\s*try\{\s*var w=new window\.WebGLRenderer/.test(inline[1]),
-  "WebGL solo se intenta sin texto nativo");
+assert(/if\(!textLayer && qs\("renderer"\)!=="canvas2d"\)\{\s*try\{\s*var w=new window\.WebGLRenderer/.test(inline[1]),
+  "WebGL solo se intenta sin texto nativo (y sin ?renderer=canvas2d, W-26)");
 assert(inline[1].indexOf("r.pixelScale=cellPx") >= 0,
   "el backing store del Canvas2D escala con el zoom cuando hay texto");
 assert(inline[1].indexOf("cellScale=(textLayer && r.pixelScale>1)?r.pixelScale:1") >= 0);
