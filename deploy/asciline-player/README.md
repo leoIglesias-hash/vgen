@@ -173,3 +173,14 @@ Una key reemplazada bajo `v0/` (el resto del prefijo queda igual; siguen siendo
 
 Verificación tras subir: `GET https://iargen.com/player/v0/index.html?x=<nonce>`
 → SHA-256 igual al del archivo local; token de subida quemado después.
+
+## Actualización del 2026-09-02 (H-11, corrección del mando y de la leyenda)
+
+La misma key de siempre bajo `v0/` (siguen siendo 61 keys):
+
+| key | bytes | md5 | qué cambia |
+|---|---|---|---|
+| `v0/index.html` | 40410 | `9e6a24caa16de69af9dbe40f3f692807` | teclas de la capa a dos cifras (`80` lote de la visita, `81` baseline, `82` vp9, `83` a ojo; el `8` pasa a ser puerta y espera 900 ms u OK); leyenda por tier (`now` grande y arriba, `tool`, `done` chico), agrupada y sin desbordar sobre el zócalo |
+
+Verificación tras subir: `GET https://iargen.com/player/v0/index.html?x=<nonce>`
+→ SHA-256 igual al del archivo local; token de subida quemado después.

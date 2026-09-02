@@ -3969,3 +3969,48 @@ desde memoria (H-13) eran del contenedor o del momento.
 
 **Estado: H-11 EJECUTADA hasta la pantalla.** Falta la foto de la caja. Se
 publica en `v0/` con la copia previa en `deploy/` (segmento siguiente).
+
+## 2026-09-02 — el mando vuelve a dos cifras y la leyenda dice qué mirar
+
+**Dos correcciones del operador sobre la pantalla de H-11**, con la foto de su
+navegador a la vista (`panel 1280×800 · superficie 1272×668`).
+
+**1. Nada de tres cifras.** El mando se había ido a `930`..`933` porque el `9`
+era la única puerta a los códigos compuestos y sus diez lugares (`90`..`99`)
+estaban tomados. El operador lo cortó en seco: *«tenemos hasta 100 números
+antes de eso»*. Ahora hay **dos puertas**: el `9` (secundario ya medido, sin
+acción propia) y el **`8`**, que conserva la suya —«cambio a demanda»— y por
+eso solo espera 900 ms u OK antes de dispararla. La capa de H-11 pasa a
+**`80`** (el lote de la visita), **`81`** (capa sobre Baseline), **`82`** (capa
+sobre VP9) y **`83`** (la capa a ojo). El test impone el techo: ninguna tecla
+puede tener tres cifras, y ningún dígito suelto puede demorarse salvo las dos
+puertas declaradas.
+
+**2. La leyenda no entraba.** Con 23 teclas del mismo tamaño la lista pasaba el
+zócalo y las últimas quedaban tapadas o fuera de pantalla. El operador pidió
+además que lo ya probado se vea más chico que lo que falta probar, *«eso nos
+daría lugar y además me ayudaría a diferenciar qué querés que vea»*. Cada tecla
+declara ahora su **tier** y el tamaño es el mensaje:
+
+| tier | qué es | cómo se ve |
+|---|---|---|
+| `now` | lo que hay que probar en esta visita (`80`..`83`) | 0,85 em, cuatro por renglón, arriba de todo, con el número **invertido** (fondo ámbar) |
+| `tool` | herramientas de siempre (`1`, `95`, `93`, `0`, `94`) | 0,62 em, cinco por renglón |
+| `done` | lo ya medido (progresivas, alfa, empaquetados, paquete, `90`..`92`, `96`..`99`) | 0,50 em, cinco por renglón, apagado |
+
+La leyenda se dibuja **agrupada por tier**, no en el orden del arreglo, y la
+franja de teclas arranca más arriba (0,26 del alto en vez de 0,22). El detalle
+que hacía fallar la cuenta: **el interlineado lo ponía el contenedor**, así que
+un renglón de las chicas ocupaba lo mismo que uno de las grandes; ahora
+`#teclas` va con `line-height: 0` y cada tecla pone el suyo.
+
+**Medido en Chromium sobre la geometría de la foto (1272×668):** cinco
+renglones, cero desborde, **43 px libres** antes del zócalo (antes se pasaba
+25 px). A 1600×900 (16:9, la forma de la caja): **76 px** libres. El `8`
+seguido del `3` enciende la capa —el buffer del canvas quedó en 704×396 para
+un recuadro de 2112×1188, o sea al panel— y la leyenda sigue siendo botón: el
+clic en la fila del `83` la alterna.
+
+**Lo que la visita a la caja tiene que traer no cambió, solo el número:**
+`80` y esperar (≈ 1,5–2 min) → `95` y foto → `83` a ojo mientras algo suena →
+decir si volvió a aparecer el símbolo de play.
