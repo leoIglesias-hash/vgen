@@ -4014,3 +4014,160 @@ clic en la fila del `83` la alterna.
 **Lo que la visita a la caja tiene que traer no cambió, solo el número:**
 `80` y esperar (≈ 1,5–2 min) → `95` y foto → `83` a ojo mientras algo suena →
 decir si volvió a aparecer el símbolo de play.
+
+## 2026-09-02 (madrugada) — H-12 implementada hasta la pantalla, W-26 cerrada, H-14 con evidencia
+
+El operador, antes de dormir: *«aún no pude probar nada, pero avanzá creando
+más puntos de prueba o mejoras en general»*. Nada de esto toca lo que la caja
+tiene que contestar de H-11; suma preguntas para la misma visita y cierra dos
+deudas que no necesitan pantalla.
+
+### H-12 — la caché: el paquete residente en el aparato
+
+**Por qué ahora.** H-13 dejó escrito que el arranque lo mandan los bytes (305 ms
+a VP9 y 1.180–1.468 ms a Baseline por red; 517 ms desde `blob:`), así que el
+incentivador tiene que estar **residente**, y residente quiere decir que
+sobrevive a un reinicio. La única memoria que persiste dentro del piso ES5 es
+**IndexedDB**, que es una API de eventos.
+
+**Qué se construyó** (`0ce2cb4` → `9011fe7`, CI verde 3/3):
+
+- **`frontend/vgencache.js`**, la única puerta a la base (`vgen`, un store
+  `piezas`): `download` (XHR `arraybuffer` con `onprogress`), `open`, `put`,
+  `get`, `list` (metadatos sin bytes, para la cabecera), `remove`, `clear`,
+  `prune` (borra lo que no esté en el manifiesto vigente), `keyFor` (`id` +
+  `sha12`: **pineo por contenido**, CACHE-001 — una re-emisión es otra clave),
+  `fill` (ruido para el techo) y `quota` (`webkitTemporaryStorage.
+  queryUsageAndQuota`, la única API de cuota con callback; la moderna es
+  `Promise` y queda fuera del piso). Se guardan **`ArrayBuffer`, no `Blob`**:
+  el clon estructurado de un ArrayBuffer lo soporta toda IndexedDB que exista,
+  el de un Blob recién desde Chrome 37; el Blob se arma al leer. **La
+  escritura se confirma por la transacción (`oncomplete`), no por el
+  request**: un `QuotaExceededError` aborta la transacción aunque el `put` haya
+  dicho que sí, y escuchar solo el request es no enterarse. El test
+  (`tests/test_vgencache.js`) corre todo contra una IndexedDB falsa que respeta
+  exactamente eso: respuestas por eventos y después, confirmación por
+  transacción, cuota que aborta.
+- **Tres teclas nuevas en `v0.html`**, detrás del `8` como las de la capa:
+  **`84`** baja Baseline y VP9 con progreso en el estado («bajando … 47 %»),
+  las guarda pineadas, poda lo viejo, las **reproduce desde la caché** y mide
+  el **techo con 10 / 25 / 50 MB de ruido** (ruido y no ceros: la base
+  comprime lo que guarda —LevelDB + Snappy en Chromium— y 50 MB de ceros
+  entrarían donde 50 MB de video no entran; el registro se borra al terminar).
+  **`85`** solo reproduce desde la caché: es **la tecla de después de
+  REINICIAR** — si la fila dice «no está en la caché», la base no persistió.
+  **`86`** vacía la base. El `1` (correr todo) incluye el lote de caché.
+- **La cabecera del reporte dice qué hay guardado al cargar** (`cache si
+  guardadas N bytes cuota usado/total MB`): tras un reinicio, esa línea sola
+  ya responde la persistencia antes de tocar nada.
+- Las filas que no reproducen (`cache:guardar:*`, `cache:techo:*`) llevan
+  `noVideo` y **no se marcan «ciego»**: `1er` es ahí el tiempo de guardado y
+  la nota lleva la bajada, los bytes y las claves viejas borradas.
+- La leyenda pasó a **siete teclas `now`** (dos renglones): `now` 0,85 → 0,80
+  em y `done` de cinco a **siete por renglón** (19 → 14 %). Medido en Chromium
+  a la geometría de la foto del operador (1272×668): 26 filas, **13 px libres
+  dentro de la franja y 35 px hasta el zócalo**, cero desborde.
+
+**Lo que la PC dijo (Chromium, refuta y no consagra; la página corría en el
+panel embebido del navegador de trabajo, a escala):**
+
+| fila | 1er | caídos/total | nota |
+|---|---|---|---|
+| `cache:guardar:base` | 15 ms (guardado) | — | bajada 1.461 ms; 9.551.715 B |
+| `cache:guardar:vp9` | 8 ms (guardado) | — | bajada 201 ms; 4.411.693 B |
+| `cache:base` | **105 ms** | 9/158 | desde caché |
+| `cache:vp9` | **324 ms** | 8/156, 1 atasco | desde caché |
+| `cache:techo:10MB` | 9 ms | — | leyó en 14 ms |
+| `cache:techo:25MB` | 23 ms | — | leyó en 15 ms |
+| `cache:techo:50MB` | 39 ms | — | leyó en 29 ms |
+
+Cabecera después: `cache si guardadas 2 13.963.408 B cuota 35/3123 MB`. En la
+PC entran los 50 MB y el arranque desde la caché es de **105 ms para
+Baseline** (contra 2.985 por red en la caja y 517 desde `blob:`). Los caídos
+de la PC (≈ 5 %) están por encima del gate, pero la PC no consagra y esa
+corrida iba en un panel escalado; la marca la pone la caja.
+
+**Lo que la visita a la caja tiene que traer para H-12** (se suma a la de
+H-11, misma visita):
+
+1. `84` y esperar (≈ 1 min: dos bajadas, dos reproducciones de 10 s y el
+   techo) → `95` y **foto**.
+2. **Reiniciar la caja**, volver a abrir `iargen.com/player/v0/`, `95` y
+   **foto de la cabecera** (la línea `cache … guardadas N`), después `85` y
+   **foto**.
+
+**Cómo se lee:** `guardadas 2` después del reinicio y `cache:base` /
+`cache:vp9` arrancando en ≤ 1 s → **la caché persiste** y el incentivador
+puede ser residente (H-8 lo asume). `no está en la caché` → **no persiste** →
+degradación escrita: memoria por sesión (bajar a `blob:` en cada arranque, con
+el arranque de red de H-10 como costo). En el techo, **la primera fila que
+diga `QuotaExceededError` es el techo del aparato**; si entran los 50 MB, el
+pack entero (≈ 27 MB) cabe con margen.
+
+### W-26 — la raíz acepta `?renderer=canvas2d` (cerrada en código)
+
+`frontend/live-player.html` decidía WebGL sin escape, y en la caja esa GPU **no
+presenta** (pantallazos blancos, DIAG-002). Ahora `pickRenderer()` mira
+`?renderer=canvas2d` **antes de crear el contexto WebGL** (un canvas que lo
+creó no vuelve a 2D) y cae al piso; cualquier otro valor deja el automático.
+WebGL solo acelera, nunca agrega función, así que forzar el piso no pierde
+nada. Test en `test_live_player_page.js`; `522bdf8` → `730c5f4`, CI verde 3/3.
+**No se publicó la raíz**: la copia servida (`index.html` = 24.950 B, md5
+`534abb7e…`) es más vieja que el `live-player.html` del repo ya antes de este
+cambio, así que republicarla arrastraría diferencias que no se auditaron; y el
+player JS «se mantiene, no crece» (decisión del operador). Publicarla queda
+como decisión suya, con auditoría previa de qué cambió.
+
+### H-14 — determinismo del carril H.264: qué dijo el CI
+
+**Método.** El workflow `emitir-v0` gana `determinismo: true` (`0eb8dab`):
+emite **solo las dos piezas H.264, dos veces en la misma corrida**, las
+compara byte a byte (`cmp`) y deja en el artifact `maquina.txt` (`nproc`,
+`lscpu`, `ffmpeg -version`, build de x264) y `comparacion.txt`. Y
+`emit_pieces.py` gana `--x264-extra`, que pega opciones al final de
+`-x264-params` de las piezas H.264 **sin tocar la receta** (test: no se filtra
+al carril VP9). Nueve corridas en la madrugada, todas con **ffmpeg
+6.1.1-3ubuntu5 y libx264 0.164.3108+git31e19f9**:
+
+| run | CPU del runner | `x264_extra` | Baseline (bytes · sha16) | Main (bytes · sha16) | pasada 1 vs 2 |
+|---|---|---|---|---|---|
+| `33592184699` | AMD EPYC 9V74 | — | 9.551.693 · `97bb642a6dfc9567` | 8.686.512 · `e1037ead463ec31d` | idénticas |
+| `33592561098` | AMD EPYC 7763 | — | 9.551.693 · `97bb642a6dfc9567` | 8.686.512 · `e1037ead463ec31d` | idénticas |
+| `33592574772` | **Intel Xeon 6973P-C** | — | **9.551.715** · `cf927d578ab993d4` | **8.686.438** · `b9b1e1f542fe4f10` | idénticas |
+| `33592189733` | AMD EPYC 9V74 | `cpu-independent=1` | 9.553.193 · `abe6caf9fa545da4` | 8.681.167 · `1f92c55217dce633` | idénticas |
+| `33592568217` | AMD EPYC 9V74 | `cpu-independent=1` | 9.553.193 · `abe6caf9fa545da4` | 8.681.167 · `1f92c55217dce633` | idénticas |
+| `33592581226` | AMD EPYC 9V74 | `cpu-independent=1` | 9.553.193 · `abe6caf9fa545da4` | 8.681.167 · `1f92c55217dce633` | idénticas |
+| `33593014280` | **Intel Xeon Platinum 8370C** | `cpu-independent=1` | 9.553.193 · `abe6caf9fa545da4` | 8.681.167 · `1f92c55217dce633` | idénticas |
+| `33593008652` | **Intel Xeon Platinum 8573C** | `cpu-independent=1` | 9.553.193 · `abe6caf9fa545da4` | 8.681.167 · `1f92c55217dce633` | idénticas |
+| `33593002823` | AMD EPYC 9V74 | `cpu-independent=1` | 9.553.193 · `abe6caf9fa545da4` | 8.681.167 · `1f92c55217dce633` | idénticas |
+
+**Lo que dice la tabla:**
+
+1. **El encoder es determinista en la misma máquina**: nueve de nueve pares
+   byte-idénticos. No hay «no determinismo».
+2. **La diferencia es por CPU**: dos AMD distintos (7763 y 9V74) dan los
+   mismos bytes entre sí, y el Intel da otros. Los 9.551.715 / 8.686.438 B del
+   Intel son **exactamente el pack publicado** (H-9 se emitió en un Intel);
+   los +22 / −74 B de la otra corrida de H-9 eran un AMD. x264 elige rutas
+   SIMD distintas por CPU y no todas redondean igual; para eso existe su
+   opción `cpu-independent`.
+3. **`cpu-independent=1` cura**: con la opción, AMD 9V74, Intel 8370C e Intel 8573C dan
+   **los mismos bytes** (`abe6caf9…` / `1f92c552…`). Costo: Baseline
+   +1.500 B (+0,016 %), Main −5.345 B (−0,06 %) — despreciable, y sin tocar
+   ningún parámetro que la caja haya medido (perfil, `refs`, GOP, CRF).
+
+**Estado: causa establecida con evidencia (cierre de H-14 en su primera
+mitad).** Lo que falta es una decisión del operador y no una medición: **(a)
+adoptar `cpu-independent=1` en la receta** (`X264_BASELINE`/`X264_MAIN` en
+`emit_pieces.py`), con lo que el invariante 7 vuelve a cumplirse tal cual y el
+próximo pack sale byte-idéntico desde cualquier runner —a costa de que las
+dos piezas H.264 cambien de SHA (la caja no distingue: mismos parámetros de
+decodificación)—, o **(b) redefinir el invariante como «misma build + misma
+familia de CPU»** y dejar la receta como está. La recomendación es (a): es la
+opción que x264 documenta para esto y el costo es cero para el aparato. No se
+aplicó de noche porque cambia bytes de la receta declarada (regla 3), y eso
+lleva firma.
+
+**Corrección menor al workflow en el mismo segmento**: el `tee` de `maquina.txt`
+y `comparacion.txt` mandaba la salida solo al summary; ahora también al log del
+job (`tee -a`), así se lee por la API sin bajar el artifact.

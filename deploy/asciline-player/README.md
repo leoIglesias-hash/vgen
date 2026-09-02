@@ -184,3 +184,19 @@ La misma key de siempre bajo `v0/` (siguen siendo 61 keys):
 
 Verificación tras subir: `GET https://iargen.com/player/v0/index.html?x=<nonce>`
 → SHA-256 igual al del archivo local; token de subida quemado después.
+
+## Actualización del 2026-09-02 (H-12, la caché)
+
+**2 keys** bajo `v0/`: `index.html` (regenerada = `frontend/v0.html` con las
+teclas `84`/`85`/`86`, la cabecera `cache` y la leyenda de siete `now`) y
+**`vgencache.js`** (nueva: la puerta a IndexedDB). El bucket queda con
+**62 keys**. Orden respetado: las dos estaban commiteadas en `main` antes de
+subirlas.
+
+| key | bytes | md5 | qué es |
+|---|---|---|---|
+| `v0/index.html` | 50859 | `d53f3c9c1efc4d4a912752ddb68f2db8` | H-12: `84` guardar + desde caché + techo, `85` desde caché (tras reiniciar), `86` borrar; filas sin video no son «ciegas» |
+| `v0/vgencache.js` | 10278 | `2928be086427495379d23bff840ffc12` | IndexedDB: bajada con progreso, pineo por contenido, poda, techo, cuota |
+
+Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
+→ SHA-256 igual al del archivo local en las dos; token de subida quemado.

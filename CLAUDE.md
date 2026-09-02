@@ -111,7 +111,8 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 11. **Los valores manuales del operador prevalecen** sobre cualquier automatismo.
     Y **el player JS anterior se mantiene, no crece**: queda como reproductor de
     escritorio y banco de verificación del máster (las 4 páginas + `playloop.js`).
-    Única deuda activa ahí: **W-26** (escape `?renderer=` en la raíz).
+    W-26 (escape `?renderer=canvas2d`) **cerrada en código** el 2026-09-02;
+    la raíz servida no se republicó (decisión del operador, con auditoría).
 
 ## Estado (resumen grueso — el detalle vive en RUNBOOK-ESTADO)
 
@@ -139,9 +140,9 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   `init+16` = archivo, intercambio de orden solo por MSE `sequence`, bucle por
   `loop` refutado, cambio a demanda 305 ms a VP9 y >1 s a Baseline → muxer A =
   concatenación, B = MSE `sequence`; REGISTRO «H-13: reporte de la caja»),
-  **H-11** (**ejecutada hasta la pantalla** `fd9a7ab`; falta la foto de la caja: `80` + `95`) canvas de intervención encima del `<video>`, **H-12** caché, **H-6** matriz por
+  **H-11** (**ejecutada hasta la pantalla** `fd9a7ab`; falta la foto de la caja: `80` + `95`) canvas de intervención encima del `<video>`, **H-12** caché (**ejecutada hasta la pantalla** `0ce2cb4`; falta la foto: `84` + `95`, reiniciar, `95` + `85`), **H-6** matriz por
   bytes a igual look, **H-7** spec `SPEC-VGEN.md`, **H-8** muxer ES5 + player.
-  **H-14** (determinismo de H.264) y **W-26** son independientes. Externo: pedir
+  **H-14** (determinismo de H.264 — **causa establecida el 2026-09-02**: determinista en la misma máquina (9/9 pares idénticos), **distinto por CPU** (AMD 7763 = AMD 9V74 ≠ Intel; el pack publicado es el Intel) y **`cpu-independent=1` lo cura** (AMD 9V74 = Intel 8370C = Intel 8573C, +0,016 % de bytes). Falta la decisión del operador: adoptar la opción en la receta (recomendado) o redefinir el invariante 7) y **W-26** (cerrada en código) son independientes. Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
 - **Lo que la caja dijo (2026-09-01, Android 9 / Chromium 70):** todo lo
   progresivo reproduce **fluido por hardware** a 720p@15 con la superficie 4K
