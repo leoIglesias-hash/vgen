@@ -22,8 +22,14 @@ function flush() {
 function FakeDB(limitBytes) {
   this.records = {};
   this.limit = limitBytes || Infinity;
-  this.objectStoreNames = { contains: function (name) { return name === "piezas"; } };
   this.stores = [];
+  var self = this;
+  /* Como la de verdad: contains() dice lo que HAY, no lo que deberia haber. */
+  this.objectStoreNames = { contains: function (name) {
+    var i;
+    for (i = 0; i < self.stores.length; i++) { if (self.stores[i].name === name) { return true; } }
+    return false;
+  } };
   this.closed = false;
 }
 FakeDB.prototype.createObjectStore = function (name, options) {
@@ -280,8 +286,10 @@ function buffer(n) { return { byteLength: n, tag: "buf" + n }; }
   FakeXHR.prototype.send = function () {
     var self = this;
     assert.strictEqual(self.responseType, "arraybuffer");
-    self.onprogress({ loaded: 4, total: 9, lengthComputable: true });
-    self.onprogress({ loaded: 9, total: 9, lengthComputable: true });
+    if (self.onprogress) {
+      self.onprogress({ loaded: 4, total: 9, lengthComputable: true });
+      self.onprogress({ loaded: 9, total: 9, lengthComputable: true });
+    }
     t = 350;
     self.readyState = 4;
     self.status = self.url === "rota" ? 404 : 200;
