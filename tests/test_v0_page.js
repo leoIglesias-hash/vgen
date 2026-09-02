@@ -5,7 +5,9 @@
  * no es "que exista un boton" sino las reglas que la hacen usable en un TV
  * BOX: una sola pantalla sin scroll, una accion por tecla numerica, y (H-13)
  * que las cinco pruebas de paquete existan, que la medicion tenga la columna
- * congel, que no pause al terminar y que ningun digito suelto se demore. */
+ * congel, que no pause al terminar y que ningun digito suelto se demore.
+ * H-11: que exista UN canvas encima del video, dimensionado al panel y no a
+ * la superficie, con sus teclas y apagado por defecto. */
 
 var assert = require("assert");
 var fs = require("fs");
@@ -202,11 +204,12 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 19);
+assert.strictEqual(codigos.length, 23);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
-["90", "91", "92", "93", "94", "95", "96", "97", "98", "99"].forEach(function (code) {
+["90", "91", "92", "93", "94", "95", "96", "97", "98", "99",
+ "930", "931", "932", "933"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta el codigo compuesto " + code);
 });
 assert.strictEqual(registered.actions[0].code, "1");
@@ -243,7 +246,7 @@ codigos.forEach(function (code) {
 });
 assert(codigos.indexOf("9") < 0,
   "el 9 queda reservado como prefijo de los compuestos");
-assert.strictEqual(byId("teclas").childNodes.length, 19,
+assert.strictEqual(byId("teclas").childNodes.length, 23,
   "la leyenda de teclas se dibuja en pantalla: en una TV no hay donde mirarla");
 
 /* La misma leyenda es el boton: en el celular no hay teclado numerico. */
@@ -251,7 +254,7 @@ var conClick = 0;
 byId("teclas").childNodes.forEach(function (row) {
   if (typeof row.onclick === "function") { conClick++; }
 });
-assert.strictEqual(conClick, 19,
+assert.strictEqual(conClick, 23,
   "cada entrada de la leyenda tiene que poder tocarse en un celular");
 
 /* --- Correr el 5 en un aparato sin MSE: la fila aparece con su error y el
@@ -267,5 +270,57 @@ assert(/\n# id\tdice\tarranco\t1er_ms\tcaidos\ttotal\tderiva_ms\tatascos\tcongel
 action("0").run();
 assert.strictEqual(filas.childNodes.length, 7, "el 0 limpia las filas sinteticas");
 assert.strictEqual(byId("video").loop, false, "el 0 apaga el loop del bucle");
+
+/* --- H-11: la capa de intervencion encima del video --- */
+
+assert.strictEqual((page.match(/<canvas\s+id="capa"/g) || []).length, 1,
+  "un solo canvas de intervencion (dos capas: video + canvas, no mas)");
+assert(page.indexOf('<canvas id="capa"') > page.indexOf('<video id="video"'),
+  "el canvas va DESPUES del video en el DOM: queda encima, no debajo");
+assert(/#capa\s*\{[^}]*position:\s*absolute/.test(page),
+  "el canvas se posiciona sobre el recuadro del video");
+assert.strictEqual(byId("capa").style.top, byId("video").style.top,
+  "el canvas ocupa exactamente el recuadro del video (alto)");
+assert.strictEqual(byId("capa").style.width, byId("video").style.width,
+  "el canvas ocupa exactamente el recuadro del video (ancho)");
+var cssW = parseInt(byId("video").style.width, 10);
+var cssH = parseInt(byId("video").style.height, 10);
+assert.strictEqual(byId("capa").width, Math.round(cssW * 1280 / 3840),
+  "el buffer del canvas se dimensiona al PANEL (1280), nunca a la superficie (3840)");
+assert.strictEqual(byId("capa").height, Math.round(cssH * 1280 / 3840),
+  "idem en alto");
+assert(byId("report").value.indexOf("\ncapa\t" + byId("capa").width + "x" +
+       byId("capa").height + "\tk 0.333") >= 0,
+  "el reporte dice el tamano del buffer del canvas y la escala panel/superficie");
+["function setCapa", "function paintCapa", "function stepCapa",
+ "function capaSteps", "function capaAll", "function h11Batch"]
+  .forEach(function (name) {
+    assert(inline[1].indexOf(name) >= 0, "falta " + name);
+  });
+assert(/fillText\(/.test(inline[1]),
+  "la capa dibuja numero y texto con la API nativa de Canvas2D (INT-004)");
+assert(/\.arc\(/.test(inline[1]), "la capa dibuja la ruleta");
+assert(/packageSteps\(\), capaAll\(\)/.test(inline[1]),
+  "correr todo (1) incluye las seis mediciones de capa");
+assert(/H-11/.test(action("930").label), "930 = el lote de la visita H-11");
+assert(/blob/.test(action("930").detail),
+  "el lote lleva blob: y blob concat seguidos (arranque desde memoria)");
+assert(/capa/.test(action("931").label) && /baseline/.test(action("931").label),
+  "931 = capa sobre Baseline");
+assert(/capa/.test(action("932").label) && /vp9/.test(action("932").label),
+  "932 = capa sobre VP9");
+assert(/ojo/.test(action("933").label), "933 = la capa a ojo, para el operador");
+
+/* Sin medir, el canvas no existe (display none): la linea de base es sin capa.
+ * El 933 la alterna y el 0 la apaga. */
+assert.strictEqual(byId("capa").className, "off",
+  "antes de medir el canvas no existe: la linea de base es sin capa");
+action("933").run();
+assert.strictEqual(byId("capa").className, "", "933 enciende el rectangulo");
+action("933").run();
+assert.strictEqual(byId("capa").className, "off", "933 otra vez lo apaga");
+action("933").run();
+action("0").run();
+assert.strictEqual(byId("capa").className, "off", "el 0 apaga la capa");
 
 console.log("v0 page tests: OK");

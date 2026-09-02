@@ -14,6 +14,8 @@
   #alphaBg { position: absolute; background: #1f6f3f; display: none; }
   #alphaBg.on { display: block; }
   #video { position: absolute; background: #000; }
+  #capa { position: absolute; }
+  #capa.off { display: none; }
   #side { position: absolute; overflow: hidden; }
   table { border-collapse: collapse; width: 100%; font-size: 0.58em; }
   th, td { border: 1px solid #33384a; padding: 0.18em 0.3em; text-align: left;
@@ -41,12 +43,13 @@
 <body>
 
 <div id="head">
-  <span id="titulo">pack v0 - por donde entra el video, y por donde entra el paquete</span>
+  <span id="titulo">pack v0 - por donde entra el video, el paquete, y la capa encima</span>
   <span id="estado">listo</span>
 </div>
 
 <div id="alphaBg"></div>
 <video id="video" muted playsinline></video>
+<canvas id="capa" class="off"></canvas>
 <div id="side">
   <table>
     <thead><tr><th>pieza</th><th>ok</th><th>caidos/total</th><th>1er</th>
@@ -82,6 +85,15 @@
  * (98), el cambio de pieza a demanda (8) y el bucle de 60 s (99). El 5 corre
  * las cinco; el 1 corre TODO. Las puertas viven en vgenfeed.js, que el muxer
  * de H-8 va a reusar.
+ *
+ * H-11 (2026-09-01) suma LA CAPA: un canvas de intervencion encima del <video>
+ * -numero, ruleta y texto dibujados con la API nativa de Canvas2D- con tres
+ * cargas: nada (el canvas no existe: display none), un rectangulo chico
+ * repintado a 15 fps, y la pantalla completa pintada UNA vez. Se mide sobre
+ * Baseline y sobre VP9 (931 / 932; 930 es el lote entero de la visita). La
+ * pregunta es S5: si el canvas saca al video de su plano de hardware, los
+ * caidos suben con la capa y la intervencion va AL LADO, no encima. El canvas
+ * se dimensiona AL PANEL (screen), nunca a la superficie del WebView.
  *
  * PANTALLA FIJA, SIN SCROLL (pedido del operador, 2026-09-01): en una TV el
  * scroll se hace con flechas y se pierde de vista lo que importa. Todo entra en
@@ -158,6 +170,8 @@ function layout() {
   if (vh > midH) { vh = midH; vw = Math.round(midH * 16 / 9); }
   px(byId("video"), 0, midTop + Math.round((midH - vh) / 2), vw, vh);
   px(byId("alphaBg"), 0, midTop + Math.round((midH - vh) / 2), vw, vh);
+  px(byId("capa"), 0, midTop + Math.round((midH - vh) / 2), vw, vh);
+  sizeCapa(vw, vh);
   px(byId("side"), stageW + 8, midTop, w - stageW - 12, midH);
   byId("keys").style.top = (midTop + midH) + "px";
   byId("keys").style.height = keysH + "px";
@@ -238,7 +252,7 @@ function quality(video) {
 function blank(piece) {
   return { id: piece.id, says: "", started: false, firstMs: -1,
            total: 0, dropped: 0, driftMs: 0, stalls: 0, frozen: 0,
-           switchMs: -1, laps: 0, duration: -1, bytes: piece.bytes,
+           switchMs: -1, laps: 0, duration: -1, hidden: 0, bytes: piece.bytes,
            error: "" };
 }
 
@@ -254,6 +268,7 @@ function stopFeeding() {
  * opts.feed(video, row)  en vez de poner src: quien alimenta (MSE, cambio)
  * opts.seconds           cuanto medir (SECONDS por defecto)
  * opts.loop              video.loop = true y se cuentan las vueltas (seeking)
+ * opts.capa              carga de la capa H-11: "none" | "rect" | "full"
  *
  * La medicion NO pausa al terminar (ver cabecera). */
 function measure(piece, src, done, opts) {
@@ -317,6 +332,7 @@ function measure(piece, src, done, opts) {
       /* Tiempo de media reproducido, robusto al bucle (ct vuelve a 0). */
       if (ct >= lastTime) { played += ct - lastTime; } else { played += ct; }
       if (ct === lastTime && !video.paused && !video.ended) { row.frozen++; }
+      if (document.hidden) { row.hidden++; }
       lastTime = ct;
     }
     if (row.started && (now - wall0) >= seconds * 1000) {
@@ -333,6 +349,7 @@ function measure(piece, src, done, opts) {
   byId("alphaBg").className = piece.role === "alpha" ? "on" : "";
   row.says = video.canPlayType(piece.mime) || "no";
   video.loop = o.loop ? true : false;
+  setCapa(o.capa || "none");
   video.addEventListener("waiting", onStall, false);
   video.addEventListener("seeking", onLap, false);
   video.addEventListener("error", onError, false);
@@ -402,6 +419,7 @@ function environment() {
   lines.push("panel\t" + screen.width + "x" + screen.height +
              "\tdpr " + (window.devicePixelRatio || 1) +
              "\tsuperficie " + window.innerWidth + "x" + window.innerHeight);
+  lines.push("capa\t" + capa.w + "x" + capa.h + "\tk " + (Math.round(capa.k * 1000) / 1000));
   lines.push("mse\t" + (window.MediaSource ? "si" : "no") +
              "\tchangeType\t" + (VGenFeed.hasChangeType() ? "si" : "no") +
              "\tblob\t" + ((window.Blob && url && url.createObjectURL) ? "si" : "no"));
@@ -424,6 +442,7 @@ function noteOf(piece, r) {
   if (r.error) { parts.push(r.error); }
   if (blind(r)) { parts.push("ciego"); }
   if (r.laps) { parts.push("vueltas " + r.laps); }
+  if (r.hidden) { parts.push("oculto " + r.hidden); }
   if (piece.role === "paquete" && r.duration >= 0) { parts.push("dur " + r.duration + "s"); }
   if (piece.note) { parts.push(piece.note); }
   return parts.join("; ");
@@ -443,7 +462,7 @@ function writeReport() {
   var i, line;
   var env = environment();
   for (i = 0; i < env.length; i++) { lines.push(env[i]); }
-  lines.push("# atascos = waiting despues de arrancar; congel = muestras de 100 ms sin avance");
+  lines.push("# atascos = waiting despues de arrancar; congel = muestras de 100 ms sin avance; oculto = muestras con la pagina oculta (el navegador pausa el video mudo)");
   lines.push("# id\tdice\tarranco\t1er_ms\tcaidos\ttotal\tderiva_ms\tatascos\tcongel\tcambio_ms\tnota");
   for (i = 0; i < pieces.length; i++) {
     line = reportLine(pieces[i]);
@@ -660,6 +679,138 @@ function stepLoop(id, pieceId) {
   } };
 }
 
+/* --- H-11: la capa de intervencion encima del <video> --- */
+
+var CAPA_FPS = 15;
+var capa = { load: "none", paints: 0, n: 0, timer: 0, w: 0, h: 0, k: 1 };
+
+/* Panel real / superficie del WebView, tope 1. En la caja medida: 1280/3840. */
+function panelScale() {
+  var sw = (typeof screen !== "undefined" && screen.width) ? screen.width : 0;
+  var vw = window.innerWidth || 0;
+  var k = (sw > 0 && vw > 0) ? sw / vw : 1;
+  return k > 1 ? 1 : k;
+}
+
+/* El buffer del canvas se dimensiona AL PANEL: el recuadro CSS del video por
+ * la escala panel/superficie. Un canvas a la superficie 4K seria letal. */
+function sizeCapa(cssW, cssH) {
+  var node = byId("capa");
+  capa.k = panelScale();
+  capa.w = Math.max(1, Math.round(cssW * capa.k));
+  capa.h = Math.max(1, Math.round(cssH * capa.k));
+  if (node.width !== capa.w) { node.width = capa.w; }
+  if (node.height !== capa.h) { node.height = capa.h; }
+}
+
+function capaContext() {
+  var node = byId("capa");
+  return node.getContext ? node.getContext("2d") : null;
+}
+
+/* Lo que la intervencion real dibuja: un numero, una ruleta y un texto, con
+ * la API nativa de Canvas2D (INT-004). `n` avanza por pintada. */
+function paintCapa(ctx, x, y, w, h, n, alpha) {
+  var cx = x + w * 0.74, cy = y + h * 0.5, r = h * 0.36;
+  var a = (n % 60) / 60 * Math.PI * 2;
+  ctx.clearRect(x, y, w, h);
+  ctx.fillStyle = "rgba(16,16,20," + alpha + ")";
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "#ffd479";
+  ctx.lineWidth = Math.max(1, h * 0.03);
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  ctx.font = "bold " + Math.round(h * 0.5) + "px monospace";
+  ctx.fillText(String(n % 100), x + w * 0.06, y + h * 0.42);
+  ctx.font = Math.round(h * 0.16) + "px monospace";
+  ctx.fillText("ASCILINE", x + w * 0.06, y + h * 0.82);
+}
+
+function capaTick() {
+  var ctx;
+  capa.timer = 0;
+  if (capa.load !== "rect") { return; }
+  ctx = capaContext();
+  if (ctx) {
+    capa.n++; capa.paints++;
+    paintCapa(ctx, Math.round(capa.w * 0.04), Math.round(capa.h * 0.06),
+              Math.round(capa.w * 0.26), Math.round(capa.h * 0.3), capa.n, 0.55);
+  }
+  capa.timer = window.setTimeout(capaTick, Math.round(1000 / CAPA_FPS));
+}
+
+/* load: "none" (sin canvas: display none), "rect" (rectangulo chico
+ * repintado a CAPA_FPS) o "full" (pantalla completa pintada UNA vez). */
+function setCapa(load) {
+  var node = byId("capa"), ctx;
+  if (capa.timer) { window.clearTimeout(capa.timer); capa.timer = 0; }
+  capa.load = load;
+  capa.paints = 0;
+  node.className = load === "none" ? "off" : "";
+  if (load === "none") { return; }
+  ctx = capaContext();
+  if (ctx) { ctx.clearRect(0, 0, capa.w, capa.h); }
+  if (load === "full") {
+    if (ctx) { capa.n++; capa.paints = 1; paintCapa(ctx, 0, 0, capa.w, capa.h, capa.n, 0.25); }
+    return;
+  }
+  capaTick();
+}
+
+function toggleCapa() { setCapa(capa.load === "rect" ? "none" : "rect"); }
+
+var CAPA_LOADS = [
+  { n: 0, load: "none", note: "sin canvas" },
+  { n: 1, load: "rect", note: "rect 15 fps" },
+  { n: 2, load: "full", note: "pantalla una vez" }
+];
+
+/* Una pieza progresiva con una carga de capa; la fila dice cuantas pintadas
+ * hubo y a que tamano de buffer, para saber que la capa realmente trabajo. */
+function stepCapa(pieceId, short, which) {
+  var id = "capa" + which.n + ":" + short;
+  return { id: id, go: function (done) {
+    var src = findPiece(pieceId);
+    var piece, row;
+    if (!src) {
+      piece = addExtra(fake(id, "capa", "", "", ""));
+      row = blank(piece); row.error = "no esta la pieza " + pieceId;
+      finishRow(id, done)(row);
+      return;
+    }
+    piece = addExtra(fake(id, "capa", src.mime, src.file, which.note));
+    measure(piece, base + src.file, function (r) {
+      if (which.load !== "none") {
+        piece.note = which.note + "; pintadas " + capa.paints +
+                     " (" + capa.w + "x" + capa.h + ")";
+      }
+      setCapa("none");
+      finishRow(id, done)(r);
+    }, { capa: which.load });
+  } };
+}
+
+function capaSteps(pieceId, short) {
+  return [stepCapa(pieceId, short, CAPA_LOADS[0]),
+          stepCapa(pieceId, short, CAPA_LOADS[1]),
+          stepCapa(pieceId, short, CAPA_LOADS[2])];
+}
+
+function capaAll() {
+  return capaSteps("v0-h264-baseline", "base").concat(capaSteps("v0-vp9", "vp9"));
+}
+
+/* 930: todo lo que la visita de H-11 a la caja tiene que traer: las seis de
+ * capa y, seguidos, blob: (mp4 clasico) y blob concat (fMP4), para comparar
+ * el arranque desde memoria de los dos (1.286 ms vs 517 en H-13/H-10). */
+function h11Batch() {
+  return capaAll().concat(blobClassicSteps(), blobSteps());
+}
+
 function mseSteps() { return [stepMse("mse:h264", null)]; }
 function blobSteps() { return [stepBlob("blob:cmaf", null)]; }
 function orderSteps() {
@@ -682,7 +833,7 @@ function packageSteps() {
  * pruebas de paquete, una atras de otra y en el mismo recuadro. */
 function everything() {
   return pieceSteps(withRole("base").concat(withRole("alpha"), withRole("stream")))
-    .concat(packageSteps());
+    .concat(packageSteps(), capaAll());
 }
 
 /* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
@@ -693,6 +844,7 @@ function stopAll() {
   stopFeeding();
   video.pause();
   video.loop = false;
+  setCapa("none");
   byId("alphaBg").className = "";
   byId("full").className = "";
   results = {};
@@ -706,14 +858,15 @@ function repeatLast() {
 }
 
 /* blob: es el piso de la cache (bajar una vez y reproducir sin red). Se prueba
- * con la primera pieza progresiva. */
-function runBlob() {
+ * con la primera pieza progresiva. Devuelve el paso para poder encadenarlo
+ * (930 lo corre seguido del blob concat). */
+function blobClassicSteps() {
   var list = baseOnly();
   var piece, id;
-  if (!list.length) { return; }
+  if (!list.length) { return []; }
   piece = list[0];
   id = "blob:" + piece.id;
-  runSteps([{ id: id, go: function (done) {
+  return [{ id: id, go: function (done) {
     var row;
     var extra = addExtra(fake(id, "blob", piece.mime, "(blob)", ""));
     extra.bytes = piece.bytes;
@@ -737,8 +890,10 @@ function runBlob() {
       say("blob: " + piece.id);
       measure(extra, url, finishRow(id, done));
     });
-  } }], 0);
+  } }];
 }
+
+function runBlob() { runSteps(blobClassicSteps(), 0); }
 
 /* En una TV no se puede copiar texto: el reporte se lee a pantalla completa y
  * se saca una foto. Por eso ocupa todo y con tipografia grande. */
@@ -781,6 +936,14 @@ var TECLAS = [
     run: runBlob },
   { code: "93", label: "repetir", detail: "la ultima corrida otra vez",
     run: repeatLast },
+  { code: "930", label: "H-11 lote", detail: "capa x6 + blob: + blob concat",
+    run: function () { runSteps(h11Batch(), 0); } },
+  { code: "931", label: "capa / baseline", detail: "sin, rect 15 fps, pantalla",
+    run: function () { runSteps(capaSteps("v0-h264-baseline", "base"), 0); } },
+  { code: "932", label: "capa / vp9", detail: "sin, rect 15 fps, pantalla",
+    run: function () { runSteps(capaSteps("v0-vp9", "vp9"), 0); } },
+  { code: "933", label: "capa a ojo", detail: "alterna el rect sobre lo que suena",
+    run: toggleCapa },
   /* El lanzador vive en OTRO servidor (es un archivo suelto), asi que no se
    * puede linkear a una ruta fija: se vuelve con el historial, y ?ir=<url>
    * permite apuntarlo si algun dia conviene. */
