@@ -175,8 +175,9 @@ var hooks = { host: host, XHR: FakeXHR };
   assert.deepStrictEqual(blob.parts, ["I", "1", "2"],
     "init primero, segmentos despues, sin tocar los bytes");
   assert.strictEqual(blob.type, 'video/mp4; codecs="avc1.42C01F"');
-  assert.strictEqual(Feed.concat(["I"], "video/mp4", { host: {}, Blob: null }),
-    null, "sin Blob devuelve null, no explota");
+  assert.strictEqual(Feed.concat(["I"], "video/mp4",
+    { host: {}, Blob: function () { throw new Error("sin Blob"); } }),
+    null, "si el Blob no se puede construir devuelve null, no explota");
   assert.strictEqual(Feed.objectUrl(blob, hooks), "blob:fake/0");
   Feed.revoke("blob:fake/0", hooks);
   assert.deepStrictEqual(revoked, ["blob:fake/0"]);
