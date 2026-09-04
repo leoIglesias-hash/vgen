@@ -54,8 +54,17 @@ assert(inline[1].indexOf("\\tatascos\\tcongel\\tcambio_ms\\tnota") >= 0,
   "el reporte lleva las columnas congel y cambio_ms");
 assert(/if \(row\.started\) \{ row\.stalls\+\+; \}/.test(inline[1]),
   "atascos cuenta el waiting solo despues de arrancar");
-assert.strictEqual((inline[1].match(/\.pause\(\)/g) || []).length, 1,
-  "no se pausa al terminar una medicion: la unica pausa es la del 0 (cortar)");
+/* La regla es que UNA MEDICION NO PAUSA lo que mide: la pieza sigue sonando
+ * hasta que la proxima la reemplace, para que se vea si de verdad seguia. La
+ * unica pausa del <video> de las piezas es la del 0 (cortar). H-18 agrega la
+ * del segundo <video>, y esa SI corresponde: un efecto que quedara sonando
+ * encima de las mediciones siguientes las ensuciaria. */
+assert.strictEqual((inline[1].match(/video\.pause\(\)/g) || []).length, 1,
+  "no se pausa al terminar una medicion: la unica pausa del video es la del 0");
+assert.strictEqual((inline[1].match(/\.pause\(\)/g) || []).length, 2,
+  "y la unica otra pausa es la del efecto de H-18, cuando su prueba termina");
+assert(/node\.pause\(\);\n  node\.className = "off";/.test(inline[1]),
+  "esa pausa es la del efecto: se corta y se esconde en el mismo lugar");
 assert(inline[1].indexOf('"ciego"') >= 0,
   "la fila dice ciego cuando el contador de cuadros no se movio");
 assert(inline[1].indexOf("dash/init.m4s") >= 0 && inline[1].indexOf("dash/chunk-") >= 0,
