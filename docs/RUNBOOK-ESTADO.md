@@ -145,31 +145,52 @@ nada.
    a un manual, ≥ 10 a la vista a la izquierda) → **H-16**; **dos `<video>` a
    la vez** (loop + efecto alfa) → **H-18**.
 7. **La cola del 2026-09-04 está TERMINADA:** ~~H-14b~~, ~~H-12b~~, ~~H-16~~,
-   ~~W-26b~~ y ~~H-18~~. Las cuatro últimas esperan **una sola visita a la
-   caja** (ver «Lo que hay que traer de la próxima visita»). Después: **H-6 →
-   H-7 (con H-15 adentro) → H-8**. **Los arranques por red
-   variaron 3× entre visitas**
-   (3,3–4,0 s hoy; MSE 7,5 s con 4 atascos): el gate de arranque solo se exige
-   desde caché o `blob:`.
+   ~~W-26b~~ y ~~H-18~~. Después: **H-6 → H-7 (con H-15 adentro) → H-8**.
+   **Los arranques por red variaron 3× entre visitas** (3,3–4,0 s hoy; MSE
+   7,5 s con 4 atascos): el gate de arranque solo se exige desde caché o
+   `blob:`.
+8. **Foto de la caja del 2026-09-04 (noche)** (REGISTRO, entrada del día). Lo
+   que cerró: el **techo aguanta 50 MB** en tandas de 5 MB **con la app viva**
+   —era un defecto de la prueba, confirmado— y **Hobo entra** en Chromium 70
+   (`fuente hobo (166 ms)`) → **H-16 CERRADA**. Lo que agregó: **los dos planos
+   de video se sostienen en la caja y mejor que en la PC** (2/155 abajo y 2/138
+   arriba, contra 5..12/157 en la PC), y la **cuota declarada no es un gate**
+   (dice 13/225 MB al empezar y 43/225 después, con la base vacía: sube por lo
+   escrito y no vuelve a bajar al borrar).
+9. **Dos pedidos del operador sobre esa foto, ejecutados el mismo día
+   (`8a6370a`):** **H-18b** —la prueba de dos videos estaba mal armada: el de
+   arriba iba encogido y corrido, y encima llevaba el RGB del máster, así que
+   superpuesto exacto habría sido indistinguible de lo de abajo. Ahora va
+   **exactamente sobre el otro** y la pieza con alfa lleva **papelitos sobre
+   transparencia total**, contenido que no existe abajo; **obliga a re-emitir
+   el pack**— y **H-20** —medir **a pantalla entera** (teclas `70`/`73`) y el
+   **reporte en dos columnas** con el `88` para volver, porque la foto cortó en
+   la novena fila y en una TV lo que no entra no existe.
 
 
-### Lo que hay que traer de la próxima visita (una sola, seis puntos)
+### Lo que hay que traer de la próxima visita (una sola, cinco puntos)
+
+Actualizado con la **foto del 2026-09-04 (noche)**, que cerró dos puntos de la
+lista anterior: el techo aguantó **50 MB en tandas de 5 MB con la app viva**
+(H-12b) y la capa se dibujó **en Hobo, 166 ms** (H-16 **cerrada**). Lo que sigue
+abierto, más lo que esa misma foto hizo aparecer.
 
 Todo se contesta en `https://iargen.com/player/v0/` salvo el último punto. La
-página ya está publicada con todo esto adentro; la leyenda muestra 13 teclas y
-lo demás está en [`MANUAL-TECLAS-V0.md`](MANUAL-TECLAS-V0.md).
+leyenda muestra 13 teclas y lo demás está en
+[`MANUAL-TECLAS-V0.md`](MANUAL-TECLAS-V0.md).
 
 | # | qué apretar | qué tiene que contestar | cierra |
 |---|---|---|---|
-| 1 | `86` y después `84` | la fila `cache:techo` dice **cuánto declara** el aparato y **cuántos MB entraron** antes de cortar (o «50 MB, tope de la prueba»). **La app no se tiene que cerrar** | H-12b |
-| 2 | apagar y prender la caja, abrir la página, `85` | ¿las dos piezas siguen ahí y arrancan **sin red**? | H-12b |
-| 3 | `83` sola | tiene que **verse el video** con el rectángulo encima. Si aparece «el aparato pide un gesto», anotarlo: decide si el arranque automático necesita un toque en la instalación real | H-12b |
-| 4 | mirar el rectángulo del `83`, y `95` | ¿la capa se ve **en Hobo**? El reporte dice `fuente hobo (N ms)` o `fuente fallback`; las dos son respuestas. ¿Las 13 teclas entran sin pisar nada? | H-16 |
-| 5 | `87` | los dos videos a la vez: la fila trae los caídos **de los dos**. En la PC: VP9 solo 0/156, con el efecto encima 5..12/157 abajo y 4..8/153 arriba | H-18 |
-| 6 | en el lanzador (`ir.html`), tecla **`6`** | abre la raíz sin WebGL: **sin pantallazo blanco**. Ya no hay que escribir la dirección con el control | W-26b |
+| 1 | apagar y prender la caja, abrir la página, `85` | ¿las dos piezas siguen ahí y arrancan **sin red**? Es lo único que separa «sobrevive al cierre de la app» de «sobrevive al reinicio». Si la cabecera dice `guardadas 0`, primero hay que correr `84` **antes** de apagar | H-12b |
+| 2 | `83` sola | tiene que **verse el video** con el rectángulo encima. Si aparece «el aparato pide un gesto», anotarlo: decide si el arranque automático necesita un toque en la instalación real | H-12b |
+| 3 | `87` | los dos videos **del mismo tamaño**, con los papelitos encima: ¿se ve **un solo video con papelitos**? La fila trae los caídos de los dos. La versión anterior (recuadro chico y corrido) dio 2/155 abajo y 2/138 arriba en la caja | H-18b |
+| 4 | `70` | **pantalla entera**, cuatro escalones: solo, con capa, con efecto, todo junto. La nota dice a qué tamaño quedó el video y si el WebView concedió la pantalla completa de verdad (`api si`/`no`). Es el caso que más puede doler: 3840×2160 sobre un panel de 1280×720 | H-20 |
+| 5 | en el lanzador (`ir.html`), tecla **`6`** | abre la raíz sin WebGL: **sin pantallazo blanco**. Ya no hay que escribir la dirección con el control | W-26b |
 
-Con el `95` a pantalla completa la foto trae todo junto. Y como siempre: la foto
-se transcribe **textual** al REGISTRO antes de tocar nada.
+Al final, **`95`** para el reporte y **`88`** para volver. Ahora entra entero en
+una pantalla, en dos columnas, con la letra más grande que quepa: la foto
+anterior cortó en la novena fila. Y como siempre: la foto se transcribe
+**textual** al REGISTRO antes de tocar nada.
 
 **Si llegan reportes de otros aparatos, van al REGISTRO antes que a cualquier
 otra cosa**, transcriptos de la foto, nunca de memoria; y una fila nueva en

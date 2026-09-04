@@ -187,14 +187,32 @@ class AlphaTest(unittest.TestCase):
         self.assertEqual(int(frame[:, :, :3][fuera].max()), 0)
 
     def test_los_papelitos_caen(self):
-        def fila_media(index):
-            frame = emit_pieces.confetti_rgba(96, 720, index)
-            filas = np.nonzero(frame[:, :, 3].any(axis=1))[0]
-            return float(filas.mean()) if filas.size else None
-        primera, despues = fila_media(0), fila_media(3)
-        self.assertIsNotNone(primera)
-        self.assertIsNotNone(despues)
-        self.assertGreater(despues, primera)
+        """UN solo papelito, no el promedio de los 160: con todos, el promedio
+        no baja de forma monotona porque los que salen por abajo vuelven a
+        entrar por arriba (fallo real en CI la primera vez). Con uno, lo unico
+        que puede interrumpir la bajada es su propia vuelta, y en doce cuadros
+        no entra mas de una."""
+        original = emit_pieces.CONFETTI_COUNT
+        emit_pieces.CONFETTI_COUNT = 1
+        try:
+            techos = []
+            for index in range(12):
+                frame = emit_pieces.confetti_rgba(1024, 720, index)
+                filas = np.nonzero(frame[:, :, 3].any(axis=1))[0]
+                techos.append(int(filas[0]) if filas.size else None)
+        finally:
+            emit_pieces.CONFETTI_COUNT = original
+        vistos = [valor for valor in techos if valor is not None]
+        self.assertGreater(len(vistos), 6, "el papelito tiene que verse")
+        bajadas = 0
+        for antes, despues in zip(vistos, vistos[1:]):
+            if despues > antes:
+                bajadas += 1
+        # No se exige que bajen LAS ONCE transiciones: entrando por arriba el
+        # borde superior queda clavado en 0 un par de cuadros, y una vuelta
+        # completa lo devuelve arriba. Lo que se afirma es la caida, no una
+        # monotonia que el propio ciclo no puede cumplir.
+        self.assertGreaterEqual(bajadas, 7)
 
     def test_no_se_usan_trascendentes(self):
         """Invariante 7: dos maquinas tienen que emitir el MISMO archivo. Un
