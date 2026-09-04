@@ -279,3 +279,23 @@ el producto hay que revisar la licencia de distribución web.
 
 Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
 → SHA-256 igual al del archivo local en las dos; token de subida quemado.
+
+### Corrección del mismo día (H-16, lo que apareció al probar la página)
+
+`v0/index.html` → **60541 B**, md5 `042cf70a68ab86786e7d14c7cf6d600e`. Dos arreglos que salieron de abrir la
+página publicada en un navegador y medirla, no de leerla:
+
+1. **La detección de la fuente pasa a M contra i.** La versión anterior comparaba
+   el ancho de una frase contra monospace y el margen era de **1,5 px sobre 285**
+   (medido: 285,9 contra 284,4). Andaba, pero por poco. Ahora se comparan
+   `MMMMM` e `iiiii` **en la misma familia**: monospace le da a toda letra el
+   mismo avance, así que anchos distintos solo pueden venir de Hobo. Medido en el
+   mismo navegador: 170,2 contra 53,2.
+2. **La columna de teclas dejaba de entrar en pantallas angostas** (a 399 px
+   mostraba «cache: gua…»). Ahora tiene un piso de 200 px acotado a un tercio del
+   ancho, y `box-sizing: border-box` para que el relleno no la monte 14 px sobre
+   el video.
+
+**Comprobado sobre lo publicado:** la fuente carga y se detecta pese a servirse
+como `application/octet-stream`, el `83` arranca VP9 en bucle y la capa pinta
+encima del video.
