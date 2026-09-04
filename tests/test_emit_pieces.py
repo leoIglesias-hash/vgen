@@ -71,22 +71,45 @@ class BuildCommandTest(unittest.TestCase):
             self.assertIn("+bitexact", command)
             self.assertIn("-map_metadata", command)
 
+    def test_las_dos_h264_son_independientes_de_la_cpu(self):
+        """H-14b (adoptado 2026-09-04): `threads=1` hace que una maquina repita
+        sus bytes; `cpu-independent=1` hace que DOS maquinas coincidan. Sin esto
+        la residencia (H-15) pierde sentido: una re-emision sin cambios cambiaria
+        la huella y el aparato bajaria de nuevo lo que ya tiene."""
+        for variant_id in ("v0-h264-baseline", "v0-h264-main"):
+            command = self.command(variant_id)
+            params = command[command.index("-x264-params") + 1]
+            self.assertIn("cpu-independent=1", params)
+            self.assertIn("threads=1", params)
+        # Las dos comparten base: la comparacion baseline/main sigue midiendo
+        # solo CABAC, no una diferencia de determinismo.
+        self.assertTrue(emit_pieces.X264_MAIN.startswith(emit_pieces.X264_COMMON))
+        self.assertEqual(emit_pieces.X264_BASELINE, emit_pieces.X264_COMMON)
+
+    def test_no_se_le_pide_cpu_independent_al_carril_vp9(self):
+        """libvpx es entero y ya repite bytes entre maquinas; la opcion es de
+        x264 y ffmpeg la rechazaria en el otro carril."""
+        for variant_id in ("v0-vp9", "v0-vp9-alpha"):
+            command = self.command(variant_id)
+            self.assertNotIn("cpu-independent=1", " ".join(command))
+            self.assertNotIn("-x264-params", command)
+
     def test_x264_extra_se_pega_solo_a_las_piezas_h264(self):
-        """H-14: la palanca de CI para probar cpu-independent=1 no puede tocar
-        la receta ni filtrarse al carril VP9."""
+        """H-14: la palanca de CI para probar una opcion del encoder no puede
+        tocar la receta ni filtrarse al carril VP9."""
         for variant_id in ("v0-h264-baseline", "v0-h264-main"):
             variant = emit_pieces.variant_by_id(variant_id)
             command = emit_pieces.build_command(
                 "ffmpeg", variant, 1280, 720, 15, "out.mp4",
-                x264_extra="cpu-independent=1")
+                x264_extra="no-mbtree=1")
             params = command[command.index("-x264-params") + 1]
-            self.assertTrue(params.endswith(":cpu-independent=1"), params)
+            self.assertTrue(params.endswith(":no-mbtree=1"), params)
             self.assertIn("threads=1", params)
-            self.assertNotIn("cpu-independent", self.command(variant_id))
+            self.assertNotIn("no-mbtree", " ".join(self.command(variant_id)))
         vp9 = emit_pieces.build_command(
             "ffmpeg", emit_pieces.variant_by_id("v0-vp9"), 1280, 720, 15,
-            "out.webm", x264_extra="cpu-independent=1")
-        self.assertNotIn("cpu-independent=1", " ".join(vp9))
+            "out.webm", x264_extra="no-mbtree=1")
+        self.assertNotIn("no-mbtree=1", " ".join(vp9))
         self.assertNotIn("-x264-params", vp9)
 
 

@@ -68,8 +68,19 @@ CRF_VP9 = 32
 DETERMINISM = ("-threads", "1")
 BITEXACT = ("-fflags", "+bitexact", "-flags:v", "+bitexact", "-map_metadata", "-1")
 
-X264_BASELINE = "bframes=0:ref=1:keyint=%d:min-keyint=%d:scenecut=0:threads=1" % (GOP, GOP)
-X264_MAIN = "bframes=0:ref=1:keyint=%d:min-keyint=%d:scenecut=0:threads=1:cabac=1" % (GOP, GOP)
+# H-14b (adoptado por el operador el 2026-09-04): `threads=1` alcanza para que
+# UNA maquina repita sus propios bytes, pero no para que DOS coincidan: x264
+# elige con aritmetica que depende del juego de instrucciones de la CPU (medido
+# en H-14: AMD EPYC 9V74 y 7763 dan un archivo, Intel 6973P-C otro).
+# `cpu-independent=1` apaga esos atajos y las CPUs del parque de runners emiten
+# los mismos bytes; cuesta +0,016 % en baseline y -0,06 % en main. Va EN LA
+# RECETA, no como palanca de CI, porque la residencia (H-15) pinea las piezas
+# por contenido: una re-emision sin cambios no puede invalidar lo que el
+# aparato ya tiene guardado.
+X264_COMMON = ("bframes=0:ref=1:keyint=%d:min-keyint=%d:scenecut=0"
+               ":threads=1:cpu-independent=1" % (GOP, GOP))
+X264_BASELINE = X264_COMMON
+X264_MAIN = X264_COMMON + ":cabac=1"
 
 VARIANTS = (
     {
@@ -194,8 +205,9 @@ def build_command(ffmpeg, variant, width, height, fps, out_path,
     decodificado del master y sale la pieza; ningun paso re-cuantiza el look.
 
     `x264_extra` (H-14) se pega al final de -x264-params de las piezas H.264:
-    es la palanca para probar en CI una opcion del encoder (cpu-independent=1)
-    sin tocar la receta declarada arriba."""
+    es la palanca para probar en CI una opcion del encoder sin tocar la receta
+    declarada arriba. La que se probo asi -cpu-independent=1- ya no necesita la
+    palanca: desde H-14b vive en la receta (X264_COMMON)."""
     args = list(variant["args"])
     if x264_extra and "-x264-params" in args:
         at = args.index("-x264-params") + 1
