@@ -224,11 +224,11 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 31);
+assert.strictEqual(codigos.length, 32);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
-["70", "73", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89",
+["70", "71", "73", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89",
  "90", "91", "92", "93", "94", "95", "96", "97", "98", "99"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta el codigo compuesto " + code);
 });
@@ -316,8 +316,8 @@ var ahora = registered.actions.filter(function (item) {
   return item.tier === "now";
 }).map(function (item) { return item.code; }).sort();
 assert.deepStrictEqual(ahora,
-  ["1", "70", "84", "85", "87"],
-  "lo pendiente: la cache, los dos videos, la pantalla entera y el 1");
+  ["1", "70", "71", "84", "85", "87"],
+  "lo pendiente: la cache, los dos videos, la pantalla entera, el bucle a ojo y el 1");
 
 function emDe(sel) {
   var m = page.match(new RegExp("#teclas \\." + sel +
@@ -351,8 +351,8 @@ assert(/px\(byId\("side"\), sideX, midTop, w - sideX - 12, midH\)/.test(inline[1
 var visibles = byId("teclas").childNodes.length;
 assert(visibles >= 10,
   "tienen que quedar al menos 10 teclas a la vista, y hay " + visibles);
-assert.strictEqual(visibles, 13,
-  "hoy son 13: las 5 de ahora y las 8 herramientas");
+assert.strictEqual(visibles, 14,
+  "hoy son 14: las 6 de ahora y las 8 herramientas");
 var ocultas = registered.actions.filter(function (item) {
   return item.tier === "done";
 }).length;
@@ -748,4 +748,46 @@ assert(/return techoSteps\(\)\.concat\(\[stepDosVideos\(\)\], enteraSteps\(\)\)/
   .test(inline[1]),
   "el 1 suma la pantalla entera: es lo que la caja todavia no contesto");
 
-console.log("v0 page tests (H-18b + H-20): OK");
+/* H-21: los dos planos A OJO, en bucle y sin cortes.
+ *
+ * El operador vio "que se corta el video cuando son dos superpuestos". Los
+ * cortes son de la MEDICION -el 70 corre cuatro escalones y entre uno y otro
+ * para, cambia la carga y arranca de nuevo-, no del aparato. Pero la pregunta
+ * de fondo no la contesta ningun contador: esta tecla existe para mirarlo
+ * seguido, y por eso NO agrega fila al reporte. */
+function cuerpoDe(nombre) {
+  var desde = inline[1].indexOf("function " + nombre + "(");
+  var hasta = inline[1].indexOf("\n}", desde);
+  assert(desde >= 0 && hasta > desde, "no esta la funcion " + nombre);
+  return inline[1].slice(desde, hasta);
+}
+
+assert(/dos a ojo/.test(action("71").label), "71 = los dos planos a ojo");
+assert(/H-21/.test(action("71").detail));
+assert(/BUCLE/.test(action("71").detail),
+  "la leyenda tiene que decir que no corta: es lo que lo distingue del 70");
+var bucleCuerpo = cuerpoDe("toggleBucle");
+assert(/entrarEntera\(\);/.test(bucleCuerpo),
+  "arranca a pantalla entera, que es como lo pidio el operador");
+assert(/startEfecto\("v0-vp9-alpha"\);/.test(bucleCuerpo),
+  "son los dos planos, no uno");
+assert(/video\.loop = true;/.test(bucleCuerpo),
+  "en bucle: la pieza no puede terminarse mientras se la mira");
+assert(/layout\(\);/.test(bucleCuerpo),
+  "layout despues de startEfecto: el de arriba va en el rectangulo exacto");
+assert(bucleCuerpo.indexOf("addExtra") < 0 &&
+       bucleCuerpo.indexOf("measure(") < 0,
+  "no mide y no agrega fila: muestra");
+assert(/setInterval\(tickBucle, 1000\)/.test(bucleCuerpo),
+  "el zocalo lleva los caidos vivos, para que el ojo y los numeros se miren juntos");
+var tick = cuerpoDe("tickBucle");
+assert(/armEfecto\(\);/.test(tick),
+  "la base del de arriba se toma cuando empieza a sonar, no al pedir el play");
+assert(/bucle\.armed && video\.currentTime > 0/.test(tick),
+  "y la del de abajo tambien");
+assert(/pararBucle\(\);/.test(cuerpoDe("stopAll")),
+  "el 0 apaga el reloj: si no, sigue escribiendo en el zocalo despues de cortar");
+assert(cuerpoDe("pararBucle").indexOf("stopAll") < 0,
+  "pararBucle solo apaga el reloj; si tambien apagara todo, se llamarian en circulo");
+
+console.log("v0 page tests (H-18b + H-20 + H-21): OK");

@@ -194,8 +194,28 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
      fila, y en una TV lo que no entra no existe. Abre la **tercera puerta** del
      mando (`7`).
 
-  **Las cinco esperan UNA SOLA VISITA a la caja** (qué traer:
-  `RUNBOOK-ESTADO.md`). Después siguen **H-6** (matriz por bytes a igual look),
+  **H-18b y H-20 quedaron CERRADAS con la segunda foto del 2026-09-04**, y de
+  ahí sale una **regla de diseño**: dos planos de video se sostienen (2/154 y
+  1/141 → **un efecto puede SER video**), la superficie 4K **no le cuesta al
+  `<video>`** (1/155 él solo; la escala el hardware) y la API de fullscreen ni
+  se concedió ni hizo falta — pero **video + video alfa + canvas juntos dan
+  11 % de caídos**, casi cuatro veces el gate. **El presupuesto de composición
+  es DOS planos, no tres:** sobre el video base va UN plano encima —el canvas o
+  una pieza alfa—, nunca los dos; si una escena necesita texto vivo *y* efecto,
+  el efecto **se hornea en la pieza** (DISENO §9).
+
+  8. **H-21** — el operador pidió mirar los dos planos **sin los cortes de la
+     medición** (*«se corta el video cuando son dos superpuestos… un loop de
+     los dos videos superpuestos, en pantalla grande»*). Los cortes eran del
+     `70`, que corre cuatro escalones y para entre uno y otro. Tecla **`71`**:
+     los dos planos a toda la superficie, **en bucle y sin un solo corte**,
+     hasta que se apague; no agrega fila —no mide, muestra— pero el zócalo
+     lleva los **caídos vivos de los dos**. Porque «2,6 % de caídos» y «se ve
+     fluido dos minutos» son dos datos distintos, y el segundo lo firma el ojo.
+
+  **Quedan TRES puntos para UNA SOLA VISITA a la caja** (qué traer:
+  `RUNBOOK-ESTADO.md`): `85` tras apagar y prender, `83` sola, y `71`. Después
+  siguen **H-6** (matriz por bytes a igual look),
   **H-7** (spec `SPEC-VGEN.md`, con **H-15** residencia adentro) y **H-8**
   (muxer ES5 + player). Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).

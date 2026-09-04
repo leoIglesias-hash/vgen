@@ -18,7 +18,7 @@ abajo a la izquierda lo que se va tecleando (`8_`, `83_`) y ejecuta cuando pasan
 900 ms sin otra tecla, así que **una tecla de una cifra tarda un momento en
 salir**: es normal, está esperando a ver si viene la segunda.
 
-## Lo que se ve en pantalla (13 teclas)
+## Lo que se ve en pantalla (14 teclas)
 
 **Lo que hay que probar**
 
@@ -28,6 +28,7 @@ salir**: es normal, está esperando a ver si viene la segunda.
 | `85` | **desde caché**: la tecla de después de apagar y prender. ¿Siguen ahí? ¿Arranca sin red? |
 | `87` | **dos videos a la vez** (H-18b): el loop VP9 abajo y los **papelitos con alfa encima, exactamente del mismo tamaño**. Si el aparato compone, se ve un solo video con papelitos. La fila trae los cuadros caídos de los dos |
 | `70` | **pantalla entera** (H-20): el video ocupando toda la superficie, en cuatro escalones — solo, con la capa, con el efecto, y todo junto. La nota dice a qué tamaño quedó y si el WebView concedió la pantalla completa de verdad |
+| `71` | **los dos a ojo** (H-21): los mismos dos planos del `87`, pero **a toda la superficie, en bucle y sin un solo corte**, para mirarlos el rato que haga falta. No mide: el zócalo va contando los caídos vivos de los dos. Se sale con `71` otra vez o con `0` |
 | `1` | **lo que falta**: corre solo lo que la caja todavía no consagró — el techo, los dos videos y la pantalla entera |
 
 **Herramientas**

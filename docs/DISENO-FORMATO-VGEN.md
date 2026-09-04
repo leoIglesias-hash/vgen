@@ -241,10 +241,37 @@ reglas que salen de la conversación con el operador (sincronía):
 **Una sola pantalla es más eficiente**: el video ocupa todo y la capa dibuja
 solo su rectángulo; «al lado» achica el video y obliga a pintar más área con
 la CPU, que es el recurso escaso. La fuente de la capa es **Hobo** por defecto
-(operador, 2026-09-04; servida con `@font-face`, cae a `monospace`). Y los
-**efectos pueden ser video con alfa** (`v0-vp9-alpha` compone en la caja); si
-H-18 sostiene dos `<video>` a la vez, un efecto es una pieza alfa encima del
-loop.
+(operador, 2026-09-04; servida con `@font-face`, cae a `monospace`).
+
+**Los efectos SON video con alfa** (H-18b, cerrada 2026-09-04 con la foto de la
+caja): el loop abajo y `v0-vp9-alpha` encima dan **2/154 y 1/141 caídos**, los
+dos dentro del gate de 3 %, y el navegador compone. Un efecto deja de tener que
+estar horneado o dibujado a mano: es una pieza más del paquete.
+
+### El presupuesto de composición: DOS planos, no tres
+
+Medido a pantalla entera en la caja (H-20, misma foto), con el video ocupando
+los 3840×2160 que el WebView le da:
+
+| encima del video base | caídos abajo | caídos arriba |
+|---|---|---|
+| nada | 1/155 = 0,6 % | — |
+| el canvas de intervención | 0/153 = **0 %** | — |
+| una pieza alfa | 4/156 = 2,6 % | 2/138 = 1,4 % |
+| **las dos cosas a la vez** | 17/154 = **11,0 %** | 7/149 = **4,7 %** |
+
+**No es la suma de los costos: es un salto.** De ahí la regla, y el operador la
+vio a ojo antes de mirar los números (*«no creo que resista más de dos videos
+superpuestos, pero con 2 va bien»*):
+
+> Sobre el video base va **UN** plano encima —o el canvas de intervención, o una
+> pieza alfa—, **nunca los dos a la vez**. Si una escena necesita texto vivo *y*
+> efecto, el efecto **se hornea en la pieza** y el canvas se queda solo con lo
+> que no puede saberse antes.
+
+Corolario del mismo dato: **la superficie 4K no le cuesta nada al `<video>`**
+(0,6 % él solo, la escala el hardware). Lo que no escala es la CPU — es
+exactamente lo que mata al player 100 % JS en el mismo aparato (DIAG-003).
 
 ## 10. Decidido vs. gateado por medición
 

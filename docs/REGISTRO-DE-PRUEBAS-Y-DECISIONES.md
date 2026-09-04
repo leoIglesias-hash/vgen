@@ -5099,3 +5099,87 @@ que salga de H-6/H-7/H-8.
 antes de saber si va a haber texto nativo ahorraría la ventana de 240 ms sin
 necesidad del parámetro. No urge: el parámetro ya está publicado en las cuatro
 carpetas y el lanzador lo abre con una tecla.
+
+---
+
+## 2026-09-04 (noche, 2ª foto) — H-18b y H-20 contestadas: el techo de composición es DOS planos
+
+Foto de la caja con el reporte entero en dos columnas (el `88` y las dos
+columnas de H-20 funcionaron: **entra todo en una sola toma**, que era el
+motivo de hacerlas). Transcripción **textual**:
+
+```
+reporte - 88 para volver
+# pack v0 - reporte de aparato
+ua  Mozilla/5.0 (Linux; Android 9; TVBOX Build/PPR1.180610.011; wv) AppleWebKit/537.36
+(KHTML, like Gecko) Version/4.0 Chrome/70.0.3538.80 Safari/537.36
+panel   1280x720   dpr 1   superficie 3840x2160
+capa    560x315 k 0.333 fuente hobo (342 ms)
+mse si  changeType si  blob  si
+mse.h264   si  mse.vp9 si
+rvfc    no  indexeddb si  quality no
+cache   si  guardadas 0 0 B cuota 22/225 MB
+hls maybe  dash  no
+# atascos = waiting despues de arrancar; congel = muestras de 100 ms sin avance; oculto
+= muestras con la pagina oculta (el navegador pausa el video mudo)
+# id    dice    arranco 1er_ms  caidos total  deriva_ms  atascos congel  cambio_ms  nota
+cache:techo        si 5665   0  0  0  0  0  -1  declara 0/225 MB; tandas de 5 MB;
+entraron 50 MB (tope de la prueba)
+dos:vp9+alfa    probably  si 5629   2 154 2  0  0  -1  loop VP9 + alfa encima;
+el de arriba dice probably, caidos 1/141
+entera:solo probably   si 217 1   155 0  0  0  -1  entera 3840x2160 sobre 3840x2160;
+api no
+entera:capa probably   si 346 0   153 0  0  0  -1  entera 3840x2160 sobre 3840x2160;
+api no; capa rect, pintadas 145 (1280x720)
+entera:dos  probably   si 435 4   156 0  0  0  -1  entera 3840x2160 sobre 3840x2160;
+api no; el de arriba dice probably, caidos 2/138
+entera:todo probably   si 638 17  154 0  0  0  -1  entera 3840x2160 sobre 3840x2160;
+api no; capa rect, pintadas 148 (1280x720); el de arriba dice probably, caidos 7/149
+```
+
+Y la lectura del operador, textual: *«No creo que resiste mas de dos videos
+superpuestos, pero con 2 va bien»*.
+
+### Lo que dicen los números, en porcentaje
+
+| corrida | qué hay en pantalla | abajo | arriba | capa |
+|---|---|---|---|---|
+| `dos:vp9+alfa` | dos planos, tamaño normal | 2/154 = **1,3 %** | 1/141 = **0,7 %** | — |
+| `entera:solo` | un video a **3840×2160** | 1/155 = **0,6 %** | — | — |
+| `entera:capa` | video 4K + canvas | 0/153 = **0 %** | — | 145 pintadas |
+| `entera:dos` | video 4K + video alfa 4K | 4/156 = **2,6 %** | 2/138 = **1,4 %** | — |
+| `entera:todo` | video + video alfa + canvas | 17/154 = **11,0 %** | 7/149 = **4,7 %** | 148 pintadas |
+
+Gate vigente: **≤ 3 % de caídos**.
+
+### Cuatro conclusiones, y una es de diseño
+
+1. **H-18b CERRADA: dos planos de video se sostienen.** 1,3 % abajo y 0,7 %
+   arriba con el armado corregido —mismo rectángulo exacto, papelitos sobre
+   transparencia total—, contra 1,3 % y 1,4 % con el armado malo. **El efecto
+   puede SER video** (DISENO §9): una pieza con alfa encima del loop cuesta
+   menos de un cuadro y medio de cada cien.
+2. **H-20 CERRADA, y la superficie 4K no es el problema del `<video>`.** Un
+   video estirado a **3840×2160** sobre un panel de 1280×720 pierde **0,6 %**:
+   lo escala el hardware y no lo paga la CPU. Es exactamente lo contrario de lo
+   que le pasa al player 100 % JS en el mismo aparato (DIAG-003), y refuerza por
+   qué el paradigma cambió.
+3. **La API de fullscreen no se concedió (`api no`) y no hizo falta.** El
+   WebView ya entrega la superficie entera; «pantalla entera» acá es esconder el
+   cromo y estirar el video. Queda declarado, no supuesto: si otro aparato sí la
+   concede, la fila lo va a decir.
+4. **DE DISEÑO — el presupuesto de composición es DOS planos, no tres.** Video
+   4K + capa: 0 %. Video 4K + video alfa: 2,6 %. **Los tres juntos: 11 %**, casi
+   cuatro veces el gate, y el de arriba se cae siete veces más que solo. No es
+   la suma de los costos: es un salto. El operador lo vio a ojo antes de mirar
+   los números. **Regla nueva: sobre el video base va UN plano encima —o el
+   canvas de intervención, o una pieza alfa—, nunca los dos a la vez.** Si una
+   escena necesitara texto vivo *y* efecto, el efecto se hornea en la pieza y el
+   canvas se queda con lo que no puede saberse antes.
+
+### Lo que esta foto NO contesta
+
+`cache guardadas 0 0 B`: el operador corrió el `1` (lo que falta), que no
+incluye `84`. Siguen abiertos los dos puntos de H-12b: **`85` tras apagar y
+prender** (hay que correr `84` antes de apagar) y **`83` sola mostrando video**.
+

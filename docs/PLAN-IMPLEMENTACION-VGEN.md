@@ -81,6 +81,8 @@ bytes y el arranque son el objetivo.**
 | **E11** | Superficie 3840×2160 sobre panel 1280×720 | DIAG-003 + reporte | externo (la app). El canvas de intervención se dimensiona **al panel**, nunca a la superficie |
 | **E12** | Ojo del operador: VP9 «perfecto, hasta más fluido»; el alfa **compone** (verde alrededor, video en el círculo); HLS-TS «se traba mucho al iniciar» | respuestas del operador, REGISTRO 2026-09-01 | consagra VP9 y el alfa por video; saca el camino D del producto en esta clase |
 | **E13** | «De momento el tv box es la base»; contenido = loop intervenido + publicidad que reemplaza y vuelve + incentivadores a demanda; nombre `.vgen` | decisiones del operador, REGISTRO 2026-09-01 | la caja **consagra**; los casos de uso de §2.7; el nombre del formato |
+| **E14** | Dos planos de video a la vez se sostienen: loop VP9 abajo + pieza alfa encima, **mismo rectángulo exacto**, 2/154 y 1/141 caídos | H-18b, foto de la caja 2026-09-04 (noche) | **un efecto puede SER video**: una pieza alfa más del paquete, en vez de horneada o dibujada a mano |
+| **E15** | La superficie **3840×2160** no le cuesta al `<video>`: 1/155 caídos él solo. Pero **video + video alfa + canvas** juntos dan **17/154 = 11 %**, contra 0 % del canvas solo y 2,6 % de la pieza alfa sola | H-20, misma foto | **el presupuesto de composición es DOS planos, no tres**; y la API de fullscreen no se concedió (`api no`) ni hizo falta |
 
 **Lo que todavía no se sabe** —y por eso no se afirma—: cómo se ve la
 **costura** entre segmentos y en el bucle, cuánto tarda un **cambio de pieza a
@@ -149,8 +151,13 @@ principal (§3.3).
 
 - **N1 (elegir piezas)** por A, B o D. Es lo primero que el formato promete y lo
   que H-13 pone a prueba en hardware.
-- **N2 (canvas encima)** sujeto a H-11 (encima o al lado). El alfa por video
-  **compone en la caja** (S4): el personaje sin fondo puede ir por video.
+- **N2 (canvas encima)**: **ENCIMA**, decidido en H-11. El alfa por video
+  **compone en la caja** (S4) y **se sostiene** (H-18b): el personaje sin fondo
+  puede ir por video.
+- **Presupuesto de composición: DOS planos, no tres** (H-20, E15). Sobre el
+  video base va **un** plano encima —el canvas de intervención **o** una pieza
+  alfa—, nunca los dos: juntos dan 11 % de caídos contra 0 % y 2,6 %. Si una
+  escena necesita texto vivo *y* efecto, el efecto **se hornea en la pieza**.
 - **Sincronía:** sin rVFC en esta clase, el loop lee `currentTime` (no
   `timeupdate`, que va a ~4 Hz). Tolerancia declarada: **≥ 1 cuadro (66 ms a
   15 fps)** para toda intervención «de evento»; la «de cuadro» se hornea en el

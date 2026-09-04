@@ -1146,6 +1146,7 @@ function pendingSteps() {
 function stopAll() {
   var video = byId("video");
   aborted = true;
+  pararBucle();
   stopFeeding();
   video.pause();
   video.loop = false;
@@ -1560,6 +1561,95 @@ function enteraSteps() {
           stepEntera(false)];
 }
 
+/* --- H-21: los dos planos A OJO, enteros y en bucle, sin un solo corte ---
+ *
+ * Pedido del operador (2026-09-04, mirando la foto del reporte): «se corta el
+ * video cuando son dos superpuestos. Eso esta mal.. podrias hacerme una opcion
+ * que sea un loop de los dos videos superpuestos? En pantalla grande».
+ *
+ * Lo primero, porque cambia que sea un defecto o no: **los cortes que se ven
+ * con `70` son de la medicion, no del aparato**. `70` corre CUATRO escalones de
+ * SECONDS segundos; entre uno y otro la pagina para el video, cambia la carga y
+ * lo vuelve a arrancar. Son cuatro cortes por diseno.
+ *
+ * Pero la observacion de fondo es correcta y ningun numero la contesta: "2,6 %
+ * de caidos" es un dato y "se ve fluido dos minutos seguidos" es OTRO, y el
+ * segundo lo firma el ojo (PLAN 3.5, «lo que el contador no ve, lo firma el
+ * ojo»). Esta tecla es exactamente eso y nada mas: los dos planos, a toda la
+ * superficie, en bucle, sin corte, hasta que se apague.
+ *
+ * No agrega fila al reporte -no mide, muestra-, pero el zocalo lleva los
+ * caidos VIVOS de los dos, para que el ojo y los contadores se miren juntos y
+ * no haya que elegir entre uno y otro. */
+var bucle = { on: false, timer: 0, t0: 0, armed: false,
+              baseTotal: 0, baseDropped: 0 };
+
+/* Solo apaga el reloj. Lo demas -pausar, sacar el efecto, salir de la pantalla
+ * entera- lo hace stopAll(), que es quien sabe apagar todo; si esto lo hiciera
+ * tambien, stopAll() y esta funcion se llamarian en circulo. */
+function pararBucle() {
+  if (bucle.timer) { window.clearInterval(bucle.timer); bucle.timer = 0; }
+  bucle.on = false;
+  bucle.armed = false;
+}
+
+function vivos(node, baseTotal, baseDropped) {
+  var q = quality(node), total, dropped;
+  if (!q) { return "-"; }
+  total = q.total - baseTotal;
+  dropped = q.dropped - baseDropped;
+  /* Misma regla que en las filas (H-12b): una resta negativa es una base que
+   * ya no existe, no un dato. */
+  if (total < 0 || dropped < 0) { total = q.total; dropped = q.dropped; }
+  if (dropped < 0) { dropped = 0; }
+  return dropped + "/" + total;
+}
+
+function tickBucle() {
+  var video = byId("video"), q, abajo = "-", arriba = "-", segundos;
+  if (!bucle.on) { return; }
+  /* La linea de base se toma cuando EMPIEZA A SONAR, igual que la del efecto:
+   * tomarla al pedir el play cuenta contra los contadores de la corrida
+   * anterior. */
+  if (!bucle.armed && video.currentTime > 0) {
+    q = quality(video);
+    bucle.baseTotal = q ? q.total : 0;
+    bucle.baseDropped = q ? q.dropped : 0;
+    bucle.armed = true;
+  }
+  armEfecto();
+  if (bucle.armed) { abajo = vivos(video, bucle.baseTotal, bucle.baseDropped); }
+  if (efecto.armed) {
+    arriba = vivos(byId("efecto"), efecto.baseTotal, efecto.baseDropped);
+  }
+  segundos = Math.round((new Date().getTime() - bucle.t0) / 1000);
+  say("dos a ojo: " + segundos + " s - abajo " + abajo + ", arriba " + arriba +
+      (efecto.error ? " (" + efecto.error + ")" : "") + " - 71 o 0 corta");
+}
+
+function toggleBucle() {
+  var video, src;
+  if (bucle.on) { stopAll(); return; }
+  src = findPiece("v0-vp9");
+  if (!src) { say("dos a ojo: no esta v0-vp9"); return; }
+  stopAll();
+  bucle.on = true;
+  bucle.armed = false;
+  bucle.t0 = new Date().getTime();
+  entrarEntera();
+  video = byId("video");
+  video.loop = true;
+  video.src = base + src.file;
+  video.load();
+  video.play();
+  startEfecto("v0-vp9-alpha");
+  /* Despues de startEfecto, para que el de arriba quede en el rectangulo
+   * exacto del de abajo ya en pantalla entera (H-18b). */
+  layout();
+  bucle.timer = window.setInterval(tickBucle, 1000);
+  say("dos a ojo: bucle entero - 71 o 0 corta");
+}
+
 /* El techo, en TANDAS CHICAS y acumulativas.
  *
  * La version anterior armaba 10, 25 y 50 MB de ruido de una sola vez, y en la
@@ -1777,6 +1867,9 @@ var TECLAS = [
   { code: "70", label: "pantalla entera", tier: "now",
     detail: "H-20: el video en toda la superficie - solo, con capa, con efecto, y todo junto",
     run: function () { runSteps(enteraSteps(), 0); } },
+  { code: "71", label: "dos a ojo", tier: "now",
+    detail: "H-21: los dos encima, enteros y en BUCLE, sin cortes - para mirarlo, no para medirlo",
+    run: toggleBucle },
   { code: "73", label: "entera a ojo", tier: "tool",
     detail: "prende y apaga la pantalla entera, sin medir",
     run: toggleEntera },
