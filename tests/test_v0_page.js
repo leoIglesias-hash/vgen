@@ -32,8 +32,14 @@ assert.strictEqual(/\bJSON\s*\./.test(page), false,
 
 assert(/html,\s*body\s*\{[^}]*overflow:\s*hidden/.test(page),
   "la pagina no puede scrollear: todo tiene que entrar en una pantalla");
-assert.strictEqual((page.match(/<video\s+id=/g) || []).length, 1,
-  "una sola etiqueta <video>: todas las piezas se reproducen en el mismo lugar");
+/* La regla sigue siendo que TODAS LAS PIEZAS suenan en el mismo <video>: nunca
+ * uno por pieza. H-18 (2026-09-04) suma UN segundo <video> y solo uno, el del
+ * efecto con alfa que va encima, porque la pregunta del operador era
+ * justamente si el aparato sostiene dos planos de video a la vez. */
+assert.strictEqual((page.match(/<video\s+id="video"/g) || []).length, 1,
+  "un solo <video> para las piezas: todas se reproducen en el mismo lugar");
+assert.strictEqual((page.match(/<video\s+id=/g) || []).length, 2,
+  "y exactamente uno mas, el del efecto de H-18: dos planos, no N");
 assert(page.indexOf('<div id="side">') >= 0,
   "la tabla va AL LADO del video, no debajo, o hay que scrollear para verla");
 assert(page.indexOf("function everything()") >= 0,
