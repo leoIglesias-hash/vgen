@@ -133,7 +133,9 @@ nada.
    **H-12b** (techo en tandas chicas; `83` sola queda en play; caídos −3 en
    `blob:cmaf`).
 6. **Seis decisiones del operador (2026-09-04, textuales en el REGISTRO):**
-   **H-14 → adoptar `cpu-independent=1`** y re-emitir (H-14b); **VP9 base,
+   **H-14 → adoptar `cpu-independent=1`** y re-emitir (**H-14b CERRADA el
+   2026-09-04**: pack re-emitido y publicado, mismos bytes en cuatro CPUs);
+   **VP9 base,
    Baseline secundario**; **requisito de residencia** (prendido ≥ 16 h/día,
    baja una vez al día, reproduce siempre desde el aparato, sin «falso
    streaming») → **H-15** con `residente`/`prioridad` por pieza y presupuesto
@@ -142,8 +144,9 @@ nada.
    capa** + reforma de la página (`1` solo con lo no consagrado, teclas probadas
    a un manual, ≥ 10 a la vista a la izquierda) → **H-16**; **dos `<video>` a
    la vez** (loop + efecto alfa) → **H-18**.
-7. **Orden acordado:** H-14b → H-12b → H-16 → W-26b → H-18 → H-6 → H-7 (con
-   H-15 adentro) → H-8. **Los arranques por red variaron 3× entre visitas**
+7. **Orden acordado:** ~~H-14b~~ (cerrada) → **H-12b (próxima)** → H-16 →
+   W-26b → H-18 → H-6 → H-7 (con H-15 adentro) → H-8. **Los arranques por red
+   variaron 3× entre visitas**
    (3,3–4,0 s hoy; MSE 7,5 s con 4 atascos): el gate de arranque solo se exige
    desde caché o `blob:`.
 
@@ -185,9 +188,11 @@ refutaciones en [`EMISION-V0.md`](EMISION-V0.md)):
 5. **H-12 — caché: CERRADA en lo que decide 2026-09-04**: persiste al cierre
    de la app, cuota 225 MB, 25 MB entran; la prueba de 50 MB cierra la app
    (defecto de la prueba → **H-12b**). Debe la foto tras apagar y prender.
-5b. **H-14b — adoptar `cpu-independent=1`** en `X264_BASELINE`/`X264_MAIN`,
-   re-emitir el pack, huellas nuevas al REGISTRO y a `deploy/`, republicar
-   `v0/`. **H-12b** — techo en tandas ≤ 5 MB con la cuota declarada como
+5b. **H-14b — CERRADA 2026-09-04:** `cpu-independent=1` adoptada en la receta
+   (`bdc4a08`), pack re-emitido (runs `33894807627` y `33894814769`) y **54
+   keys de `v0/` republicadas y verificadas**; las dos VP9 salieron
+   byte-idénticas a las del 09-01. Invariante 7 saldado.
+   **H-12b (próxima)** — techo en tandas ≤ 5 MB con la cuota declarada como
    primer techo, `83` sola, caídos negativos. **H-16** — Hobo por defecto en
    la capa + `1` reducido + `docs/MANUAL-TECLAS-V0.md` + leyenda ≥ 10 a la
    izquierda. **W-26b** — auditar la raíz servida contra el repo y republicar
@@ -206,8 +211,9 @@ refutaciones en [`EMISION-V0.md`](EMISION-V0.md)):
    texto tabulado, nunca JSON** (el gate ES5 prohíbe `JSON`).
 8. **H-8 — muxer ES5 + player híbrido mínimo:** lo que H-13 deje en pie
    (concatenador CMAF / alimentador MSE / playlist), solo con H-7 aprobada.
-9. **H-14 — causa establecida** (determinista en la misma máquina, distinto por CPU,
-   `cpu-independent=1` lo cura) → **decidido 2026-09-04: adoptar** (H-14b).
+9. **H-14 — CERRADA** (causa establecida: determinista en la misma máquina,
+   distinto por CPU) y **H-14b CERRADA 2026-09-04**: adoptada la opción,
+   re-emitido y publicado; cuatro CPUs dan el mismo archivo.
    **W-26** cerrada en código; **decidido 2026-09-04: terminar y republicar** (W-26b).
 10. Externo: pedirle a la app de la caja que el WebView reporte el panel real
     (hoy da 3840×2160 sobre un panel de 1280×720 = 9× de píxeles regalados).
@@ -243,7 +249,7 @@ base del contenedor.
 **Estado de fases: F0-F9 completas y verificadas (paradigma anterior; resúmenes
 en [`ejecutados/`](ejecutados/README.md)); DIAG-002/003 cerradas con decisión;
 abierta la fase H (H-0 y H-9 cerradas, H-1..H-5 reemplazadas, H-10 con la caja
-medida, **H-13, H-11 y H-12 cerradas con la caja (2026-09-04); abiertas H-14b, H-12b, H-16, W-26b, H-18, H-15**); F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla
+medida, **H-13, H-11, H-12 y H-14b cerradas (2026-09-04); abiertas H-12b, H-16, W-26b, H-18, H-15**); F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla
 de tareas abajo.
 
 **Receta de producto vigente (2026-08-31, S-4 cerrada):** defaults del workflow
@@ -315,9 +321,9 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido, borrado de claves viejas y techo medido | **CERRADA en lo que decide, 2026-09-04**: persiste al cierre de la app (`guardadas 2`), cuota declarada 225 MB, 25 MB entran; la tanda de 50 MB cerró la app (defecto de la prueba → H-12b). Debe la foto tras apagar y prender + `85` | no |
 | H-7 | H | **spec normativa `SPEC-VGEN.md`**: contenedor, manifiesto (texto tabulado, **no JSON**), segmentos, sprites, cues, huecos, perfil → camino de runtime | pendiente (precondición: H-10, H-11, H-6) | define bytes |
 | H-8 | H | **muxer ES5 + player híbrido mínimo** (incluye «cambiar solo la música») | pendiente (precondición: H-7) | no |
-| H-14 | H | **determinismo del carril H.264** (deuda contra el invariante 7) | **causa establecida 2026-09-02** (determinista por máquina, distinto por CPU, `cpu-independent=1` lo cura) y **decidida 2026-09-04: adoptar** → sigue en H-14b | define bytes |
+| H-14 | H | **determinismo del carril H.264** (deuda contra el invariante 7) | **CERRADA**: causa establecida 2026-09-02 (determinista por máquina, distinto por CPU, `cpu-independent=1` lo cura), decidida y ejecutada el 2026-09-04 en H-14b | define bytes |
 | W-26 | — | escape `?renderer=` en la raíz publicada + default para TV box | **cerrada en código 2026-09-02** (`522bdf8` → `730c5f4`); **decidido 2026-09-04: terminar y republicar** → sigue en W-26b | no |
-| H-14b | H | **adoptar `cpu-independent=1`** en `X264_BASELINE`/`X264_MAIN` de `tools/emit_pieces.py`, re-emitir el pack v0, huellas nuevas al REGISTRO y a `deploy/`, republicar `v0/` (decisión del operador 2026-09-04) | pendiente — **primera de la cola** | sí (H.264 + remuxes) |
+| H-14b | H | **adoptar `cpu-independent=1`** en `X264_BASELINE`/`X264_MAIN` de `tools/emit_pieces.py`, re-emitir el pack v0, huellas nuevas al REGISTRO y a `deploy/`, republicar `v0/` (decisión del operador 2026-09-04) | **CERRADA 2026-09-04**: `bdc4a08` (receta + pruebas, CI verde), runs `33894807627` (pack, AMD 9V74) y `33894814769` (determinismo, AMD 7763) con bytes idénticos entre sí y con los Intel de H-14; 54 keys de `v0/` republicadas y verificadas; copia previa en `af1fc01`. VP9 y VP9+alfa byte-idénticas al pack del 09-01 | sí (H.264 + remuxes) |
 | H-12b | H | **cierre técnico de la caché**: techo en **tandas ≤ 5 MB** que nunca cierren la app, con la cuota declarada como primer techo reportado; `83` sola queda en play (gesto); caídos negativos en `blob:cmaf`; y en la caja: foto tras **apagar y prender** + `85` | pendiente | no |
 | H-16 | H | **Hobo por defecto + reforma de la página de pruebas**: `HoboStd.ttf` servida desde `v0/` (`@font-face`, espera por `measureText`, cae a `monospace`), fuente por defecto de la capa; el `1` corre solo lo **no consagrado**; teclas ya probadas fuera de la leyenda → `docs/MANUAL-TECLAS-V0.md`; leyenda ≥ 10 teclas a la izquierda, tabla de filas más alta | pendiente | no |
 | W-26b | — | **terminar W-26 como corresponde** (operador 2026-09-04): auditar `index.html` servido en `/`, `/1280-15/`, `/1280-12/`, `/1920-10/` contra `frontend/live-player.html` + JS del repo, listar qué cambia, republicar con copia previa en `deploy/` | pendiente | no |
@@ -493,3 +499,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-09-02 (madrugada) | **H-14 con evidencia de CI** (`0eb8dab`: el workflow `emitir-v0` gana `determinismo: true` —solo las dos piezas H.264, dos veces en la misma corrida, comparadas byte a byte, con `lscpu` y la build de x264 en el log— y `--x264-extra` para probar `cpu-independent=1` sin tocar la receta). **Nueve corridas, causa establecida:** el encoder es **determinista en la misma máquina** (9/9 pares byte-idénticos) y **depende de la CPU**: AMD EPYC 7763 y 9V74 dan los mismos bytes entre sí (Baseline 9.551.693 B) y el Intel Xeon 6973P-C da otros (**9.551.715 B = el pack publicado**: H-9 salió de un Intel y su segunda corrida de un AMD; de ahí los +22/−74 B). **`cpu-independent=1` cura**: AMD 9V74, Intel Xeon 8370C e Intel Xeon 8573C dan bytes idénticos (`abe6caf9…` / `1f92c552…`), a +0,016 % / −0,06 % de bytes. **Pendiente del operador**: adoptarlo en la receta (recomendado; cambia el SHA de las dos piezas H.264, no lo que la caja decodifica) o redefinir el invariante 7. Tabla completa en el REGISTRO. |
 | 2026-09-04 | **Visita a la caja (tres fotos, REGISTRO «Visita a la caja 2026-09-04»). H-11 CERRADA: ENCIMA** (canvas a 15 fps = 0/155 caídos vs 1/156 sin, Baseline y VP9, deriva 0–1 ms; `83` a ojo «se ve bien»). **H-12 CERRADA en lo que decide**: la base persiste al cierre de la app (`guardadas 2`, 13.963.408 B al abrir), cuota declarada **225 MB**, 25 MB entran; **la tanda de 50 MB cierra la app** → defecto de la prueba (50 MB de ruido en RAM de una vez), no del aparato → H-12b. Bugs anotados: `83` sola queda en play; caídos −3 en `blob:cmaf`. **Arranques por red 3× más lentos que el 09-01** (3,3–4,0 s; MSE 7,5 s con 4 atascos) sin cambio en piezas ni página → el gate de arranque solo se exige desde caché o `blob:`. |
 | 2026-09-04 | **Seis decisiones del operador** (textuales en el REGISTRO): H-14 → **adoptar `cpu-independent=1`** y re-emitir (H-14b); **VP9 base, Baseline secundario**; **residencia** como requisito (≥ 16 h/día prendido, baja una vez al día, reproduce siempre desde el aparato) → H-15 con `residente`/`prioridad` por pieza y presupuesto por navegador; W-26 → **terminar y republicar la raíz** (W-26b); muxer A = concat / B = MSE confirmado; **Hobo por defecto** en la capa + reforma de la página (`1` solo con lo no consagrado, teclas probadas al manual `docs/MANUAL-TECLAS-V0.md`, ≥ 10 a la vista a la izquierda) → H-16; «¿efectos que sean video?» → H-18 (dos `<video>` a la vez). **Orden:** H-14b → H-12b → H-16 → W-26b → H-18 → H-6 → H-7 (con H-15) → H-8. `HoboStd.ttf` copiada a `inputs/` (31.444 B, `477d186c…611aec`, OpenType CFF). |
+| 2026-09-04 | **H-14b CERRADA: el invariante 7 vuelve a cumplirse.** `cpu-independent=1` pasa a la receta de x264 (`bdc4a08`: `X264_COMMON` compartida, `X264_MAIN` = base + `cabac=1` para que la comparación siga midiendo solo CABAC; dos pruebas nuevas; CI verde). Pack re-emitido en dos corridas: `33894807627` (pack completo, **AMD EPYC 9V74**) y `33894814769` (`determinismo: true`, dos pasadas, **AMD EPYC 7763**) — **los mismos bytes en las dos, y los mismos que H-14 midió en Intel 8370C y 8573C**: cuatro CPUs, un solo archivo. Piezas vigentes: `v0-h264-baseline.mp4` 9.553.193 B `abe6caf9…6fa6f63d` (+1.478 B, +0,015 % contra lo publicado) y `v0-h264-main.mp4` 8.681.167 B `1f92c552…7af0b95f` (−5.271 B, −0,061 %). **VP9 y VP9+alfa salieron byte-idénticas** a las del 09-01 (libvpx nunca dependió de la CPU: era hipótesis, ahora es dato) y los dos `stream.m3u8` tampoco cambiaron. **54 keys de `v0/` republicadas** (las dos H.264 + los 48 segmentos/init/manifiestos que salen de ellas por remux + `MANIFEST.tsv`), las 54 verificadas contra lo servido; copia previa commiteada en `af1fc01`; token quemado y confirmado con 403. Costo único: los aparatos que ya tuvieran las dos H.264 en caché las bajan **una vez** más. |

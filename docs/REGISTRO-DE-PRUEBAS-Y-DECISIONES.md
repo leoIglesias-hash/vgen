@@ -4340,3 +4340,93 @@ Se le presentó el árbol completo y respondió punto por punto:
   republicar la raíz).
 - **Orden acordado:** H-14b → H-12b → H-16 → W-26b → H-18 → H-6 → H-7 (con
   H-15 adentro) → H-8.
+
+---
+
+## 2026-09-04 — H-14b CERRADA: `cpu-independent=1` en la receta, pack re-emitido y publicado
+
+**Qué se hizo y por qué.** H-14 había establecido con evidencia que el carril
+H.264 no era «no determinista»: era **determinista por máquina y distinto por
+CPU** (dos AMD daban un archivo, un Intel otro), y que la opción
+`cpu-independent=1` de x264 los iguala. El operador decidió el 2026-09-04
+**adoptarla en la receta**, no dejarla como palanca de CI. El motivo no es
+estético: la residencia (H-15) pinea las piezas **por contenido**, así que una
+re-emisión sin cambios no puede cambiar la huella y obligar al aparato a bajar
+de nuevo lo que ya tiene guardado.
+
+**Código** (`bdc4a08`, CI verde). En `tools/emit_pieces.py` las dos líneas de
+x264 pasan a salir de una base común:
+
+```
+X264_COMMON   = "bframes=0:ref=1:keyint=15:min-keyint=15:scenecut=0:threads=1:cpu-independent=1"
+X264_BASELINE = X264_COMMON
+X264_MAIN     = X264_COMMON + ":cabac=1"
+```
+
+Que compartan base no es cosmética: la comparación baseline/main es el
+**detector de hardware** del pack, y si las dos difirieran en algo más que
+CABAC dejaría de medir una sola cosa. Pruebas nuevas en
+`tests/test_emit_pieces.py`: las dos piezas H.264 piden la opción y comparten
+base; el carril VP9 **no** la recibe (libvpx es entero, y ffmpeg rechazaría la
+opción ahí). La prueba de la palanca `--x264-extra` pasa a usar una opción
+neutra: la palanca sigue viva para la **próxima** opción a probar, ya no para
+esta.
+
+**Emisión.** Dos corridas del workflow `emitir-v0` sobre `bdc4a08`:
+
+| run | modo | CPU del runner | Baseline | Main |
+|---|---|---|---:|---:|
+| `33894807627` | pack completo | AMD EPYC 9V74 | 9.553.193 B · `abe6caf9fa545da4` | 8.681.167 B · `1f92c55217dce633` |
+| `33894814769` | `determinismo: true` (dos pasadas) | AMD EPYC 7763 | 9.553.193 B · `abe6caf9fa545da4` | 8.681.167 B · `1f92c55217dce633` |
+
+Las dos pasadas de la corrida de determinismo salieron **idénticas entre sí**, y
+—lo que importa— **idénticas a las de la otra corrida en otra CPU**, y a su vez
+iguales a las que H-14 había medido en **Intel Xeon 8370C y 8573C** con la
+opción puesta a mano. **Cuatro modelos de CPU, un solo archivo.** El invariante
+7 («mismo máster + mismos parámetros → mismos bytes») vuelve a cumplirse tal
+cual está escrito, sin redefinirlo.
+
+SHA-256 completos de las piezas vigentes:
+
+- `v0-h264-baseline.mp4` 9.553.193 B → `abe6caf9fa545da428792accad163477a1ba58fe9275b87f24b241636fa6f63d`
+- `v0-h264-main.mp4` 8.681.167 B → `1f92c55217dce6334232342bf7d9674355fc179954f5000f6a6ff8f77af0b95f`
+
+**Lo que NO se movió, y es la mejor prueba de que el cambio fue quirúrgico.**
+`v0-vp9.webm` (4.411.693 B) y `v0-vp9-alpha.webm` (4.664.676 B) salieron
+**byte-idénticos** a los del pack del 2026-09-01, mismo md5. O sea que libvpx
+nunca dependió de la CPU —era la hipótesis, ahora es dato— y que la re-emisión
+tocó exactamente el carril que tenía que tocar. Los dos `stream.m3u8` tampoco
+cambiaron: son listas de nombres y duraciones, y ni los nombres ni las
+duraciones se movieron. Y los 16 segmentos de `hls-fmp4/` siguen siendo
+byte-idénticos a los 16 `chunk` de `dash/`, uno a uno, como en el pack anterior:
+un solo juego de piezas, dos manifiestos.
+
+**Costo del cambio**, contra lo que estaba publicado (que era la emisión Intel):
+Baseline **+1.478 B (+0,015 %)**, Main **−5.271 B (−0,061 %)**. Nada que la caja
+pueda notar: no se tocó ni el perfil, ni `refs`, ni el GOP, ni el CRF —o sea,
+ningún parámetro de decodificación de los que ya midió.
+
+**Publicación.** 54 keys bajo `v0/`: las dos piezas H.264 y **todo lo que sale
+de ellas por remux** (16 segmentos TS, 16 CMAF, 16 `chunk` de DASH, los dos
+`init`, `dash/manifest.mpd`) más `v0/MANIFEST.tsv`. Las otras 4 keys de medios
+—las dos VP9 y los dos `stream.m3u8`— no se tocaron porque no cambiaron. El
+bucket sigue con **62 keys**: se reemplazó contenido, no se agregó ni se borró
+nada. Orden respetado: `MANIFEST.tsv` y `README.md` de `deploy/` commiteados en
+`main` (`af1fc01`) **antes** de subir. Las 54 subidas dieron 200 y las 54
+verificadas contra lo servido (`GET …?x=<nonce>`) dan el SHA-256 esperado.
+Token de subida quemado y confirmado: reintentar con él da **403**, y la key de
+prueba no existe (404).
+
+**Estado: H-14b CERRADA.** Queda cumplido lo que pedía el cierre: CI verde, dos
+pasadas idénticas en el log, huellas servidas = huellas del REGISTRO, e
+invariante 7 marcado **saldado** en `docs/EMISION-V0.md`.
+
+**Una consecuencia que conviene no olvidar:** cualquier aparato que ya tuviera
+`v0-h264-baseline.mp4` o `v0-h264-main.mp4` en su caché (H-12 los guarda por
+contenido) los va a considerar distintos y los va a volver a bajar **una vez**.
+Es el único costo de esta adopción, se paga una sola vez, y es exactamente lo
+que deja de pasar de acá en adelante.
+
+**Sigue H-12b** (techo en tandas de ≤ 5 MB, `83` sola que arranque el video,
+caídos que no queden negativos, y la foto de la caja tras apagar y prender
+con `85`).

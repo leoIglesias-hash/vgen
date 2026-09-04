@@ -200,8 +200,8 @@ exige con datos: persiste al cierre de la app (`guardadas 2`), cuota declarada
 `residente: si|no` y `prioridad` por pieza (a mano); **presupuesto fijo por
 navegador** = `min(tope absoluto, fracción de la cuota declarada)`; al pasarse
 se conserva **por prioridad** (incentivador → publicidad → resto). Huellas
-estables entre emisiones (H-14b) para que una re-emisión sin cambios no
-invalide lo residente. Tarea: H-15 (diseño en H-7, runtime en H-8).
+estables entre emisiones —**cumplido desde H-14b, 2026-09-04**— para que una
+re-emisión sin cambios no invalide lo residente. Tarea: H-15 (diseño en H-7, runtime en H-8).
 
 ## 9. La capa de intervención
 
