@@ -4914,3 +4914,144 @@ H-18**, por lo que sigue.
 
 **El pedido 1 obliga a re-emitir el pack**, que es la primera vez que el
 contenido de una pieza cambia por una razón de prueba y no de codec.
+
+---
+
+## 2026-09-04 (noche) — H-18b: el efecto encima de verdad (mismo tamaño, contenido propio)
+
+El operador rechazó la primera versión de H-18 y el rechazo era correcto por
+**dos razones distintas**, no una:
+
+1. **Geometría.** El segundo `<video>` se ubicaba en el rectángulo de la capa
+   —encogido al 26 % del ancho y corrido un 4 %—, así que se veía un recuadro
+   flotando sobre el video. *«Debería ser un video sobre otro de exactamente el
+   mismo tamaño.»* Y además medía otra cosa: un video chico cuesta menos que uno
+   del tamaño del de abajo, que es el caso real.
+2. **Contenido.** Este es el que no se veía a simple vista. La pieza con alfa
+   llevaba **el RGB del propio máster** con una máscara de disco. Superponerla
+   exacta habría mostrado *lo mismo que ya estaba abajo*: la prueba no podía
+   distinguir «compuso» de «no compuso». *«Al ser transparente el video de
+   arriba se vería el de abajo con los papelitos de festejo como si fuera un
+   solo video.»*
+
+### Lo que se emite ahora
+
+`v0-vp9-alpha.webm` lleva **papelitos de colores sobre transparencia total**:
+160 rectángulos que caen, se hamacan y giran sobre su eje, en ocho colores
+fijos. Donde no hay papelito, alfa 0 y RGB negro — **nada del máster se
+filtra**. Cubre alrededor del 3 % del cuadro: un efecto que tapara todo no
+dejaría ver lo de abajo, que es justo lo que la prueba tiene que poder ver.
+Los bordes siguen siendo duros a propósito: es el caso que más sufre al
+componer y al subsamplear.
+
+**Todo se calcula con enteros y ondas triangulares, sin `sin`/`cos`.** No es
+estética: una diferencia de 1 ULP entre dos `libm` movería el borde de un
+papelito y **cambiaría los bytes de la pieza**. H-14b acaba de saldar el
+invariante 7 del lado de x264; no se rompe por el otro. Un gate del test lee el
+código fuente del generador y rechaza `sin(`, `cos(`, `sqrt(`, `random` y
+`float(`.
+
+### Lo que la caja ya había dicho con la versión mala
+
+2/155 caídos abajo y 2/138 arriba —1,3 % y 1,4 %, dentro del gate de 3 %—
+contra 5..12/157 y 4..8/153 en la PC. **Los dos planos se sostienen, y en la
+caja mejor que en la PC.** El número nuevo, con el efecto del tamaño completo,
+es el que decide: es el que mide lo que el producto haría.
+
+### Un test que se equivocó de estadístico
+
+El primero medía la **fila promedio** de los 160 papelitos entre dos cuadros y
+exigía que bajara. Falló en CI (361,4 contra 369,4): los que salen por abajo
+vuelven a entrar por arriba, así que el promedio **no es monótono** aunque cada
+papelito caiga. Ahora se mide **uno solo**, y se afirma la caída sin exigir una
+monotonía que el propio ciclo no puede cumplir —entrando por arriba, el borde
+superior queda clavado en 0 un par de cuadros—.
+
+---
+
+## 2026-09-04 (noche) — H-20: a pantalla entera, y el reporte que entra en una foto
+
+Dos pedidos del operador sobre la misma foto.
+
+### La pantalla entera
+
+*«No tenemos probado un fullscreen de estas cosas (que suele bajar rendimiento)
+podríamos hacerlo.»* Es la última pregunta grande sin medir del lado del
+aparato, y en esta caja es la que más puede doler: la app le da al WebView una
+superficie de **3840×2160 sobre un panel de 1280×720**, así que «entera» no es
+720p, es **4K de escalado**. Hasta ahora todo se midió en un recuadro de
+560×315.
+
+Tecla **`70`**, cuatro escalones, porque lo que importa no es un número sino
+**dónde se rompe**:
+
+| fila | qué corre |
+|---|---|
+| `entera:solo` | el loop VP9, nada más |
+| `entera:capa` | más el canvas repintando a 15 fps |
+| `entera:dos` | más el efecto con alfa encima |
+| `entera:todo` | los tres a la vez: **la forma del producto** |
+
+Se respeta 16:9 y se centra en vez de estirar: un video deformado se compararía
+contra otra cosa. La leyenda, la tabla y el encabezado se esconden; el zócalo
+queda —es una línea de texto quieta— porque en una TV es la única forma de
+recordar cómo se sale. Tecla **`73`** para prenderla y apagarla a ojo.
+
+**La API de pantalla completa es un extra, no la prueba.** Lo que se mide es el
+video ocupando la superficie, que no depende de que el WebView la conceda. Si
+además la concede, Android puede promover el video a un plano de hardware y el
+número cambia; por eso se pide y la fila **declara** `api si` / `api no` /
+`api sin api`, en vez de suponer.
+
+### El reporte en dos columnas
+
+*«Todo el reporte no entra en la pantalla, deberías achicarlo poniéndolo en dos
+columnas… y agregarle un botón back que sea un número no usado.»* La foto de esa
+noche cortó en la novena fila: **en una TV no se scrollea ni se copia texto, la
+única salida del reporte es la foto, así que lo que no entra no existe.**
+
+Dos `<pre>` al 49,4 % cada uno, con la letra **buscada por medición**: arranca
+en 1,40 em y baja hasta que las dos columnas entran (piso 0,24 em). Achicarse
+era el pedido, pero dejar media pantalla vacía también arruina la foto, así que
+el barrido empieza grande. El reparto entre columnas se **estima** por largo de
+línea; quien decide si entró es el **alto medido**, que es el único que sabe
+cómo envolvió el navegador.
+
+Tecla **`88`** para volver. El `95` también cierra, pero adivinar que la misma
+tecla hace las dos cosas no es una interfaz.
+
+Y de paso: **el reporte deja de vivir en un `<textarea>`**. Con el foco adentro
+—un clic en el celular alcanzaba— el mando numérico se apagaba entero, porque
+ahí los números son texto.
+
+### La tercera puerta del mando
+
+El `9` estaba lleno (`90`..`99`) y en el `8` quedaba **un solo número**. Así que
+el `7` pasa a ser puerta: `70` y `73`. Lo que el operador fijó el 2026-09-02 fue
+el **techo** —dos cifras, no tres—, no la cantidad de puertas; y el `7` («solo
+vp9») es una tecla consagrada que ya no se dibuja, así que los 900 ms que ahora
+espera no se los cobra a nadie.
+
+### La leyenda se rebalancea con lo que la foto consagró
+
+`80`, `81` y `82` (los lotes de capa) bajan al manual: la foto volvió a dar
+**0 caídos en las seis filas**, ahora a 560×315. `86` pasa a herramienta. Entran
+`70`, `73` y `88`. Siguen siendo **13 teclas a la vista**: cinco de lo que hay
+que probar y ocho herramientas.
+
+### Medido en el navegador antes de publicar
+
+Con un reporte de **32 líneas** —las 11 de cabecera más 21 filas, incluidas las
+cuatro de pantalla entera— entra **entero en una pantalla** a 0,92 em en una
+ventana de 399×635, y a 0,62 em en 1280×720. El efecto queda exactamente en el
+mismo rectángulo que el video (`136px,300px,142px,80px` los dos). La pantalla
+entera lleva el video de 142×80 a 399×224 centrado, esconde las tres columnas y
+vuelve. `dioLaApi()` devolvió `no` al pedirla sin gesto de usuario: **declara,
+no supone**.
+
+### Tres gates que describían la forma vieja
+
+El conteo de teclas (28 → 31), el orden dentro de `stopAll` —`salirEntera()`
+entra entre `stopEfecto()` y el fondo verde— y la forma exacta del `concat` del
+`1`. Ninguno se aflojó: el del `concat` se mudó al bloque de H-20, donde se
+verifica entero.

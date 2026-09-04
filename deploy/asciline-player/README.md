@@ -372,3 +372,31 @@ seguidas** —única forma de verlo— la segunda informaba «1/2 caídos» arri
 línea de base se tomaba al pedirle que suene, o sea contra los contadores de la
 pasada anterior que `load()` acababa de poner en cero. Ahora se arma en la
 primera vuelta con `currentTime > 0`, y si nunca sonó la fila lo dice.
+
+## 2026-09-04 (noche) — H-18b + H-20: tres keys
+
+`v0/v0-vp9-alpha.webm` → **2.434.369 B**, md5 `b011a443f2d31956fa117958e9f6b37a`
+(era 4.664.676 B: **−47,8 %**, porque la pieza pasó a ser casi toda
+transparente). `v0/MANIFEST.tsv` → **1.538 B**, md5
+`fbad17b4fc5e838214a70fcae0258dda`. `v0/index.html` → **76.483 B**, md5
+`b70f7286b1a8c1731a66b14ce8dbfd91`.
+
+**Y solo tres.** El pack se re-emitió entero (run `33912699058`, workflow
+`emitir-v0`) y las otras seis piezas —las dos H.264, VP9, y los tres
+empaquetados con sus segmentos— salieron **byte-idénticas** a las publicadas el
+2026-09-04 por la mañana, en otro runner. Es la segunda confirmación del
+invariante 7 después de H-14b, y esta vez gratis: se verificó comparando md5
+contra este mismo manifiesto antes de subir nada.
+
+**Qué cambió en la pieza con alfa.** El operador rechazó el armado de H-18: el
+segundo `<video>` iba encogido y corrido, y la pieza llevaba **el RGB del propio
+máster**, así que superpuesta exacta habría sido indistinguible de lo de abajo.
+Ahora lleva **papelitos de colores sobre transparencia total** —contenido que no
+existe en el video de abajo— y el segundo `<video>` va exactamente sobre el
+primero. El generador usa **enteros y ondas triangulares, nunca `sin`/`cos`**:
+1 ULP de diferencia entre dos libm movería un borde y cambiaría los bytes.
+
+**Qué cambió en la página** (H-20): el video a **pantalla entera** en cuatro
+escalones (teclas `70` y `73`) y el reporte en **dos columnas** con el `88` para
+volver, con la letra buscada por medición hasta que entra. Deja de vivir en un
+`<textarea>`, donde el foco adentro apagaba el mando numérico entero.
