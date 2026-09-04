@@ -5055,3 +5055,47 @@ El conteo de teclas (28 → 31), el orden dentro de `stopAll` —`salirEntera()`
 entra entre `stopEfecto()` y el fondo verde— y la forma exacta del `concat` del
 `1`. Ninguno se aflojó: el del `concat` se mudó al bloque de H-20, donde se
 verifica entero.
+
+---
+
+## 2026-09-04 (noche) — W-26b CERRADA: se fue el pantallazo, quedó el cuello
+
+Reporte del operador, textual: *«El 6 del webgl lo probe y sigue andando trabado
+pero sin pantallazos»*.
+
+**Las dos mitades de esa frase son dos resultados distintos, y conviene no
+mezclarlos.**
+
+### «sin pantallazos» → W-26 y W-26b quedan cerradas
+
+El escape `?renderer=canvas2d` **hace lo que tenía que hacer** en la clase
+principal. Es la confirmación en la caja de lo medido en el navegador el mismo
+día: sin el parámetro la raíz pasa **240 ms en WebGL** al abrir —`openAscl()`
+elige renderer antes de que attachee el texto nativo— y esa ventana es
+exactamente el pantallazo blanco de DIAG-002. Con el parámetro no toca WebGL
+nunca, y en la caja **ya no hay pantallazos**. La tecla `6` del lanzador evita
+tener que escribir la dirección con el control, que era el motivo de que este
+punto se arrastrara.
+
+**W-26 y W-26b: CERRADAS.** Nada más que hacer del lado del pantallazo.
+
+### «sigue andando trabado» → no es un defecto nuevo: es DIAG-003 otra vez
+
+**No sorprende y no cambia nada, pero vale escribirlo porque es la última
+confirmación de la premisa del repo.** Lo que el `6` abre es el **player 100 %
+JS** —el de ASCILINE-video, el que decodifica `.asclv` en el navegador—, y ese
+player **ya estaba medido en esta misma caja**: FRAME p50 **233–290 ms** contra
+los 66,7 que pide 15 fps, con el cuello en **CPU** (DIAG-003, 2026-09-01). Que
+ande trabado sin WebGL es el resultado esperado: WebGL no presentaba, pero
+tampoco era el cuello.
+
+**Es, textualmente, la razón por la que existe este repo.** El `<video>` por
+hardware reproduce el mismo material «muy bien» en el mismo aparato, y de ahí
+salió el paradigma híbrido. La raíz publicada queda como está —sirve, no
+pantalla— pero **no es el camino del producto**: el producto es el pack v0 y lo
+que salga de H-6/H-7/H-8.
+
+**Anotado sin hacer** (sigue sin ser tarea): que `pickRenderer()` no elija WebGL
+antes de saber si va a haber texto nativo ahorraría la ventana de 240 ms sin
+necesidad del parámetro. No urge: el parámetro ya está publicado en las cuatro
+carpetas y el lanzador lo abre con una tecla.

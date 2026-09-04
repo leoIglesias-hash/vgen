@@ -161,7 +161,11 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
      el `1` corre solo lo no consagrado y «correr todo» se mudó al `89`.
   4. **W-26b** — raíz **auditada** (64 rutas, 56 ya iguales) y las 8 del player
      republicadas. Medido: sin `?renderer=canvas2d` la raíz pasa **240 ms en
-     WebGL** al abrir, que es el pantallazo blanco de la caja. W-26 CERRADA.
+     WebGL** al abrir, que es el pantallazo blanco de la caja. **W-26 y W-26b
+     CERRADAS esa misma noche en la caja**: *«sigue andando trabado pero sin
+     pantallazos»*. Lo trabado es el **player 100 % JS**, ya medido acá en
+     DIAG-003 (p50 233–290 ms contra 66,7; cuello en CPU, no en WebGL): no es un
+     defecto nuevo, es la razón por la que existe este repo.
   5. **H-18** — un **segundo `<video>` con alfa encima** del loop (tecla `87`),
      **rehecho como H-18b** (abajo).
 
