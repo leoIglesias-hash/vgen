@@ -118,7 +118,18 @@ tesis del formato —piezas + manifiesto— comprobada sin escribir una línea d
 muxer. Y la sobrecarga de empaquetar en CMAF/DASH es **0,04 %**; solo el TS
 clásico cuesta 2,6 %.
 
-### ⚠ El determinismo NO se cumplió en el carril H.264
+### ⚠ El determinismo NO se cumplió en el carril H.264 — **SALDADO el 2026-09-04 (H-14b)**
+
+> **Cierre.** Lo que sigue es el hallazgo tal como se escribió el 2026-09-01, sin
+> retocar. La causa quedó establecida en H-14 (no era «no determinismo»: era la
+> CPU del runner) y la deuda se saldó en **H-14b**, adoptando
+> `cpu-independent=1` en la receta y **re-emitiendo el pack**. Desde entonces
+> las dos piezas H.264 dan los mismos bytes en cuatro CPUs distintas —AMD EPYC
+> 7763 y 9V74, Intel Xeon 8370C y 8573C— y el invariante 7 vuelve a cumplirse
+> tal cual está escrito. Piezas vigentes:
+> `v0-h264-baseline.mp4` 9.553.193 B `abe6caf9…6fa6f63d` y `v0-h264-main.mp4`
+> 8.681.167 B `1f92c552…7af0b95f`. VP9 y VP9+alfa salieron **byte-idénticos** a
+> los del 2026-09-01: la re-emisión tocó solo el carril que tenía que tocar.
 
 La segunda corrida es, sin quererlo, una prueba del invariante 7 («mismo máster +
 mismos parámetros → mismos bytes»). Resultado, textual:

@@ -373,20 +373,31 @@ re-implementa — se extiende. Resumen por carril:
 Todos los clips medidos, del vigente al histórico. «Reproducible» = re-encodear desde
 `main` con esos flags devuelve ese SHA byte a byte (regla 5, verificada — nunca supuesta).
 
-**Pack v0 (H-9, 2026-09-01, run `33566441576`)** — emitido del máster vigente con
-`tools/emit_pieces.py`, publicado en `https://iargen.com/player/v0/`:
+**Pack v0 VIGENTE (H-14b, re-emitido el 2026-09-04, run `33894807627`)** — mismo
+máster, misma receta salvo `cpu-independent=1` en el carril x264; es lo que sirve
+`https://iargen.com/player/v0/`:
 
 | Pieza | Bytes | SHA-256 |
 |---|---:|---|
-| `v0-h264-baseline.mp4` | 9.551.715 | `cf927d578ab993d468ada2cd2440d9a18b030a343e23ef5008ed39912ef04fdc` |
-| `v0-h264-main.mp4` | 8.686.438 | `b9b1e1f542fe4f10ff44dc53f6eb2a297bcff9e357d9c277068a088e72451890` |
+| `v0-h264-baseline.mp4` | 9.553.193 | `abe6caf9fa545da428792accad163477a1ba58fe9275b87f24b241636fa6f63d` |
+| `v0-h264-main.mp4` | 8.681.167 | `1f92c55217dce6334232342bf7d9674355fc179954f5000f6a6ff8f77af0b95f` |
 | `v0-vp9.webm` | 4.411.693 | `5be4650747fd511aa0b54b493c3a9a1d7c24f15c630ba7d22fc1acf42543830b` |
 | `v0-vp9-alpha.webm` | 4.664.676 | `2b1fe6c3bfdee0cd0d3d07acec80bdcff3d877070ca839f21cbceccbbc76bc6c` |
 
-**Ojo con «reproducible» acá:** VP9 y VP9+alfa **sí** salieron byte-idénticos entre
-dos corridas; las dos piezas de H.264 **no** (Baseline +22 B, Main −74 B, con la
-misma ffmpeg y las mismas opciones de x264). Es la deuda **H-14**, abierta por
-evidencia y no por sospecha.
+**«Reproducible» acá ya se cumple entero.** Las dos piezas VP9 no se movieron un
+byte respecto del pack del 2026-09-01 (libvpx es entero: nunca dependió de la
+CPU). Las dos de H.264 **cambiaron a propósito** y ahora dan el mismo archivo en
+cuatro CPUs distintas: AMD EPYC 7763 y 9V74, Intel Xeon 8370C y 8573C. Costo del
+cambio contra lo que estaba publicado: Baseline +1.478 B (+0,015 %), Main
+−5.271 B (−0,061 %). Los empaquetados HLS/DASH cambian con ella porque son un
+remux de la baseline, y los 16 segmentos de `hls-fmp4/` siguen siendo
+byte-idénticos a los 16 `chunk` de `dash/`.
+
+**Pack v0 anterior (H-9, 2026-09-01, run `33566441576`)** — reemplazado, se deja
+por trazabilidad: `v0-h264-baseline.mp4` 9.551.715 B `cf927d57…2ef04fdc` y
+`v0-h264-main.mp4` 8.686.438 B `b9b1e1f5…e72451890`, emitidas en un runner Intel.
+La deuda **H-14** que este par dejó abierta —dos corridas del mismo máster con
+bytes distintos— quedó **saldada en H-14b**: no era el encoder, era la CPU.
 
 **Producto vigente (S-4/S-7 cerradas, 2026-08-31): 1280 @15 fps, formato v3,
 tile=sweep (espacial 16 + regional 32) = `dcd6afb6…1632a`**

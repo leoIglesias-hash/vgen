@@ -200,3 +200,38 @@ subirlas.
 
 Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
 → SHA-256 igual al del archivo local en las dos; token de subida quemado.
+
+## Actualización del 2026-09-04 (H-14b, el pack re-emitido con `cpu-independent=1`)
+
+**54 keys** bajo `v0/`: las **dos piezas H.264** y **todo lo que sale de ellas
+por remux** (los 16 segmentos TS, los 16 CMAF, los 16 `chunk` de DASH, los dos
+`init`, `dash/manifest.mpd` y `v0/MANIFEST.tsv`). El bucket sigue con **62
+keys**: no se agregó ni se borró ninguna, se reemplazó contenido.
+
+**Qué NO cambió, y por qué importa:** `v0-vp9.webm` y `v0-vp9-alpha.webm`
+salieron **byte-idénticos** al pack del 2026-09-01 (mismo md5), y los dos
+`stream.m3u8` también (son listas de nombres y duraciones, que no se movieron).
+O sea que la re-emisión tocó exactamente el carril que se quiso tocar. Los 16
+segmentos de `hls-fmp4/` siguen siendo byte-idénticos a los 16 `chunk` de
+`dash/`, uno a uno, como en el pack anterior.
+
+| key | bytes | md5 | qué cambió |
+|---|---|---|---|
+| `v0/v0-h264-baseline.mp4` | 9553193 | `761cd4c023b53fe449c5ee0ab7f6ad9e` | re-emitida con `cpu-independent=1` (+1.478 B, +0,015 %) |
+| `v0/v0-h264-main.mp4` | 8681167 | `50348aaccf07a43becd915f289b91b72` | ídem (−5.271 B, −0,061 %) |
+| `v0/MANIFEST.tsv` | 1528 | `347a4eb8cbcfb33489363eb717f75e11` | los SHA-256 de las dos piezas H.264 |
+| `v0/hls-ts/seg000..015.ts` | — | ver filas | remux de la baseline nueva |
+| `v0/hls-fmp4/init.mp4` + `seg000..015.m4s` | — | ver filas | ídem |
+| `v0/dash/init.m4s` + `chunk-00001..16.m4s` + `manifest.mpd` | — | ver filas | ídem |
+
+SHA-256 de las dos piezas, para pinear por contenido:
+
+- `v0-h264-baseline.mp4` → `abe6caf9fa545da428792accad163477a1ba58fe9275b87f24b241636fa6f63d`
+- `v0-h264-main.mp4` → `1f92c55217dce6334232342bf7d9674355fc179954f5000f6a6ff8f77af0b95f`
+
+Esas huellas ya no dependen del runner: son las mismas que H-14 midió en Intel
+8370C y 8573C, y las que dieron ahora AMD EPYC 9V74 (pack) y 7763 (corrida de
+determinismo). Cuatro CPUs, un solo archivo.
+
+Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
+→ SHA-256 igual al del archivo local en las 54; token de subida quemado.
