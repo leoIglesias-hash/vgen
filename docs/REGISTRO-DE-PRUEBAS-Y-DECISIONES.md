@@ -4774,3 +4774,31 @@ tecla queda como la evidencia de por qué.
 **Con esto se termina la cola acordada el 2026-09-04.** Lo que sigue depende de
 la próxima visita: H-12b, H-16, W-26b y H-18 esperan **una sola visita** a la
 caja, y después vienen H-6, H-7 (con H-15 adentro) y H-8.
+
+---
+
+## 2026-09-04 — El lanzador gana la tecla `6`, y la licencia de Hobo deja de ser un pendiente
+
+Dos cosas cortas, las dos del operador, después de cerrar la cola.
+
+**1. `ir.html` suma la tecla `6` → `player/?renderer=canvas2d`.** Textual:
+*«si tengo que abrir iargen.com/player/?renderer=canvas2d recorda que teniamos
+el archivo ir.html. podrias agregarle un numero que me redirija ahi no? me seria
+mas facil»*. Tiene razón y es el único punto de la visita que obligaba a
+escribir una dirección con el control remoto. Ningún otro código empieza con
+`6`, así que dispara al instante, sin el retardo de los de dos cifras.
+
+Un detalle que ya estaba bien y ahora queda afirmado con una prueba: `target()`
+**no** le pega barra final a un destino que es solo pregunta. Si lo hiciera
+saldría `.../?renderer=canvas2d/`, que no llega a ningún lado.
+
+`ir.html` **no vive en el bucket**: es un archivo suelto en otro servidor, por
+decisión del operador. Se le entrega como archivo, y por eso es autocontenido
+—no carga `keypad.js`— y usa URLs absolutas. El manual de teclas suma la tabla
+del lanzador entero, que hasta ahora no estaba escrita en ningún lado.
+
+**2. La licencia de Hobo se cierra.** Textual: *«no la voy a usar en el producto
+a la fuente, es una prueba.. luego usaremos otras»*. Con eso deja de ser un
+riesgo anotado: la fuente queda como la de la página de pruebas, no hay nada que
+revisar para el producto, y se puede sacar del bucket el día que deje de hacer
+falta. La del producto se elige después.
