@@ -790,4 +790,32 @@ assert(/pararBucle\(\);/.test(cuerpoDe("stopAll")),
 assert(cuerpoDe("pararBucle").indexOf("stopAll") < 0,
   "pararBucle solo apaga el reloj; si tambien apagara todo, se llamarian en circulo");
 
-console.log("v0 page tests (H-18b + H-20 + H-21): OK");
+/* H-12b: la red, declarada.
+ *
+ * El operador descartó «arrancar sin red»: la app de la caja tiene validaciones
+ * intermedias que la piden, así que ese camino no se puede probar y no se
+ * insiste. Lo que SÍ puede hacer es cortar la red con la página ya abierta, y
+ * ahí el `85` es una prueba limpia -lee de IndexedDB y reproduce desde un
+ * `blob:`, sin tocar la red-. Para que la foto pruebe algo, la cabecera y la
+ * fila tienen que DECIR si había red. */
+assert(/function redDice\(\)/.test(inline[1]));
+assert(/navigator\.onLine/.test(inline[1]),
+  "el dato sale del navegador, no de una suposicion");
+assert(/"\tred\t" \+ redDice\(\)/.test(inline[1]),
+  "la cabecera lleva el campo red");
+assert(/"desde cache; " \+ \(record\.bytes \|\| 0\) \+ " B; red " \+/.test(inline[1]),
+  "y la fila de cache tambien: es la que prueba que los bytes salieron del aparato");
+
+/* Y anda: el stub no declara onLine, asi que la cabecera dice "?" en vez de
+ * inventar un "si". */
+assert(/red\t\?/.test(reporteTexto()),
+  "sin navigator.onLine se declara ?, nunca se supone que habia red");
+navigatorStub.onLine = false;
+action("0").run();
+assert(/red\tno/.test(reporteTexto()),
+  "con la red cortada la cabecera lo dice");
+navigatorStub.onLine = true;
+action("0").run();
+assert(/red\tsi/.test(reporteTexto()));
+
+console.log("v0 page tests (H-18b + H-20 + H-21 + red): OK");

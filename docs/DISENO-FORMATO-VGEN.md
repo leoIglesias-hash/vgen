@@ -248,31 +248,43 @@ caja): el loop abajo y `v0-vp9-alpha` encima dan **2/154 y 1/141 caídos**, los
 dos dentro del gate de 3 %, y el navegador compone. Un efecto deja de tener que
 estar horneado o dibujado a mano: es una pieza más del paquete.
 
-### El presupuesto de composición: DOS planos, no tres
+### Cuántos planos se pueden componer: TRES, firmado por el ojo
 
-Medido a pantalla entera en la caja (H-20, misma foto), con el video ocupando
-los 3840×2160 que el WebView le da:
+Medido a pantalla entera en la caja (H-20), con el video ocupando los 3840×2160
+que el WebView le da, en **dos corridas**:
 
 | encima del video base | caídos abajo | caídos arriba |
 |---|---|---|
-| nada | 1/155 = 0,6 % | — |
-| el canvas de intervención | 0/153 = **0 %** | — |
-| una pieza alfa | 4/156 = 2,6 % | 2/138 = 1,4 % |
-| **las dos cosas a la vez** | 17/154 = **11,0 %** | 7/149 = **4,7 %** |
+| nada | 1/155 · **0/155** | — |
+| el canvas de intervención | 0/153 · **4/154** | — |
+| una pieza alfa | 4/156 · **3/155** | 2/138 · **4/149** |
+| **las dos cosas a la vez** | 17/154 · **17/155** | 7/149 · **11/150** |
 
-**No es la suma de los costos: es un salto.** De ahí la regla, y el operador la
-vio a ojo antes de mirar los números (*«no creo que resista más de dos videos
-superpuestos, pero con 2 va bien»*):
+Los tres primeros escalones bailan entre corridas: a esta escala son ruido. **El
+cuarto no se movió ni un cuadro entre una corrida y la otra.**
 
-> Sobre el video base va **UN** plano encima —o el canvas de intervención, o una
-> pieza alfa—, **nunca los dos a la vez**. Si una escena necesita texto vivo *y*
-> efecto, el efecto **se hornea en la pieza** y el canvas se queda solo con lo
-> que no puede saberse antes.
+**Y sin embargo el ojo del operador dice que se ven perfecto**, textual: *«todo
+junto, dos videos + el rectángulo con los números y el símbolo girando se ven
+perfecto. así que se la banca en ese sentido»*. **Eso manda**, por dos razones:
+la caja **consagra** (VISION §8.11), y el contador de esta clase **ya estaba
+desacreditado** —la cabecera dice `quality no`, el número sale de
+`webkitDroppedFrameCount`, y E5 midió que ese contador informa `total 0` para
+VP9 y HLS-TS mientras el video se ve perfecto—.
+
+> **Los tres planos están habilitados**: video base + pieza alfa + canvas de
+> intervención. Una regla anterior de este documento («dos planos, no tres»,
+> escrita el 2026-09-04 por la mañana) **quedó sin efecto esa misma noche**: se
+> apoyaba en un solo instrumento y el instrumento perdió contra el ojo en el
+> aparato que decide.
+
+**Lo que sí queda anotado**, sin fuerza de regla: el contador marca un salto
+limpio y repetible sólo en el cuarto escalón. Se resolverá **en un aparato donde
+`quality` exista**, no en éste. Mientras tanto, cuando hornear el efecto en la
+pieza salga gratis, **se hornea** — por barato, no por miedo.
 
 Corolario del mismo dato: **la superficie 4K no le cuesta nada al `<video>`**
-(0,6 % él solo, la escala el hardware). Lo que no escala es la CPU — es
-exactamente lo que mata al player 100 % JS en el mismo aparato (DIAG-003).
-
+(0–1 cuadro de 155 él solo, la escala el hardware). Lo que no escala es la CPU
+— es exactamente lo que mata al player 100 % JS en el mismo aparato (DIAG-003).
 ## 10. Decidido vs. gateado por medición
 
 | Tema | Estado |

@@ -197,12 +197,26 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   **H-18b y H-20 quedaron CERRADAS con la segunda foto del 2026-09-04**, y de
   ahí sale una **regla de diseño**: dos planos de video se sostienen (2/154 y
   1/141 → **un efecto puede SER video**), la superficie 4K **no le cuesta al
-  `<video>`** (1/155 él solo; la escala el hardware) y la API de fullscreen ni
-  se concedió ni hizo falta — pero **video + video alfa + canvas juntos dan
-  11 % de caídos**, casi cuatro veces el gate. **El presupuesto de composición
-  es DOS planos, no tres:** sobre el video base va UN plano encima —el canvas o
-  una pieza alfa—, nunca los dos; si una escena necesita texto vivo *y* efecto,
-  el efecto **se hornea en la pieza** (DISENO §9).
+  `<video>`** (0–1 de 155 él solo; la escala el hardware) y la API de fullscreen
+  ni se concedió ni hizo falta.
+
+  **Con los tres planos el contador salta a 17/155 —idéntico en dos corridas—,
+  pero el ojo del operador firmó *«todo junto… se ven perfecto»*, y eso manda:
+  los TRES PLANOS ESTÁN HABILITADOS** (video base + pieza alfa + canvas). La
+  caja **consagra**, y el contador de esta clase está desacreditado: la cabecera
+  dice `quality no`, el número sale de `webkitDroppedFrameCount`, el mismo que
+  en E5 informaba `total 0` con VP9 andando perfecto. **Una regla escrita la
+  mañana del 2026-09-04 («dos planos, no tres») quedó sin efecto esa noche**;
+  el salto del cuarto escalón queda anotado para un aparato donde `quality`
+  exista. Cuando hornear el efecto salga gratis, se hornea: por barato, no por
+  miedo (DISENO §9).
+
+  **La red (E16):** la caja **no puede arrancar sin red** —la app tiene
+  validaciones intermedias que la piden—, así que ese escenario **se descarta**
+  y se diseña **con** el arranque conectado. Cortarla en el medio tampoco prueba
+  residencia. La prueba que discrimina: red cortada con la página **ya abierta**
+  y recién ahí `85` (IndexedDB → `blob:`, cero red); la cabecera y las filas
+  `cache:*` ahora declaran **`red si|no`** para que la foto lo pruebe sola.
 
   8. **H-21** — el operador pidió mirar los dos planos **sin los cortes de la
      medición** (*«se corta el video cuando son dos superpuestos… un loop de
@@ -213,8 +227,8 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
      lleva los **caídos vivos de los dos**. Porque «2,6 % de caídos» y «se ve
      fluido dos minutos» son dos datos distintos, y el segundo lo firma el ojo.
 
-  **Quedan TRES puntos para UNA SOLA VISITA a la caja** (qué traer:
-  `RUNBOOK-ESTADO.md`): `85` tras apagar y prender, `83` sola, y `71`. Después
+  **Queda UNA SOLA VISITA a la caja** (qué traer: `RUNBOOK-ESTADO.md`): `85` con
+  la red cortada, `83` sola, y `71` como opcional. Después
   siguen **H-6** (matriz por bytes a igual look),
   **H-7** (spec `SPEC-VGEN.md`, con **H-15** residencia adentro) y **H-8**
   (muxer ES5 + player). Externo: pedir

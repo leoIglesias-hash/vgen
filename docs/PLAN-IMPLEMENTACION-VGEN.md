@@ -82,7 +82,8 @@ bytes y el arranque son el objetivo.**
 | **E12** | Ojo del operador: VP9 «perfecto, hasta más fluido»; el alfa **compone** (verde alrededor, video en el círculo); HLS-TS «se traba mucho al iniciar» | respuestas del operador, REGISTRO 2026-09-01 | consagra VP9 y el alfa por video; saca el camino D del producto en esta clase |
 | **E13** | «De momento el tv box es la base»; contenido = loop intervenido + publicidad que reemplaza y vuelve + incentivadores a demanda; nombre `.vgen` | decisiones del operador, REGISTRO 2026-09-01 | la caja **consagra**; los casos de uso de §2.7; el nombre del formato |
 | **E14** | Dos planos de video a la vez se sostienen: loop VP9 abajo + pieza alfa encima, **mismo rectángulo exacto**, 2/154 y 1/141 caídos | H-18b, foto de la caja 2026-09-04 (noche) | **un efecto puede SER video**: una pieza alfa más del paquete, en vez de horneada o dibujada a mano |
-| **E15** | La superficie **3840×2160** no le cuesta al `<video>`: 1/155 caídos él solo. Pero **video + video alfa + canvas** juntos dan **17/154 = 11 %**, contra 0 % del canvas solo y 2,6 % de la pieza alfa sola | H-20, misma foto | **el presupuesto de composición es DOS planos, no tres**; y la API de fullscreen no se concedió (`api no`) ni hizo falta |
+| **E15** | La superficie **3840×2160** no le cuesta al `<video>` (0–1 caído de 155 él solo). Con **video + video alfa + canvas** el contador salta a **17/155, idéntico en dos corridas** — pero el **ojo del operador dice que se ven perfecto**, y la cabecera dice `quality no`: el número sale de `webkitDroppedFrameCount`, el mismo contador que en E5 informaba `total 0` con el video andando | H-20, fotos 2ª y 3ª del 2026-09-04 | **los tres planos están habilitados** (la caja consagra, el contador está desacreditado). La API de fullscreen no se concedió (`api no`) ni hizo falta. **Anotado sin fuerza de regla:** el salto del cuarto escalón se resuelve en un aparato donde `quality` exista |
+| **E16** | La caja **no puede arrancar sin red**: la app que hospeda al WebView tiene validaciones intermedias que la piden. Cortarla **en el medio** no prueba residencia: lo ya buffereado sigue sonando | operador, 2026-09-04 (noche) | «arranca sin red» **se descarta como prueba**. La residencia se prueba por **de dónde salen los bytes**: red cortada con la página abierta → `85` (IndexedDB → `blob:`, cero red). Y hay que **diseñar con** el arranque conectado, no contra él |
 
 **Lo que todavía no se sabe** —y por eso no se afirma—: cómo se ve la
 **costura** entre segmentos y en el bucle, cuánto tarda un **cambio de pieza a
@@ -154,10 +155,11 @@ principal (§3.3).
 - **N2 (canvas encima)**: **ENCIMA**, decidido en H-11. El alfa por video
   **compone en la caja** (S4) y **se sostiene** (H-18b): el personaje sin fondo
   puede ir por video.
-- **Presupuesto de composición: DOS planos, no tres** (H-20, E15). Sobre el
-  video base va **un** plano encima —el canvas de intervención **o** una pieza
-  alfa—, nunca los dos: juntos dan 11 % de caídos contra 0 % y 2,6 %. Si una
-  escena necesita texto vivo *y* efecto, el efecto **se hornea en la pieza**.
+- **Tres planos habilitados** (H-20, E15): video base + pieza alfa + canvas de
+  intervención. El contador marca un salto en ese tercer plano, pero **el ojo
+  del operador firmó que se ven perfecto** en la caja, y el contador de esta
+  clase está desacreditado (`quality no`; E5). Cuando hornear el efecto en la
+  pieza salga gratis, **se hornea** — por barato, no por miedo.
 - **Sincronía:** sin rVFC en esta clase, el loop lee `currentTime` (no
   `timeupdate`, que va a ~4 Hz). Tolerancia declarada: **≥ 1 cuadro (66 ms a
   15 fps)** para toda intervención «de evento»; la «de cuadro» se hornea en el
@@ -237,7 +239,12 @@ byte de las piezas. Por eso:
 - si el presupuesto no alcanza, **se conserva por prioridad** (incentivador →
   publicidad → resto) y lo que queda afuera se marca «por red»;
 - las huellas tienen que ser **estables entre emisiones**: **cumplido desde
-  H-14b** (2026-09-04), una re-emisión sin cambios ya no invalida lo residente.
+  H-14b** (2026-09-04), una re-emisión sin cambios ya no invalida lo residente;
+- **el arranque del aparato es CON red y no se pelea** (E16): la app pide red
+  para pasar sus validaciones, así que «arrancar sin red» no es un escenario a
+  soportar. Lo que sí se exige es que, una vez abierta la página, **los bytes
+  salgan del aparato**: si internet se corta a las tres horas, no cambia nada.
+  Esa es la prueba que discrimina, y se toma con la red cortada y `85`.
 
 Orden de códecs fijado el mismo día: **VP9 base** (eficiencia en la TV box,
 53,8 % menos bytes, «perfecto, hasta más fluido»), **H.264 Baseline

@@ -5183,3 +5183,109 @@ Gate vigente: **≤ 3 % de caídos**.
 incluye `84`. Siguen abiertos los dos puntos de H-12b: **`85` tras apagar y
 prender** (hay que correr `84` antes de apagar) y **`83` sola mostrando video**.
 
+
+---
+
+## 2026-09-04 (noche, 3ª foto) — el contador dice 11 % y el ojo dice «perfecto»: se RETIRA la regla de los dos planos
+
+Segunda corrida del `70`, sola (sin `84` ni `87` antes). Transcripción
+**textual**:
+
+```
+reporte - 88 para volver
+# pack v0 - reporte de aparato
+ua  Mozilla/5.0 (Linux; Android 9; TVBOX Build/PPR1.180610.011; wv)
+AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/70.0.3538.80 Safari/537.36
+panel   1280x720   dpr 1   superficie 3840x2160
+capa    560x315 k 0.333 fuente hobo (4 ms)
+mse si  changeType si  blob  si
+mse.h264   si  mse.vp9 si
+rvfc    no  indexeddb si  quality no
+cache   si  guardadas 0 0 B cuota 13/225 MB
+hls maybe  dash  no
+# atascos = waiting despues de arrancar; congel = muestras de 100 ms sin avance;
+oculto = muestras con la pagina oculta (el navegador pausa el video mudo)
+# id    dice    arranco 1er_ms  caidos total  deriva_ms  atascos congel  cambio_ms  nota
+entera:solo probably   si 339 0   155 2  0  0  -1  entera 3840x2160 sobre 3840x2160;
+api no
+entera:capa probably   si 479 4   154 0  0  0  -1  entera 3840x2160 sobre 3840x2160;
+api no; capa rect, pintadas 147 (1280x720)
+entera:dos  probably   si 523 3   155 1  0  0  -1  entera 3840x2160 sobre 3840x2160;
+api no; el de arriba dice probably, caidos 4/149
+entera:todo probably   si 675 17  155 -1 0  0  -1  entera 3840x2160 sobre 3840x2160;
+api no; capa rect, pintadas 149 (1280x720); el de arriba dice probably, caidos 11/150
+```
+
+### Las dos corridas, lado a lado
+
+| escalón | corrida 1 | corrida 2 |
+|---|---|---|
+| `entera:solo` | 1/155 = 0,6 % | **0/155 = 0 %** |
+| `entera:capa` | 0/153 = 0 % | **4/154 = 2,6 %** |
+| `entera:dos` | 4/156 = 2,6 % · arriba 2/138 | **3/155 = 1,9 % · arriba 4/149** |
+| `entera:todo` | 17/154 = 11,0 % · arriba 7/149 | **17/155 = 11,0 % · arriba 11/150** |
+
+Los tres primeros escalones **se mueven entre corridas** (el canvas pasó de 0 %
+a 2,6 %, los dos planos de 2,6 % a 1,9 %): a esta escala son ruido. **El cuarto
+no se movió ni un cuadro: 17 y 17.** Como lectura de contador, el salto es
+real y repetible.
+
+### Y sin embargo, el ojo del operador dice lo contrario
+
+Textual: *«todo junto, dos videos + el rectángulo con los números y el símbolo
+girando se ven perfecto. así que se la banca en ese sentido»*.
+
+**Eso manda.** Dos razones, y no son una concesión:
+
+1. **La caja consagra** (VISION §8.11). El aparato que decide es este, y sobre
+   este aparato el operador miró los tres planos juntos y no vio nada.
+2. **El contador de esta clase ya está desacreditado.** La cabecera dice
+   `quality no`: no hay `getVideoPlaybackQuality`, así que el número sale de
+   `webkitDroppedFrameCount`. Y **E5 ya había medido que ese contador miente en
+   esta caja**: VP9 y HLS-TS reproducían perfecto con `total 0`. Un contador que
+   informa cero cuadros donde hay video no es un juez.
+
+### Lo que se RETIRA, dicho sin vueltas
+
+**La regla «el presupuesto de composición es dos planos, no tres», escrita esta
+misma mañana en DISENO §9, PLAN §2.5/E15, los runbooks y `CLAUDE.md`, queda sin
+efecto.** Se apoyaba en un solo instrumento, y el instrumento perdió contra el
+ojo en el aparato que consagra. **Los tres planos —video base + pieza alfa +
+canvas de intervención— están habilitados.**
+
+**Lo que sobrevive, como anotación y no como prohibición:** el contador marca un
+salto limpio y repetible en el cuarto escalón (17/155 dos veces, contra 0–4 en
+los otros tres). No sabemos si eso es un costo real que el ojo todavía tolera o
+un artefacto de un contador roto. **Se resuelve midiendo en un aparato donde
+`quality` sí exista** —es una pregunta para cuando haya un segundo aparato, no
+para esta caja— y mientras tanto, **cuando hornear el efecto en la pieza sale
+gratis, se hornea**: no por miedo al 11 %, sino porque es más barato.
+
+### La red: el operador descarta la prueba que teníamos, y da la que sirve
+
+Textual: *«puedo cortarle el internet para medir si sobrevive a estar sin red,
+pero creo que no pasa las validaciones intermedias de la app arrancar sin red
+así que descartá eso. si puedo desconectarle el internet en medio a ver qué
+pasa. de hecho lo hice y sigue funcionando pero es natural si todo está activo
+creo»*.
+
+Tiene razón en las dos mitades.
+
+- **«Arranca sin red» no se puede probar en esta caja y se descarta.** La app
+  que hospeda al WebView pide red para pasar sus validaciones. No es una
+  limitación del formato ni algo que podamos rodear desde la página: es el
+  entorno real de instalación, y hay que diseñar **con** eso.
+- **Y «cortar la red en el medio y que siga» no prueba residencia**, exactamente
+  como él dice: si el video ya está buffereado, seguir sonando es lo esperable.
+
+**La prueba que sí discrimina** —y que él puede hacer— es cortar la red **con la
+página ya abierta** y **recién entonces** apretar `85`. El `85` no toca la red
+ni una vez: abre IndexedDB, saca los bytes, arma un `blob:` y reproduce. Si con
+la red cortada las dos piezas suenan, salieron del aparato y de ningún otro
+lado.
+
+Para que la **foto** lo pruebe y no haya que creerle a nadie, se agregó el campo
+**`red`** a la cabecera del reporte y a la nota de las filas `cache:*`
+(`navigator.onLine`; dice `?` si el navegador no lo declara, nunca supone que
+había red). Con eso, una sola foto muestra `red no` y las dos filas sonando.
+

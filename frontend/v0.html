@@ -569,10 +569,25 @@ function environment() {
              "\tquality\t" + (video.getVideoPlaybackQuality ? "si" : "no"));
   lines.push("cache\t" + cacheInfo.says + "\tguardadas " + cacheInfo.n +
              "\t" + cacheInfo.bytes + " B" +
-             (cacheInfo.quota ? "\tcuota " + cacheInfo.quota : ""));
+             (cacheInfo.quota ? "\tcuota " + cacheInfo.quota : "") +
+             "\tred\t" + redDice());
   lines.push("hls\t" + (video.canPlayType("application/vnd.apple.mpegurl") || "no") +
              "\tdash\t" + (video.canPlayType("application/dash+xml") || "no"));
   return lines;
+}
+
+/* H-12b: si habia red o no cuando se midio.
+ *
+ * El operador no puede arrancar la caja sin red -la app tiene validaciones
+ * intermedias que la piden-, asi que "arranca sin red" no se puede probar por
+ * ese lado y no se va a insistir. Pero SI puede CORTAR la red con la pagina ya
+ * abierta, y ahi el `85` es una prueba limpia: lee de IndexedDB y reproduce
+ * desde un `blob:`, sin tocar la red una sola vez. Que la cabecera y la fila
+ * digan `red no` es lo que convierte la foto en evidencia en vez de en un
+ * "confia en mi". */
+function redDice() {
+  if (typeof navigator.onLine !== "boolean") { return "?"; }
+  return navigator.onLine ? "si" : "no";
 }
 
 function noteOf(piece, r) {
@@ -1321,7 +1336,8 @@ function stepCachePlay(pieceId) {
         VGenFeed.revoke(lastObjectUrl);
         lastObjectUrl = url;
         piece.bytes = String(record.bytes || 0);
-        piece.note = "desde cache; " + (record.bytes || 0) + " B";
+        piece.note = "desde cache; " + (record.bytes || 0) + " B; red " +
+                     redDice();
         say(id);
         measure(piece, url, finishRow(id, done));
       });
