@@ -801,7 +801,7 @@ assert(cuerpoDe("pararBucle").indexOf("stopAll") < 0,
 assert(/function redDice\(\)/.test(inline[1]));
 assert(/navigator\.onLine/.test(inline[1]),
   "el dato sale del navegador, no de una suposicion");
-assert(/"\tred\t" \+ redDice\(\)/.test(inline[1]),
+assert(/red.t" \+ redDice\(\)\);/.test(inline[1]),
   "la cabecera lleva el campo red");
 assert(/"desde cache; " \+ \(record\.bytes \|\| 0\) \+ " B; red " \+/.test(inline[1]),
   "y la fila de cache tambien: es la que prueba que los bytes salieron del aparato");
