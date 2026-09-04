@@ -209,11 +209,11 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 27);
+assert.strictEqual(codigos.length, 28);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
-["80", "81", "82", "83", "84", "85", "86", "89",
+["80", "81", "82", "83", "84", "85", "86", "87", "89",
  "90", "91", "92", "93", "94", "95", "96", "97", "98", "99"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta el codigo compuesto " + code);
 });
@@ -279,8 +279,9 @@ registered.actions.forEach(function (item) {
 var ahora = registered.actions.filter(function (item) {
   return item.tier === "now";
 }).map(function (item) { return item.code; }).sort();
-assert.deepStrictEqual(ahora, ["1", "80", "81", "82", "83", "84", "85", "86"],
-  "lo pendiente de probar es la capa de H-11, la cache de H-12 y el 1");
+assert.deepStrictEqual(ahora,
+  ["1", "80", "81", "82", "83", "84", "85", "86", "87"],
+  "lo pendiente es la capa de H-11, la cache de H-12, los dos videos y el 1");
 
 function emDe(sel) {
   var m = page.match(new RegExp("#teclas \\." + sel +
@@ -314,8 +315,8 @@ assert(/px\(byId\("side"\), sideX, midTop, w - sideX - 12, midH\)/.test(inline[1
 var visibles = byId("teclas").childNodes.length;
 assert(visibles >= 10,
   "tienen que quedar al menos 10 teclas a la vista, y hay " + visibles);
-assert.strictEqual(visibles, 12,
-  "hoy son 12: las 8 de ahora y las 4 herramientas");
+assert.strictEqual(visibles, 13,
+  "hoy son 13: las 9 de ahora y las 4 herramientas");
 var ocultas = registered.actions.filter(function (item) {
   return item.tier === "done";
 }).length;
@@ -576,3 +577,47 @@ assert(/capaOjoArranca\(desde\)/.test(inline[1]),
   "y reintenta hasta que la pieza base este");
 assert(/if \(capa\.load !== "rect"\) \{ return; \}/.test(inline[1]),
   "si mientras tanto se apago la capa, el reintento se corta solo");
+
+/* --- H-18: dos <video> a la vez --- */
+
+/* La pregunta del operador (2026-09-04) fue si un efecto puede SER video: una
+ * pieza con alfa encima del loop, compuesta por el navegador, en vez de
+ * horneada o dibujada a mano. Lo que estas pruebas cuidan es que el segundo
+ * <video> exista de verdad, vaya ENCIMA sin crecer hacia abajo, y que la fila
+ * traiga los cuadros de LOS DOS: si solo se midiera el de abajo, la prueba no
+ * contestaria la pregunta. */
+
+assert.strictEqual((page.match(/<video\s+id="efecto"/g) || []).length, 1,
+  "hay un segundo <video> declarado, no un canvas ni un div");
+assert(/#efecto\s*\{[^}]*position:\s*absolute/.test(page),
+  "va posicionado encima, no en el flujo");
+assert(/#efecto\.off\s*\{\s*display:\s*none/.test(page),
+  "y apagado no ocupa nada");
+assert(page.indexOf('<canvas id="capa" class="off"></canvas>\n<video id="efecto"') >= 0,
+  "el segundo video va DESPUES del canvas: encima, no debajo");
+assert(/placeEfecto\(stageX, midTop \+ Math\.round\(\(midH - vh\) \/ 2\), vw, vh\)/
+  .test(inline[1]),
+  "el layout lo coloca sobre el recuadro del video, no en otro lado");
+assert(/Math\.round\(w \* 0\.26\), Math\.round\(h \* 0\.3\)/.test(inline[1]),
+  "del tamano del rectangulo de la capa: nunca crece hacia abajo (regla 10)");
+
+assert(/function stepDosVideos\(\)/.test(inline[1]),
+  "la prueba de los dos videos existe");
+assert(/\{ loop: true, efecto: "v0-vp9-alpha" \}/.test(inline[1]),
+  "el de abajo va en bucle y el de arriba es la pieza con alfa");
+assert(/findPiece\("v0-vp9"\)/.test(inline[1]),
+  "el de abajo es VP9: el codec base que eligio el operador el 2026-09-04");
+assert(/caidos " \+ efecto\.dropped \+\s*\n?\s*"\/" \+ efecto\.total/.test(inline[1]) ||
+       /efecto\.dropped/.test(inline[1]) && /efecto\.total/.test(inline[1]),
+  "la fila trae los cuadros del de ARRIBA tambien");
+assert(/if \(o\.efecto\) \{ startEfecto\(o\.efecto\); \}/.test(inline[1]) &&
+       /if \(o\.efecto\) \{ stopEfecto\(\); \}/.test(inline[1]),
+  "arranca con la medicion y se corta con ella: nunca queda sonando solo");
+assert(/stopEfecto\(\);\n  byId\("alphaBg"\)\.className = "";/.test(inline[1]),
+  "el 0 tambien lo apaga: en una TV no hay otra forma de callarlo");
+
+/* Y entra en lo que corre el 1, porque todavia no lo contesto la caja. */
+assert(/return techoSteps\(\)\.concat\(\[stepDosVideos\(\)\]\)/.test(inline[1]),
+  "el 1 corre el techo y los dos videos: lo no consagrado, nada mas");
+assert(/dos videos/.test(action("87").label), "87 = dos videos a la vez");
+assert(/H-18/.test(action("87").detail));

@@ -18,7 +18,7 @@ izquierda lo que se va tecleando (`8_`, `83_`) y ejecuta cuando pasan 900 ms sin
 otra tecla, así que **una tecla de una cifra tarda un momento en salir**: es
 normal, está esperando a ver si viene la segunda.
 
-## Lo que se ve en pantalla (12 teclas)
+## Lo que se ve en pantalla (13 teclas)
 
 | tecla | qué hace |
 |---|---|
@@ -29,7 +29,8 @@ normal, está esperando a ver si viene la segunda.
 | `84` | caché: baja y guarda Baseline + VP9, las reproduce desde ahí y mide el techo en tandas de 5 MB |
 | `85` | **desde caché**: la tecla de después de apagar y prender. ¿Siguen ahí? ¿Arranca sin red? |
 | `86` | borrar la caché |
-| `1` | **lo que falta**: corre solo lo que la caja todavía no consagró. Hoy es el techo de la caché |
+| `87` | **dos videos a la vez** (H-18): el loop VP9 abajo y la pieza con alfa **encima**, en un segundo `<video>` del tamaño del rectángulo de la capa. La fila trae los cuadros caídos de los dos |
+| `1` | **lo que falta**: corre solo lo que la caja todavía no consagró. Hoy, el techo de la caché y los dos videos |
 | `95` | reporte a pantalla completa, para la foto |
 | `93` | repetir la última corrida |
 | `0` | cortar: deja la pantalla en cero sin recargar |
@@ -72,8 +73,10 @@ Se agregan a la URL, separados por `&` después de un `?`.
 
 La capa dibuja con **Hobo** (`v0/HoboStd.ttf`). No se puede preguntar por
 `document.fonts` —devuelve una promesa y el piso de compatibilidad del proyecto
-la prohíbe—, así que la página **mide**: compara el ancho del mismo texto en
-`Hobo, monospace` contra `monospace`, hasta 3 segundos. La cabecera del reporte
+la prohíbe—, así que la página **mide**: compara el ancho de `MMMMM` contra el
+de `iiiii` **pidiendo la misma familia**, hasta 3 segundos. Monospace le da a
+toda letra el mismo avance, así que anchos distintos solo pueden venir de Hobo.
+La cabecera del reporte
 dice `fuente hobo` o `fuente fallback` con cuántos milisegundos tardó. Si dice
 `fallback`, lo que se ve está dibujado en monospace y la medición no está
 mintiendo sobre eso.

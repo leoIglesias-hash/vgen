@@ -16,6 +16,10 @@
   #video { position: absolute; background: #000; }
   #capa { position: absolute; }
   #capa.off { display: none; }
+  /* H-18: el segundo <video>, encima del primero y del tamano del rectangulo
+   * de la capa. Nunca crece hacia abajo (regla 10). */
+  #efecto { position: absolute; background: transparent; }
+  #efecto.off { display: none; }
   /* H-16: la fuente de la capa es Hobo por defecto (decision del operador,
    * 2026-09-04: "que sea la fuente por defecto asi no agrego mas funciones").
    * Se sirve al lado de la pagina, en el mismo prefijo v0/. El archivo es
@@ -77,6 +81,7 @@
 <div id="alphaBg"></div>
 <video id="video" muted playsinline></video>
 <canvas id="capa" class="off"></canvas>
+<video id="efecto" class="off" muted playsinline></video>
 <div id="side">
   <table>
     <thead><tr><th>pieza</th><th>ok</th><th>caidos/total</th><th>1er</th>
@@ -222,6 +227,7 @@ function layout() {
   px(byId("alphaBg"), stageX, midTop + Math.round((midH - vh) / 2), vw, vh);
   px(byId("capa"), stageX, midTop + Math.round((midH - vh) / 2), vw, vh);
   sizeCapa(vw, vh);
+  placeEfecto(stageX, midTop + Math.round((midH - vh) / 2), vw, vh);
   sideX = stageX + stageW + 8;
   px(byId("side"), sideX, midTop, w - sideX - 12, midH);
   byId("keys").style.top = midTop + "px";
@@ -321,6 +327,7 @@ function stopFeeding() {
  * opts.seconds           cuanto medir (SECONDS por defecto)
  * opts.loop              video.loop = true y se cuentan las vueltas (seeking)
  * opts.capa              carga de la capa H-11: "none" | "rect" | "full"
+ * opts.efecto            H-18: id de una pieza que suena EN OTRO <video>, encima
  *
  * La medicion NO pausa al terminar (ver cabecera). */
 function measure(piece, src, done, opts) {
@@ -375,6 +382,7 @@ function measure(piece, src, done, opts) {
     /* Sin pausa: la pieza sigue hasta que la proxima la reemplace. Solo se
      * corta el alimentador, que ya no tiene a quien darle. */
     stopFeeding();
+    if (o.efecto) { stopEfecto(); }
     cleanup();
     done(row);
   }
@@ -413,6 +421,7 @@ function measure(piece, src, done, opts) {
   row.says = video.canPlayType(piece.mime) || "no";
   video.loop = o.loop ? true : false;
   setCapa(o.capa || "none");
+  if (o.efecto) { startEfecto(o.efecto); }
   video.addEventListener("waiting", onStall, false);
   video.addEventListener("seeking", onLap, false);
   video.addEventListener("error", onError, false);
@@ -1041,7 +1050,7 @@ function everything() {
  * entra (H-18, dos <video> a la vez), se suma aca; cuando la caja la consagra,
  * se saca y pasa al manual. */
 function pendingSteps() {
-  return techoSteps();
+  return techoSteps().concat([stepDosVideos()]);
 }
 
 /* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
@@ -1053,6 +1062,7 @@ function stopAll() {
   video.pause();
   video.loop = false;
   setCapa("none");
+  stopEfecto();
   byId("alphaBg").className = "";
   byId("full").className = "";
   results = {};
@@ -1226,6 +1236,92 @@ function stepCachePlay(pieceId) {
         measure(piece, url, finishRow(id, done));
       });
     });
+  } };
+}
+
+/* --- H-18: el segundo <video>, el que prueba si un efecto puede SER video ---
+ *
+ * La pregunta es del operador (2026-09-04): «¿probamos videos "transparentes"?
+ * ¿como para crear efectos que en realidad sean video?». Si el aparato sostiene
+ * DOS <video> a la vez -el loop abajo y una pieza con alfa encima, compuesta
+ * por el navegador-, un efecto deja de tener que estar horneado en el video o
+ * dibujado a mano en el canvas: puede ser una pieza mas del paquete.
+ *
+ * Va ENCIMA y del tamano del rectangulo de la capa; nunca creciendo hacia
+ * abajo (regla 10: todo en una pantalla). Y cuenta SUS PROPIOS cuadros, porque
+ * la pregunta no es si el de arriba se ve: es si los dos se sostienen. */
+var efecto = { on: false, total: 0, dropped: 0, baseTotal: 0, baseDropped: 0,
+               says: "", error: "" };
+
+function placeEfecto(x, y, w, h) {
+  px(byId("efecto"), x + Math.round(w * 0.04), y + Math.round(h * 0.06),
+     Math.round(w * 0.26), Math.round(h * 0.3));
+}
+
+function startEfecto(pieceId) {
+  var node = byId("efecto"), src = findPiece(pieceId), before;
+  efecto.on = false; efecto.total = 0; efecto.dropped = 0;
+  efecto.baseTotal = 0; efecto.baseDropped = 0;
+  efecto.says = ""; efecto.error = "";
+  if (!src) { efecto.error = "no esta " + pieceId; return; }
+  efecto.says = node.canPlayType ? (node.canPlayType(src.mime) || "no") : "?";
+  before = quality(node);
+  efecto.baseTotal = before ? before.total : 0;
+  efecto.baseDropped = before ? before.dropped : 0;
+  node.className = "";
+  node.loop = true;
+  node.src = base + src.file;
+  node.load();
+  node.play();
+  efecto.on = true;
+}
+
+function stopEfecto() {
+  var node = byId("efecto"), after;
+  if (!efecto.on) { return; }
+  after = quality(node);
+  if (after) {
+    efecto.total = after.total - efecto.baseTotal;
+    efecto.dropped = after.dropped - efecto.baseDropped;
+    /* Misma regla que el video principal (H-12b): una resta negativa es una
+     * base que ya no existe, no un dato. */
+    if (efecto.total < 0 || efecto.dropped < 0) {
+      efecto.total = after.total;
+      efecto.dropped = after.dropped;
+    }
+    if (efecto.dropped < 0) { efecto.dropped = 0; }
+    if (efecto.total > 0 && efecto.dropped > efecto.total) {
+      efecto.dropped = efecto.total;
+    }
+  }
+  node.pause();
+  node.className = "off";
+  efecto.on = false;
+}
+
+/* El loop VP9 abajo y la pieza con alfa encima, los dos a la vez. La fila mide
+ * el de abajo como cualquier otra; la nota trae los cuadros del de arriba. */
+function stepDosVideos() {
+  var id = "dos:vp9+alfa";
+  return { id: id, go: function (done) {
+    var src = findPiece("v0-vp9");
+    var piece, row;
+    if (!src) {
+      piece = addExtra(fake(id, "dos", "", "", ""));
+      row = blank(piece);
+      row.error = "no esta v0-vp9";
+      finishRow(id, done)(row);
+      return;
+    }
+    piece = addExtra(fake(id, "dos", src.mime, src.file,
+                          "loop VP9 + alfa encima"));
+    measure(piece, base + src.file, function (r) {
+      piece.note = "loop VP9 + alfa encima; el de arriba dice " +
+                   (efecto.says || "-") + ", caidos " + efecto.dropped +
+                   "/" + efecto.total +
+                   (efecto.error ? "; " + efecto.error : "");
+      finishRow(id, done)(r);
+    }, { loop: true, efecto: "v0-vp9-alpha" });
   } };
 }
 
@@ -1427,6 +1523,9 @@ var TECLAS = [
   { code: "86", label: "borrar cache", tier: "now",
     detail: "vacia la base",
     run: clearCache },
+  { code: "87", label: "dos videos", tier: "now",
+    detail: "H-18: loop VP9 abajo y la pieza con alfa encima, a la vez",
+    run: function () { runSteps([stepDosVideos()], 0); } },
   /* H-16: el `1` corre SOLO LO NO CONSAGRADO (operador, 2026-09-04: "si ya
    * tuvimos claridad sobre ciertos elementos, ya quitalos de la prueba
    * general"). Hoy es el techo de la cache; crece cuando H-18 exista. Lo ya
