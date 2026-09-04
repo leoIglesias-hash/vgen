@@ -153,7 +153,7 @@ nada.
    desde caché o `blob:`.
 
 
-### Lo que hay que traer de la próxima visita (una sola, cuatro tareas)
+### Lo que hay que traer de la próxima visita (una sola, seis puntos)
 
 Todo se contesta en `https://iargen.com/player/v0/` salvo el último punto. La
 página ya está publicada con todo esto adentro; la leyenda muestra 13 teclas y
