@@ -372,7 +372,11 @@ assert(/url\("HoboStd\.ttf"\)\s*format\("opentype"\)/.test(page),
 assert(/#hobo\s*\{[^}]*font-family:\s*"Hobo"/.test(page),
   "un nodo del documento usa la fuente: en Chromium 70 un canvas no siempre " +
   "alcanza para disparar la descarga");
-assert.strictEqual(/document\.fonts/.test(page), false,
+/* La prohibicion es sobre el CODIGO, no sobre la prosa: los comentarios de la
+ * pagina nombran la API para explicar por que no se usa, y eso hay que poder
+ * escribirlo. Se mide contra el texto sin comentarios. */
+var pageCode = page.replace(/\/\*[\s\S]*?\*\//g, " ");
+assert.strictEqual(/document\.fonts/.test(pageCode), false,
   "document.fonts devuelve Promise y el piso ES5 la prohibe");
 
 assert(/CAPA_FUENTE_MS = 3000/.test(inline[1]),
