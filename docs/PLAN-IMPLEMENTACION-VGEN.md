@@ -330,7 +330,7 @@ H-7 y se mide en H-8.
 | **Arranque por red no reproducible** (3× entre visitas, misma página y piezas) | de la clase, medido 2026-09-04 | el gate se exige desde caché o `blob:`; residencia H-15 |
 | **La prueba de techo mata al WebView** (50 MB de ruido de una vez) | **corregida 2026-09-04** (H-12b) | tandas de 5 MB cumplidas en el módulo (`VGenCache.TANDA_MB`); la cuota declarada (225 MB en la caja) se reporta como primer techo |
 | **Dos `<video>` simultáneos sin probar** (efectos como video alfa) | H-18 | si no sostiene, los efectos van horneados o al canvas |
-| **Hobo Std es de Adobe**: servirla desde `v0/` la deja descargable | anotada 2026-09-04 | para la prueba no cambia nada; para el producto, el operador revisa la licencia |
+| **Hobo Std es de Adobe**: servirla desde `v0/` la deja descargable | **CERRADA 2026-09-04**: el operador dijo que **no va al producto** («no la voy a usar en el producto a la fuente, es una prueba… luego usaremos otras») | queda solo en la pagina de pruebas; la del producto se elige después |
 
 ## 6. Decisiones que necesita el operador
 
@@ -358,7 +358,9 @@ republicar la raíz (W-26b); **muxer** → A = concat principal, B = MSE reserva
 (H-16). Pregunta nueva del operador —«¿efectos que en realidad sean video?»—
 → H-18. **Orden:** ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ ~~H-18~~ (hechas) → H-6 → H-7 (con
 H-15) → H-8. **No queda ninguna decisión pendiente del operador**; debe una
-foto (tras apagar y prender, `85`) y, para el producto, la licencia de Hobo.
+foto (tras apagar y prender, `85`). La licencia de Hobo dejó de ser un
+pendiente: el operador la descartó para el producto y queda solo como fuente de
+prueba (2026-09-04).
 
 ## 7. Cómo se mantiene este documento
 

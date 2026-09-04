@@ -166,7 +166,7 @@ lo demás está en [`MANUAL-TECLAS-V0.md`](MANUAL-TECLAS-V0.md).
 | 3 | `83` sola | tiene que **verse el video** con el rectángulo encima. Si aparece «el aparato pide un gesto», anotarlo: decide si el arranque automático necesita un toque en la instalación real | H-12b |
 | 4 | mirar el rectángulo del `83`, y `95` | ¿la capa se ve **en Hobo**? El reporte dice `fuente hobo (N ms)` o `fuente fallback`; las dos son respuestas. ¿Las 13 teclas entran sin pisar nada? | H-16 |
 | 5 | `87` | los dos videos a la vez: la fila trae los caídos **de los dos**. En la PC: VP9 solo 0/156, con el efecto encima 5..12/157 abajo y 4..8/153 arriba | H-18 |
-| 6 | abrir `https://iargen.com/player/?renderer=canvas2d` | **sin pantallazo blanco** | W-26b |
+| 6 | en el lanzador (`ir.html`), tecla **`6`** | abre la raíz sin WebGL: **sin pantallazo blanco**. Ya no hay que escribir la dirección con el control | W-26b |
 
 Con el `95` a pantalla completa la foto trae todo junto. Y como siempre: la foto
 se transcribe **textual** al REGISTRO antes de tocar nada.

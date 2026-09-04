@@ -68,6 +68,12 @@ var DESTINOS = [
   { code: "3", label: "1280-15", detail: "variante v2", to: "1280-15/" },
   { code: "4", label: "1280-12", detail: "variante", to: "1280-12/" },
   { code: "5", label: "1920-10", detail: "variante", to: "1920-10/" },
+  /* W-26: la raiz elige WebGL en los primeros 240 ms y en la caja esa GPU no
+   * presenta (pantallazo blanco, DIAG-002). Este destino la abre forzada al
+   * piso. Va como tecla propia porque escribir la direccion entera con el
+   * control remoto no es razonable (pedido del operador, 2026-09-04). */
+  { code: "6", label: "raiz sin WebGL", detail: "?renderer=canvas2d (W-26)",
+    to: "?renderer=canvas2d" },
   { code: "90", label: "pack v0 lento", detail: "retardo de tecla 1600 ms",
     to: "v0/?delay=1600" },
   { code: "91", label: "pack v0 rapido", detail: "retardo de tecla 400 ms",

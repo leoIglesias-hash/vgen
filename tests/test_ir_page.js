@@ -84,13 +84,26 @@ assert.strictEqual(api.target("https://otro/lado/"), "https://otro/lado/",
   "una URL entera pasa tal cual");
 assert.strictEqual(api.target("   "), "", "vacio no navega");
 
-/* La leyenda se dibuja: 7 destinos mas la opcion de escribir. */
-assert.strictEqual(byId("ops").childNodes.length, 8);
+/* La leyenda se dibuja: 8 destinos mas la opcion de escribir. */
+assert.strictEqual(byId("ops").childNodes.length, 9);
+
+/* W-26: la raiz forzada a Canvas2D tiene tecla propia. Es un destino con
+ * pregunta y sin ruta, asi que `target` no le puede pegar una barra final: si
+ * lo hiciera saldria ".../?renderer=canvas2d/" y no llegaria a ningun lado. */
+assert.strictEqual(api.target("?renderer=canvas2d"),
+  "https://iargen.com/player/?renderer=canvas2d");
 
 /* Un digito que no puede crecer navega al instante. */
 api.push("3");
 assert.strictEqual(windowStub.location.href,
   "https://iargen.com/player/1280-15/");
+
+/* Y el 6 tambien: ningun codigo empieza con 6, asi que no espera. Esa es la
+ * gracia del pedido -abrir la raiz sin WebGL de una tecla, sin escribir. */
+windowStub.location.href = "";
+api.push("6");
+assert.strictEqual(windowStub.location.href,
+  "https://iargen.com/player/?renderer=canvas2d");
 
 /* Uno que si puede crecer espera, y el segundo digito completa el codigo:
  * es el caso de dos unidades que pidio el operador. */

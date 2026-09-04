@@ -68,6 +68,7 @@ Se agregan a la URL, separados por `&` después de un `?`.
 | `?base=` | de dónde bajar las piezas, si no es la carpeta de la página |
 | `?delay=` | milisegundos de espera del teclado (por defecto 900) |
 | `?ir=` | a dónde manda la tecla `94` |
+| `?renderer=canvas2d` | **solo en la raíz** (`iargen.com/player/`), no en esta página: la abre sin WebGL. Desde el lanzador es la tecla `6` |
 
 ## Nota sobre la fuente
 
@@ -80,3 +81,23 @@ La cabecera del reporte
 dice `fuente hobo` o `fuente fallback` con cuántos milisegundos tardó. Si dice
 `fallback`, lo que se ve está dibujado en monospace y la medición no está
 mintiendo sobre eso.
+
+## El lanzador (`ir.html`)
+
+Es un archivo suelto que vive en **otro servidor**, no en el bucket del player.
+Sus teclas:
+
+| tecla | a dónde va |
+|---|---|
+| `1` | `player/v0/` — esta página de pruebas |
+| `2` | `player/` — la raíz (producto 1280@15) |
+| `3` | `player/1280-15/` |
+| `4` | `player/1280-12/` |
+| `5` | `player/1920-10/` |
+| `6` | **`player/?renderer=canvas2d`** — la raíz **sin WebGL**. Es el escape de W-26: la raíz elige WebGL en los primeros 240 ms y en la caja esa GPU no presenta (pantallazo blanco) |
+| `90` | `player/v0/` con retardo de tecla de 1600 ms |
+| `91` | `player/v0/` con retardo de tecla de 400 ms |
+| `0` | foco en el campo para escribir un destino a mano |
+
+Ninguna otra tecla empieza con `6`, así que dispara al instante: no hay que
+esperar el retardo de los códigos de dos cifras.

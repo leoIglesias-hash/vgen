@@ -273,9 +273,11 @@ las fuentes de `@font-face`. Si aun así la caja la rechazara, la página lo dic
 sola —el reporte saldría con `fuente fallback`— y ahí sí la corrección es una
 línea: sumar `ttf` a `TYPES` en `worker.js`.
 
-**Licencia:** `HoboStd.ttf` es una fuente de Adobe. Está publicada acá para
-**probar** en los aparatos, que es lo que el operador pidió. Antes de usarla en
-el producto hay que revisar la licencia de distribución web.
+**Licencia:** `HoboStd.ttf` es una fuente de Adobe, publicada acá solo para
+**probar** en los aparatos. El operador cerró el punto el 2026-09-04: «no la voy
+a usar en el producto a la fuente, es una prueba… luego usaremos otras». O sea
+que no hay nada que revisar para el producto; la fuente del producto se elige
+después, y esta se puede sacar del bucket el día que deje de hacer falta.
 
 Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
 → SHA-256 igual al del archivo local en las dos; token de subida quemado.
