@@ -192,6 +192,17 @@ y el clip no puede depender de ellas.
   manifiesto es el mismo en los dos casos** — la web es el contrato, el APK es
   una optimización, nunca una dependencia.
 
+**Residencia (operador, 2026-09-04).** El aparato está prendido ≥ 16 h/día:
+baja **una vez** (a lo sumo una por día) y reproduce **siempre desde el
+aparato**; con la red cortada sigue; nada de «falso streaming». La caja lo
+exige con datos: persiste al cierre de la app (`guardadas 2`), cuota declarada
+225 MB, y los arranques por red variaron 3× entre visitas. Manifiesto con
+`residente: si|no` y `prioridad` por pieza (a mano); **presupuesto fijo por
+navegador** = `min(tope absoluto, fracción de la cuota declarada)`; al pasarse
+se conserva **por prioridad** (incentivador → publicidad → resto). Huellas
+estables entre emisiones (H-14b) para que una re-emisión sin cambios no
+invalide lo residente. Tarea: H-15 (diseño en H-7, runtime en H-8).
+
 ## 9. La capa de intervención
 
 Sobrevive del paradigma anterior, con su costo ahora proporcional al área y no a
@@ -214,10 +225,26 @@ la pantalla. Reusa lo que ya existe y está probado: `overlay.js`, `textlayer.js
 - **Donde el aparato componga alfa por video (camino C), ese es el camino
   preferido** para el personaje transparente: costo de CPU ~cero.
 
-**Incógnita crítica:** si poner un canvas encima del `<video>` le baja el fps al
-video (puede sacarlo de su plano de hardware). Si la medición dice que sí, el
-diseño se adapta: la intervención vive **al lado** del video, no encima. Es una
-bifurcación de layout, y hay que conocerla antes de dibujar una sola pantalla.
+**Decidido el 2026-09-04 con la foto de la caja: la capa va ENCIMA.** Un
+canvas repintando a 15 fps sobre el `<video>` no le costó un cuadro (0/155
+contra 1/156 sin canvas, en Baseline y en VP9; deriva 0–1 ms). Con eso, dos
+reglas que salen de la conversación con el operador (sincronía):
+
+- **El video nunca se rompe por la capa**: lo lleva el hardware con su reloj;
+  si una pintada tarda, se atrasa la capa, no el video. Por eso la capa **lee
+  `video.currentTime` en cada pintada** y dibuja el estado de ese instante — una
+  pintada tardía muestra lo correcto, un poco después. No cuenta sola.
+- **Todo lo que necesite sincronía de cuadro se hornea en el video** (encoder
+  caro, offline). En la capa va solo lo que no puede saberse antes: el número
+  que sale, el incentivador a demanda, el texto del momento.
+
+**Una sola pantalla es más eficiente**: el video ocupa todo y la capa dibuja
+solo su rectángulo; «al lado» achica el video y obliga a pintar más área con
+la CPU, que es el recurso escaso. La fuente de la capa es **Hobo** por defecto
+(operador, 2026-09-04; servida con `@font-face`, cae a `monospace`). Y los
+**efectos pueden ser video con alfa** (`v0-vp9-alpha` compone en la caja); si
+H-18 sostiene dos `<video>` a la vez, un efecto es una pieza alfa encima del
+loop.
 
 ## 10. Decidido vs. gateado por medición
 
@@ -233,12 +260,12 @@ bifurcación de layout, y hay que conocerla antes de dibujar una sola pantalla.
 | Audio: ambiente en `<audio>` separado; el propio de una pieza muxeado en ella; cues para lo hablado sobre el loop | **decidido** (operador, 2026-09-01); S13/S14 gateadas por la emisión v1 |
 | **Manifiesto en texto tabulado, nunca JSON** | **decidido** — el gate ES5 prohíbe `JSON`; se parsea con `split` |
 | Nombre `.vgen` | **decidido** (operador, 2026-09-01); el magic se fija en H-7 |
-| Qué códecs emitimos y en qué orden de preferencia | **gateado por el pack v0** (H-9/H-10): ¿VP9 existe? ¿Main sale gratis, o sea hardware? |
+| Qué códecs emitimos y en qué orden de preferencia | **decidido (operador, 2026-09-04): VP9 base, H.264 Baseline secundario**; Main solo detector; H.265 no evaluado, AV1 columna futura |
 | Camino de runtime por perfil (A/B/C/D) | **gateado** (¿`blob:`? ¿MSE? ¿WebM alfa?) — lo responde reproducir v0 |
 | Camino **D** (HLS/DASH nativo) | **gateado por el pack v0**: lleva `hls-ts/`, `hls-fmp4/` y `dash/` emitidos **por remux**. Donde D exista, el muxer ES5 puede sobrar en ese perfil |
 | Que las piezas se intercambien sin recodificar | **gateado** por los mismos empaquetados: si los segmentos reproducen sin costura, la afirmación central del formato queda probada en hardware |
-| Persistencia del paquete | **gateado** por **H-12** (¿IndexedDB persiste y cuánto?) |
-| Intervención encima o al lado del video | **gateado** por **H-11** (¿el canvas encima cuesta cuadros?) |
+| Persistencia del paquete | **decidido con la caja (2026-09-04)**: persiste al cierre de la app, cuota 225 MB, 25 MB entran; residencia mixta con `residente`/`prioridad` y presupuesto por navegador (H-15) |
+| Intervención encima o al lado del video | **decidido con la caja (2026-09-04): ENCIMA** — 0/155 caídos con canvas a 15 fps; la capa lee `video.currentTime`; fuente Hobo por defecto |
 | Techo de planos de video simultáneos | **gateado** (sesiones de decodificación) |
 | Nivel N4 (intercambio sub-cuadro) | **investigación**, no cimiento |
 | Layout binario del contenedor | **H-7**, después de todo lo anterior |

@@ -212,6 +212,32 @@ Consecuencias que se vuelven requisitos:
 4. Con VP9 consagrado y HLS-TS irregular, **los caminos del producto son A y
    B**; H-13 decide cuál hace el cambio de pieza.
 
+### 2.9 Residencia (operador, 2026-09-04: «prendido 16 hs por día como mínimo… que no falle si se cortó internet… nada de falso streaming»)
+
+El aparato está prendido **≥ 16 h por día**. El contenido **se baja una vez**
+—a lo sumo una vez por día, con un chequeo del manifiesto— y **se reproduce
+siempre desde el aparato**; si se corta internet, sigue; nunca se toma «el
+video fresco» en cada vuelta. La evidencia que lo exige es de la caja misma:
+los arranques **por red** variaron 3× entre dos visitas (1,2–3,0 s el 09-01;
+3,3–4,0 s el 09-04; MSE de 2,0 s a 7,5 s con 4 atascos) sin que cambiara un
+byte de las piezas. Por eso:
+
+- el gate de arranque (≤ 1 s) **se exige desde caché o `blob:`**, nunca por red;
+- el manifiesto lleva por pieza **`residente: si|no`** y **`prioridad`**
+  (menor = antes), fijados a mano por el operador;
+- hay un **presupuesto fijo por navegador**: `min(tope absoluto, fracción de la
+  cuota declarada)`, con los valores manuales por encima del automatismo;
+- si el presupuesto no alcanza, **se conserva por prioridad** (incentivador →
+  publicidad → resto) y lo que queda afuera se marca «por red»;
+- las huellas tienen que ser **estables entre emisiones** (por eso H-14b): una
+  re-emisión sin cambios no puede invalidar lo residente.
+
+Orden de códecs fijado el mismo día: **VP9 base** (eficiencia en la TV box,
+53,8 % menos bytes, «perfecto, hasta más fluido»), **H.264 Baseline
+secundario** para aparatos viejos; Main sigue solo como detector. H.265 no se
+evaluó (Chromium 70 no lo reproduce en `<video>`; regalías) y AV1 sigue como
+columna futura; una pieza HEVC puede entrar como sonda si el operador lo pide.
+
 ## 3. Reglas de decisión
 
 ### 3.1 Gates de reproducción
@@ -261,39 +287,50 @@ Ni por analogía, ni por «es lo normal», ni por `canPlayType`.
 
 ## 4. Fases y tareas
 
-Orden: **H-13 → H-11 → H-12 → H-6 → H-7 → H-8**; **H-14**, **W-26** y lo que
-falte de **H-10** corren aparte. Cuerpos ejecutables (archivo, acción, cierre)
+Orden (actualizado 2026-09-04): **H-14b → H-12b → H-16 → W-26b → H-18 → H-6 →
+H-7 (con H-15 adentro) → H-8**; lo que falte de **H-10** corre aparte.
+H-13, H-11 y H-12 están cerradas con la caja. Cuerpos ejecutables (archivo, acción, cierre)
 en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 
 | Tarea | Pregunta que le hace al aparato | Entrega | Cierra cuando |
 |---|---|---|---|
 | **H-10** (queda abierta para las otras clases) | lo mismo que ya contestó la caja | filas de celular / Smart TV / escritorio | el operador las corre, **o** fija a mano la caja como clase que consagra (§6) |
 | **H-13 — por dónde entra el paquete** (**CERRADA 2026-09-01 noche**; REGISTRO «H-13: reporte de la caja») | ¿MSE reproduce los segmentos CMAF ya publicados (**S9**)? ¿`init + segmentos` concatenados en un Blob reproduce como archivo (**S10**)? ¿las piezas se **intercambian** sin costura (**S12**)? ¿el **bucle** cose sin `waiting`? ¿cuánto tarda un **cambio de pieza a demanda** y la vuelta al loop (§2.7)? ¿existe `SourceBuffer.changeType`? | `v0.html` crece con teclas `9x`: MSE H.264, Blob concatenado, intercambio de orden, bucle de 60 s, cambio a demanda entre dos piezas (VP9 ↔ Baseline) y vuelta; columna «congelados»; «atascos» descuenta el `waiting` inicial; fila marcada «contador ciego» cuando corresponde; **no pausa al terminar la medición** (el símbolo de play que vio el operador). **Cero emisión nueva**: todo sale del pack publicado | filas en el REGISTRO por camino con las columnas de §3.1; S9/S10/S12 marcadas; gate ES5 verde; y **queda escrito qué camino implementa el muxer (H-8)** |
-| **H-11 — encima o al lado** | ¿un canvas que repinta encima del `<video>` le cuesta cuadros (**S5**)? | misma página: canvas de intervención con tres cargas (nada / rectángulo chico a 15 fps / pantalla completa una vez), sobre Baseline y VP9 | caídos con y sin canvas en la tabla; la decisión **encima / al lado** escrita en DISENO §9 |
-| **H-12 — caché** | ¿IndexedDB persiste tras reiniciar? ¿hasta qué tamaño? ¿arranca en ≤ 1 s desde ahí? | XHR con progreso → `Blob` → IndexedDB → `blob:`; pineo por hash; borrado de claves viejas; prueba de techo (10 / 25 / 50 MB) | el pack sobrevive a un reinicio y arranca dentro del gate; techo y degradación escritos |
+| **H-11 — encima o al lado** (**CERRADA 2026-09-04: ENCIMA**) | ¿un canvas que repinta encima del `<video>` le cuesta cuadros (**S5**)? | canvas con tres cargas sobre Baseline y VP9 | **0/155 con canvas a 15 fps vs 1/156 sin**, en los dos códecs; DISENO §9 decidido |
+| **H-12 — caché** (**CERRADA en lo que decide, 2026-09-04**) | ¿IndexedDB persiste tras reiniciar? ¿hasta qué tamaño? ¿arranca en ≤ 1 s desde ahí? | XHR con progreso → IndexedDB → `blob:`; pineo por hash; poda; techo | **persiste al cierre de la app** (`guardadas 2`); cuota 225 MB; 25 MB entran; la tanda de 50 MB cerró la app (defecto de la prueba → H-12b); arranque desde caché 105 ms en la PC, la caja lo mide con `85` |
 | **H-6 — matriz por bytes a igual look** | ¿cuántos bytes menos a igual gate? por eje: VP9 (CRF, `cpu-used`), **fps variable por segmento** (S6 → bytes, ya no fluidez), H.264 piso relajado (Main/High, `refs`, B dentro del GOP cerrado), zonas estáticas, paleta 4:2:0. Incluye una fila de **referencia** con los defaults de ffmpeg (el `producto.mp4`) bajo los mismos contadores | emisión **v1**: cada variante con sus segmentos (CMAF para H.264, WebM segmentado para VP9 → **S11**) | tabla en el REGISTRO con medición por aparato; **receta por perfil**, firmada por el operador |
-| **H-14 — determinismo H.264** | (no es del aparato) ¿el encoder es no determinista o depende de la máquina? | la misma pieza dos veces en la misma corrida; `lscpu` en el log | causa establecida con evidencia; invariante 7 cumplido o redefinido por escrito |
+| **H-14 — determinismo H.264** (**causa establecida; decidida 2026-09-04: adoptar**) | (no es del aparato) | dos pasadas por corrida + `lscpu` | determinista por máquina, distinto por CPU, `cpu-independent=1` lo cura → H-14b |
 | **H-7 — spec `SPEC-VGEN.md`** | — | contenedor, manifiesto tabulado, segmentos, sprites, cues, huecos, mapa perfil → camino | aprobada por el operador; cada decisión trazable a una fila |
 | **H-8 — muxer ES5 + player mínimo** | ¿reproduce el paquete real con intervención activa en la caja? | **lo que H-13 dejó en pie (decidido 2026-09-01 noche): A = `concat()` en orden canónico para piezas enteras desde caché; B = alimentador MSE en `sequence` para el bucle y el intercambio; cambio a demanda por `src` con la pieza residente (VP9) o por B con `changeType`; D no.** Era: concatenador CMAF (A), alimentador MSE (B), generador de playlist (D); `<audio>` separado; canvas de intervención | veredicto del operador en la caja; gate ES5 verde |
-| **W-26** | — | `?renderer=` en la raíz publicada | gate ES5 verde |
+| **W-26** (**cerrada en código; decidida 2026-09-04: terminar**) | — | `?renderer=` en la raíz | → W-26b |
+| **H-14b — adoptar `cpu-independent=1`** | (no es del aparato) | receta con la opción, pack re-emitido, huellas nuevas publicadas | dos pasadas idénticas en el CI; huellas servidas = REGISTRO; invariante 7 **cumplido** |
+| **H-12b — cierre técnico de la caché** | ¿hasta cuántos MB en tandas chicas sin cerrar la app? ¿persiste tras apagar y prender? | techo en tandas ≤ 5 MB, cuota declarada como primer techo, caídos nunca negativos, `83` sola arranca | foto de la caja con `techo` completo y `85` tras reiniciar |
+| **H-16 — Hobo por defecto + página reformada** | ¿la capa con fuente propia por hardware se ve y cuánto tarda en estar lista? | `@font-face` desde `v0/`, espera por `measureText`, `1` solo con lo no consagrado, ≥ 10 teclas a la izquierda, `docs/MANUAL-TECLAS-V0.md` | foto con `fuente: hobo` en la fila `capa*` |
+| **W-26b — terminar la raíz** | ¿la raíz con `?renderer=canvas2d` deja de dar pantallazo blanco? | auditoría servido-vs-repo escrita; las cuatro carpetas republicadas | foto de la caja sin pantallazo |
+| **H-18 — dos `<video>` a la vez** | ¿el loop y un efecto alfa encima sostienen los dos el gate? | tecla con segundo `<video>` posicionado como la capa; contador en ambos | fila en el REGISTRO; techo de planos simultáneos escrito en DISENO §10 |
+| **H-15 — residencia** | ¿reproduce el día entero con la red cortada, arrancando desde el aparato en ≤ 1 s? | `residente`/`prioridad` por pieza en el manifiesto (H-7); presupuesto por navegador y conservación por prioridad (H-8) | medido en la caja con la red cortada |
 
-**Regla de dependencia:** H-7 no empieza sin H-13 **y** H-11 cerradas; H-8 no
-empieza sin H-7 aprobada. H-12 y H-6 pueden correr en paralelo con H-11 si el
-operador tiene visitas a la caja disponibles (§3.4).
+**Regla de dependencia:** H-7 no empieza sin H-13 **y** H-11 cerradas (lo están
+desde el 2026-09-04); H-8 no empieza sin H-7 aprobada. H-15 se diseña dentro de
+H-7 y se mide en H-8.
 
 ## 5. Riesgos y deudas conocidas
 
 | Riesgo / deuda | Estado | Qué lo contiene |
 |---|---|---|
-| **H.264 no determinista** (invariante 7) | abierta, H-14 | mientras tanto VP9 es el carril reproducible; los SHAs de H.264 se citan con la salvedad |
+| **H.264 no determinista** (invariante 7) | causa establecida; **adoptar `cpu-independent=1`** (H-14b) | hasta re-emitir, los SHAs de H.264 se citan con la salvedad |
 | **Contadores ciegos** para VP9 y HLS-TS en la caja | conocida | firma del ojo + columna «congelados» (H-13) + fila marcada |
 | **Sin rVFC** → sincronía por `currentTime` | de la clase (Chromium 70) | tolerancia ≥ 1 cuadro declarada; lo de cuadro se hornea offline |
 | **MSE sin probar**; `changeType` desconocido | H-13 | si no hay `changeType`, cambiar de códec exige recrear el `MediaSource`; A y D son el respaldo |
-| **Camino A retiene el paquete en RAM** | H-12 | techo medido, no supuesto; B es la salida si no cabe |
+| **Camino A retiene el paquete en RAM** | medido 2026-09-04 | 25 MB entran en la caja; el pack (≈ 27 MB) cabe en la cuota de 225 MB; B es la salida si no cabe |
 | **Superficie 4K sobre panel 720p** | externo (la app) | el canvas se dimensiona al panel; el `<video>` ya demostró absorberla |
 | **Un solo aparato medido** | H-10 | el operador fijó la caja como clase principal (consagra); la PC, cuando se pruebe, refuta |
 | **Audio sin probar en la caja** (pack v0 mudo) | H-6 v1 (S13, S14) | dos clases definidas en §2.6: ambiente en `<audio>` aparte; el propio de una pieza, muxeado en ella |
 | **`producto.mp4` (defaults) nunca se midió con contadores** | H-6, fila de referencia | la comparación 2,3× hoy es de bytes, no de fluidez |
+| **Arranque por red no reproducible** (3× entre visitas, misma página y piezas) | de la clase, medido 2026-09-04 | el gate se exige desde caché o `blob:`; residencia H-15 |
+| **La prueba de techo mata al WebView** (50 MB de ruido de una vez) | H-12b | tandas ≤ 5 MB; la cuota declarada (225 MB en la caja) es el primer techo |
+| **Dos `<video>` simultáneos sin probar** (efectos como video alfa) | H-18 | si no sostiene, los efectos van horneados o al canvas |
+| **Hobo Std es de Adobe**: servirla desde `v0/` la deja descargable | anotada 2026-09-04 | para la prueba no cambia nada; para el producto, el operador revisa la licencia |
 
 ## 6. Decisiones que necesita el operador
 
@@ -310,8 +347,18 @@ publicidades/contenido hablado con sincronía en algunos momentos (diseño en
 (§3.1). Y una pregunta más, respondida en §2.8: las compresiones ASCILINE se
 aplican **siempre**, porque toda pieza sale del máster.
 
-**No queda ninguna decisión pendiente del operador.** Lo que sigue es ejecutar
-H-13 (§4).
+
+**Respondidas el 2026-09-04** (textuales en el REGISTRO, entrada «Visita a la
+caja 2026-09-04»): **H-14** → adoptar `cpu-independent=1` y re-emitir
+(H-14b); **códecs** → VP9 base, Baseline secundario; **H-11** → encima, una
+sola pantalla; **H-12** → residente **mixto** con `residente`/`prioridad` por
+pieza y presupuesto fijo por navegador (H-15); **W-26** → terminar y
+republicar la raíz (W-26b); **muxer** → A = concat principal, B = MSE reserva;
+**fuente Hobo** → por defecto en la capa, y la página de pruebas se reforma
+(H-16). Pregunta nueva del operador —«¿efectos que en realidad sean video?»—
+→ H-18. **Orden:** H-14b → H-12b → H-16 → W-26b → H-18 → H-6 → H-7 (con
+H-15) → H-8. **No queda ninguna decisión pendiente del operador**; debe una
+foto (tras apagar y prender, `85`) y, para el producto, la licencia de Hobo.
 
 ## 7. Cómo se mantiene este documento
 

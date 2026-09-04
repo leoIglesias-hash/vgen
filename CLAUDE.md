@@ -112,7 +112,8 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
     Y **el player JS anterior se mantiene, no crece**: queda como reproductor de
     escritorio y banco de verificación del máster (las 4 páginas + `playloop.js`).
     W-26 (escape `?renderer=canvas2d`) **cerrada en código** el 2026-09-02;
-    la raíz servida no se republicó (decisión del operador, con auditoría).
+    el operador decidió el 2026-09-04 **terminarla**: auditar y republicar la
+    raíz (W-26b).
 
 ## Estado (resumen grueso — el detalle vive en RUNBOOK-ESTADO)
 
@@ -140,9 +141,17 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   `init+16` = archivo, intercambio de orden solo por MSE `sequence`, bucle por
   `loop` refutado, cambio a demanda 305 ms a VP9 y >1 s a Baseline → muxer A =
   concatenación, B = MSE `sequence`; REGISTRO «H-13: reporte de la caja»),
-  **H-11** (**ejecutada hasta la pantalla** `fd9a7ab`; falta la foto de la caja: `80` + `95`) canvas de intervención encima del `<video>`, **H-12** caché (**ejecutada hasta la pantalla** `0ce2cb4`; falta la foto: `84` + `95`, reiniciar, `95` + `85`), **H-6** matriz por
-  bytes a igual look, **H-7** spec `SPEC-VGEN.md`, **H-8** muxer ES5 + player.
-  **H-14** (determinismo de H.264 — **causa establecida el 2026-09-02**: determinista en la misma máquina (9/9 pares idénticos), **distinto por CPU** (AMD 7763 = AMD 9V74 ≠ Intel; el pack publicado es el Intel) y **`cpu-independent=1` lo cura** (AMD 9V74 = Intel 8370C = Intel 8573C, +0,016 % de bytes). Falta la decisión del operador: adoptar la opción en la receta (recomendado) o redefinir el invariante 7) y **W-26** (cerrada en código) son independientes. Externo: pedir
+  **H-11 CERRADA 2026-09-04: ENCIMA** (0/155 caídos con canvas a 15 fps), **H-12
+  CERRADA en lo que decide** (persiste al cierre de la app, cuota 225 MB, 25 MB
+  entran; H-12b arregla la prueba de techo), **H-6** matriz por bytes a igual
+  look, **H-7** spec `SPEC-VGEN.md` (con **H-15** residencia adentro), **H-8**
+  muxer ES5 + player.
+  **H-14 decidida 2026-09-04: adoptar `cpu-independent=1`** (→ H-14b, primera
+  de la cola) y **W-26 → terminar** (W-26b). **Nuevas 2026-09-04:** H-14b,
+  H-12b, **H-16** (Hobo por defecto + `1` reducido + `docs/MANUAL-TECLAS-V0.md`
+  + ≥ 10 teclas a la izquierda), W-26b, **H-18** (dos `<video>` a la vez),
+  **H-15** (residencia). **Orden: H-14b → H-12b → H-16 → W-26b → H-18 → H-6 →
+  H-7 → H-8.** Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
 - **Lo que la caja dijo (2026-09-01, Android 9 / Chromium 70):** todo lo
   progresivo reproduce **fluido por hardware** a 720p@15 con la superficie 4K
@@ -162,10 +171,14 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   momentos → ambiente en `<audio>` aparte, el propio de una pieza muxeado en
   ella; plan §2.6). **Gates aprobados** (caídos ≤ 3 %; plan §3.1). Las
   compresiones ASCILINE se aplican **siempre** (toda pieza sale del máster) y
-  compran bytes, no velocidad de decodificación (plan §2.8). **No hay
-  decisiones pendientes. H-13 cerrada con la foto de la caja; la próxima sesión
-  ejecuta H-11** (en su visita a la caja: `92` + `97` seguidos, y preguntar si
-  volvió a aparecer el símbolo de play ahora que no se pausa).
+  compran bytes, no velocidad de decodificación (plan §2.8). **Visita del
+  2026-09-04 (REGISTRO «Visita a la caja 2026-09-04»):** VP9 base y Baseline
+  secundario; **residencia** como requisito (prendido ≥ 16 h/día, baja una vez
+  al día, reproduce siempre desde el aparato, sin «falso streaming»; plan
+  §2.9); muxer A = concat / B = MSE; **Hobo** fuente por defecto de la capa
+  (`inputs/HoboStd.ttf`, git-ignorada). Los arranques por red variaron 3× entre
+  visitas → el gate de arranque solo se exige desde caché o `blob:`. **No hay
+  decisiones pendientes**; el operador debe la foto tras apagar y prender + `85`.
 - **Herramientas de la fase H, ya hechas — no re-implementar:**
   `tools/emit_pieces.py` + workflow `emitir-v0` (emiten el pack desde el máster,
   con los empaquetados HLS/DASH por remux), `frontend/v0.html` (una sola

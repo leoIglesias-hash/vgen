@@ -77,7 +77,7 @@ material verdadero y en varios aparatos. Invariante nuevo:
 
 ---
 
-### ⏵ LO PRIMERO AL RETOMAR (actualizado con H-12 ejecutada hasta la pantalla, 2026-09-02 madrugada)
+### ⏵ LO PRIMERO AL RETOMAR (actualizado con la visita a la caja del 2026-09-04: H-11 y H-12 cerradas, seis decisiones)
 
 **La TV box ya está medida.** El operador corrió `https://iargen.com/player/v0/`
 en la caja y mandó la foto del reporte; está **transcripto textual** en el
@@ -116,35 +116,36 @@ nada.
    VP9 y residente (H-12). El camino del muxer está escrito en el plan §2.3 y
    §4 (H-8). Las filas `cambio*` miden 4 s a propósito (65 cuadros), no es un
    timer roto.
-3. **H-11 EJECUTADA hasta la pantalla** (`fd9a7ab`, CI verde; REGISTRO «H-11
-   implementada hasta la pantalla»): `<canvas id="capa">` encima del `<video>`,
-   dimensionado **al panel** (1280/3840 en la caja), con tres cargas (nada /
-   rect 15 fps / pantalla una vez) sobre Baseline y VP9, teclas `80`..`83`,
-   contador `oculto` (Chromium pausa el video mudo con la página oculta).
-   **Falta solo la foto de la caja:** el operador corre **`80`** (≈ 2 min,
-   incluye `blob:` + `blob concat` seguidos), `95` y foto; `83` a ojo mientras
-   algo suena; y dice si volvió el símbolo de play. Lectura: si `capa1`/`capa2`
-   caen dentro del gate como `capa0` → **encima** (DISENO §9); si no → **al
-   lado**. Publicado en `v0/` (una key) con copia previa en `deploy/`.
+3. **H-11 CERRADA — la capa va ENCIMA** (foto del `80`, 2026-09-04; REGISTRO
+   «Visita a la caja 2026-09-04»): canvas a 15 fps sobre el video = **0/155
+   caídos** contra 1/156 sin canvas, en Baseline y VP9, deriva 0–1 ms. S5
+   sostenida en la clase principal; DISENO §9/§10 decididos. Regla que sale:
+   **la capa lee `video.currentTime` en cada pintada**; lo que necesite
+   sincronía de cuadro se hornea en el video.
 4. **La caja consagra por decisión manual del operador** (VISION §8.11 lo
    prevé): lo sostenido en ella queda consagrado; la PC, cuando se pruebe, es
    refutadora, no consagradora.
-5. **H-12 EJECUTADA hasta la pantalla** (`0ce2cb4` → `9011fe7`, CI verde, publicada en
-   `v0/`; REGISTRO «H-12 implementada hasta la pantalla»). `vgencache.js` =
-   IndexedDB con pineo por contenido, poda, progreso, techo 10/25/50 MB y
-   cuota; teclas **`84`** (guardar + desde caché + techo), **`85`** (desde
-   caché, **la tecla de después de reiniciar**) y **`86`** (borrar); la
-   cabecera del reporte dice `cache … guardadas N` al cargar. PC: desde caché
-   **105 ms** Baseline / 324 ms VP9, 50 MB entran. **Falta la foto de la
-   caja, en la misma visita de H-11:** `84` → `95` foto; **reiniciar**; `95`
-   foto de la cabecera + `85` → foto. Lectura: `guardadas 2` tras reiniciar y
-   arranque ≤ 1 s → persiste; «no está en la caché» → degradación a memoria
-   por sesión; primera fila `QuotaExceededError` = techo.
-6. **W-26 cerrada en código** (`522bdf8`): la raíz respeta
-   `?renderer=canvas2d`; la raíz servida **no se republicó** (es más vieja que
-   el repo ya antes del cambio: decisión del operador, con auditoría previa).
-   **H-14 con evidencia de CI** (`0eb8dab`, workflow `emitir-v0` con
-   `determinismo: true`): **causa establecida el 2026-09-02**: determinista en la misma máquina (9/9 pares idénticos), **distinto por CPU** (AMD 7763 = AMD 9V74 ≠ Intel; el pack publicado es el Intel) y **`cpu-independent=1` lo cura** (AMD 9V74 = Intel 8370C = Intel 8573C, +0,016 % de bytes). Falta la decisión del operador: adoptar la opción en la receta (recomendado) o redefinir el invariante 7
+5. **H-12 CERRADA en lo que decide** (2026-09-04): la base **persiste** al
+   cierre de la app (`guardadas 2`, 13.963.408 B en la cabecera al abrir);
+   cuota declarada **225 MB**; **25 MB entran; la tanda de 50 MB cierra la
+   app** — defecto de la prueba (50 MB de ruido en RAM de una vez), no del
+   aparato. Debe: foto tras **apagar y prender** + `85`. Deuda técnica →
+   **H-12b** (techo en tandas chicas; `83` sola queda en play; caídos −3 en
+   `blob:cmaf`).
+6. **Seis decisiones del operador (2026-09-04, textuales en el REGISTRO):**
+   **H-14 → adoptar `cpu-independent=1`** y re-emitir (H-14b); **VP9 base,
+   Baseline secundario**; **requisito de residencia** (prendido ≥ 16 h/día,
+   baja una vez al día, reproduce siempre desde el aparato, sin «falso
+   streaming») → **H-15** con `residente`/`prioridad` por pieza y presupuesto
+   por navegador; **W-26 → terminar: auditar y republicar la raíz** (W-26b);
+   **muxer A = concat, B = MSE** confirmado; **Hobo = fuente por defecto de la
+   capa** + reforma de la página (`1` solo con lo no consagrado, teclas probadas
+   a un manual, ≥ 10 a la vista a la izquierda) → **H-16**; **dos `<video>` a
+   la vez** (loop + efecto alfa) → **H-18**.
+7. **Orden acordado:** H-14b → H-12b → H-16 → W-26b → H-18 → H-6 → H-7 (con
+   H-15 adentro) → H-8. **Los arranques por red variaron 3× entre visitas**
+   (3,3–4,0 s hoy; MSE 7,5 s con 4 atascos): el gate de arranque solo se exige
+   desde caché o `blob:`.
 
 **Si llegan reportes de otros aparatos, van al REGISTRO antes que a cualquier
 otra cosa**, transcriptos de la foto, nunca de memoria; y una fila nueva en
@@ -178,13 +179,21 @@ refutaciones en [`EMISION-V0.md`](EMISION-V0.md)):
    «congelados» para los caminos con contador ciego. **CERRADA 2026-09-01 noche
    con la foto de la caja: A = concatenación, B = MSE `sequence` (bucle e
    intercambio), `loop` progresivo refutado.**
-4. **H-11 — la bifurcación de layout**: canvas de intervención encima del
-   `<video>`, con tres cargas, sobre Baseline y VP9, contra la línea de base ya
-   medida (S5). Decide **encima o al lado** para todo el producto.
-5. **H-12 — caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido
-   y techo medido. Vale **2,5 s de arranque** en la caja (E4). **EJECUTADA
-   hasta la pantalla 2026-09-02** (`0ce2cb4` → `9011fe7`; teclas `84`/`85`/`86`; falta la
-   foto de la caja antes y después de reiniciar).
+4. **H-11 — la bifurcación de layout: CERRADA 2026-09-04, ENCIMA** (foto del
+   `80`: 0/155 caídos con canvas a 15 fps, en Baseline y VP9). La capa lee
+   `video.currentTime` en cada pintada; lo de cuadro se hornea.
+5. **H-12 — caché: CERRADA en lo que decide 2026-09-04**: persiste al cierre
+   de la app, cuota 225 MB, 25 MB entran; la prueba de 50 MB cierra la app
+   (defecto de la prueba → **H-12b**). Debe la foto tras apagar y prender.
+5b. **H-14b — adoptar `cpu-independent=1`** en `X264_BASELINE`/`X264_MAIN`,
+   re-emitir el pack, huellas nuevas al REGISTRO y a `deploy/`, republicar
+   `v0/`. **H-12b** — techo en tandas ≤ 5 MB con la cuota declarada como
+   primer techo, `83` sola, caídos negativos. **H-16** — Hobo por defecto en
+   la capa + `1` reducido + `docs/MANUAL-TECLAS-V0.md` + leyenda ≥ 10 a la
+   izquierda. **W-26b** — auditar la raíz servida contra el repo y republicar
+   las cuatro carpetas. **H-18** — dos `<video>` a la vez (loop + efecto
+   alfa). **H-15** — residencia con `residente`/`prioridad` por pieza y
+   presupuesto por navegador (diseño en H-7, runtime en H-8).
 6. **H-6 — matriz por bytes a igual look, con la fluidez como gate** (reorientada:
    en la caja la fluidez está saturada y el decodificador es hardware): VP9 ×
    fps variable por segmento × H.264 piso relajado × zonas estáticas × paleta
@@ -197,8 +206,9 @@ refutaciones en [`EMISION-V0.md`](EMISION-V0.md)):
    texto tabulado, nunca JSON** (el gate ES5 prohíbe `JSON`).
 8. **H-8 — muxer ES5 + player híbrido mínimo:** lo que H-13 deje en pie
    (concatenador CMAF / alimentador MSE / playlist), solo con H-7 aprobada.
-9. **H-14** (determinismo H.264 — **causa establecida el 2026-09-02**: determinista en la misma máquina (9/9 pares idénticos), **distinto por CPU** (AMD 7763 = AMD 9V74 ≠ Intel; el pack publicado es el Intel) y **`cpu-independent=1` lo cura** (AMD 9V74 = Intel 8370C = Intel 8573C, +0,016 % de bytes). Falta la decisión del operador: adoptar la opción en la receta (recomendado) o redefinir el invariante 7) y **W-26** (`?renderer=` en la
-   raíz — **cerrada en código** `522bdf8`, raíz no republicada): independientes.
+9. **H-14 — causa establecida** (determinista en la misma máquina, distinto por CPU,
+   `cpu-independent=1` lo cura) → **decidido 2026-09-04: adoptar** (H-14b).
+   **W-26** cerrada en código; **decidido 2026-09-04: terminar y republicar** (W-26b).
 10. Externo: pedirle a la app de la caja que el WebView reporte el panel real
     (hoy da 3840×2160 sobre un panel de 1280×720 = 9× de píxeles regalados).
 
@@ -233,7 +243,7 @@ base del contenedor.
 **Estado de fases: F0-F9 completas y verificadas (paradigma anterior; resúmenes
 en [`ejecutados/`](ejecutados/README.md)); DIAG-002/003 cerradas con decisión;
 abierta la fase H (H-0 y H-9 cerradas, H-1..H-5 reemplazadas, H-10 con la caja
-medida, **H-13 cerrada, H-11 ejecutada hasta la pantalla —falta la foto de la caja—**); F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla
+medida, **H-13, H-11 y H-12 cerradas con la caja (2026-09-04); abiertas H-14b, H-12b, H-16, W-26b, H-18, H-15**); F10/F11/F8/DIAG-001 suspendidas.** El detalle: tabla
 de tareas abajo.
 
 **Receta de producto vigente (2026-08-31, S-4 cerrada):** defaults del workflow
@@ -300,13 +310,19 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | H-9 | H | **pack v0 — el primer video, por suposición** (`tools/emit_pieces.py` + workflow `emitir-v0`): 4 piezas + `hls-ts/`, `hls-fmp4/`, `dash/` por remux, y `MANIFEST.tsv` | **cerrada 2026-09-01** (run `33566441576` verde). Resumen: [`ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md`](ejecutados/2026-09-01-H9-pack-v0-y-herramientas.md); SHAs abajo en «Referencias de clips» | sí (piezas nuevas) |
 | H-10 | H | **reproducirlo y que él nos diga** (`frontend/v0.html` + `keypad.js`): cuál arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, HLS/DASH, panel real — en la caja **y** 2-3 aparatos más | **en curso — la TV box está medida (2026-09-01)**: reporte transcripto en el REGISTRO, fila en PLAN-DE-MEDICION §5, veredictos en EMISION-V0 §4.b. Faltan el ojo del operador (alfa; VP9 y HLS-TS con contador ciego) y las otras clases, o su decisión manual. **No bloquea** | no |
 | H-13 | H | **por dónde entra el paquete** (`frontend/v0.html` crece, cero emisión nueva): MSE con los segmentos CMAF publicados (S9), `init + segmentos` concatenados en un Blob (S10), intercambio de orden (S12), bucle de 60 s, `changeType`, columna «congelados», «atascos» sin el `waiting` inicial, fila «contador ciego» | **CERRADA 2026-09-01 noche** (`85eebd1`→`b3d5837` código, `0589dc9` docs; publicado en `v0/`; foto de la caja en el REGISTRO «H-13: reporte de la caja»). S9 consagrada, S10 en dos clases (muxer A = `concat()`), S12 por MSE `sequence` sí / por Blob no («se tilda»), bucle por `loop` refutado, cambio a demanda 305 ms a VP9 y 1.468/1.180 a Baseline. Camino del muxer escrito en el plan | no |
-| H-11 | H | **la bifurcación de layout**: canvas de intervención **encima** del `<video>`, con tres cargas, sobre Baseline y VP9, contra la línea de base medida (suposición S5) | **EJECUTADA hasta la pantalla** (`fd9a7ab`, CI verde, publicada en `v0/`); cierra con la foto de la caja (`80` + `95`) | no |
+| H-11 | H | **la bifurcación de layout**: canvas de intervención **encima** del `<video>`, con tres cargas, sobre Baseline y VP9, contra la línea de base medida (suposición S5) | **CERRADA 2026-09-04 con la foto de la caja: ENCIMA** (0/155 caídos con canvas a 15 fps vs 1/156 sin, Baseline y VP9; `83` a ojo «se ve bien»; REGISTRO «Visita a la caja 2026-09-04») | no |
 | H-6 | H | **matriz por bytes a igual look, con la fluidez como gate** (reorientada por el reporte): VP9 × fps variable por segmento × H.264 piso relajado × zonas estáticas × paleta 4:2:0; emisión v1 con segmentos (WebM segmentado para VP9 → S11) + fila de referencia con los defaults | pendiente (precondición: H-13, H-11) | sí (variantes) |
-| H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido, borrado de claves viejas y techo medido (10/25/50 MB). Vale 2,5 s de arranque en la caja | **EJECUTADA hasta la pantalla 2026-09-02** (`0ce2cb4` → `9011fe7`, CI verde, publicada en `v0/`); cierra con la foto de la caja antes y después de reiniciar (`84` + `95`, reinicio, `95` + `85`) | no |
+| H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido, borrado de claves viejas y techo medido | **CERRADA en lo que decide, 2026-09-04**: persiste al cierre de la app (`guardadas 2`), cuota declarada 225 MB, 25 MB entran; la tanda de 50 MB cerró la app (defecto de la prueba → H-12b). Debe la foto tras apagar y prender + `85` | no |
 | H-7 | H | **spec normativa `SPEC-VGEN.md`**: contenedor, manifiesto (texto tabulado, **no JSON**), segmentos, sprites, cues, huecos, perfil → camino de runtime | pendiente (precondición: H-10, H-11, H-6) | define bytes |
 | H-8 | H | **muxer ES5 + player híbrido mínimo** (incluye «cambiar solo la música») | pendiente (precondición: H-7) | no |
-| H-14 | H | **determinismo del carril H.264** (deuda contra el invariante 7): dos corridas dieron Baseline +22 B y Main −74 B con **misma ffmpeg y mismas opciones de x264**; VP9 salió byte-idéntico. Separar «no determinista» de «depende de la máquina» | **en curso 2026-09-02** (`0eb8dab`: workflow con `determinismo: true` + `--x264-extra`; **causa establecida el 2026-09-02**: determinista en la misma máquina (9/9 pares idénticos), **distinto por CPU** (AMD 7763 = AMD 9V74 ≠ Intel; el pack publicado es el Intel) y **`cpu-independent=1` lo cura** (AMD 9V74 = Intel 8370C = Intel 8573C, +0,016 % de bytes). Falta la decisión del operador: adoptar la opción en la receta (recomendado) o redefinir el invariante 7) | define bytes |
-| W-26 | — | escape `?renderer=` en la raíz publicada + default para TV box | **cerrada en código 2026-09-02** (`522bdf8` → `730c5f4`, CI verde): la raíz respeta `?renderer=canvas2d`; la raíz servida no se republicó (REGISTRO) | no |
+| H-14 | H | **determinismo del carril H.264** (deuda contra el invariante 7) | **causa establecida 2026-09-02** (determinista por máquina, distinto por CPU, `cpu-independent=1` lo cura) y **decidida 2026-09-04: adoptar** → sigue en H-14b | define bytes |
+| W-26 | — | escape `?renderer=` en la raíz publicada + default para TV box | **cerrada en código 2026-09-02** (`522bdf8` → `730c5f4`); **decidido 2026-09-04: terminar y republicar** → sigue en W-26b | no |
+| H-14b | H | **adoptar `cpu-independent=1`** en `X264_BASELINE`/`X264_MAIN` de `tools/emit_pieces.py`, re-emitir el pack v0, huellas nuevas al REGISTRO y a `deploy/`, republicar `v0/` (decisión del operador 2026-09-04) | pendiente — **primera de la cola** | sí (H.264 + remuxes) |
+| H-12b | H | **cierre técnico de la caché**: techo en **tandas ≤ 5 MB** que nunca cierren la app, con la cuota declarada como primer techo reportado; `83` sola queda en play (gesto); caídos negativos en `blob:cmaf`; y en la caja: foto tras **apagar y prender** + `85` | pendiente | no |
+| H-16 | H | **Hobo por defecto + reforma de la página de pruebas**: `HoboStd.ttf` servida desde `v0/` (`@font-face`, espera por `measureText`, cae a `monospace`), fuente por defecto de la capa; el `1` corre solo lo **no consagrado**; teclas ya probadas fuera de la leyenda → `docs/MANUAL-TECLAS-V0.md`; leyenda ≥ 10 teclas a la izquierda, tabla de filas más alta | pendiente | no |
+| W-26b | — | **terminar W-26 como corresponde** (operador 2026-09-04): auditar `index.html` servido en `/`, `/1280-15/`, `/1280-12/`, `/1920-10/` contra `frontend/live-player.html` + JS del repo, listar qué cambia, republicar con copia previa en `deploy/` | pendiente | no |
+| H-18 | H | **dos `<video>` a la vez**: loop (VP9) + efecto con alfa (`v0-vp9-alpha`) encima, mismo contador; responde «¿los efectos pueden ser video?» (pregunta del operador 2026-09-04) y el techo de planos simultáneos (DISENO §10) | pendiente | no |
+| H-15 | H | **residencia** (requisito del operador 2026-09-04: prendido ≥ 16 h/día, baja una vez al día, reproduce siempre desde el aparato, sin «falso streaming»): manifiesto con `residente: si|no` y `prioridad` por pieza; presupuesto fijo por navegador (fracción de la cuota declarada con tope absoluto); al pasarse se conserva por prioridad (incentivador → publicidad → resto) | pendiente — diseño en H-7, runtime en H-8 | no |
 
 **Suspendidas por el cambio de dirección (2026-09-01)** — recuperables verbatim de
 [`historico/RUNBOOK-IMPLEMENTACION-asclv-js.md`](historico/RUNBOOK-IMPLEMENTACION-asclv-js.md)
@@ -464,3 +480,5 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-09-02 (madrugada) | **H-12 EJECUTADA hasta la pantalla** (`0ce2cb4` → `9011fe7` → `204b02f` —`fill()` pasó a `noise()` porque el gate ES5 rechaza cualquier `.fill(`—, CI verde 3/3; el operador dormía y pidió *«más puntos de prueba o mejoras»*). `frontend/vgencache.js` = la única puerta a IndexedDB: bajada con progreso, **ArrayBuffer pineado por contenido** (`id.sha12`), poda de lo que no esté en el manifiesto, techo con **ruido** (la base comprime), cuota por `queryUsageAndQuota`; la escritura se confirma **por la transacción** (un `QuotaExceededError` llega por `onabort`). Teclas **`84`** (guardar + desde caché + techo 10/25/50 MB), **`85`** (desde caché: **la tecla de después de reiniciar**), **`86`** (borrar); cabecera `cache … guardadas N` al cargar; filas sin video no son «ciegas». Leyenda con siete `now` (0,80 em) y `done` a siete por renglón: 35 px libres a 1272×668. **PC (refuta):** desde caché **105 ms** Baseline / 324 ms VP9; 50 MB entran; cuota 35/3123 MB. Publicado en `v0/` (`index.html` + `vgencache.js`, 62 keys; copia en `deploy/` antes). **Visita:** `84` → `95` foto; reiniciar; `95` foto + `85` → foto. |
 | 2026-09-02 (madrugada) | **W-26 cerrada en código** (`522bdf8` → `730c5f4`, CI verde): `live-player.html` mira `?renderer=canvas2d` **antes** de crear el contexto WebGL y cae al piso. **La raíz servida no se republicó**: su `index.html` (24.950 B, md5 `534abb7e…`) ya era más viejo que el `live-player.html` del repo antes de este cambio, y el player JS «se mantiene, no crece»; republicarla es decisión del operador con auditoría previa de qué cambió. |
 | 2026-09-02 (madrugada) | **H-14 con evidencia de CI** (`0eb8dab`: el workflow `emitir-v0` gana `determinismo: true` —solo las dos piezas H.264, dos veces en la misma corrida, comparadas byte a byte, con `lscpu` y la build de x264 en el log— y `--x264-extra` para probar `cpu-independent=1` sin tocar la receta). **Nueve corridas, causa establecida:** el encoder es **determinista en la misma máquina** (9/9 pares byte-idénticos) y **depende de la CPU**: AMD EPYC 7763 y 9V74 dan los mismos bytes entre sí (Baseline 9.551.693 B) y el Intel Xeon 6973P-C da otros (**9.551.715 B = el pack publicado**: H-9 salió de un Intel y su segunda corrida de un AMD; de ahí los +22/−74 B). **`cpu-independent=1` cura**: AMD 9V74, Intel Xeon 8370C e Intel Xeon 8573C dan bytes idénticos (`abe6caf9…` / `1f92c552…`), a +0,016 % / −0,06 % de bytes. **Pendiente del operador**: adoptarlo en la receta (recomendado; cambia el SHA de las dos piezas H.264, no lo que la caja decodifica) o redefinir el invariante 7. Tabla completa en el REGISTRO. |
+| 2026-09-04 | **Visita a la caja (tres fotos, REGISTRO «Visita a la caja 2026-09-04»). H-11 CERRADA: ENCIMA** (canvas a 15 fps = 0/155 caídos vs 1/156 sin, Baseline y VP9, deriva 0–1 ms; `83` a ojo «se ve bien»). **H-12 CERRADA en lo que decide**: la base persiste al cierre de la app (`guardadas 2`, 13.963.408 B al abrir), cuota declarada **225 MB**, 25 MB entran; **la tanda de 50 MB cierra la app** → defecto de la prueba (50 MB de ruido en RAM de una vez), no del aparato → H-12b. Bugs anotados: `83` sola queda en play; caídos −3 en `blob:cmaf`. **Arranques por red 3× más lentos que el 09-01** (3,3–4,0 s; MSE 7,5 s con 4 atascos) sin cambio en piezas ni página → el gate de arranque solo se exige desde caché o `blob:`. |
+| 2026-09-04 | **Seis decisiones del operador** (textuales en el REGISTRO): H-14 → **adoptar `cpu-independent=1`** y re-emitir (H-14b); **VP9 base, Baseline secundario**; **residencia** como requisito (≥ 16 h/día prendido, baja una vez al día, reproduce siempre desde el aparato) → H-15 con `residente`/`prioridad` por pieza y presupuesto por navegador; W-26 → **terminar y republicar la raíz** (W-26b); muxer A = concat / B = MSE confirmado; **Hobo por defecto** en la capa + reforma de la página (`1` solo con lo no consagrado, teclas probadas al manual `docs/MANUAL-TECLAS-V0.md`, ≥ 10 a la vista a la izquierda) → H-16; «¿efectos que sean video?» → H-18 (dos `<video>` a la vez). **Orden:** H-14b → H-12b → H-16 → W-26b → H-18 → H-6 → H-7 (con H-15) → H-8. `HoboStd.ttf` copiada a `inputs/` (31.444 B, `477d186c…611aec`, OpenType CFF). |

@@ -4171,3 +4171,172 @@ lleva firma.
 **Corrección menor al workflow en el mismo segmento**: el `tee` de `maquina.txt`
 y `comparacion.txt` mandaba la salida solo al summary; ahora también al log del
 job (`tee -a`), así se lee por la API sin bajar el artifact.
+
+## 2026-09-04 — Visita a la caja: H-11 y H-12 cierran con la foto; seis decisiones del operador
+
+Tres fotos del operador (transcriptas textual, columnas `id dice arranco 1er_ms
+caidos total deriva_ms atascos congel cambio_ms nota`) y sus palabras. Misma
+caja: `Mozilla/5.0 (Linux; Android 9; TVBOX Build/PPR1.180610.011; wv)
+Chrome/70.0.3538.80`, panel 1280×720 dpr 1, superficie 3840×2160, capa 703×396
+k 0,333; `mse si · changeType si · blob si · mse.h264 si · mse.vp9 si · rvfc no
+· indexeddb si · quality no · hls maybe · dash no`.
+
+### Foto 1 — la cabecera al abrir, sin tocar nada
+
+`cache si · guardadas 2 · 13963408 B · cuota 22/225 MB`
+
+Lo que la escribió fue una corrida anterior de `84`, y esa corrida terminó con
+la app **cerrada** (ver techo, abajo). O sea: **la base sobrevivió al cierre de
+la app y a volver a abrirla** — 2 piezas, 13.963.408 B, exactamente lo que
+guardó la PC. El aparato declara **225 MB** de cuota.
+
+### Foto 2 — después de `80` (H-11, la capa)
+
+| id | dice | arrancó | 1er_ms | caídos | total | deriva | atascos | congel | nota |
+|---|---|---|---|---|---|---|---|---|---|
+| capa0:base | probably | sí | 1.847 | 1 | 156 | 1 | 0 | 0 | sin canvas |
+| capa1:base | probably | sí | 574 | **0** | 155 | 0 | 0 | 0 | rect 15 fps; pintadas 155 (703×396) |
+| capa2:base | probably | sí | 479 | **0** | 155 | 0 | 0 | 0 | pantalla una vez; pintadas 1 (703×396) |
+| capa0:vp9 | probably | sí | 939 | 1 | 155 | −1 | 0 | 0 | sin canvas |
+| capa1:vp9 | probably | sí | 319 | **0** | 154 | 0 | 0 | 0 | rect 15 fps; pintadas 150 (703×396) |
+| capa2:vp9 | probably | sí | 248 | **0** | 156 | 1 | 0 | 0 | pantalla una vez; pintadas 1 (703×396) |
+| blob:v0-h264-baseline | probably | sí | 816 | 0 | 156 | 0 | 0 | 0 | |
+| blob:cmaf | probably | sí | 857 | 0 | 155 | 0 | 0 | 0 | dur 15.4s; orden 1-16 |
+
+**S5 sostenida en la clase principal → la capa va ENCIMA.** El canvas
+repintando a 15 fps sobre el video no le cuesta un cuadro (0/155 con canvas
+contra 1/156 sin él, en Baseline y en VP9; todas las pintadas entraron:
+155 de 155 y 150 de 154). La deriva entre el reloj del video y el de la
+página: 0–1 ms.
+
+Operador: *«El 83 a ojo se ve bien, aunque al presionar 83 solo no se ve el
+video sino que queda en play (pero pude verlo cuando presioné 1 y se ve bien)»*.
+→ **Bug anotado (H-12b):** `83` sola deja el `<video>` en play sin arrancar;
+dentro del `1` sí reproduce. Hipótesis: la tecla sola no llega como gesto de
+usuario al `play()` y dentro del lote ya hubo uno.
+
+### Foto 3 — después de `1` (correr todo), la última antes de que la app se cierre
+
+Cabecera: `guardadas 2 · 13963408 B · cuota 45/225 MB`.
+
+| id | dice | arrancó | 1er_ms | caídos | total | deriva | atascos | congel | nota |
+|---|---|---|---|---|---|---|---|---|---|
+| v0-h264-baseline | probably | sí | 3.988 | 0 | 155 | 0 | 0 | 0 | piso universal; DPB mínimo (sin B, refs=1) |
+| v0-h264-main | probably | sí | 3.524 | 0 | 155 | 1 | 0 | 0 | detector hardware vs software (CABAC + 8x8) |
+| v0-vp9 | probably | sí | 3.310 | 1 | 155 | 1 | 0 | 0 | banda: el camino de YouTube en Android TV |
+| v0-vp9-alpha | probably | sí | 3.384 | 0 | 155 | 0 | 0 | 0 | personaje sin fondo: alfa compuesta por el navegador |
+| v0-hls-ts | maybe | sí | 5.666 | 0 | 0 | 0 | 0 | 0 | ciego; HLS con segmentos MPEG-TS; 16 segmentos |
+| v0-hls-fmp4 | maybe | no | −1 | 0 | 0 | 0 | 0 | 0 | no arrancó en 15 s; HLS CMAF; 17 segmentos |
+| v0-dash | no | no | −1 | 0 | 0 | 0 | 0 | 0 | error de carga/decodificación; DASH; 17 segmentos |
+| mse:h264 | probably | sí | **7.484** | 3 | 60 | **6.208** | **4** | **58** | orden 1-16 |
+| blob:cmaf | probably | sí | 957 | **−3** | 96 | 1 | 0 | 0 | dur (cortado por la foto) |
+
+La app se cerró en la tanda de 50 MB del techo, así que las filas de caché de
+esta corrida no llegaron a la foto.
+
+**Lo que esta corrida dice, además de lo ya sabido:**
+
+- **Los arranques por red varían mucho entre visitas.** Hoy 3,3–4,0 s para lo
+  progresivo, contra 1,2–3,0 s el 2026-09-01; y MSE dio 7,5 s con 4 atascos, 58
+  congelamientos y deriva de 6,2 s, contra 2,0 s y 0 atascos en H-13. Nada
+  cambió en las piezas ni en la página entre las dos visitas: es la red y/o
+  la memoria del aparato (la cuota usada pasó de 22 a 45 MB en la misma
+  sesión). **Consecuencia:** el gate de arranque (≤ 1 s) solo puede exigirse
+  **desde caché o desde `blob:`**; por red es una medición de red, no del
+  formato. Y es la evidencia que el operador pedía para la residencia (abajo).
+- **`blob:cmaf` dio caídos −3:** contador con signo negativo → bug (la resta
+  de `droppedVideoFrames` entre dos lecturas puede dar negativa al cambiar de
+  fuente). Anotado (H-12b).
+- **Persistencia H-12: sostenida.** `guardadas 2` en las dos cabeceras de la
+  visita, escritas por una sesión anterior que terminó con la app cerrada.
+  Falta solo la foto **después de apagar y prender** para separar «sobrevive
+  al cierre de la app» de «sobrevive al reinicio»; el operador la debe.
+- **Techo H-12:** *«el techo de guardado llega hasta 25 MB y cuando va a la
+  tanda siguiente te cierra la app, así que no pude tomar ese valor en reporte.
+  (Sin embargo esto es un solo dispositivo, otros tienen menos memoria u otros
+  tienen más, es algo a tener en cuenta)»*. Lectura: la fila de 50 MB **no**
+  falló por `QuotaExceededError` — la cuota declarada es 225 MB —, falló porque
+  la prueba arma **50 MB de ruido en RAM de una sola vez** más su clon
+  estructurado, y eso mata el WebView. **Es un defecto de la prueba, no del
+  aparato.** Se rehace en tandas chicas (H-12b) y la cuota declarada pasa a
+  ser el primer techo que se reporta. El pack entero (≈ 27 MB) cabe con margen
+  en esta caja.
+
+### Las seis decisiones del operador (textuales donde importa)
+
+Se le presentó el árbol completo y respondió punto por punto:
+
+1. **H-14 — determinismo.** Tras la explicación técnica (VP9 es entero y
+   determinista; x264 depende del CPU del runner; `cpu-independent=1` lo cura a
+   +0,016 % de bytes): *«entiendo ahora, lo que nos interesa igual es que en la
+   web cargue tal vez una vez al día, pero mientras no cargue cada vez que
+   reproduce ya estamos contentos… necesitamos esa fluidez de reacción y además
+   como el dispositivo está prendido 16 hs por día como mínimo, en esas horas el
+   contenido que se reproduce no falle si se cortó internet y no nos genere un
+   "falso streaming" al tomar el video fresco cada vez… si vp9 corre bien usalo
+   como base porque vamos a primar eficiencia en el tv box y h264 baseline como
+   secundario para dispositivos más viejos (entonces aún importa menos la carga
+   inicial porque si al principio del día carga el video pero en menos porque
+   la mayoría usa vp9 ya nos sirve)»*.
+   → **Se adopta `cpu-independent=1`** en la receta H.264 (huellas estables =
+   la caché no se invalida por el runner; es lo que su requisito exige). Se
+   ejecuta como H-14b: receta, re-emisión, huellas nuevas, publicación.
+   → **Orden de códecs fijado: VP9 base, H.264 Baseline secundario** para
+   aparatos viejos; Main sigue solo como detector.
+   → **Requisito de producto nuevo (H-15, residencia):** el aparato está
+   prendido ≥ 16 h/día; el contenido **se baja una vez** (a lo sumo una vez al
+   día) y **se reproduce siempre desde el aparato**; si se corta internet no
+   falla; nada de «falso streaming».
+   → H.265 no se evaluó y no entra a v0 (Chromium 70 no lo reproduce en
+   `<video>`; regalías); AV1 columna futura. Si el operador quiere, una pieza
+   HEVC entra como sonda en la próxima emisión para que la caja diga sí o no.
+2. **H-11 — encima.** Con la explicación de sincronía (el video no se rompe por
+   la capa; lo que puede atrasarse es la capa, y se contiene leyendo
+   `video.currentTime` en cada pintada; todo lo que necesite sincronía de cuadro
+   se hornea en el video): *«listo entendido»* y **una sola pantalla**. Pregunta
+   nueva: *«¿probamos entonces videos "transparentes"? como para crear efectos
+   que en realidad sean video?»* → sí: `v0-vp9-alpha` ya reprodujo compuesto
+   en la caja (0/155 hoy, 1/155 el 09-01). Lo que **no** se probó es **dos
+   `<video>` a la vez** (loop + efecto alfa encima): entra como prueba (H-18).
+3. **H-12 — residente mixto con prioridad:** *«con incentivador + publicidad
+   vamos a estar bien, así que podría hacerse mixto, donde yo decida qué va y
+   qué no fijo, pero además, que haya un límite fijo por navegador y si lo
+   estamos por pasar haya orden de prioridad: incentivadora primero, publicidad
+   después, después otra cosa, etc. de acuerdo a como lo fijemos nosotros»*.
+   → H-15: el manifiesto lleva por pieza `residente: si|no` y `prioridad`;
+   presupuesto fijo por navegador (default = fracción de la cuota declarada,
+   con tope absoluto); al pasarse, se conserva por prioridad.
+4. **W-26 — «dejemos eso cerrado, así que no está mal terminar W-26 como
+   corresponde».** → auditar lo servido en la raíz contra el repo y
+   **republicar** las cuatro carpetas con el escape (W-26b).
+5. **Muxer:** *«tomo tu recomendación»* → **A = concatenación** como camino
+   principal (957 ms hoy, 0 atascos), **B = MSE `sequence`** como reserva.
+6. **Fuente Hobo:** *«b, quiero que sea la fuente por defecto así no agrego
+   más funciones»*. Y una reforma de la página de pruebas: *«si ya tuvimos
+   claridad sobre ciertos elementos, ya quitalos de la prueba general (el 1),
+   dejándola solo como opción aparte. Y ahí en vez de darme todas las opciones
+   en pantalla largame un archivo manual donde yo desde la pc pueda saber qué
+   aprieto para las opciones que ya probamos y que van a estar ocultas (deja al
+   menos 10 siempre a la vista, alineada a la izquierda dándole más lugar a los
+   logs de prueba para que bajen mientras probamos)»*.
+   → H-16: `HoboStd.ttf` (31.444 B, SHA-256 `477d186c…611aec`, OpenType CFF;
+   el operador ya la probó en ese WebView vía CSS) servida desde `v0/` y
+   **fuente por defecto de la capa**; el `1` corre solo lo no consagrado; las
+   teclas ya probadas salen de la leyenda y viven en
+   `docs/MANUAL-TECLAS-V0.md`; leyenda de ≥ 10 teclas a la izquierda y la
+   tabla de filas con más alto. Licencia: Hobo Std es de Adobe; publicarla la
+   deja descargable — para el producto, revisar la licencia (anotado).
+
+### Qué cierra y qué abre
+
+- **H-11 CERRADA** (encima; DISENO §9 y §10, EMISION §4.b S5, PLAN-DE-MEDICION §5).
+- **H-12 CERRADA en lo que decide** (persiste al cierre de la app; 25 MB entran;
+  cuota 225 MB; arranque desde caché lo mide la PC en 105 ms y la caja lo
+  medirá con `85` cuando la prueba ya no cierre la app). Deuda técnica → H-12b.
+- **Nuevas:** H-14b (adoptar y re-emitir), H-12b (techo en tandas, `83`
+  sola, caídos negativos, `85` en la caja tras reiniciar), H-15 (residencia
+  con presupuesto y prioridad), H-16 (Hobo por defecto + leyenda/manual),
+  H-18 (dos `<video>` a la vez: loop + efecto alfa), W-26b (auditar y
+  republicar la raíz).
+- **Orden acordado:** H-14b → H-12b → H-16 → W-26b → H-18 → H-6 → H-7 (con
+  H-15 adentro) → H-8.
