@@ -162,11 +162,35 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   4. **W-26b** — raíz **auditada** (64 rutas, 56 ya iguales) y las 8 del player
      republicadas. Medido: sin `?renderer=canvas2d` la raíz pasa **240 ms en
      WebGL** al abrir, que es el pantallazo blanco de la caja. W-26 CERRADA.
-  5. **H-18** — un **segundo `<video>` con alfa encima** del loop (tecla `87`).
-     Medido en la PC: VP9 solo 0/156 caídos; con el segundo plano 5..12/157
-     abajo y 4..8/153 arriba: **se sostienen los dos, pero el segundo cuesta**.
+  5. **H-18** — un **segundo `<video>` con alfa encima** del loop (tecla `87`),
+     **rehecho como H-18b** (abajo).
 
-  **Las cuatro últimas esperan UNA SOLA VISITA a la caja** (qué traer:
+  **La foto de la caja del 2026-09-04 (noche) cerró dos:** el techo aguanta
+  **50 MB en tandas de 5 MB con la app viva** (era un defecto de la prueba,
+  confirmado) y **Hobo entra** en Chromium 70 —`fuente hobo (166 ms)`—, así que
+  **H-16 queda CERRADA**. Y dijo algo que no esperábamos: **los dos planos de
+  video se sostienen en la caja, y mejor que en la PC** (2/155 abajo, 2/138
+  arriba). Sobre esa foto el operador pidió dos cosas más, hechas el mismo día:
+
+  6. **H-18b** — la prueba de dos videos estaba **mal armada**, por dos razones
+     distintas: el de arriba iba **encogido y corrido**, y la pieza con alfa
+     llevaba **el RGB del propio máster**, así que superpuesta exacta habría
+     sido indistinguible de lo de abajo. Ahora va **exactamente sobre el otro**
+     y lleva **papelitos sobre transparencia total** —contenido que no existe
+     abajo—. El generador usa **enteros y ondas triangulares, nunca `sin`/`cos`**:
+     1 ULP entre dos libm cambiaría los bytes de la pieza (invariante 7).
+     **Pack re-emitido**: las otras seis piezas salieron byte-idénticas en otro
+     runner (segunda confirmación del invariante después de H-14b) y solo se
+     republicaron **tres keys**.
+  7. **H-20** — **a pantalla entera** (teclas `70`/`73`), que es la última
+     pregunta grande sin medir: en la caja «entera» no es 720p sino **4K de
+     escalado**. Cuatro escalones —solo, con capa, con efecto, todo junto—
+     porque importa dónde se rompe, no un número. Y el **reporte en dos
+     columnas** con el `88` para volver: la foto anterior cortó en la novena
+     fila, y en una TV lo que no entra no existe. Abre la **tercera puerta** del
+     mando (`7`).
+
+  **Las cinco esperan UNA SOLA VISITA a la caja** (qué traer:
   `RUNBOOK-ESTADO.md`). Después siguen **H-6** (matriz por bytes a igual look),
   **H-7** (spec `SPEC-VGEN.md`, con **H-15** residencia adentro) y **H-8**
   (muxer ES5 + player). Externo: pedir

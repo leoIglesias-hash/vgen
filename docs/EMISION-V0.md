@@ -66,7 +66,7 @@ registrados — mismo máster + mismos parámetros → mismos bytes.
 | `v0-h264-baseline.mp4` | H.264 Baseline, MP4 | `profile=baseline level=3.1`, `bf=0`, `refs=1`, GOP cerrado de 15, `yuv420p`, `+faststart` | el piso: que ande en todo, con el mínimo DPB posible |
 | `v0-h264-main.mp4` | H.264 Main, MP4 | igual, pero `profile=main` (CABAC + 8×8) | **hardware o software**: si esta gana, la memoria no era el cuello |
 | `v0-vp9.webm` | VP9, WebM | calidad constante, GOP 15, hilos fijos | si VP9 existe y con cuánta banda menos |
-| `v0-vp9-alpha.webm` | VP9 + alfa, WebM | `yuva420p`, recorte chico (no pantalla completa) | si el **personaje sin fondo** se puede hacer por video, con CPU ≈ 0 |
+| `v0-vp9-alpha.webm` | VP9 + alfa, WebM | `yuva420p`, **cuadro entero** sobre transparencia total | si el **personaje sin fondo** se puede hacer por video, con CPU ≈ 0. **Desde H-18b (2026-09-04)** el contenido son **papelitos de colores**, no el RGB del máster con una máscara de disco: con el máster adentro, superpuesta exacta sobre el video de abajo, la pieza era indistinguible de él y no probaba la composición. Se genera con enteros y ondas triangulares, sin `sin`/`cos`, para no romper el invariante 7 |
 | `hls-ts/stream.m3u8` | HLS + MPEG-TS | **remux** de la pieza Baseline, segmentos de 1 s | HLS nativo en su forma más rodada |
 | `hls-fmp4/stream.m3u8` | HLS + CMAF | ídem, con `init.mp4` separado | HLS nativo con **init compartido**, que es la forma de nuestro formato |
 | `dash/manifest.mpd` | DASH + fMP4 | ídem, plantilla + timeline | **DASH nativo**: nuestro modelo de datos servido tal cual |

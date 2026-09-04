@@ -287,7 +287,7 @@ Ni por analogía, ni por «es lo normal», ni por `canPlayType`.
 
 ## 4. Fases y tareas
 
-Orden (actualizado 2026-09-04): ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ ~~H-18~~ → **H-6 →
+Orden (actualizado 2026-09-04, noche): ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ ~~H-18~~ ~~H-18b~~ ~~H-20~~ → **H-6 →
 H-7 (con H-15 adentro) → H-8**; lo que falte de **H-10** corre aparte.
 H-13, H-11 y H-12 están cerradas con la caja; H-14b cerrada el 2026-09-04. Cuerpos ejecutables (archivo, acción, cierre)
 en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
@@ -305,9 +305,10 @@ en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | **W-26** (**CERRADA 2026-09-04**) | — | `?renderer=` en la raíz | publicada en las cuatro carpetas; medido: sin el parámetro la raíz pasa 240 ms en WebGL, con él nunca |
 | **H-14b — adoptar `cpu-independent=1`** (**CERRADA 2026-09-04**) | (no es del aparato) | receta con la opción, pack re-emitido, 54 keys republicadas | **cumplido**: dos pasadas idénticas y bytes iguales en cuatro CPUs; huellas servidas = REGISTRO; invariante 7 saldado |
 | **H-12b — cierre técnico de la caché** (**ejecutada hasta la pantalla 2026-09-04; debe la foto**) | ¿hasta cuántos MB en tandas chicas sin cerrar la app? ¿persiste tras apagar y prender? | techo en tandas ≤ 5 MB, cuota declarada como primer techo, caídos nunca negativos, `83` sola arranca | foto de la caja con `techo` completo y `85` tras reiniciar |
-| **H-16 — Hobo por defecto + página reformada** (**ejecutada hasta la pantalla 2026-09-04; debe la foto**) | ¿la capa con fuente propia por hardware se ve y cuánto tarda en estar lista? | `@font-face` desde `v0/`, espera por `measureText`, `1` solo con lo no consagrado, ≥ 10 teclas a la izquierda, `docs/MANUAL-TECLAS-V0.md` | foto con `fuente: hobo` en la fila `capa*` |
+| **H-16 — Hobo por defecto + página reformada** (**CERRADA 2026-09-04 con la foto**: `fuente hobo (166 ms)`) | ¿la capa con fuente propia por hardware se ve y cuánto tarda en estar lista? | `@font-face` desde `v0/`, espera por `measureText`, `1` solo con lo no consagrado, ≥ 10 teclas a la izquierda, `docs/MANUAL-TECLAS-V0.md` | foto con `fuente: hobo` en la fila `capa*` |
 | **W-26b — terminar la raíz** (**ejecutada 2026-09-04; debe la foto**) | ¿la raíz con `?renderer=canvas2d` deja de dar pantallazo blanco? | auditoría servido-vs-repo escrita; las cuatro carpetas republicadas | foto de la caja sin pantallazo |
-| **H-18 — dos `<video>` a la vez** (**ejecutada hasta la pantalla 2026-09-04; debe la foto**) | ¿el loop y un efecto alfa encima sostienen los dos el gate? | tecla con segundo `<video>` posicionado como la capa; contador en ambos | fila en el REGISTRO; techo de planos simultáneos escrito en DISENO §10 |
+| **H-18 → H-18b — dos `<video>` a la vez** (**rehecha 2026-09-04 noche; debe la foto**) | ¿el loop y un efecto alfa encima, **del mismo tamaño**, sostienen los dos el gate? ¿y se ve **un solo video** con el efecto adentro? | segundo `<video>` **exactamente sobre** el primero, con una pieza cuyo contenido **no existe abajo** (papelitos sobre transparencia total); contador en ambos | fila en el REGISTRO; techo de planos simultáneos escrito en DISENO §10 |
+| **H-20 — a pantalla entera** (**ejecutada hasta la pantalla 2026-09-04 noche; debe la foto**) | ¿el video ocupando **toda la superficie** (3840×2160 sobre un panel de 1280×720) sostiene el gate? ¿y con la capa, con el efecto, y con los tres juntos? | tecla `70`: cuatro escalones midiendo lo mismo a pantalla entera, respetando 16:9; la API de fullscreen se pide y se **declara**, no se supone. Y el reporte en dos columnas, que es lo que hace que la foto exista | cuatro filas en el REGISTRO y el reporte entero en una sola toma |
 | **H-15 — residencia** | ¿reproduce el día entero con la red cortada, arrancando desde el aparato en ≤ 1 s? | `residente`/`prioridad` por pieza en el manifiesto (H-7); presupuesto por navegador y conservación por prioridad (H-8) | medido en la caja con la red cortada |
 
 **Regla de dependencia:** H-7 no empieza sin H-13 **y** H-11 cerradas (lo están
@@ -329,7 +330,8 @@ H-7 y se mide en H-8.
 | **`producto.mp4` (defaults) nunca se midió con contadores** | H-6, fila de referencia | la comparación 2,3× hoy es de bytes, no de fluidez |
 | **Arranque por red no reproducible** (3× entre visitas, misma página y piezas) | de la clase, medido 2026-09-04 | el gate se exige desde caché o `blob:`; residencia H-15 |
 | **La prueba de techo mata al WebView** (50 MB de ruido de una vez) | **corregida 2026-09-04** (H-12b) | tandas de 5 MB cumplidas en el módulo (`VGenCache.TANDA_MB`); la cuota declarada (225 MB en la caja) se reporta como primer techo |
-| **Dos `<video>` simultáneos sin probar** (efectos como video alfa) | H-18 | si no sostiene, los efectos van horneados o al canvas |
+| **Dos `<video>` simultáneos**: la caja los sostuvo (2/155 abajo, 2/138 arriba) pero con el efecto **encogido y corrido**, y con el RGB del máster adentro | H-18b (rehecha: mismo tamaño, papelitos sobre transparencia total) | si no sostiene con el efecto del tamaño completo, los efectos van horneados o al canvas |
+| **Pantalla entera sin medir**: todo se midió en un recuadro de 560×315, y la superficie real de la caja es 3840×2160 sobre un panel de 1280×720 | H-20 | si a pantalla entera se cae, el producto necesita que la app le dé al WebView el panel real (pendiente externo) o baja de resolución |
 | **Hobo Std es de Adobe**: servirla desde `v0/` la deja descargable | **CERRADA 2026-09-04**: el operador dijo que **no va al producto** («no la voy a usar en el producto a la fuente, es una prueba… luego usaremos otras») | queda solo en la pagina de pruebas; la del producto se elige después |
 
 ## 6. Decisiones que necesita el operador
@@ -356,7 +358,7 @@ pieza y presupuesto fijo por navegador (H-15); **W-26** → terminar y
 republicar la raíz (W-26b); **muxer** → A = concat principal, B = MSE reserva;
 **fuente Hobo** → por defecto en la capa, y la página de pruebas se reforma
 (H-16). Pregunta nueva del operador —«¿efectos que en realidad sean video?»—
-→ H-18. **Orden:** ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ ~~H-18~~ (hechas) → H-6 → H-7 (con
+→ H-18. Y sobre la foto de esa noche, dos pedidos más: la prueba de dos videos estaba mal armada (el de arriba encogido, corrido y con el RGB del máster adentro) → **H-18b**, y falta medir **a pantalla entera** con el reporte entrando en una foto → **H-20**. **Orden:** ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ ~~H-18~~ ~~H-18b~~ ~~H-20~~ (hechas) → H-6 → H-7 (con
 H-15) → H-8. **No queda ninguna decisión pendiente del operador**; debe una
 foto (tras apagar y prender, `85`). La licencia de Hobo dejó de ser un
 pendiente: el operador la descartó para el producto y queda solo como fuente de
