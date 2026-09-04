@@ -4607,3 +4607,94 @@ sin pisar nada en el panel real.
 
 **Sigue W-26b** (auditar la raíz servida contra el repo y republicar las cuatro
 carpetas).
+
+---
+
+## 2026-09-04 — W-26b: la raíz auditada, puesta al día, y la prueba de que el escape sirve
+
+El operador pidió cerrarlo bien: *«dejemos eso cerrado así que no está mal
+terminar W-26 como corresponde»*. W-26 estaba **cerrada en código** desde el
+2026-09-02 pero **la raíz servida nunca se republicó**, así que en producción
+seguía sin el escape.
+
+### La auditoría, antes de tocar nada
+
+Se bajaron las **16 rutas de código de cada una de las cuatro carpetas**
+(`/`, `/1280-15/`, `/1280-12/`, `/1920-10/`) y se compararon byte a byte contra
+el repo:
+
+| resultado | keys |
+|---|---:|
+| iguales al repo | 56 |
+| distintas | 8 |
+
+Las 8 distintas son **la misma página en cuatro carpetas**: `index.html` y
+`live-player.html`, byte-idénticas entre sí en el bucket (`505071f1…`,
+26.679 B). Lo único que les faltaba, en las cuatro, es esto:
+
+```
+-    if(!textLayer){
++    if(!textLayer && qs("renderer")!=="canvas2d"){
+```
+
+Todo lo demás ya estaba al día, **incluido `playloop.js`** —el motor único de
+W-22..W-25—, que estaba servido correctamente en las cuatro carpetas.
+
+**Dos cosas que la auditoría confirma** y que conviene dejar de suponer: las
+cuatro carpetas siguen sirviendo copias byte-idénticas del código, y
+`index.html` sigue siendo `live-player.html`.
+
+**Una corrección del registro:** `playloop.js` estaba servido desde el
+2026-08-31 pero **no figuraba en `deploy/asciline-player/MANIFEST.tsv`**. Se
+agregaron sus 4 filas. Ese archivo es el registro de lo desplegado; una key
+servida y no anotada es una mentira silenciosa.
+
+### La prueba de que el escape hace algo
+
+Antes de publicar valía preguntarse si el parámetro cambia algo en la página
+como está configurada, porque el texto nativo (INT-004) ya fuerza Canvas2D. La
+respuesta es que **sí**, y se midió en un navegador muestreando qué contexto
+tiene el canvas cada 50 ms desde que abre:
+
+| dirección | secuencia medida |
+|---|---|
+| `/player/` | `2d` → **`webgl` a los 1.476 ms** → `2d` a los 1.714 ms |
+| `/player/?renderer=canvas2d` | `2d`, y nunca otra cosa |
+
+O sea: `openAscl()` llama a `pickRenderer()` **antes** de que el sidecar y el
+texto nativo estén, así que en esa primera pasada `textLayer` es null y la
+página **elige WebGL durante unos 240 ms**. Después el texto nativo attachea,
+se vuelve a elegir y cae a Canvas2D. Esa ventana de 240 ms es exactamente el
+pantallazo blanco de DIAG-002 en la caja: la GPU no presenta y lo que se ve es
+el fondo. Con `?renderer=canvas2d` esa ventana **no existe**.
+
+**Anotado como mejora posible, no hecha** (fuera del alcance de W-26b): que
+`pickRenderer()` no elija WebGL antes de saber si va a haber texto nativo
+ahorraría la ventana sin necesidad del parámetro. El escape sigue haciendo
+falta igual, porque hay configuraciones sin texto donde WebGL es la elección
+final.
+
+### Publicado
+
+**8 keys** (`index.html` y `live-player.html` en las cuatro carpetas), todas con
+el mismo contenido: 27.004 B, md5 `ba612f0dcb61317c9753ba77842e4252`, SHA-256
+`b32406bd9efa71b231cf800fcfb4ea3fa2b94431c0f577b0a285a314e7f6f8b0`. Copia previa
+commiteada en `05d2b5a` antes de subir; las 8 verificadas contra lo servido;
+token quemado y confirmado con 403.
+
+Una subida devolvió **403 la primera vez** (`1280-12/index.html`) con el mismo
+token que funcionó antes y después; el reintento dio 200. Queda anotado como lo
+que fue —un rechazo transitorio, no un problema de credencial— para no
+confundirlo si vuelve a pasar.
+
+**Re-auditoría después de publicar: 64 de 64 keys iguales al repo.** Las cuatro
+carpetas sirven exactamente lo que dice `main`.
+
+### Lo que falta de W-26b
+
+La foto de la caja: abrir `https://iargen.com/player/?renderer=canvas2d` y que
+**no haya pantallazo blanco**. Esa es la única parte que la PC no puede
+contestar, porque acá la GPU sí presenta.
+
+**Sigue H-18** (dos `<video>` a la vez: el loop VP9 y un efecto con alfa
+encima).
