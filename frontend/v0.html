@@ -46,7 +46,7 @@
    * las teclas VIGENTES: lo ya consagrado sigue andando, pero se busca en
    * docs/MANUAL-TECLAS-V0.md en vez de ocupar pantalla. */
   #keys { position: absolute; left: 0; padding: 0 0.4em 0 0.6em;
-          overflow: hidden; }
+          box-sizing: border-box; overflow: hidden; }
   #buffer { font-size: 1em; color: #ffd479; height: 1.15em;
             letter-spacing: 0.08em; }
   #teclas .op { display: block; margin: 0.12em 0; cursor: pointer;
@@ -204,9 +204,13 @@ function layout() {
   footH = Math.round(h * 0.06);
   midTop = headH;
   midH = h - headH - footH;
-  /* La columna de teclas: angosta, pero nunca tanto como para partir una
-   * etiqueta. En 1280 son 243 px, que entran los renglones mas largos. */
-  keysW = Math.round(w * 0.19);
+  /* La columna de teclas: angosta, pero nunca tanto como para PARTIR una
+   * etiqueta. En 1280 son 243 px y entran los renglones mas largos; en una
+   * pantalla angosta el 19 % no alcanza -medido: a 399 px de ancho quedaba
+   * "cache: gua..."-, asi que hay un piso de 200 px que a su vez no puede
+   * comerse mas de un tercio del ancho. */
+  keysW = Math.max(Math.round(w * 0.19),
+                   Math.min(200, Math.round(w * 0.34)));
   stageX = keysW;
   stageW = Math.round((w - keysW) * 0.54);
   /* Las piezas son 16:9: el recuadro toma esa forma para que el video no se
@@ -221,7 +225,7 @@ function layout() {
   sideX = stageX + stageW + 8;
   px(byId("side"), sideX, midTop, w - sideX - 12, midH);
   byId("keys").style.top = midTop + "px";
-  byId("keys").style.width = (keysW - 14) + "px";
+  byId("keys").style.width = keysW + "px";
   byId("keys").style.height = midH + "px";
 }
 
@@ -777,7 +781,7 @@ function capaFuenteFamily() {
   return capaFuente.name === "hobo" ? "\"Hobo\", monospace" : "monospace";
 }
 
-function anchoCon(family) {
+function anchoDe(texto) {
   var ctx;
   if (!capaRegla) {
     capaRegla = document.createElement("canvas");
@@ -786,18 +790,30 @@ function anchoCon(family) {
   }
   ctx = capaRegla.getContext ? capaRegla.getContext("2d") : null;
   if (!ctx) { return 0; }
-  ctx.font = "40px " + family;
-  return ctx.measureText("ASCILINE 0123").width;
+  ctx.font = "40px \"Hobo\", monospace";
+  return ctx.measureText(texto).width;
 }
 
+/* La prueba es que la M y la i midan DISTINTO.
+ *
+ * Como la familia se pide siempre igual -"Hobo", monospace-, mientras la fuente
+ * no haya llegado el que dibuja es monospace, y monospace le da a toda letra el
+ * MISMO avance. En cuanto los dos anchos difieren, hay una fuente proporcional
+ * puesta, y la unica que puede estar puesta es Hobo.
+ *
+ * La primera version comparaba el ancho de una frase contra el de monospace, y
+ * era fragil: medido en el navegador el 2026-09-04, "ASCILINE 0123" da 285,9 px
+ * en monospace y 284,4 en Hobo -1,5 px de diferencia sobre 285-, asi que en otro
+ * aparato podian coincidir y la pagina hubiera dicho "fallback" para siempre
+ * teniendo la fuente puesta. Con M contra i la diferencia es de 170 a 53. */
 function esperarHobo() {
   var t0 = new Date().getTime();
-  var patron = anchoCon("monospace");
   function mirar() {
-    var ancho = anchoCon("\"Hobo\", monospace");
+    var ancha = anchoDe("MMMMM");
+    var angosta = anchoDe("iiiii");
     var pasado = new Date().getTime() - t0;
     capaFuente.timer = 0;
-    if (patron > 0 && ancho > 0 && ancho !== patron) {
+    if (ancha > 0 && angosta > 0 && ancha !== angosta) {
       capaFuente.name = "hobo";
       capaFuente.ms = pasado;
       return;

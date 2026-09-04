@@ -381,11 +381,18 @@ assert.strictEqual(/document\.fonts/.test(pageCode), false,
 
 assert(/CAPA_FUENTE_MS = 3000/.test(inline[1]),
   "se espera hasta 3 s a que llegue la fuente, y ni un ms mas");
-assert(/measureText\("ASCILINE 0123"\)/.test(inline[1]),
+assert(/measureText\(texto\)/.test(inline[1]),
   "la llegada de la fuente se detecta MIDIENDO, no preguntando");
-assert(/anchoCon\("monospace"\)/.test(inline[1]) &&
-       /anchoCon\("\\"Hobo\\", monospace"\)/.test(inline[1]),
-  "se compara el mismo texto con la fuente y sin ella");
+/* Monospace le da a toda letra el mismo avance; cualquier proporcional no. Por
+ * eso la prueba es M contra i EN LA MISMA familia, y no una frase contra un
+ * ancho de referencia: medido el 2026-09-04, "ASCILINE 0123" difiere apenas
+ * 1,5 px de 285 entre Hobo y monospace, y en otro aparato podian coincidir. */
+assert(/anchoDe\("MMMMM"\)/.test(inline[1]) && /anchoDe\("iiiii"\)/.test(inline[1]),
+  "se comparan dos letras de ancho muy distinto, en la misma familia");
+assert(/ctx\.font = "40px \\"Hobo\\", monospace"/.test(inline[1]),
+  "las dos medidas se toman pidiendo la fuente, no monospace pelado");
+assert.strictEqual(/anchoDe\("ASCILINE 0123"\)/.test(inline[1]), false,
+  "la deteccion por frase quedo atras: el margen era de 1,5 px");
 assert(/ctx\.font = "bold " \+ Math\.round\(h \* 0\.5\) \+ "px " \+ capaFuenteFamily\(\)/
   .test(inline[1]),
   "la capa dibuja con la fuente elegida, no con monospace fijo");
@@ -549,3 +556,12 @@ assert(/#side\s*\{[^}]*overflow-y:\s*auto/.test(page),
 assert(/function scrollAlFinal\(\)/.test(inline[1]) &&
        /scrollAlFinal\(\);\n  writeReport\(\)/.test(inline[1]),
   "cada redibujado deja a la vista el ultimo renglon, no el primero");
+
+/* H-16: la columna de teclas no puede partir una etiqueta. Medido en el
+ * navegador el 2026-09-04: a 399 px de ancho, el 19 % dejaba "cache: gua...". */
+assert(/keysW = Math\.max\(Math\.round\(w \* 0\.19\),/.test(inline[1]),
+  "la columna tiene un piso de ancho, no solo un porcentaje");
+assert(/Math\.min\(200, Math\.round\(w \* 0\.34\)\)/.test(inline[1]),
+  "y ese piso no puede comerse mas de un tercio de una pantalla angosta");
+assert(/#keys\s*\{[^}]*box-sizing:\s*border-box/.test(page),
+  "el ancho de la columna incluye su relleno: si no, se monta sobre el video");
