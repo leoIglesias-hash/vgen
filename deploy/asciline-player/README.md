@@ -362,3 +362,11 @@ aflojaron**: «una sola etiqueta `<video>`» pasa a «un solo `<video>` para las
 piezas, más exactamente uno para el efecto», y «una sola `.pause()`» pasa a
 «el `<video>` de las piezas sigue con una sola pausa, la del `0`; la otra es la
 del efecto al terminar su prueba».
+
+### Corrección del mismo día (H-18, el contador del video de arriba)
+
+`v0/index.html` → **66267 B**, md5 `5946130981042e522864d86c2e3d4aad`. Corriendo la prueba **dos veces
+seguidas** —única forma de verlo— la segunda informaba «1/2 caídos» arriba: la
+línea de base se tomaba al pedirle que suene, o sea contra los contadores de la
+pasada anterior que `load()` acababa de poner en cero. Ahora se arma en la
+primera vuelta con `currentTime > 0`, y si nunca sonó la fila lo dice.
