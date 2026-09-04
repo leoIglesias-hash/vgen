@@ -4602,7 +4602,7 @@ que revisar la licencia de distribución web. Queda anotado, no resuelto.
 ### Lo que falta de H-16
 
 La foto de la caja: que la capa se vea **en Hobo** (o que el reporte diga
-`fallback`, que también es una respuesta), y que la leyenda de 12 teclas entre
+`fallback`, que también es una respuesta), y que la leyenda -13 teclas desde H-18- entre
 sin pisar nada en el panel real.
 
 **Sigue W-26b** (auditar la raíz servida contra el repo y republicar las cuatro
