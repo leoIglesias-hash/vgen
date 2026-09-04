@@ -348,3 +348,17 @@ no anotada es una mentira silenciosa.
 
 Verificación tras subir: `GET https://iargen.com/player/<key>?x=<nonce>`
 → SHA-256 igual al del archivo local en las 8; token de subida quemado.
+
+## Actualización del 2026-09-04 (H-18, el segundo `<video>`)
+
+`v0/index.html` → **65383 B**, md5 `4c1e4bd3a344738087bc2295a5d27596`. Tecla **`87`**: el loop VP9 abajo y
+`v0-vp9-alpha` **encima**, en un segundo `<video>` del tamaño del rectángulo de
+la capa. La fila mide el de abajo como cualquier otra y la nota trae los cuadros
+del de arriba: si solo se midiera uno, la prueba no contestaría la pregunta del
+operador —si un efecto puede **ser** video en vez de estar horneado—.
+
+Dos gates viejos chocaban con esto por diseño y se **reformularon, no se
+aflojaron**: «una sola etiqueta `<video>`» pasa a «un solo `<video>` para las
+piezas, más exactamente uno para el efecto», y «una sola `.pause()`» pasa a
+«el `<video>` de las piezas sigue con una sola pausa, la del `0`; la otra es la
+del efecto al terminar su prueba».
