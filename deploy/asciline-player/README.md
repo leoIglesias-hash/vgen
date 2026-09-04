@@ -254,3 +254,28 @@ no informa ningún techo.
 
 Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
 → SHA-256 igual al del archivo local en las dos; token de subida quemado.
+
+## Actualización del 2026-09-04 (H-16, Hobo y la página reformada)
+
+**2 keys** bajo `v0/`: `index.html` (regenerada = `frontend/v0.html`) y
+**`HoboStd.ttf`** (nueva). El bucket pasa a **63 keys**.
+
+| key | bytes | md5 | qué es |
+|---|---|---|---|
+| `v0/index.html` | 59530 | `5d3b22e235c292bec371de064cb3ab81` | tres columnas (teclas a la izquierda, video, tabla con el alto entero); solo 12 teclas a la vista; `1` = lo que falta, `89` = correr todo; la capa dibuja con Hobo |
+| `v0/HoboStd.ttf` | 31444 | `56461958360533730babbd1bcc04ca77` | la fuente de la capa (OpenType CFF, la que pasó el operador) |
+
+**Un detalle deliberado sobre el tipo de contenido.** El Worker no tiene `ttf`
+en su tabla, así que la fuente se sirve como `application/octet-stream`. No se
+tocó el Worker a propósito: cambiarlo obliga a re-desplegar el script (todas las
+demás subidas son solo R2), y los navegadores **no** exigen un tipo MIME para
+las fuentes de `@font-face`. Si aun así la caja la rechazara, la página lo dice
+sola —el reporte saldría con `fuente fallback`— y ahí sí la corrección es una
+línea: sumar `ttf` a `TYPES` en `worker.js`.
+
+**Licencia:** `HoboStd.ttf` es una fuente de Adobe. Está publicada acá para
+**probar** en los aparatos, que es lo que el operador pidió. Antes de usarla en
+el producto hay que revisar la licencia de distribución web.
+
+Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
+→ SHA-256 igual al del archivo local en las dos; token de subida quemado.
