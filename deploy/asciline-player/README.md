@@ -420,3 +420,21 @@ fila al reporte —no mide, muestra— pero el zócalo lleva los **caídos vivos
 los dos**, para que el ojo y los números se miren juntos. El reloj se apaga en
 `stopAll()`, no en la tecla, para que las dos no se llamen en círculo. Son
 **14 teclas a la vista**.
+
+## 2026-09-04 (noche, 3ª foto) — H-12b: una key
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/index.html` | 81.066 | `9e3615cf24e0d2ed574d8d9ba8bdcca8` |
+
+El operador descartó la prueba de «arrancar sin red»: la app que hospeda al
+WebView tiene **validaciones intermedias que piden red**, así que ese escenario
+no se puede probar y tampoco es el escenario real. Y cortar la red **en el
+medio** no prueba residencia: lo ya buffereado sigue sonando.
+
+**Qué cambió en la página**: la cabecera del reporte y la nota de las filas
+`cache:*` declaran ahora **`red si|no`** (`navigator.onLine`; `?` si el
+navegador no lo dice, nunca se supone que había red). Con eso, la prueba que sí
+discrimina cabe en una sola foto: cortar la red **con la página ya abierta** y
+recién entonces `85`, que lee IndexedDB y reproduce desde `blob:` sin tocar la
+red ni una vez.
