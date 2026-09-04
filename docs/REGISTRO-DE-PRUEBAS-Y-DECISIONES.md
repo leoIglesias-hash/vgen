@@ -4430,3 +4430,69 @@ que deja de pasar de acá en adelante.
 **Sigue H-12b** (techo en tandas de ≤ 5 MB, `83` sola que arranque el video,
 caídos que no queden negativos, y la foto de la caja tras apagar y prender
 con `85`).
+
+---
+
+## 2026-09-04 — H-12b ejecutada hasta la pantalla: la prueba de techo deja de matar la app
+
+Tres defectos que la visita del 2026-09-04 dejó anotados. Los tres son **de la
+prueba, no del aparato** — conviene decirlo así de entrada, porque una prueba
+que se rompe sola se lee como una limitación del hardware y no lo es.
+
+**1. El techo cerraba la app.** La versión anterior armaba 10, 25 y 50 MB de
+ruido **de una sola vez**; la tanda de 50 MB mataba el WebView, así que la caja
+nunca llegó a decir su techo. No era el aparato negándose: era esta página
+pidiéndole 50 MB contiguos y encima clonándolos para guardarlos en IndexedDB.
+Ahora el techo **se mide sumando**: tandas acumulativas de `TECHO_TANDA_MB` = 5
+hasta `TECHO_TOPE_MB` = 50, una por vez, y **nunca hay más de una viva en
+memoria**. El límite lo cumple `frontend/vgencache.js` (`TANDA_MB = 5`;
+`noise()` devuelve `null` si le piden más), no la disciplina de quien llama: un
+llamador nuevo no lo puede saltear sin darse cuenta. Y **antes de escribir un
+byte se reporta la cuota declarada** — ese es el primer techo, el único que el
+aparato dice sin que haya que empujarlo. Si la escritura corta antes, el nombre
+del error (`QuotaExceededError`) es la respuesta. Todo el ruido se borra al
+terminar, entre o no.
+
+**2. `83` sola dejaba el cartel de play.** Textual del operador: *«al presionar
+83 solo no se ve el video sino que queda en play (pero pude verlo cuando
+presione 1 y se ve bien)»*. La tecla solo prendía el canvas; si no venía de un
+lote, el `<video>` estaba sin fuente. Ahora, al prender la capa, si no hay nada
+sonando arranca la **pieza base — VP9**, la que el operador eligió como base ese
+mismo día — en bucle y por el **mismo camino que el lote** (`src` + `load` +
+`play`). Y si el WebView exige un gesto para reproducir, la página lo dice
+(«el aparato pide un gesto, aprete play») en vez de dejar al operador mirando
+una pantalla quieta sin saber por qué.
+
+**3. `caídos −3` en `blob:cmaf`.** Los contadores del video se reinician al
+cambiar de fuente, y la resta quedaba hecha contra una línea de base que ya no
+existía. Ahora, si **cualquiera** de las dos restas da negativa, la base se
+descarta y se toman los absolutos; después se acota a `[0, total]`. Un número
+negativo de cuadros caídos no es un dato: es un error de contabilidad
+disfrazado de medición.
+
+**Pruebas nuevas** (`tests/test_v0_page.js`, `tests/test_vgencache.js`): las
+tandas de 5 MB, que **jamás** se pida el tope entero de una vez, la cuota
+reportada antes de escribir, el borrado por tanda, el `83` con `play()` y con
+aviso de gesto, y el módulo rechazando más de una tanda. CI verde en `432647b`.
+
+**Publicado:** 2 keys de `v0/` — `index.html` (54.349 B,
+`836ae47ed2c40fdd7f277eb993276650`) y `vgencache.js` (10.786 B,
+`8cfb75a0b598d742fee3f5971cac9387`). Las dos verificadas contra lo servido;
+copia previa commiteada en `b53a739`; token quemado y confirmado con 403. El
+bucket sigue con 62 keys.
+
+**Falta la foto de la caja** para cerrar H-12b del todo. Lo que hay que traer,
+en una sola visita:
+
+1. `86` (borrar), después `84`: la fila `cache:techo` ahora dice **cuánto
+   declara el aparato** y **cuántos MB entraron** antes de cortar, o «50 MB
+   (tope de la prueba)» si entran todos. La app **no** debería cerrarse.
+2. **Apagar y prender la caja**, abrir la página y apretar `85`: si las dos
+   piezas siguen ahí y arrancan sin red, la residencia queda comprobada en el
+   aparato y no solo en la PC.
+3. `83` sola: tiene que **verse el video** con el rectángulo encima. Si aparece
+   el aviso del gesto, anotarlo — eso decide si el arranque automático del
+   contenido va a necesitar un toque en la instalación real.
+
+**Sigue H-16** (Hobo por defecto en la capa, `1` reducido a lo no consagrado,
+manual de teclas y leyenda de ≥ 10 a la izquierda).

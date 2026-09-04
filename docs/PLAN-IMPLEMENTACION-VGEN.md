@@ -287,7 +287,7 @@ Ni por analogía, ni por «es lo normal», ni por `canPlayType`.
 
 ## 4. Fases y tareas
 
-Orden (actualizado 2026-09-04): ~~H-14b~~ → **H-12b → H-16 → W-26b → H-18 → H-6 →
+Orden (actualizado 2026-09-04): ~~H-14b~~ ~~H-12b~~ → **H-16 → W-26b → H-18 → H-6 →
 H-7 (con H-15 adentro) → H-8**; lo que falte de **H-10** corre aparte.
 H-13, H-11 y H-12 están cerradas con la caja; H-14b cerrada el 2026-09-04. Cuerpos ejecutables (archivo, acción, cierre)
 en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
@@ -304,7 +304,7 @@ en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | **H-8 — muxer ES5 + player mínimo** | ¿reproduce el paquete real con intervención activa en la caja? | **lo que H-13 dejó en pie (decidido 2026-09-01 noche): A = `concat()` en orden canónico para piezas enteras desde caché; B = alimentador MSE en `sequence` para el bucle y el intercambio; cambio a demanda por `src` con la pieza residente (VP9) o por B con `changeType`; D no.** Era: concatenador CMAF (A), alimentador MSE (B), generador de playlist (D); `<audio>` separado; canvas de intervención | veredicto del operador en la caja; gate ES5 verde |
 | **W-26** (**cerrada en código; decidida 2026-09-04: terminar**) | — | `?renderer=` en la raíz | → W-26b |
 | **H-14b — adoptar `cpu-independent=1`** (**CERRADA 2026-09-04**) | (no es del aparato) | receta con la opción, pack re-emitido, 54 keys republicadas | **cumplido**: dos pasadas idénticas y bytes iguales en cuatro CPUs; huellas servidas = REGISTRO; invariante 7 saldado |
-| **H-12b — cierre técnico de la caché** | ¿hasta cuántos MB en tandas chicas sin cerrar la app? ¿persiste tras apagar y prender? | techo en tandas ≤ 5 MB, cuota declarada como primer techo, caídos nunca negativos, `83` sola arranca | foto de la caja con `techo` completo y `85` tras reiniciar |
+| **H-12b — cierre técnico de la caché** (**ejecutada hasta la pantalla 2026-09-04; debe la foto**) | ¿hasta cuántos MB en tandas chicas sin cerrar la app? ¿persiste tras apagar y prender? | techo en tandas ≤ 5 MB, cuota declarada como primer techo, caídos nunca negativos, `83` sola arranca | foto de la caja con `techo` completo y `85` tras reiniciar |
 | **H-16 — Hobo por defecto + página reformada** | ¿la capa con fuente propia por hardware se ve y cuánto tarda en estar lista? | `@font-face` desde `v0/`, espera por `measureText`, `1` solo con lo no consagrado, ≥ 10 teclas a la izquierda, `docs/MANUAL-TECLAS-V0.md` | foto con `fuente: hobo` en la fila `capa*` |
 | **W-26b — terminar la raíz** | ¿la raíz con `?renderer=canvas2d` deja de dar pantallazo blanco? | auditoría servido-vs-repo escrita; las cuatro carpetas republicadas | foto de la caja sin pantallazo |
 | **H-18 — dos `<video>` a la vez** | ¿el loop y un efecto alfa encima sostienen los dos el gate? | tecla con segundo `<video>` posicionado como la capa; contador en ambos | fila en el REGISTRO; techo de planos simultáneos escrito en DISENO §10 |
@@ -328,7 +328,7 @@ H-7 y se mide en H-8.
 | **Audio sin probar en la caja** (pack v0 mudo) | H-6 v1 (S13, S14) | dos clases definidas en §2.6: ambiente en `<audio>` aparte; el propio de una pieza, muxeado en ella |
 | **`producto.mp4` (defaults) nunca se midió con contadores** | H-6, fila de referencia | la comparación 2,3× hoy es de bytes, no de fluidez |
 | **Arranque por red no reproducible** (3× entre visitas, misma página y piezas) | de la clase, medido 2026-09-04 | el gate se exige desde caché o `blob:`; residencia H-15 |
-| **La prueba de techo mata al WebView** (50 MB de ruido de una vez) | H-12b | tandas ≤ 5 MB; la cuota declarada (225 MB en la caja) es el primer techo |
+| **La prueba de techo mata al WebView** (50 MB de ruido de una vez) | **corregida 2026-09-04** (H-12b) | tandas de 5 MB cumplidas en el módulo (`VGenCache.TANDA_MB`); la cuota declarada (225 MB en la caja) se reporta como primer techo |
 | **Dos `<video>` simultáneos sin probar** (efectos como video alfa) | H-18 | si no sostiene, los efectos van horneados o al canvas |
 | **Hobo Std es de Adobe**: servirla desde `v0/` la deja descargable | anotada 2026-09-04 | para la prueba no cambia nada; para el producto, el operador revisa la licencia |
 
@@ -356,7 +356,7 @@ pieza y presupuesto fijo por navegador (H-15); **W-26** → terminar y
 republicar la raíz (W-26b); **muxer** → A = concat principal, B = MSE reserva;
 **fuente Hobo** → por defecto en la capa, y la página de pruebas se reforma
 (H-16). Pregunta nueva del operador —«¿efectos que en realidad sean video?»—
-→ H-18. **Orden:** ~~H-14b~~ (cerrada) → H-12b → H-16 → W-26b → H-18 → H-6 → H-7 (con
+→ H-18. **Orden:** ~~H-14b~~ ~~H-12b~~ (hechas) → H-16 → W-26b → H-18 → H-6 → H-7 (con
 H-15) → H-8. **No queda ninguna decisión pendiente del operador**; debe una
 foto (tras apagar y prender, `85`) y, para el producto, la licencia de Hobo.
 
