@@ -306,3 +306,45 @@ encima del video.
 manifiesto dejaba la capa encendida sobre un `<video>` vacío: el mismo síntoma
 que el operador reportó en la caja, por otra causa. Ahora reintenta cada 300 ms
 hasta 6 s y se corta solo si mientras tanto se apagó la capa.
+
+## Actualización del 2026-09-04 (W-26b, la raíz auditada y puesta al día)
+
+Antes de tocar nada se **auditó**: se bajaron las 16 rutas de código de cada una
+de las cuatro carpetas (`/`, `/1280-15/`, `/1280-12/`, `/1920-10/`) y se
+compararon byte a byte contra el repo. Resultado:
+
+| | keys |
+|---|---:|
+| iguales al repo | 56 |
+| distintas | 8 |
+
+Las 8 distintas son **la misma página en cuatro carpetas**: `index.html` y
+`live-player.html`, que en el bucket eran byte-idénticas entre sí
+(`505071f1…`, 26.679 B) y no traían **W-26**. Lo único que les faltaba es esto:
+
+```
+-    if(!textLayer){
++    if(!textLayer && qs("renderer")!=="canvas2d"){
+```
+
+O sea el escape `?renderer=canvas2d`, que en la caja evita el pantallazo blanco
+de DIAG-002. Todo lo demás —incluido `playloop.js`, el motor único de
+W-22..W-25— ya estaba al día en las cuatro carpetas.
+
+**Dos cosas que la auditoría confirma y conviene no volver a suponer:** las
+cuatro carpetas siguen sirviendo copias **byte-idénticas** del código, y
+`index.html` sigue siendo `live-player.html` (mismo digest, ahora
+`ba612f0dcb61317c9753ba77842e4252`).
+
+**Corrección del manifiesto:** `playloop.js` estaba servido en las cuatro
+carpetas desde el 2026-08-31 pero **no figuraba** en este archivo. Se agregaron
+sus 4 filas. Este manifiesto es el registro de lo desplegado: una key servida y
+no anotada es una mentira silenciosa.
+
+| key | bytes | md5 |
+|---|---:|---|
+| `index.html` y `live-player.html`, en las 4 carpetas (8 keys) | 27004 | `ba612f0dcb61317c9753ba77842e4252` |
+| `playloop.js`, en las 4 carpetas (4 filas nuevas, ya servidas) | 10999 | `dcfbf631f50112547f742d87284352b1` |
+
+Verificación tras subir: `GET https://iargen.com/player/<key>?x=<nonce>`
+→ SHA-256 igual al del archivo local en las 8; token de subida quemado.
