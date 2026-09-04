@@ -235,3 +235,22 @@ determinismo). Cuatro CPUs, un solo archivo.
 
 Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
 → SHA-256 igual al del archivo local en las 54; token de subida quemado.
+
+## Actualización del 2026-09-04 (H-12b, la prueba de techo que no cierra la app)
+
+**2 keys** bajo `v0/`: `index.html` (regenerada = `frontend/v0.html`) y
+`vgencache.js`. El bucket sigue con **62 keys**. Orden respetado: las dos
+commiteadas en `main` antes de subirlas.
+
+| key | bytes | md5 | qué es |
+|---|---|---|---|
+| `v0/index.html` | 54349 | `836ae47ed2c40fdd7f277eb993276650` | techo en tandas de 5 MB hasta 50, cuota declarada reportada primero, `83` que arranca VP9 en bucle y avisa si falta el gesto, caídos que no pueden ser negativos |
+| `v0/vgencache.js` | 10786 | `8cfb75a0b598d742fee3f5971cac9387` | `TANDA_MB = 5`: `noise()` rechaza que le pidan más de una tanda de una vez |
+
+Por qué importa el segundo: el límite de una tanda lo cumple ahora el módulo y
+no la disciplina de quien lo llama. Pedir 50 MB contiguos —y clonarlos para
+guardarlos— fue lo que cerró la app de la caja el 2026-09-04, y una app cerrada
+no informa ningún techo.
+
+Verificación tras subir: `GET https://iargen.com/player/v0/<key>?x=<nonce>`
+→ SHA-256 igual al del archivo local en las dos; token de subida quemado.
