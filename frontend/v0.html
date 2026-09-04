@@ -16,37 +16,48 @@
   #video { position: absolute; background: #000; }
   #capa { position: absolute; }
   #capa.off { display: none; }
-  #side { position: absolute; overflow: hidden; }
-  table { border-collapse: collapse; width: 100%; font-size: 0.58em; }
-  th, td { border: 1px solid #33384a; padding: 0.18em 0.3em; text-align: left;
+  /* H-16: la fuente de la capa es Hobo por defecto (decision del operador,
+   * 2026-09-04: "que sea la fuente por defecto asi no agrego mas funciones").
+   * Se sirve al lado de la pagina, en el mismo prefijo v0/. El archivo es
+   * OpenType con contornos CFF aunque la extension diga .ttf, por eso el
+   * format() es "opentype": declararlo mal es la forma mas facil de que un
+   * WebView viejo lo descarte sin decir nada. Si no llega a tiempo, la capa
+   * dibuja en monospace y la fila lo declara: nunca se finge la fuente. */
+  @font-face { font-family: "Hobo"; src: url("HoboStd.ttf") format("opentype");
+               font-weight: normal; font-style: normal; }
+  /* Un nodo fuera de pantalla que USA la fuente: en Chromium 70 la descarga
+   * arranca cuando algo del documento la pide, y un canvas no siempre alcanza
+   * para dispararla. */
+  #hobo { position: absolute; left: -9999px; top: 0; font-family: "Hobo";
+          font-size: 40px; }
+  #side { position: absolute; overflow-x: hidden; overflow-y: auto; }
+  /* H-16: filas mas altas y letra mas grande. La tabla es lo que el operador
+   * mira mientras prueba, y ahora tiene el alto entero de la pantalla. */
+  table { border-collapse: collapse; width: 100%; font-size: 0.62em; }
+  th, td { border: 1px solid #33384a; padding: 0.38em 0.35em; text-align: left;
            white-space: nowrap; }
   th { background: #1a1e2c; }
   td.ok { color: #7ee08a; }
   td.no { color: #ff8f8f; }
-  #keys { position: absolute; left: 0; right: 0; padding: 0 0.6em;
+  /* H-16: la leyenda pasa a una COLUMNA A LA IZQUIERDA (pedido del operador,
+   * 2026-09-04: "deja al menos 10 siempre a la vista, alineada a la izquierda
+   * dandole mas lugar a los logs de prueba para que bajen mientras
+   * probamos"). Ya no compite por el ancho con la tabla. Y solo se muestran
+   * las teclas VIGENTES: lo ya consagrado sigue andando, pero se busca en
+   * docs/MANUAL-TECLAS-V0.md en vez de ocupar pantalla. */
+  #keys { position: absolute; left: 0; padding: 0 0.4em 0 0.6em;
           overflow: hidden; }
   #buffer { font-size: 1em; color: #ffd479; height: 1.15em;
             letter-spacing: 0.08em; }
-  /* La leyenda entra entera o no sirve: por eso hay tres tamanos y el tamano
-   * es el mensaje. Lo que hay que probar ahora va grande y arriba; lo ya
-   * medido se achica hasta ocupar lo minimo y deja de competir por la vista. */
-  /* El alto de cada renglon lo tiene que poner la tecla, no el contenedor: con
-   * el interlineado del #teclas mandando, una fila de las chicas ocupaba lo
-   * mismo que una de las grandes y la leyenda no entraba. */
-  #teclas { line-height: 0; }
-  #teclas .op { display: inline-block; margin: 0.06em 0; cursor: pointer;
-                line-height: 1.25;
-                white-space: nowrap; overflow: hidden; vertical-align: top; }
-  #teclas .now { width: 24%; font-size: 0.8em; color: #ffffff; }
-  #teclas .tool { width: 19%; font-size: 0.62em; }
-  #teclas .done { width: 14%; font-size: 0.5em; color: #8d93a8; }
+  #teclas .op { display: block; margin: 0.12em 0; cursor: pointer;
+                line-height: 1.3; white-space: nowrap; overflow: hidden; }
+  #teclas .now { font-size: 0.72em; color: #ffffff; }
+  #teclas .tool { font-size: 0.62em; color: #c3c8da; }
   #teclas .n { display: inline-block; min-width: 1.7em; text-align: center;
                background: #2a2f45; border: 1px solid #4a5170; color: #ffd479;
-               margin-right: 0.3em; }
+               margin-right: 0.35em; }
   #teclas .now .n { background: #ffd479; border-color: #ffd479;
                     color: #101014; }
-  #teclas .done .n { background: #1a1e2c; border-color: #33384a;
-                     color: #b9a06a; }
   #foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 0.6em;
           font-size: 0.55em; color: #8d93a8; overflow: hidden; }
   #full { position: absolute; left: 0; top: 0; right: 0; bottom: 0;
@@ -80,6 +91,7 @@
 </div>
 
 <div id="foot"><span id="env"></span></div>
+<span id="hobo">Hobo</span>
 
 <div id="full"><textarea id="report" readonly></textarea></div>
 
@@ -175,32 +187,42 @@ function px(node, left, top, width, height) {
 /* Geometria de una sola pantalla. La caja le da al WebView una superficie de
  * 3840x2160 sobre un panel de 1280x720, asi que todo -tipografia incluida- se
  * calcula desde el ancho real y nada se fija en pixeles a mano. */
+/* H-16: tres columnas en vez de una franja de teclas abajo.
+ *
+ * Antes la leyenda se comia el 26 % del alto a lo ancho de toda la pantalla, y
+ * la tabla -que es lo que el operador mira mientras prueba- quedaba encajonada
+ * a la derecha del video con la mitad del alto. Ahora: teclas a la IZQUIERDA en
+ * una columna angosta, video al medio y tabla a la derecha con el alto entero.
+ * Los renglones de la corrida bajan mientras se prueba, que era el pedido. */
 function layout() {
   var w = window.innerWidth || 1280;
   var h = window.innerHeight || 720;
-  var headH, keysH, footH, midTop, midH, stageW, vw, vh;
+  var headH, footH, midTop, midH, keysW, stageW, stageX, vw, vh, sideX;
   document.documentElement.style.fontSize =
     Math.max(11, Math.round(w / 46)) + "px";
   headH = Math.round(h * 0.13);
-  /* La franja de teclas empieza mas arriba que en H-10: con tres tamanos
-   * entra toda la leyenda sin pisar el zocalo (pedido del operador). */
-  keysH = Math.round(h * 0.26);
   footH = Math.round(h * 0.06);
   midTop = headH;
-  midH = h - headH - keysH - footH;
-  stageW = Math.round(w * 0.56);
+  midH = h - headH - footH;
+  /* La columna de teclas: angosta, pero nunca tanto como para partir una
+   * etiqueta. En 1280 son 243 px, que entran los renglones mas largos. */
+  keysW = Math.round(w * 0.19);
+  stageX = keysW;
+  stageW = Math.round((w - keysW) * 0.54);
   /* Las piezas son 16:9: el recuadro toma esa forma para que el video no se
    * deforme, y la tabla se queda con lo que sobra a la derecha. */
   vw = stageW;
   vh = Math.round(stageW * 9 / 16);
   if (vh > midH) { vh = midH; vw = Math.round(midH * 16 / 9); }
-  px(byId("video"), 0, midTop + Math.round((midH - vh) / 2), vw, vh);
-  px(byId("alphaBg"), 0, midTop + Math.round((midH - vh) / 2), vw, vh);
-  px(byId("capa"), 0, midTop + Math.round((midH - vh) / 2), vw, vh);
+  px(byId("video"), stageX, midTop + Math.round((midH - vh) / 2), vw, vh);
+  px(byId("alphaBg"), stageX, midTop + Math.round((midH - vh) / 2), vw, vh);
+  px(byId("capa"), stageX, midTop + Math.round((midH - vh) / 2), vw, vh);
   sizeCapa(vw, vh);
-  px(byId("side"), stageW + 8, midTop, w - stageW - 12, midH);
-  byId("keys").style.top = (midTop + midH) + "px";
-  byId("keys").style.height = keysH + "px";
+  sideX = stageX + stageW + 8;
+  px(byId("side"), sideX, midTop, w - sideX - 12, midH);
+  byId("keys").style.top = midTop + "px";
+  byId("keys").style.width = (keysW - 14) + "px";
+  byId("keys").style.height = midH + "px";
 }
 
 function say(value) {
@@ -446,7 +468,19 @@ function draw() {
   var i;
   for (i = 0; i < pieces.length; i++) { drawRow(body, pieces[i]); }
   for (i = 0; i < extras.length; i++) { drawRow(body, extras[i]); }
+  /* H-16: los renglones BAJAN mientras se prueba (pedido del operador). La
+   * tabla ahora tiene el alto entero, pero una corrida larga igual la pasa;
+   * dejarla arriba obligaria a mirar filas viejas mientras la nueva queda
+   * fuera de cuadro. En la TV no hay como scrollear a mano. */
+  scrollAlFinal();
   writeReport();
+}
+
+function scrollAlFinal() {
+  var side = byId("side");
+  if (side && typeof side.scrollHeight === "number") {
+    side.scrollTop = side.scrollHeight;
+  }
 }
 
 function environment() {
@@ -457,7 +491,9 @@ function environment() {
   lines.push("panel\t" + screen.width + "x" + screen.height +
              "\tdpr " + (window.devicePixelRatio || 1) +
              "\tsuperficie " + window.innerWidth + "x" + window.innerHeight);
-  lines.push("capa\t" + capa.w + "x" + capa.h + "\tk " + (Math.round(capa.k * 1000) / 1000));
+  lines.push("capa\t" + capa.w + "x" + capa.h + "\tk " + (Math.round(capa.k * 1000) / 1000) +
+             "\tfuente " + capaFuente.name +
+             (capaFuente.ms ? " (" + capaFuente.ms + " ms)" : " (esperando)"));
   lines.push("mse\t" + (window.MediaSource ? "si" : "no") +
              "\tchangeType\t" + (VGenFeed.hasChangeType() ? "si" : "no") +
              "\tblob\t" + ((window.Blob && url && url.createObjectURL) ? "si" : "no"));
@@ -725,6 +761,57 @@ function stepLoop(id, pieceId) {
 var CAPA_FPS = 15;
 var capa = { load: "none", paints: 0, n: 0, timer: 0, w: 0, h: 0, k: 1 };
 
+/* H-16: Hobo es la fuente de la capa, por defecto (operador, 2026-09-04). No
+ * se puede usar `document.fonts` -devuelve Promise y el piso ES5 la prohibe-,
+ * asi que la llegada de la fuente se detecta MIDIENDO: el mismo texto en
+ * "Hobo, monospace" y en "monospace" dan el mismo ancho mientras la fuente no
+ * haya llegado, y anchos distintos apenas llega. Se sondea hasta
+ * CAPA_FUENTE_MS; si no llega, la capa sigue en monospace y cada fila lo
+ * declara ("fuente: fallback"). Una medicion no puede fingir con que letra se
+ * dibujo. */
+var CAPA_FUENTE_MS = 3000;
+var capaFuente = { name: "fallback", ms: 0, timer: 0 };
+var capaRegla = null;   /* lienzo de 8x8 solo para medir; se crea una vez */
+
+function capaFuenteFamily() {
+  return capaFuente.name === "hobo" ? "\"Hobo\", monospace" : "monospace";
+}
+
+function anchoCon(family) {
+  var ctx;
+  if (!capaRegla) {
+    capaRegla = document.createElement("canvas");
+    capaRegla.width = 8;
+    capaRegla.height = 8;
+  }
+  ctx = capaRegla.getContext ? capaRegla.getContext("2d") : null;
+  if (!ctx) { return 0; }
+  ctx.font = "40px " + family;
+  return ctx.measureText("ASCILINE 0123").width;
+}
+
+function esperarHobo() {
+  var t0 = new Date().getTime();
+  var patron = anchoCon("monospace");
+  function mirar() {
+    var ancho = anchoCon("\"Hobo\", monospace");
+    var pasado = new Date().getTime() - t0;
+    capaFuente.timer = 0;
+    if (patron > 0 && ancho > 0 && ancho !== patron) {
+      capaFuente.name = "hobo";
+      capaFuente.ms = pasado;
+      return;
+    }
+    if (pasado >= CAPA_FUENTE_MS) {
+      capaFuente.name = "fallback";
+      capaFuente.ms = pasado;
+      return;
+    }
+    capaFuente.timer = window.setTimeout(mirar, 150);
+  }
+  mirar();
+}
+
 /* Panel real / superficie del WebView, tope 1. En la caja medida: 1280/3840. */
 function panelScale() {
   var sw = (typeof screen !== "undefined" && screen.width) ? screen.width : 0;
@@ -765,9 +852,9 @@ function paintCapa(ctx, x, y, w, h, n, alpha) {
   ctx.fillStyle = "#ffffff";
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
-  ctx.font = "bold " + Math.round(h * 0.5) + "px monospace";
+  ctx.font = "bold " + Math.round(h * 0.5) + "px " + capaFuenteFamily();
   ctx.fillText(String(n % 100), x + w * 0.06, y + h * 0.42);
-  ctx.font = Math.round(h * 0.16) + "px monospace";
+  ctx.font = Math.round(h * 0.16) + "px " + capaFuenteFamily();
   ctx.fillText("ASCILINE", x + w * 0.06, y + h * 0.82);
 }
 
@@ -860,7 +947,8 @@ function stepCapa(pieceId, short, which) {
     measure(piece, base + src.file, function (r) {
       if (which.load !== "none") {
         piece.note = which.note + "; pintadas " + capa.paints +
-                     " (" + capa.w + "x" + capa.h + ")";
+                     " (" + capa.w + "x" + capa.h + "); fuente: " +
+                     capaFuente.name;
       }
       setCapa("none");
       finishRow(id, done)(r);
@@ -908,6 +996,15 @@ function packageSteps() {
 function everything() {
   return pieceSteps(withRole("base").concat(withRole("alpha"), withRole("stream")))
     .concat(packageSteps(), capaAll(), cacheBatch());
+}
+
+/* H-16: lo que TODAVIA no dijo la caja. La prueba general dejo de repetir lo
+ * consagrado -piezas progresivas, HLS/DASH, MSE, blob, capa, la cache que
+ * persiste-: eso ya se sabe y solo tapaba pantalla. Cuando una pregunta nueva
+ * entra (H-18, dos <video> a la vez), se suma aca; cuando la caja la consagra,
+ * se saca y pasa al manual. */
+function pendingSteps() {
+  return techoSteps();
 }
 
 /* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
@@ -1293,9 +1390,13 @@ var TECLAS = [
   { code: "86", label: "borrar cache", tier: "now",
     detail: "vacia la base",
     run: clearCache },
-  { code: "1", label: "correr todo", tier: "tool",
-    detail: "v0 entero + las 5 de paquete + las 6 de capa + la cache",
-    run: function () { runSteps(everything(), 0); } },
+  /* H-16: el `1` corre SOLO LO NO CONSAGRADO (operador, 2026-09-04: "si ya
+   * tuvimos claridad sobre ciertos elementos, ya quitalos de la prueba
+   * general"). Hoy es el techo de la cache; crece cuando H-18 exista. Lo ya
+   * consagrado no desaparece: va en el 89 y en el manual. */
+  { code: "1", label: "lo que falta", tier: "now",
+    detail: "solo lo NO consagrado: hoy, el techo de la cache",
+    run: function () { runSteps(pendingSteps(), 0); } },
   { code: "95", label: "reporte", tier: "tool",
     detail: "a pantalla completa, para la foto",
     run: toggleReport },
@@ -1351,23 +1452,33 @@ var TECLAS = [
     detail: "1-8,13-16,9-12 por MSE y por Blob",
     run: function () { runSteps(orderSteps(), 0); } },
   { code: "99", label: "bucle 60 s", tier: "done", detail: "VP9 con loop",
-    run: function () { runSteps(loopSteps(), 0); } }
+    run: function () { runSteps(loopSteps(), 0); } },
+  { code: "89", label: "correr todo", tier: "done",
+    detail: "v0 entero + paquete + capa + cache, incluido lo consagrado",
+    run: function () { runSteps(everything(), 0); } }
 ];
 
 /* La leyenda se dibuja por tier, no en el orden del arreglo: primero lo que hay
- * que probar, despues las herramientas, al final lo ya medido. */
-var TIERS = ["now", "tool", "done"];
+ * que probar, despues las herramientas.
+ *
+ * H-16: el tier "done" -lo que la caja YA consagro- dejo de dibujarse. Las
+ * teclas siguen andando igual: lo unico que cambia es que no compiten por la
+ * pantalla. Estan listadas en docs/MANUAL-TECLAS-V0.md, que es lo que el
+ * operador pidio: "en vez de darme todas las opciones en pantalla largame un
+ * archivo manual donde yo desde la pc pueda saber que aprieto". */
+/* Los tres tiers existen para clasificar; solo estos dos se dibujan. */
+var TIERS_VISIBLES = ["now", "tool"];
 
 function renderKeys() {
   var box = byId("teclas");
   var t, i, item, row, tag, name;
   while (box.firstChild) { box.removeChild(box.firstChild); }
-  for (t = 0; t < TIERS.length; t++) {
+  for (t = 0; t < TIERS_VISIBLES.length; t++) {
     for (i = 0; i < TECLAS.length; i++) {
       item = TECLAS[i];
-      if ((item.tier || "done") !== TIERS[t]) { continue; }
+      if ((item.tier || "done") !== TIERS_VISIBLES[t]) { continue; }
       row = document.createElement("div");
-      row.className = "op " + TIERS[t];
+      row.className = "op " + TIERS_VISIBLES[t];
       tag = document.createElement("span");
       tag.className = "n";
       text(tag, item.code);
@@ -1390,6 +1501,7 @@ function start() {
   base = param("base");
   if (base && base.charAt(base.length - 1) !== "/") { base += "/"; }
   renderKeys();
+  esperarHobo();
   draw();
   refreshCacheInfo();
   if (window.ASCLKeypad) {

@@ -209,16 +209,27 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 26);
+assert.strictEqual(codigos.length, 27);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
-["80", "81", "82", "83", "84", "85", "86",
+["80", "81", "82", "83", "84", "85", "86", "89",
  "90", "91", "92", "93", "94", "95", "96", "97", "98", "99"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta el codigo compuesto " + code);
 });
-assert.strictEqual(action("1").label, "correr todo",
-  "el 1 sigue siendo correr todo: es la accion que mas se usa");
+/* H-16: el 1 dejo de correr todo. Corre SOLO lo no consagrado; lo que corria
+ * antes sigue entero en el 89. El operador lo pidio asi: "si ya tuvimos
+ * claridad sobre ciertos elementos, ya quitalos de la prueba general". */
+assert.strictEqual(action("1").label, "lo que falta",
+  "el 1 corre solo lo que la caja todavia no consagro");
+assert(/pendingSteps\(\)/.test(String(action("1").run)),
+  "y lo hace con pendingSteps(), no con everything()");
+assert.strictEqual(action("89").label, "correr todo",
+  "correr todo no desaparece: se muda al 89");
+assert(/everything\(\)/.test(String(action("89").run)),
+  "el 89 es el que corre todo, consagrado incluido");
+assert.strictEqual(action("89").tier, "done",
+  "y por eso vive en el manual, no en la pantalla");
 
 function action(code) {
   var i;
@@ -268,8 +279,8 @@ registered.actions.forEach(function (item) {
 var ahora = registered.actions.filter(function (item) {
   return item.tier === "now";
 }).map(function (item) { return item.code; }).sort();
-assert.deepStrictEqual(ahora, ["80", "81", "82", "83", "84", "85", "86"],
-  "lo pendiente de probar es la capa de H-11 y la cache de H-12, y nada mas");
+assert.deepStrictEqual(ahora, ["1", "80", "81", "82", "83", "84", "85", "86"],
+  "lo pendiente de probar es la capa de H-11, la cache de H-12 y el 1");
 
 function emDe(sel) {
   var m = page.match(new RegExp("#teclas \\." + sel +
@@ -277,20 +288,46 @@ function emDe(sel) {
   assert(m, "la leyenda no define el tamano de ." + sel);
   return parseFloat(m[1]);
 }
-assert(emDe("now") > emDe("tool") && emDe("tool") > emDe("done"),
-  "lo ya probado tiene que verse mas chico que lo que falta probar");
+assert(emDe("now") > emDe("tool"),
+  "las herramientas se ven mas chicas que lo que falta probar");
+assert(/#teclas \.done\s*\{/.test(page) === false,
+  "el tier consagrado ya no se dibuja: no necesita tamano propio");
 assert(/#keys\s*\{[^}]*overflow:\s*hidden/.test(page),
-  "la franja de teclas no puede desbordar sobre el zocalo");
+  "la columna de teclas no puede desbordar");
 
-assert.strictEqual(byId("teclas").childNodes.length, 26,
-  "la leyenda de teclas se dibuja en pantalla: en una TV no hay donde mirarla");
+/* H-16: la leyenda es una COLUMNA A LA IZQUIERDA y la tabla se queda con el
+ * alto entero, para que los renglones bajen mientras se prueba (pedido del
+ * operador, 2026-09-04). */
+assert(/#keys\s*\{[^}]*left:\s*0/.test(page),
+  "la columna de teclas va pegada a la izquierda");
+assert(/#teclas \.op\s*\{[^}]*display:\s*block/.test(page),
+  "cada tecla ocupa su propio renglon: es una columna, no una franja");
+assert(/byId\("keys"\)\.style\.width/.test(inline[1]),
+  "el layout le da a la columna un ancho propio");
+assert(/byId\("keys"\)\.style\.top = midTop/.test(inline[1]),
+  "la columna arranca arriba, no debajo del video");
+assert(/px\(byId\("side"\), sideX, midTop, w - sideX - 12, midH\)/.test(inline[1]),
+  "la tabla toma el alto entero de la franja del medio");
+
+/* Al menos 10 teclas a la vista: menos que eso obliga a mirar el manual para
+ * lo de todos los dias, y el operador prueba con el control en la mano. */
+var visibles = byId("teclas").childNodes.length;
+assert(visibles >= 10,
+  "tienen que quedar al menos 10 teclas a la vista, y hay " + visibles);
+assert.strictEqual(visibles, 12,
+  "hoy son 12: las 8 de ahora y las 4 herramientas");
+var ocultas = registered.actions.filter(function (item) {
+  return item.tier === "done";
+}).length;
+assert.strictEqual(visibles + ocultas, codigos.length,
+  "ninguna tecla se pierde: la que no se ve, sigue andando");
 
 /* La misma leyenda es el boton: en el celular no hay teclado numerico. */
 var conClick = 0;
 byId("teclas").childNodes.forEach(function (row) {
   if (typeof row.onclick === "function") { conClick++; }
 });
-assert.strictEqual(conClick, 26,
+assert.strictEqual(conClick, visibles,
   "cada entrada de la leyenda tiene que poder tocarse en un celular");
 
 /* Se dibuja agrupada por tier, no en el orden del arreglo. */
@@ -305,8 +342,65 @@ assert.strictEqual(
 var orden = pintadas.join(" ");
 assert(orden.indexOf("op tool") > orden.lastIndexOf("op now"),
   "las herramientas van despues de lo que hay que probar");
-assert(orden.indexOf("op done") > orden.lastIndexOf("op tool"),
-  "lo ya medido va al final");
+assert(orden.indexOf("op done") < 0,
+  "lo ya consagrado no se dibuja: se busca en el manual");
+
+/* --- H-16: el manual de teclas --- */
+
+var manual = fs.readFileSync(
+  path.join(__dirname, "..", "docs", "MANUAL-TECLAS-V0.md"), "utf8");
+registered.actions.forEach(function (item) {
+  if (item.tier !== "done") { return; }
+  assert(manual.indexOf("`" + item.code + "`") >= 0,
+    "la tecla oculta " + item.code + " no esta en el manual: quedaria perdida");
+});
+assert(/`83`/.test(manual) && /`1`/.test(manual),
+  "el manual tambien lista lo que se ve, para poder leerlo todo de una");
+
+/* --- H-16: Hobo, la fuente de la capa --- */
+
+/* El operador la eligio por defecto el 2026-09-04 ("que sea la fuente por
+ * defecto asi no agrego mas funciones") y ya la habia probado en ESE WebView
+ * desde CSS. Lo que estas pruebas cuidan es que no se pueda mentir sobre con
+ * que letra se dibujo, y que la falta de la fuente no rompa nada. */
+
+assert(/@font-face\s*\{[^}]*font-family:\s*"Hobo"/.test(page),
+  "la capa declara la fuente Hobo con @font-face");
+assert(/url\("HoboStd\.ttf"\)\s*format\("opentype"\)/.test(page),
+  "el archivo es OpenType con contornos CFF aunque diga .ttf: declararlo " +
+  "como truetype es la forma facil de que un WebView viejo lo descarte");
+assert(/#hobo\s*\{[^}]*font-family:\s*"Hobo"/.test(page),
+  "un nodo del documento usa la fuente: en Chromium 70 un canvas no siempre " +
+  "alcanza para disparar la descarga");
+assert.strictEqual(/document\.fonts/.test(page), false,
+  "document.fonts devuelve Promise y el piso ES5 la prohibe");
+
+assert(/CAPA_FUENTE_MS = 3000/.test(inline[1]),
+  "se espera hasta 3 s a que llegue la fuente, y ni un ms mas");
+assert(/measureText\("ASCILINE 0123"\)/.test(inline[1]),
+  "la llegada de la fuente se detecta MIDIENDO, no preguntando");
+assert(/anchoCon\("monospace"\)/.test(inline[1]) &&
+       /anchoCon\("\\"Hobo\\", monospace"\)/.test(inline[1]),
+  "se compara el mismo texto con la fuente y sin ella");
+assert(/ctx\.font = "bold " \+ Math\.round\(h \* 0\.5\) \+ "px " \+ capaFuenteFamily\(\)/
+  .test(inline[1]),
+  "la capa dibuja con la fuente elegida, no con monospace fijo");
+assert.strictEqual(/px monospace"/.test(inline[1]), false,
+  "no puede quedar ninguna pintada clavada en monospace");
+assert(/"; fuente: " \+\s*\n?\s*capaFuente\.name/.test(inline[1]) ||
+       /fuente: " \+/.test(inline[1]),
+  "cada fila de capa declara con que fuente se dibujo");
+assert(/"\\tfuente " \+ capaFuente\.name/.test(inline[1]),
+  "y la cabecera del reporte tambien, que es lo que sale en la foto");
+
+/* El archivo servido, tal cual se publica. */
+var fuentePath = path.join(__dirname, "..", "frontend", "HoboStd.ttf");
+assert(fs.existsSync(fuentePath),
+  "la fuente vive en el repo: lo desplegado se guarda antes de subirlo");
+var fuenteBuf = fs.readFileSync(fuentePath);
+assert.strictEqual(fuenteBuf.length, 31444, "la fuente que paso el operador");
+assert.strictEqual(fuenteBuf.slice(0, 4).toString("latin1"), "OTTO",
+  "OpenType con contornos CFF: por eso el format() dice opentype");
 
 /* --- Correr el 5 en un aparato sin MSE: la fila aparece con su error y el
  * resto no explota; el 0 la limpia. --- */
@@ -443,3 +537,11 @@ action("0").run();
 assert.strictEqual(filas.childNodes.length, 7);
 
 console.log("v0 page tests: OK");
+
+/* H-16: la tabla es lo que el operador mira mientras prueba, y los renglones
+ * tienen que BAJAR solos: en una TV no hay como scrollear a mano. */
+assert(/#side\s*\{[^}]*overflow-y:\s*auto/.test(page),
+  "la tabla puede desplazarse: una corrida larga no entra en ningun alto");
+assert(/function scrollAlFinal\(\)/.test(inline[1]) &&
+       /scrollAlFinal\(\);\n  writeReport\(\)/.test(inline[1]),
+  "cada redibujado deja a la vista el ultimo renglon, no el primero");
