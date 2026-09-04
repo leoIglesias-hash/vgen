@@ -152,9 +152,9 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   VP9 salieron byte-idénticas a las del 09-01 → **invariante 7 saldado**.
   **W-26 → terminar** (W-26b). **Nuevas 2026-09-04:**
   **H-12b ejecutada 2026-09-04** (techo en tandas de 5 MB, `83` que arranca VP9,
-  caídos no negativos; publicada; **debe la foto de la caja**), **H-16 (próxima)** (Hobo por defecto + `1` reducido + `docs/MANUAL-TECLAS-V0.md`
+  caídos no negativos; publicada; **debe la foto de la caja**), **H-16 ejecutada 2026-09-04** (Hobo por defecto, tres columnas, 12 teclas a la vista, manual aparte; publicada; **debe la foto**) (Hobo por defecto + `1` reducido + `docs/MANUAL-TECLAS-V0.md`
   + ≥ 10 teclas a la izquierda), W-26b, **H-18** (dos `<video>` a la vez),
-  **H-15** (residencia). **Orden: H-16 → W-26b → H-18 → H-6 →
+  **H-15** (residencia). **Orden: W-26b → H-18 → H-6 →
   H-7 → H-8.** Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
 - **Lo que la caja dijo (2026-09-01, Android 9 / Chromium 70):** todo lo

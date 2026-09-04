@@ -4496,3 +4496,114 @@ en una sola visita:
 
 **Sigue H-16** (Hobo por defecto en la capa, `1` reducido a lo no consagrado,
 manual de teclas y leyenda de ≥ 10 a la izquierda).
+
+---
+
+## 2026-09-04 — H-16 ejecutada: Hobo por defecto, la página reformada, y tres cosas que aparecieron al probarla
+
+Cuatro pedidos del operador del 2026-09-04, textuales: *«que sea la fuente por
+defecto así no agrego más funciones»*, *«si ya tuvimos claridad sobre ciertos
+elementos, ya quitalos de la prueba general (el 1)»*, *«en vez de darme todas
+las opciones en pantalla largame un archivo manual donde yo desde la pc pueda
+saber qué aprieto»*, *«dejá al menos 10 siempre a la vista, alineada a la
+izquierda dándole más lugar a los logs de prueba para que bajen mientras
+probamos»*.
+
+### La fuente
+
+La capa dibuja con **Hobo** (`v0/HoboStd.ttf`, 31.444 B, el archivo que pasó el
+operador). Es **OpenType con contornos CFF** aunque la extensión diga `.ttf`,
+así que el `@font-face` lo declara `format("opentype")`: declararlo como
+`truetype` es la forma más fácil de que un WebView viejo lo descarte sin decir
+nada.
+
+No se puede preguntar por `document.fonts` —devuelve una promesa y el piso ES5
+del proyecto la prohíbe—, así que la llegada de la fuente **se mide**. Y acá
+hubo que corregirse, midiendo de verdad en un navegador:
+
+- **Primera versión:** comparar el ancho de `"ASCILINE 0123"` en
+  `Hobo, monospace` contra `monospace`. Andaba, pero el margen era de **1,5 px
+  sobre 285** (medido: 285,9 contra 284,4). En otro aparato los dos podían
+  coincidir y la página hubiera dicho `fallback` para siempre **teniendo la
+  fuente puesta**.
+- **Versión adoptada:** comparar `MMMMM` contra `iiiii` **en la misma familia**.
+  Monospace le da a toda letra el mismo avance, así que anchos distintos solo
+  pueden venir de una fuente proporcional, y la única que puede estar puesta es
+  Hobo. Medido en el mismo navegador: **170,2 contra 53,2**. No hay margen que
+  se pueda perder.
+
+Si no llega en 3 s se sigue en monospace, y tanto la fila como la cabecera del
+reporte lo declaran (`fuente hobo (165 ms)` / `fuente fallback`). Una medición
+no puede fingir con qué letra se dibujó.
+
+**Se sirve como `application/octet-stream`** porque el Worker no tiene `ttf` en
+su tabla, y **no se tocó el Worker a propósito**: cambiarlo obliga a
+re-desplegar el script, mientras que todas las demás subidas son solo R2, y los
+navegadores no exigen tipo MIME para las fuentes de `@font-face`. Comprobado en
+el navegador contra lo publicado: **carga y se detecta igual**. Si algún día un
+aparato la rechazara, la página lo dice sola y la corrección es una línea.
+
+### La pantalla
+
+Tres columnas en vez de una franja abajo: **teclas a la izquierda, video al
+medio, tabla a la derecha con el alto entero**. Antes la leyenda se comía el
+26 % del alto a todo lo ancho y la tabla quedaba encajonada con la mitad del
+alto. Filas más altas y letra más grande, y los renglones **bajan solos** al
+redibujar, porque en una TV no hay cómo scrollear a mano.
+
+### Las teclas
+
+En pantalla quedan **12**: las 8 de ahora (`80`..`86` y el `1`) y las 4
+herramientas (`95`, `93`, `0`, `94`). Lo consagrado **sigue andando por su
+tecla** pero sale de la pantalla y entra en
+[`MANUAL-TECLAS-V0.md`](MANUAL-TECLAS-V0.md), con lo que la caja ya dijo de cada
+una. El `1` pasa a ser **«lo que falta»** y corre solo lo no consagrado (hoy, el
+techo de la caché); **«correr todo» no desaparece: se muda al `89`**. Una prueba
+verifica que ninguna tecla se pierda —visibles + ocultas = todas— y que cada
+oculta esté listada en el manual.
+
+### Tres cosas que aparecieron al PROBARLA, no al leerla
+
+La página publicada se abrió en un navegador y se midió. Salieron tres defectos
+que ninguna lectura del código hubiera mostrado:
+
+1. **La detección de la fuente tenía 1,5 px de margen** (arriba).
+2. **La columna de teclas partía etiquetas en pantallas angostas.** A 399 px de
+   ancho mostraba «cache: gua…», «desde cach…». Ahora tiene un piso de 200 px
+   acotado a un tercio del ancho. Y `box-sizing: border-box`, porque el relleno
+   la montaba **14 px sobre el video** (medido: la columna terminaba en 257 y el
+   video empezaba en 243).
+3. **`83` apretada apenas abre la página dejaba la capa encendida sobre un
+   `<video>` vacío** — el **mismo síntoma** que el operador reportó en la caja,
+   por una causa distinta: el manifiesto todavía no había llegado. O sea que
+   arreglar solo la primera causa (H-12b) no alcanzaba. Ahora reintenta cada
+   300 ms hasta 6 s diciendo «esperando el manifiesto», y se corta solo si
+   mientras tanto se apagó la capa.
+
+**Verificado sobre lo publicado**, no supuesto: a 1280×720 la columna termina en
+243 y el video empieza en 243 (sin solape), la tabla toma los 583 px de alto,
+ninguna etiqueta queda cortada ni a 1280 ni a 420 de ancho, la fuente se detecta
+en 165 ms, y `83` apretada de inmediato arranca VP9 en bucle con la capa
+pintando encima.
+
+### Publicado
+
+3 keys de `v0/`: `HoboStd.ttf` (nueva, 31.444 B,
+`56461958360533730babbd1bcc04ca77`) e `index.html`, esta última tres veces —una
+por cada arreglo—, quedando en **61.329 B**, `8fd7a9c6ad7a6e536f02297877829316`.
+El bucket pasa de 62 a **63 keys**. Copias previas commiteadas antes de cada
+subida (`fe55326`, `b2091b8`, `010e0fb`); cada verificación contra lo servido
+por SHA-256; los tres tokens quemados y confirmados con 403.
+
+**Licencia:** `HoboStd.ttf` es de Adobe. Está publicada para **probar** en los
+aparatos, que es lo que el operador pidió. Antes de usarla en el producto hay
+que revisar la licencia de distribución web. Queda anotado, no resuelto.
+
+### Lo que falta de H-16
+
+La foto de la caja: que la capa se vea **en Hobo** (o que el reporte diga
+`fallback`, que también es una respuesta), y que la leyenda de 12 teclas entre
+sin pisar nada en el panel real.
+
+**Sigue W-26b** (auditar la raíz servida contra el repo y republicar las cuatro
+carpetas).
