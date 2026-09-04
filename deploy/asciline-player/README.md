@@ -438,3 +438,26 @@ navegador no lo dice, nunca se supone que había red). Con eso, la prueba que s�
 discrimina cabe en una sola foto: cortar la red **con la página ya abierta** y
 recién entonces `85`, que lee IndexedDB y reproduce desde `blob:` sin tocar la
 red ni una vez.
+
+## 2026-09-04 (noche) — H-22: dos keys
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/index.html` | 81.788 | `443494a0ec3fb9e60d97b688bf1a96f7` |
+| `v0/keypad.js` | 7.853 | `2423d8b649bfb8c80a6de30defcc42e5` |
+
+En el WebView de un **Smart TV con Android** no entraba ningún número, ni por
+control remoto ni por un pad USB. El mando ahora lee el dígito por **cuatro
+caminos** —`keyCode` 48–57, `keyCode` 96–105, **`key`** y `code`/`charCode`—,
+usa `keypress` como plan B con guarda anti-doble, y se engancha en `document` y
+`window` marcando el evento para no atenderlo dos veces.
+
+**Confirmado sin ir al aparato:** el navegador de esta sesión reproduce el
+síntoma —`keydown kc=0 w=0 cc=0 key=9`— y con el arreglo el `83` enciende la
+capa. El zócalo de `v0/` muestra ahora **lo último que el aparato mandó por el
+teclado**, que es lo que separa «los eventos no llegan a la página» de «llegan
+por un campo que no mirábamos».
+
+`ir.html` **no vive acá** (va en otro servidor, como archivo suelto): se le
+entrega al operador aparte, con el mismo arreglo y con la línea de diagnóstico
+fija en pantalla.
