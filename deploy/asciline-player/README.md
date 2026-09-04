@@ -299,3 +299,10 @@ página publicada en un navegador y medirla, no de leerla:
 **Comprobado sobre lo publicado:** la fuente carga y se detecta pese a servirse
 como `application/octet-stream`, el `83` arranca VP9 en bucle y la capa pinta
 encima del video.
+
+### Segunda corrección del mismo día (H-16, la carrera del `83`)
+
+`v0/index.html` → **61329 B**, md5 `8fd7a9c6ad7a6e536f02297877829316`. Apretar `83` **antes** de que llegara el
+manifiesto dejaba la capa encendida sobre un `<video>` vacío: el mismo síntoma
+que el operador reportó en la caja, por otra causa. Ahora reintenta cada 300 ms
+hasta 6 s y se corta solo si mientras tanto se apagó la capa.
