@@ -224,11 +224,11 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 28);
+assert.strictEqual(codigos.length, 31);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
-["80", "81", "82", "83", "84", "85", "86", "87", "89",
+["70", "73", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89",
  "90", "91", "92", "93", "94", "95", "96", "97", "98", "99"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta el codigo compuesto " + code);
 });
@@ -655,12 +655,14 @@ assert(/caidos " \+ efecto\.dropped \+\s*\n?\s*"\/" \+ efecto\.total/.test(inlin
 assert(/if \(o\.efecto\) \{ startEfecto\(o\.efecto\); \}/.test(inline[1]) &&
        /if \(o\.efecto\) \{ stopEfecto\(\); \}/.test(inline[1]),
   "arranca con la medicion y se corta con ella: nunca queda sonando solo");
-assert(/stopEfecto\(\);\n  byId\("alphaBg"\)\.className = "";/.test(inline[1]),
+assert(/stopEfecto\(\);\n  salirEntera\(\);\n  byId\("alphaBg"\)\.className = "";/
+  .test(inline[1]),
   "el 0 tambien lo apaga: en una TV no hay otra forma de callarlo");
 
-/* Y entra en lo que corre el 1, porque todavia no lo contesto la caja. */
-assert(/return techoSteps\(\)\.concat\(\[stepDosVideos\(\)\]\)/.test(inline[1]),
-  "el 1 corre el techo y los dos videos: lo no consagrado, nada mas");
+/* Y entra en lo que corre el 1, porque todavia no lo contesto la caja. La
+ * forma exacta del concat se verifica abajo, con H-20 adentro. */
+assert(/stepDosVideos\(\)\]/.test(inline[1]),
+  "el 1 corre los dos videos: lo no consagrado, nada mas");
 assert(/dos videos/.test(action("87").label), "87 = dos videos a la vez");
 assert(/H-18/.test(action("87").detail));
 
