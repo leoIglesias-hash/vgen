@@ -636,3 +636,17 @@ assert(/return techoSteps\(\)\.concat\(\[stepDosVideos\(\)\]\)/.test(inline[1]),
   "el 1 corre el techo y los dos videos: lo no consagrado, nada mas");
 assert(/dos videos/.test(action("87").label), "87 = dos videos a la vez");
 assert(/H-18/.test(action("87").detail));
+
+/* H-18: el contador del de ARRIBA se arma cuando empieza a sonar, no al pedirle
+ * que suene. Medido el 2026-09-04 corriendo la prueba dos veces seguidas: con
+ * la base tomada antes, la segunda pasada informaba "1/2 caidos" -la resta iba
+ * contra los contadores de la pasada anterior, que load() acababa de poner en
+ * cero-. Un contador que solo acierta la primera vez no sirve para nada. */
+assert(/function armEfecto\(\)/.test(inline[1]),
+  "la linea de base del efecto se arma aparte");
+assert(/if \(!\(node\.currentTime > 0\)\) \{ return; \}/.test(inline[1]),
+  "y se arma cuando el de arriba EMPEZO A SONAR, no antes");
+assert(/if \(o\.efecto\) \{ armEfecto\(\); \}/.test(inline[1]),
+  "se intenta armar en cada vuelta de la medicion");
+assert(/efecto\.error = "el de arriba no arranco"/.test(inline[1]),
+  "si nunca sono, la fila lo dice en vez de mostrar un cero enganoso");

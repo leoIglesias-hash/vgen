@@ -394,6 +394,7 @@ function measure(piece, src, done, opts) {
     if (row.error) { finish(); return; }
     ct = video.currentTime;
     now = new Date().getTime();
+    if (o.efecto) { armEfecto(); }
     if (!row.started && ct > 0) {
       row.started = true;
       row.firstMs = now - t0;
@@ -1250,8 +1251,8 @@ function stepCachePlay(pieceId) {
  * Va ENCIMA y del tamano del rectangulo de la capa; nunca creciendo hacia
  * abajo (regla 10: todo en una pantalla). Y cuenta SUS PROPIOS cuadros, porque
  * la pregunta no es si el de arriba se ve: es si los dos se sostienen. */
-var efecto = { on: false, total: 0, dropped: 0, baseTotal: 0, baseDropped: 0,
-               says: "", error: "" };
+var efecto = { on: false, armed: false, total: 0, dropped: 0,
+               baseTotal: 0, baseDropped: 0, says: "", error: "" };
 
 function placeEfecto(x, y, w, h) {
   px(byId("efecto"), x + Math.round(w * 0.04), y + Math.round(h * 0.06),
@@ -1259,15 +1260,13 @@ function placeEfecto(x, y, w, h) {
 }
 
 function startEfecto(pieceId) {
-  var node = byId("efecto"), src = findPiece(pieceId), before;
-  efecto.on = false; efecto.total = 0; efecto.dropped = 0;
+  var node = byId("efecto"), src = findPiece(pieceId);
+  efecto.on = false; efecto.armed = false;
+  efecto.total = 0; efecto.dropped = 0;
   efecto.baseTotal = 0; efecto.baseDropped = 0;
   efecto.says = ""; efecto.error = "";
   if (!src) { efecto.error = "no esta " + pieceId; return; }
   efecto.says = node.canPlayType ? (node.canPlayType(src.mime) || "no") : "?";
-  before = quality(node);
-  efecto.baseTotal = before ? before.total : 0;
-  efecto.baseDropped = before ? before.dropped : 0;
   node.className = "";
   node.loop = true;
   node.src = base + src.file;
@@ -1276,22 +1275,43 @@ function startEfecto(pieceId) {
   efecto.on = true;
 }
 
+/* La linea de base del de ARRIBA se toma cuando EMPIEZA A SONAR, no al pedirle
+ * que suene. Medido el 2026-09-04 corriendo la prueba dos veces seguidas: si
+ * se tomaba antes, la segunda pasada informaba "1/2 caidos" -la resta iba
+ * contra los contadores de la pasada anterior, que `load()` acababa de poner
+ * en cero-. Un contador que solo acierta la primera vez no sirve para nada. */
+function armEfecto() {
+  var node = byId("efecto"), before;
+  if (!efecto.on || efecto.armed) { return; }
+  if (!(node.currentTime > 0)) { return; }
+  before = quality(node);
+  efecto.baseTotal = before ? before.total : 0;
+  efecto.baseDropped = before ? before.dropped : 0;
+  efecto.armed = true;
+}
+
 function stopEfecto() {
   var node = byId("efecto"), after;
   if (!efecto.on) { return; }
-  after = quality(node);
-  if (after) {
-    efecto.total = after.total - efecto.baseTotal;
-    efecto.dropped = after.dropped - efecto.baseDropped;
-    /* Misma regla que el video principal (H-12b): una resta negativa es una
-     * base que ya no existe, no un dato. */
-    if (efecto.total < 0 || efecto.dropped < 0) {
-      efecto.total = after.total;
-      efecto.dropped = after.dropped;
-    }
-    if (efecto.dropped < 0) { efecto.dropped = 0; }
-    if (efecto.total > 0 && efecto.dropped > efecto.total) {
-      efecto.dropped = efecto.total;
+  if (!efecto.armed) {
+    /* Nunca llego a sonar: decirlo, en vez de informar un cero que se leeria
+     * como "no perdio un cuadro". */
+    if (!efecto.error) { efecto.error = "el de arriba no arranco"; }
+  } else {
+    after = quality(node);
+    if (after) {
+      efecto.total = after.total - efecto.baseTotal;
+      efecto.dropped = after.dropped - efecto.baseDropped;
+      /* Misma regla que el video principal (H-12b): una resta negativa es una
+       * base que ya no existe, no un dato. */
+      if (efecto.total < 0 || efecto.dropped < 0) {
+        efecto.total = after.total;
+        efecto.dropped = after.dropped;
+      }
+      if (efecto.dropped < 0) { efecto.dropped = 0; }
+      if (efecto.total > 0 && efecto.dropped > efecto.total) {
+        efecto.dropped = efecto.total;
+      }
     }
   }
   node.pause();
