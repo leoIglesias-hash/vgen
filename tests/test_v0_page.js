@@ -393,16 +393,36 @@ assert(/VGenCache\.prune\(db, manifestKeys\(\)/.test(inline[1]),
   "al guardar se borra lo que no este en el manifiesto vigente");
 assert(/onProgress: function \(loaded, total\)/.test(inline[1]),
   "la bajada muestra progreso: en la TV una bajada muda parece colgada");
-assert(/TECHO_MB = \[10, 25, 50\]/.test(inline[1]),
-  "la prueba de techo es 10 / 25 / 50 MB (PLAN-IMPLEMENTACION-VGEN §4)");
-assert(/VGenCache\.remove\(db, key/.test(inline[1]),
-  "el ruido del techo se borra despues de medir");
+/* H-12b: el techo se mide sumando tandas chicas. Pedir 50 MB de una vez cerro
+ * la app de la caja el 2026-09-04, y una app cerrada no informa ningun techo. */
+assert(/TECHO_TANDA_MB = 5/.test(inline[1]),
+  "el techo se mide en tandas de 5 MB, nunca de un salto (H-12b)");
+assert(/TECHO_TOPE_MB = 50/.test(inline[1]),
+  "se intenta hasta 50 MB acumulados y ahi se da por bueno");
+assert(/VGenCache\.noise\(TECHO_TANDA_MB\)/.test(inline[1]),
+  "cada tanda pide UNA tanda de ruido: nunca hay mas de 5 MB vivos");
+assert(!/VGenCache\.noise\(TECHO_TOPE_MB\)/.test(inline[1]),
+  "jamas se pide el tope entero de una vez");
+assert(/VGenCache\.quota\(\{\}, function \(qError, used, granted\)/.test(inline[1]),
+  "la cuota declarada se reporta ANTES de escribir: es el primer techo");
+assert(/VGenCache\.remove\(db, "techo\." \+ i/.test(inline[1]),
+  "el ruido del techo se borra despues de medir, entre o no");
 assert(/r\.total === 0 && !r\.noVideo/.test(inline[1]),
   "una fila que no reproduce (guardar, techo) no puede decir ciego");
 
 /* Las tres teclas, detras del 8 como las de la capa. */
 assert(/guardar/.test(action("84").label), "84 = bajar y guardar (+ desde cache + techo)");
 assert(/techo/.test(action("84").detail) && /H-12/.test(action("84").detail));
+assert(/tandas de 5 MB/.test(action("84").detail),
+  "la leyenda del 84 dice como se mide el techo ahora");
+
+/* H-12b: el 83 solo prendia el canvas; en la caja quedaba el cartel de play. */
+assert(/arranca VP9/.test(action("83").detail),
+  "la leyenda del 83 avisa que arranca el video si no hay nada sonando");
+assert(/video\.play\(\);/.test(inline[1].slice(inline[1].indexOf("function toggleCapa"))),
+  "el 83 arranca el video por el mismo camino que el lote");
+assert(/pide un gesto/.test(inline[1]),
+  "si el WebView exige gesto, la pagina lo dice en vez de quedarse muda");
 assert(/desde cache/.test(action("85").label), "85 = reproducir desde la cache");
 assert(/REINICIAR/.test(action("85").detail),
   "el 85 es la tecla de despues de reiniciar: la leyenda lo dice");

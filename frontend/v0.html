@@ -326,7 +326,18 @@ function measure(piece, src, done, opts) {
     if (after) {
       row.total = after.total - baseTotal;
       row.dropped = after.dropped - baseDropped;
-      if (row.total < 0) { row.total = after.total; row.dropped = after.dropped; }
+      /* H-12b: los contadores del video se reinician al cambiar de fuente, y
+       * una resta contra una linea de base que ya no existe da negativo. En la
+       * caja salio "caidos -3" en blob:cmaf. Si CUALQUIERA de las dos restas da
+       * negativa, la base no vale y se toman los absolutos; despues se acota,
+       * porque un numero negativo de cuadros caidos no es un dato: es un error
+       * de contabilidad disfrazado de medicion. */
+      if (row.total < 0 || row.dropped < 0) {
+        row.total = after.total;
+        row.dropped = after.dropped;
+      }
+      if (row.dropped < 0) { row.dropped = 0; }
+      if (row.total > 0 && row.dropped > row.total) { row.dropped = row.total; }
     }
     if (row.started) {
       var wall = (new Date().getTime() - wall0) / 1000;
@@ -791,7 +802,40 @@ function setCapa(load) {
   capaTick();
 }
 
-function toggleCapa() { setCapa(capa.load === "rect" ? "none" : "rect"); }
+/* H-12b: la tecla `83` sola tiene que MOSTRAR algo. Antes solo prendia el
+ * canvas: si no venia de un lote, el <video> estaba sin fuente y la caja se
+ * quedaba con el cartel de play (reporte del operador, 2026-09-04). Ahora, al
+ * prender la capa, si no hay nada sonando arranca la pieza base -VP9, la que
+ * el operador eligio como base ese mismo dia- por el MISMO camino que el lote:
+ * src + load + play, en bucle. Y si el WebView exige un gesto para reproducir,
+ * el video queda en pausa: la pagina lo dice en vez de dejar al operador
+ * mirando una pantalla quieta sin saber por que. */
+function capaOjoPieza() {
+  return findPiece("v0-vp9") || findPiece("v0-h264-baseline");
+}
+
+function toggleCapa() {
+  var video = byId("video"), src;
+  if (capa.load === "rect") { setCapa("none"); say("capa a ojo: apagada"); return; }
+  setCapa("rect");
+  if (!video.currentSrc && !video.src) {
+    src = capaOjoPieza();
+    if (!src) { say("capa a ojo: no esta la pieza base"); return; }
+    stopFeeding();
+    video.loop = true;
+    video.src = base + src.file;
+    video.load();
+  }
+  if (video.paused || video.ended) {
+    if (video.ended) { video.currentTime = 0; }
+    video.play();
+  }
+  window.setTimeout(function () {
+    var v = byId("video");
+    say(v.paused ? "capa a ojo: el aparato pide un gesto, aprete play"
+                 : "capa a ojo: encendida sobre " + (v.currentSrc || "el video"));
+  }, 900);
+}
 
 var CAPA_LOADS = [
   { n: 0, load: "none", note: "sin canvas" },
@@ -895,7 +939,12 @@ function repeatLast() {
  * manifiesto vigente se borra al guardar. El techo se mide con ruido, no con
  * video: la pregunta es cuanto deja guardar el aparato, no que guarda. */
 var CACHE_PIECES = ["v0-h264-baseline", "v0-vp9"];
-var TECHO_MB = [10, 25, 50];
+/* H-12b: el techo se mide sumando tandas chicas, nunca de un salto. Mas de
+ * TECHO_TANDA_MB vivos en memoria a la vez fue lo que cerro la app en la caja
+ * el 2026-09-04; TECHO_TOPE_MB es hasta donde se intenta antes de dar por
+ * bueno el techo (mas que eso ya no informa: el pack entero pesa menos). */
+var TECHO_TANDA_MB = 5;
+var TECHO_TOPE_MB = 50;
 var cacheDb = null;                       /* conexion abierta, se reusa */
 var cacheInfo = { says: "?", n: 0, bytes: 0, quota: "" };   /* cabecera */
 
@@ -1046,50 +1095,84 @@ function stepCachePlay(pieceId) {
   } };
 }
 
-/* El techo: un registro de N MB de ruido, guardado, releido y borrado. El
- * nombre del error (QuotaExceededError) es la respuesta, no una falla de la
- * pagina. Se borra al terminar para no comerle lugar al pack. */
-function stepTecho(mb) {
-  var id = "cache:techo:" + mb + "MB";
+/* El techo, en TANDAS CHICAS y acumulativas.
+ *
+ * La version anterior armaba 10, 25 y 50 MB de ruido de una sola vez, y en la
+ * caja la de 50 MB CERRO LA APP. Eso no era el aparato diciendo su techo: era
+ * esta prueba pidiendole 50 MB contiguos y ademas clonandolos para guardarlos.
+ * El techo se mide sumando, no de un salto: tandas de TECHO_TANDA_MB, una por
+ * vez, y nunca mas de una viva en memoria.
+ *
+ * Y antes de escribir un solo byte se reporta la CUOTA DECLARADA: ese es el
+ * primer techo, el unico que el aparato dice sin que haya que empujarlo. Si la
+ * escritura corta antes, el nombre del error (QuotaExceededError) es la
+ * respuesta, no una falla de la pagina. Todo se borra al terminar, entre o no,
+ * para no comerle lugar al pack. */
+function stepTecho() {
+  var id = "cache:techo";
   return { id: id, go: function (done) {
-    var piece = addExtra(fake(id, "cache", "", "", mb + " MB de ruido"));
+    var piece = addExtra(fake(id, "cache", "", "",
+                              "tandas de " + TECHO_TANDA_MB + " MB"));
     var row = blank(piece);
-    var key = "techo." + mb;
     row.noVideo = true;
-    cacheOpen(function (error, db) {
-      var data, t0;
-      if (error) { row.error = error; finishRow(id, done)(row); return; }
-      say("techo " + mb + " MB: armando");
-      data = VGenCache.noise(mb);
-      if (!data) { row.error = "sin Uint8Array"; finishRow(id, done)(row); return; }
-      say("techo " + mb + " MB: guardando");
-      t0 = new Date().getTime();
-      VGenCache.put(db, { key: key, id: "techo", sha: "", mime: "",
-                          bytes: data.byteLength, data: data, at: t0 }, function (e2) {
-        var putMs = new Date().getTime() - t0, t1;
-        data = null;
-        if (e2) {
-          row.error = e2;
-          piece.note += "; no entro (" + putMs + " ms)";
-          refreshCacheInfo(function () { finishRow(id, done)(row); });
-          return;
-        }
-        t1 = new Date().getTime();
-        VGenCache.get(db, key, function (e3, record) {
-          var readMs = new Date().getTime() - t1;
-          var ok = !e3 && record && record.data &&
-                   record.data.byteLength === mb * 1048576;
-          VGenCache.remove(db, key, function () {
-            if (!ok) {
-              row.error = e3 ? "leer: " + e3 : "volvio distinto";
-            } else {
-              row.started = true;
-              row.firstMs = putMs;
-              piece.note += "; guardo " + putMs + " ms; leyo " + readMs + " ms";
+    VGenCache.quota({}, function (qError, used, granted) {
+      piece.note = "declara " + (qError ? qError :
+                   (Math.round(used / 1048576) + "/" +
+                    Math.round(granted / 1048576) + " MB")) +
+                   "; tandas de " + TECHO_TANDA_MB + " MB";
+      cacheOpen(function (error, db) {
+        var puestas = 0, t0;
+        if (error) { row.error = error; finishRow(id, done)(row); return; }
+        t0 = new Date().getTime();
+
+        /* Borra lo escrito, una por una, y recien ahi cierra la fila. */
+        function limpiar() {
+          var i = 0;
+          function siguiente() {
+            if (i >= puestas) {
+              refreshCacheInfo(function () { finishRow(id, done)(row); });
+              return;
             }
-            refreshCacheInfo(function () { finishRow(id, done)(row); });
-          });
-        });
+            i++;
+            VGenCache.remove(db, "techo." + i, siguiente);
+          }
+          siguiente();
+        }
+
+        function tanda() {
+          var data, entraron = puestas * TECHO_TANDA_MB;
+          if (entraron >= TECHO_TOPE_MB) {
+            piece.note += "; entraron " + entraron + " MB (tope de la prueba)";
+            row.started = true;
+            row.firstMs = new Date().getTime() - t0;
+            limpiar();
+            return;
+          }
+          say("techo: tanda " + (puestas + 1) + ", acumula " +
+              (entraron + TECHO_TANDA_MB) + " MB");
+          data = VGenCache.noise(TECHO_TANDA_MB);
+          if (!data) {
+            row.error = "sin ruido de " + TECHO_TANDA_MB + " MB (el modulo da hasta " +
+                        VGenCache.TANDA_MB + ")";
+            limpiar();
+            return;
+          }
+          VGenCache.put(db, { key: "techo." + (puestas + 1), id: "techo",
+                              sha: "", mime: "", bytes: data.byteLength,
+                              data: data, at: new Date().getTime() },
+            function (e2) {
+              data = null;
+              if (e2) {
+                piece.note += "; entraron " + entraron + " MB, corto en " + e2;
+                row.error = e2;
+                limpiar();
+                return;
+              }
+              puestas++;
+              tanda();
+            });
+        }
+        tanda();
       });
     });
   } };
@@ -1108,9 +1191,7 @@ function cachePlaySteps() {
 }
 
 function techoSteps() {
-  var out = [], i;
-  for (i = 0; i < TECHO_MB.length; i++) { out.push(stepTecho(TECHO_MB[i])); }
-  return out;
+  return [stepTecho()];
 }
 
 /* 84: guardar las dos piezas, reproducirlas desde la cache y medir el techo:
@@ -1201,10 +1282,10 @@ var TECLAS = [
     detail: "sin, rect 15 fps, pantalla",
     run: function () { runSteps(capaSteps("v0-vp9", "vp9"), 0); } },
   { code: "83", label: "capa a ojo", tier: "now",
-    detail: "alterna el rect sobre lo que suena",
+    detail: "prende el rect; si no hay nada sonando, arranca VP9 en bucle",
     run: toggleCapa },
   { code: "84", label: "cache: guardar", tier: "now",
-    detail: "H-12: baja y guarda baseline + vp9, las reproduce desde ahi y mide el techo 10/25/50 MB",
+    detail: "H-12: baja y guarda baseline + vp9, las reproduce desde ahi y mide el techo en tandas de 5 MB",
     run: function () { runSteps(cacheBatch(), 0); } },
   { code: "85", label: "desde cache", tier: "now",
     detail: "tras REINICIAR la caja: siguen ahi? arranque sin red",

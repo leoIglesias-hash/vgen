@@ -15,6 +15,7 @@
  *   keyFor(id, sha256)         id + "." + sha12: dos versiones de la misma
  *                              pieza nunca comparten clave (CACHE-001)
  *   noise(mb)                  bytes pseudoaleatorios para la prueba de techo
+ *                              (hasta TANDA_MB de una vez, ni un byte mas)
  *   quota(hooks, cb)           lo que el aparato dice tener (API con callback)
  *
  * Se guardan ArrayBuffers, no Blobs: el clon estructurado de un ArrayBuffer lo
@@ -231,6 +232,13 @@ var VGenCache = (function () {
     });
   }
 
+  /* Cuanto ruido se puede pedir DE UNA VEZ. No es un gusto: pedir 50 MB
+   * contiguos y despues clonarlos para guardarlos cerro la app de la caja el
+   * 2026-09-04 (H-12b). El techo se mide sumando tandas de este tamano, y el
+   * limite se cumple aca -en el modulo- para que ningun llamador nuevo lo
+   * pueda saltear sin darse cuenta. */
+  var TANDA_MB = 5;
+
   /* Bytes para la prueba de techo. Pseudoaleatorios a proposito: la base
    * comprime lo que guarda (LevelDB + Snappy en Chromium), y 50 MB de ceros
    * entrarian donde 50 MB de video no entran. Un megabyte de ruido repetido
@@ -239,6 +247,7 @@ var VGenCache = (function () {
     var MB = 1048576;
     var chunk, big, i, x = 2463534242;
     if (typeof Uint8Array === "undefined" || !(mb > 0)) { return null; }
+    if (mb > TANDA_MB) { return null; }
     chunk = new Uint8Array(MB);
     for (i = 0; i < MB; i++) {
       x = (x * 1103515245 + 12345) & 0x7fffffff;
@@ -282,6 +291,7 @@ var VGenCache = (function () {
     clear: clear,
     prune: prune,
     keyFor: keyFor,
+    TANDA_MB: TANDA_MB,
     noise: noise,
     quota: quota
   };

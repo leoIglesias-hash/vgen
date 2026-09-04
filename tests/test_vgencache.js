@@ -323,6 +323,16 @@ function buffer(n) { return { byteLength: n, tag: "buf" + n }; }
   assert.strictEqual(Cache.noise(0), null);
 }());
 
+/* H-12b: el limite de una tanda lo cumple el modulo, no la disciplina del que
+ * llama. Pedir 50 MB contiguos y clonarlos para guardarlos cerro la app de la
+ * caja el 2026-09-04, y una app cerrada no informa ningun techo. */
+(function testNoiseRefusesMoreThanOneTanda() {
+  assert.strictEqual(Cache.TANDA_MB, 5, "la tanda son 5 MB");
+  assert(Cache.noise(Cache.TANDA_MB), "una tanda entera si");
+  assert.strictEqual(Cache.noise(Cache.TANDA_MB + 1), null, "una tanda y media no");
+  assert.strictEqual(Cache.noise(50), null, "el salto que cerro la app, jamas");
+}());
+
 /* --- cuota --- */
 
 (function testQuotaUsesTheCallbackApiOnly() {
