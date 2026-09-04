@@ -16,8 +16,9 @@
   #video { position: absolute; background: #000; }
   #capa { position: absolute; }
   #capa.off { display: none; }
-  /* H-18: el segundo <video>, encima del primero y del tamano del rectangulo
-   * de la capa. Nunca crece hacia abajo (regla 10). */
+  /* H-18: el segundo <video>, encima del primero y EXACTAMENTE del mismo
+   * tamano (H-18b), para que los dos planos compongan como uno solo. Nunca
+   * crece hacia abajo (regla 10). */
   #efecto { position: absolute; background: transparent; }
   #efecto.off { display: none; }
   /* H-16: la fuente de la capa es Hobo por defecto (decision del operador,
@@ -64,11 +65,23 @@
                     color: #101014; }
   #foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 0.6em;
           font-size: 0.55em; color: #8d93a8; overflow: hidden; }
+  /* H-20: el reporte a pantalla completa, en DOS COLUMNAS. La foto de la caja
+   * del 2026-09-04 corto en la novena fila -lo que no entra en la pantalla no
+   * existe, porque en una TV la unica salida es la foto-. Dos columnas y letra
+   * que se achica sola hasta que entra; se sale con el 88. */
   #full { position: absolute; left: 0; top: 0; right: 0; bottom: 0;
-          background: #05060a; display: none; padding: 0.5em; }
+          background: #05060a; display: none; }
   #full.on { display: block; }
-  #report { width: 100%; height: 100%; font: inherit; font-size: 0.72em;
-            background: #05060a; color: #cdd3e6; border: 0; resize: none; }
+  #reportHead { position: absolute; left: 0.4em; top: 0.15em;
+                font-size: 0.55em; color: #8d93a8; }
+  #reportCols { position: absolute; left: 0.3em; right: 0.3em; top: 1.4em;
+                bottom: 0.2em; }
+  #reportCols pre { position: absolute; top: 0; bottom: 0; width: 49.4%;
+                    margin: 0; font-family: monospace; line-height: 1.22;
+                    color: #cdd3e6; white-space: pre-wrap; word-break: break-all;
+                    overflow: hidden; tab-size: 4; -moz-tab-size: 4; }
+  #colA { left: 0; }
+  #colB { right: 0; }
 </style>
 </head>
 <body>
@@ -98,7 +111,10 @@
 <div id="foot"><span id="env"></span></div>
 <span id="hobo">Hobo</span>
 
-<div id="full"><textarea id="report" readonly></textarea></div>
+<div id="full">
+  <div id="reportHead">reporte - 88 para volver</div>
+  <div id="reportCols"><pre id="colA"></pre><pre id="colB"></pre></div>
+</div>
 
 <script src="keypad.js"></script>
 <script src="vgenfeed.js"></script>
@@ -168,6 +184,12 @@ var lastSteps = null;      /* ultima corrida, para repetirla con una tecla */
 var aborted = false;       /* corta una secuencia en curso */
 var feeding = null;        /* mango del feedMse en curso, para cortarlo */
 var lastObjectUrl = "";    /* blob: vivo, se libera al crear el siguiente */
+var reportLines = [];      /* H-20: el reporte, para repartirlo en dos columnas */
+/* H-20: el video ocupando TODA la superficie. En la caja son 3840x2160 sobre un
+ * panel de 1280x720, que es el caso que mas puede doler y el unico que todavia
+ * no se midio (operador, 2026-09-04: "no tenemos probado un fullscreen de estas
+ * cosas (que suele bajar rendimiento)"). */
+var entera = { on: false, api: "" };
 
 function byId(id) { return document.getElementById(id); }
 
@@ -199,12 +221,37 @@ function px(node, left, top, width, height) {
  * a la derecha del video con la mitad del alto. Ahora: teclas a la IZQUIERDA en
  * una columna angosta, video al medio y tabla a la derecha con el alto entero.
  * Los renglones de la corrida bajan mientras se prueba, que era el pedido. */
+/* H-20: la misma pantalla, pero con el video ocupando TODA la superficie y sin
+ * nada alrededor. Se respeta 16:9 (se centra y se apaisa lo que sobre) en vez
+ * de estirar: si el video se deformara, los cuadros caidos se compararian
+ * contra otra cosa. El zocalo queda a la vista a proposito -es una linea de
+ * texto quieta- porque es la unica forma de recordar en la TV como se sale. */
+function esconderTodo(si) {
+  var nombres = ["head", "keys", "side"], i;
+  for (i = 0; i < nombres.length; i++) {
+    byId(nombres[i]).style.display = si ? "none" : "";
+  }
+}
+
+function layoutEntera(w, h) {
+  var vw = w, vh = Math.round(w * 9 / 16), x, y;
+  if (vh > h) { vh = h; vw = Math.round(h * 16 / 9); }
+  x = Math.round((w - vw) / 2);
+  y = Math.round((h - vh) / 2);
+  px(byId("video"), x, y, vw, vh);
+  px(byId("alphaBg"), x, y, vw, vh);
+  px(byId("capa"), x, y, vw, vh);
+  sizeCapa(vw, vh);
+  placeEfecto(x, y, vw, vh);
+}
+
 function layout() {
   var w = window.innerWidth || 1280;
   var h = window.innerHeight || 720;
   var headH, footH, midTop, midH, keysW, stageW, stageX, vw, vh, sideX;
   document.documentElement.style.fontSize =
     Math.max(11, Math.round(w / 46)) + "px";
+  if (entera.on) { layoutEntera(w, h); return; }
   headH = Math.round(h * 0.13);
   footH = Math.round(h * 0.06);
   midTop = headH;
@@ -563,10 +610,49 @@ function writeReport() {
     line = reportLine(extras[i]);
     if (line) { lines.push(line); }
   }
-  byId("report").value = lines.join("\n");
+  reportLines = lines;
+  if (byId("full").className === "on") { paintReport(); }
   text(byId("env"), "panel " + screen.width + "x" + screen.height +
        " · superficie " + window.innerWidth + "x" + window.innerHeight +
-       " · 95 para ver el reporte entero");
+       (entera.on ? " · PANTALLA ENTERA · 73 vuelve · 0 corta"
+                  : " · 95 para ver el reporte entero"));
+}
+
+/* H-20: el reporte en DOS COLUMNAS, achicandose hasta que entra.
+ *
+ * La foto de la caja del 2026-09-04 corto en la novena fila. En una TV no se
+ * scrollea ni se copia texto: la unica salida del reporte es la foto, asi que
+ * lo que no entra en la pantalla, para el proyecto, no existe. El reparto entre
+ * columnas se ESTIMA por largo de linea y quien decide si entro es el alto
+ * medido, que es el unico que sabe como envolvio el navegador. */
+function paintReport() {
+  var colA = byId("colA"), colB = byId("colB"), caja = byId("reportCols");
+  var raiz = parseFloat(document.documentElement.style.fontSize) || 16;
+  var ancho = caja.offsetWidth > 0 ? caja.offsetWidth : 0;
+  var cien, cpl, filas, total, suma, corte, i;
+  /* De grande a chico: la letra mas grande que entre. Achicarse era el pedido,
+   * pero dejar media pantalla vacia tambien arruina la foto. */
+  for (cien = 140; cien >= 24; cien -= 6) {
+    colA.style.fontSize = (cien / 100) + "em";
+    colB.style.fontSize = (cien / 100) + "em";
+    /* El monospace de esta pagina mide ~0,6 em por caracter. */
+    cpl = Math.max(16, Math.floor((ancho / 2 - 8) /
+                                  (raiz * cien / 100 * 0.6)));
+    filas = []; total = 0;
+    for (i = 0; i < reportLines.length; i++) {
+      filas.push(Math.max(1, Math.ceil(reportLines[i].length / cpl)));
+      total += filas[i];
+    }
+    suma = 0; corte = reportLines.length;
+    for (i = 0; i < reportLines.length; i++) {
+      suma += filas[i];
+      if (suma * 2 >= total) { corte = i + 1; break; }
+    }
+    text(colA, reportLines.slice(0, corte).join("\n"));
+    text(colB, reportLines.slice(corte).join("\n"));
+    if (colA.scrollHeight <= colA.clientHeight &&
+        colB.scrollHeight <= colB.clientHeight) { return; }
+  }
 }
 
 /* --- pasos: cada tecla arma una lista de pasos y se corren en secuencia --- */
@@ -1042,7 +1128,8 @@ function packageSteps() {
  * pruebas de paquete, una atras de otra y en el mismo recuadro. */
 function everything() {
   return pieceSteps(withRole("base").concat(withRole("alpha"), withRole("stream")))
-    .concat(packageSteps(), capaAll(), cacheBatch());
+    .concat(packageSteps(), capaAll(), cacheBatch(), [stepDosVideos()],
+            enteraSteps());
 }
 
 /* H-16: lo que TODAVIA no dijo la caja. La prueba general dejo de repetir lo
@@ -1051,7 +1138,7 @@ function everything() {
  * entra (H-18, dos <video> a la vez), se suma aca; cuando la caja la consagra,
  * se saca y pasa al manual. */
 function pendingSteps() {
-  return techoSteps().concat([stepDosVideos()]);
+  return techoSteps().concat([stepDosVideos()], enteraSteps());
 }
 
 /* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
@@ -1064,6 +1151,7 @@ function stopAll() {
   video.loop = false;
   setCapa("none");
   stopEfecto();
+  salirEntera();
   byId("alphaBg").className = "";
   byId("full").className = "";
   results = {};
@@ -1248,15 +1336,23 @@ function stepCachePlay(pieceId) {
  * por el navegador-, un efecto deja de tener que estar horneado en el video o
  * dibujado a mano en el canvas: puede ser una pieza mas del paquete.
  *
- * Va ENCIMA y del tamano del rectangulo de la capa; nunca creciendo hacia
- * abajo (regla 10: todo en una pantalla). Y cuenta SUS PROPIOS cuadros, porque
- * la pregunta no es si el de arriba se ve: es si los dos se sostienen. */
+ * H-18b: va ENCIMA y EXACTAMENTE del mismo tamano que el de abajo, y la pieza
+ * que suena ahi lleva contenido que NO existe abajo -papelitos sobre
+ * transparencia total-. Las dos cosas son el pedido del operador y las dos son
+ * necesarias: superpuesta exacta pero con el RGB del master, la prueba no podia
+ * distinguir "compuso" de "no compuso". Cuenta SUS PROPIOS cuadros, porque la
+ * pregunta no es si el de arriba se ve: es si los dos se sostienen. */
 var efecto = { on: false, armed: false, total: 0, dropped: 0,
                baseTotal: 0, baseDropped: 0, says: "", error: "" };
 
+/* H-18b: EXACTAMENTE el mismo rectangulo que el video de abajo. La primera
+ * version lo ponia encogido y corrido, y el operador tenia razon en rechazarla
+ * (2026-09-04): «deberia ser un video sobre otro de exactamente el mismo
+ * tamano... al ser transparente el video de arriba se veria el de abajo con los
+ * papelitos de festejo como si fuera un solo video». Un recuadro flotando mide
+ * otra cosa -un video chico- y ademas no deja ver si la composicion ocurrio. */
 function placeEfecto(x, y, w, h) {
-  px(byId("efecto"), x + Math.round(w * 0.04), y + Math.round(h * 0.06),
-     Math.round(w * 0.26), Math.round(h * 0.3));
+  px(byId("efecto"), x, y, w, h);
 }
 
 function startEfecto(pieceId) {
@@ -1343,6 +1439,125 @@ function stepDosVideos() {
       finishRow(id, done)(r);
     }, { loop: true, efecto: "v0-vp9-alpha" });
   } };
+}
+
+/* --- H-20: a pantalla entera --- */
+
+/* El pedido es del operador (2026-09-04): «no tenemos probado un fullscreen de
+ * estas cosas (que suele bajar rendimiento) podriamos hacerlo». Es la ultima
+ * pregunta grande que queda sin medir del lado del aparato, y en esta caja es
+ * la que mas puede doler: la app le da al WebView una superficie de 3840x2160
+ * sobre un panel de 1280x720, asi que "entera" no es 720p, es 4K de escalado.
+ *
+ * Se mide en cuatro escalones porque lo que importa no es un numero sino DONDE
+ * se rompe: el video solo, con la capa, con el efecto, y todo junto -que es la
+ * forma del producto-.
+ *
+ * La API de pantalla completa es un EXTRA, no la prueba. Lo que se mide es el
+ * video ocupando la superficie, que no depende de que el WebView la conceda; si
+ * ademas la concede, Android puede promover el video a un plano de hardware y
+ * el numero cambia, asi que se pide y se DECLARA si la dio en vez de suponer. */
+function apiEntera() {
+  var root = document.documentElement;
+  if (root.requestFullscreen) { root.requestFullscreen(); return "pedida"; }
+  if (root.webkitRequestFullscreen) {
+    root.webkitRequestFullscreen(); return "pedida";
+  }
+  return "sin api";
+}
+
+function dioLaApi() {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    return "si";
+  }
+  return entera.api === "sin api" ? "sin api" : "no";
+}
+
+function entrarEntera() {
+  if (entera.on) { return; }
+  entera.on = true;
+  entera.api = apiEntera();
+  esconderTodo(true);
+  layout();
+  draw();
+}
+
+function salirEntera() {
+  if (!entera.on) { return; }
+  entera.on = false;
+  if (document.exitFullscreen && document.fullscreenElement) {
+    document.exitFullscreen();
+  } else if (document.webkitExitFullscreen && document.webkitFullscreenElement) {
+    document.webkitExitFullscreen();
+  }
+  esconderTodo(false);
+  layout();
+  draw();
+}
+
+function toggleEntera() {
+  if (entera.on) { salirEntera(); say("listo"); return; }
+  entrarEntera();
+  say("pantalla entera - 73 vuelve");
+}
+
+/* Un paso que no mide nada: solo cambia la pantalla y le da tiempo a asentarse
+ * antes de que arranque la medicion siguiente. */
+function stepEntera(prender) {
+  return { id: prender ? "a pantalla entera" : "vuelve la pantalla",
+           go: function (done) {
+             if (prender) { entrarEntera(); } else { salirEntera(); }
+             window.setTimeout(done, 600);
+           } };
+}
+
+function notaEntera(carga, conEfecto) {
+  var node = byId("video");
+  var nota = "entera " + node.offsetWidth + "x" + node.offsetHeight +
+             " sobre " + window.innerWidth + "x" + window.innerHeight +
+             "; api " + dioLaApi();
+  if (carga !== "none") {
+    nota += "; capa " + carga + ", pintadas " + capa.paints +
+            " (" + capa.w + "x" + capa.h + ")";
+  }
+  if (conEfecto) {
+    nota += "; el de arriba dice " + (efecto.says || "-") +
+            ", caidos " + efecto.dropped + "/" + efecto.total +
+            (efecto.error ? "; " + efecto.error : "");
+  }
+  return nota;
+}
+
+/* Siempre VP9 en bucle abajo: es el codec base que eligio el operador, y el
+ * bucle evita que la pieza se termine antes que la medicion. */
+function stepEnteraPaso(id, carga, conEfecto) {
+  return { id: id, go: function (done) {
+    var src = findPiece("v0-vp9");
+    var piece, row;
+    if (!src) {
+      piece = addExtra(fake(id, "entera", "", "", ""));
+      row = blank(piece);
+      row.error = "no esta v0-vp9";
+      finishRow(id, done)(row);
+      return;
+    }
+    piece = addExtra(fake(id, "entera", src.mime, src.file, ""));
+    measure(piece, base + src.file, function (r) {
+      piece.note = notaEntera(carga, conEfecto);
+      setCapa("none");
+      finishRow(id, done)(r);
+    }, { loop: true, capa: carga,
+         efecto: conEfecto ? "v0-vp9-alpha" : "" });
+  } };
+}
+
+function enteraSteps() {
+  return [stepEntera(true),
+          stepEnteraPaso("entera:solo", "none", false),
+          stepEnteraPaso("entera:capa", "rect", false),
+          stepEnteraPaso("entera:dos", "none", true),
+          stepEnteraPaso("entera:todo", "rect", true),
+          stepEntera(false)];
 }
 
 /* El techo, en TANDAS CHICAS y acumulativas.
@@ -1500,20 +1715,29 @@ function blobClassicSteps() {
 function runBlob() { runSteps(blobClassicSteps(), 0); }
 
 /* En una TV no se puede copiar texto: el reporte se lee a pantalla completa y
- * se saca una foto. Por eso ocupa todo y con tipografia grande. */
+ * se saca una foto. Por eso ocupa todo, en dos columnas y con la letra mas
+ * grande que entre (H-20). Se sale con el 88, que es su propia tecla: el 95
+ * tambien lo cierra, pero el operador pidio una para volver y tiene razon en
+ * que adivinar que la misma tecla hace las dos cosas no es una interfaz. */
 function toggleReport() {
   var full = byId("full");
-  full.className = full.className === "on" ? "" : "on";
+  if (full.className === "on") { full.className = ""; return; }
+  full.className = "on";
+  paintReport();
 }
+
+function closeReport() { byId("full").className = ""; }
 
 /* Mando numerico. El destino es un TV BOX con control remoto: el click ahi es
  * caro y las teclas numericas son gratis.
  *
  * DOS CIFRAS COMO TECHO (decision del operador, 2026-09-02): antes de llegar a
  * tres cifras hay cien numeros. Lo comun cae en un digito suelto y dispara al
- * instante; lo demas vive detras de una PUERTA, y hay dos: el 9 (secundario ya
- * medido, sin accion propia) y el 8 (la capa de H-11; conserva su accion, asi
- * que el 8 solo espera 900 ms u OK antes de correr "cambio a demanda"). El
+ * instante; lo demas vive detras de una PUERTA, y hay tres: el 9 (secundario ya
+ * medido, sin accion propia), el 8 (la capa de H-11; conserva su accion, asi
+ * que el 8 solo espera 900 ms u OK antes de correr "cambio a demanda") y, desde
+ * H-20, el 7 (pantalla entera; su accion vieja -"solo vp9"- es una tecla
+ * consagrada que ya no se dibuja, asi que la espera no se la cobra a nadie). El
  * retardo se ajusta con ?delay=<ms>.
  *
  * Cada tecla declara ademas su TIER, que es lo que la leyenda usa para elegir
@@ -1522,16 +1746,20 @@ function toggleReport() {
  * El tamano es el mensaje: el operador tiene que ver de un vistazo que se le
  * esta pidiendo, y todo tiene que entrar sin pisar el zocalo. */
 var TECLAS = [
-  { code: "80", label: "lote capa", tier: "now",
+  /* La foto del 2026-09-04 (noche) volvio a dar 0 caidos en las seis filas de
+   * capa, ahora a 560x315: la capa quedo consagrada tambien en esta geometria
+   * y sus tres teclas de lote bajan al manual. La de "a ojo" se queda: no mide,
+   * sirve para mirar. */
+  { code: "80", label: "lote capa", tier: "done",
     detail: "H-11: capa x6 + blob: + blob concat",
     run: function () { runSteps(h11Batch(), 0); } },
-  { code: "81", label: "capa / baseline", tier: "now",
+  { code: "81", label: "capa / baseline", tier: "done",
     detail: "sin, rect 15 fps, pantalla",
     run: function () { runSteps(capaSteps("v0-h264-baseline", "base"), 0); } },
-  { code: "82", label: "capa / vp9", tier: "now",
+  { code: "82", label: "capa / vp9", tier: "done",
     detail: "sin, rect 15 fps, pantalla",
     run: function () { runSteps(capaSteps("v0-vp9", "vp9"), 0); } },
-  { code: "83", label: "capa a ojo", tier: "now",
+  { code: "83", label: "capa a ojo", tier: "tool",
     detail: "prende el rect; si no hay nada sonando, arranca VP9 en bucle",
     run: toggleCapa },
   { code: "84", label: "cache: guardar", tier: "now",
@@ -1540,22 +1768,31 @@ var TECLAS = [
   { code: "85", label: "desde cache", tier: "now",
     detail: "tras REINICIAR la caja: siguen ahi? arranque sin red",
     run: function () { runSteps(cachePlaySteps(), 0); } },
-  { code: "86", label: "borrar cache", tier: "now",
+  { code: "86", label: "borrar cache", tier: "tool",
     detail: "vacia la base",
     run: clearCache },
   { code: "87", label: "dos videos", tier: "now",
-    detail: "H-18: loop VP9 abajo y la pieza con alfa encima, a la vez",
+    detail: "H-18b: loop VP9 abajo y los papelitos con alfa encima, del mismo tamano",
     run: function () { runSteps([stepDosVideos()], 0); } },
+  { code: "70", label: "pantalla entera", tier: "now",
+    detail: "H-20: el video en toda la superficie - solo, con capa, con efecto, y todo junto",
+    run: function () { runSteps(enteraSteps(), 0); } },
+  { code: "73", label: "entera a ojo", tier: "tool",
+    detail: "prende y apaga la pantalla entera, sin medir",
+    run: toggleEntera },
   /* H-16: el `1` corre SOLO LO NO CONSAGRADO (operador, 2026-09-04: "si ya
    * tuvimos claridad sobre ciertos elementos, ya quitalos de la prueba
    * general"). Hoy es el techo de la cache; crece cuando H-18 exista. Lo ya
    * consagrado no desaparece: va en el 89 y en el manual. */
   { code: "1", label: "lo que falta", tier: "now",
-    detail: "solo lo NO consagrado: hoy, el techo de la cache",
+    detail: "solo lo NO consagrado: el techo, los dos videos y la pantalla entera",
     run: function () { runSteps(pendingSteps(), 0); } },
   { code: "95", label: "reporte", tier: "tool",
-    detail: "a pantalla completa, para la foto",
+    detail: "a pantalla completa, en dos columnas, para la foto",
     run: toggleReport },
+  { code: "88", label: "cerrar reporte", tier: "tool",
+    detail: "vuelve de la foto a la pantalla de pruebas",
+    run: closeReport },
   { code: "93", label: "repetir", tier: "tool",
     detail: "la ultima corrida otra vez",
     run: repeatLast },

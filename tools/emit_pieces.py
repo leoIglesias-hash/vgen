@@ -13,7 +13,8 @@ donde entra el video al hardware del aparato:
                          casi gratis en silicio y caros en CPU. Si esta gana,
                          el cuello no es el bitstream (suposicion S2)
   v0-vp9.webm            banda: el camino que YouTube usa en Android TV (S3)
-  v0-vp9-alpha.webm      el personaje sin fondo, compuesto por el navegador (S4)
+  v0-vp9-alpha.webm      papelitos sobre transparencia total: el efecto como
+                         pieza aparte, compuesto por el navegador (S4)
 
 y despues las EMPAQUETA en segmentos, por REMUX (`-c copy`, sin recodificar):
 
@@ -125,7 +126,7 @@ VARIANTS = (
         "file": "v0-vp9-alpha.webm",
         "mime": 'video/webm; codecs="vp9"',
         "pix_in": "rgba",
-        "note": "personaje sin fondo: alfa compuesta por el navegador",
+        "note": "papelitos sobre transparencia total: el efecto no existe abajo",
         "args": ["-c:v", "libvpx-vp9", "-crf", str(CRF_VP9), "-b:v", "0",
                  "-deadline", "good", "-cpu-used", "2",
                  "-g", str(GOP), "-keyint_min", str(GOP), "-row-mt", "0",
@@ -246,41 +247,71 @@ def directory_bytes(directory):
     return total
 
 
-_GRID_CACHE = {}
+# H-18b (pedido del operador, 2026-09-04): la pieza con alfa dejo de llevar el
+# RGB del master. Antes era el propio cuadro de abajo con una mascara de disco:
+# superpuesta EXACTA sobre el video de abajo se veria identica a el, asi que la
+# prueba no podia contestar si el navegador compuso o no. Ahora lleva CONTENIDO
+# QUE NO EXISTE ABAJO -papelitos de colores- sobre transparencia TOTAL, que es
+# el caso real de un efecto: "al ser transparente el video de arriba se veria el
+# de abajo con los papelitos de festejo como si fuera un solo video".
+#
+# Todo se calcula con ENTEROS y ondas triangulares. Nada de sin/cos: una
+# diferencia de 1 ULP entre dos libm mueve el borde de un papelito y cambia los
+# bytes de la pieza, y el invariante 7 pide que dos maquinas emitan el mismo
+# archivo (H-14b lo acaba de saldar para x264; no se rompe por el otro lado).
+CONFETTI_COUNT = 160
+CONFETTI_COLORS = (
+    (255, 64, 64), (255, 176, 32), (255, 240, 64), (64, 224, 96),
+    (64, 176, 255), (160, 96, 255), (255, 96, 192), (245, 245, 255),
+)
 
 
-def _grid(width, height):
-    key = (width, height)
-    grid = _GRID_CACHE.get(key)
-    if grid is None:
-        yy, xx = np.mgrid[0:height, 0:width]
-        grid = (xx.astype(np.float32), yy.astype(np.float32))
-        _GRID_CACHE[key] = grid
-    return grid
+def _sorteo(seed, salt):
+    """Entero -> entero en [0, 4095]. Congelado a proposito: no se usa el
+    generador de numpy porque aca no importa la estadistica sino que el archivo
+    salga igual en cualquier maquina y con cualquier version instalada."""
+    value = (seed * 1103515245 + salt * 12345 + 2531011) & 0x7FFFFFFF
+    value ^= value >> 13
+    value = (value * 1103515245 + 12345) & 0x7FFFFFFF
+    return (value >> 11) & 0xFFF
 
 
-def alpha_channel(width, height, index, count):
-    """Mascara del sprite de prueba: un disco de borde duro que cruza el cuadro
-    de izquierda a derecha, derivado SOLO del indice de cuadro (deterministico).
+def _triangulo(value, period):
+    """Onda triangular entera en [0, period]: sube y baja sin trascendentes."""
+    step = value % (2 * period)
+    return step if step <= period else 2 * period - step
+
+
+def confetti_rgba(width, height, index):
+    """Un cuadro de papelitos sobre transparencia TOTAL, derivado SOLO del
+    indice de cuadro.
 
     Lo que se prueba con esto es la COMPOSICION -si el navegador transparenta un
-    WebM con alfa y a que costo-, no el arte: el contenido definitivo sale del
-    master. El borde es duro a proposito, que es el caso que mas sufre."""
-    xx, yy = _grid(width, height)
-    radius = height * 0.35
-    span = float(max(1, count - 1))
-    center_x = -radius + (width + 2.0 * radius) * (float(index) / span)
-    center_y = height * 0.5
-    inside = ((xx - center_x) ** 2 + (yy - center_y) ** 2) <= radius * radius
-    return np.where(inside, np.uint8(255), np.uint8(0))
-
-
-def rgba_frame(rgb, index, count):
-    height, width = rgb.shape[0], rgb.shape[1]
-    out = np.empty((height, width, 4), dtype=np.uint8)
-    out[:, :, :3] = rgb
-    out[:, :, 3] = alpha_channel(width, height, index, count)
-    return out
+    WebM con alfa, a que costo, y si el de abajo se sigue viendo entero-, no el
+    arte: el contenido definitivo sale del master. Los bordes son duros a
+    proposito, que es el caso que mas sufre al componer y al subsamplear."""
+    frame = np.zeros((height, width, 4), dtype=np.uint8)
+    unit = max(2, height // 90)
+    for particle in range(CONFETTI_COUNT):
+        color = CONFETTI_COLORS[particle % len(CONFETTI_COLORS)]
+        alto = unit + _sorteo(particle, 1) % (2 * unit)
+        caida = unit + _sorteo(particle, 2) % (3 * unit)
+        ciclo = height + 4 * alto
+        top = (_sorteo(particle, 3) * ciclo // 4096 +
+               index * caida) % ciclo - 2 * alto
+        vaiven = _triangulo(index * 2 + _sorteo(particle, 4) % 64, 32) - 16
+        left = _sorteo(particle, 5) * width // 4096 + vaiven * unit // 4
+        # El ancho late como un papelito que gira sobre su eje: de 1 a `alto`.
+        ancho = 1 + _triangulo(index * 3 + _sorteo(particle, 6) % 24, 12) * alto // 12
+        y0, y1 = max(0, top), min(height, top + alto)
+        x0, x1 = max(0, left), min(width, left + ancho)
+        if y1 <= y0 or x1 <= x0:
+            continue
+        frame[y0:y1, x0:x1, 0] = color[0]
+        frame[y0:y1, x0:x1, 1] = color[1]
+        frame[y0:y1, x0:x1, 2] = color[2]
+        frame[y0:y1, x0:x1, 3] = 255
+    return frame
 
 
 def sha256_of(path):
@@ -407,7 +438,7 @@ def emit(master_path, out_dir, only=None, max_frames=None, ffmpeg=None,
         for variant, _out_path, process in running:
             if variant["pix_in"] == "rgba":
                 if raw_rgba is None:
-                    raw_rgba = rgba_frame(rgb, index, frames).tobytes()
+                    raw_rgba = confetti_rgba(width, height, index).tobytes()
                 payload = raw_rgba
             else:
                 payload = raw_rgb

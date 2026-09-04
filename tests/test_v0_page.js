@@ -198,7 +198,7 @@ assert.strictEqual(filas.childNodes.length, 7,
 assert.strictEqual(filas.childNodes[0].childNodes.length, 6,
   "seis columnas: pieza, ok, caidos/total, 1er, congel, cambio");
 
-var reporte = byId("report").value;
+var reporte = reporteTexto();
 assert(reporte.indexOf("# pack v0") === 0, "el reporte arranca identificandose");
 assert(reporte.indexOf("panel\t1280x720") >= 0,
   "el reporte distingue el panel real de la superficie del WebView");
@@ -246,6 +246,22 @@ assert(/everything\(\)/.test(String(action("89").run)),
 assert.strictEqual(action("89").tier, "done",
   "y por eso vive en el manual, no en la pantalla");
 
+/* H-20: el reporte ya no vive en un <textarea>: son DOS COLUMNAS que se pintan
+ * al abrirlo (95) y se cierran con el 88. Se lee abriendolo y juntando las dos,
+ * que es exactamente lo que el operador ve en la foto. */
+function textoDe(node) {
+  return node.childNodes.length ? node.childNodes[0].data : "";
+}
+
+function reporteTexto() {
+  var arriba, abajo;
+  action("95").run();
+  arriba = textoDe(byId("colA"));
+  abajo = textoDe(byId("colB"));
+  action("88").run();
+  return abajo ? arriba + "\n" + abajo : arriba;
+}
+
 function action(code) {
   var i;
   for (i = 0; i < registered.actions.length; i++) {
@@ -269,7 +285,12 @@ assert(/bucle/.test(action("99").label), "99 = bucle 60 s");
 codigos.forEach(function (code) {
   assert(code.length <= 2, "la tecla " + code + " tiene tres cifras");
 });
-var PUERTAS = ["8", "9"];
+/* H-20 abre la TERCERA puerta, el 7, para el bloque de pantalla entera: el 9
+ * estaba lleno (90..99) y en el 8 quedaba un solo numero. Lo que el operador
+ * fijo el 2026-09-02 fue el TECHO -dos cifras, no tres-, no la cantidad de
+ * puertas; y el 7 ("solo vp9") es una tecla consagrada que no se ve, asi que
+ * los 900 ms que ahora espera no se los cobra a nadie. */
+var PUERTAS = ["7", "8", "9"];
 codigos.forEach(function (code) {
   if (code.length !== 1) { return; }
   codigos.forEach(function (other) {
@@ -295,8 +316,8 @@ var ahora = registered.actions.filter(function (item) {
   return item.tier === "now";
 }).map(function (item) { return item.code; }).sort();
 assert.deepStrictEqual(ahora,
-  ["1", "80", "81", "82", "83", "84", "85", "86", "87"],
-  "lo pendiente es la capa de H-11, la cache de H-12, los dos videos y el 1");
+  ["1", "70", "84", "85", "87"],
+  "lo pendiente: la cache, los dos videos, la pantalla entera y el 1");
 
 function emDe(sel) {
   var m = page.match(new RegExp("#teclas \\." + sel +
@@ -331,7 +352,7 @@ var visibles = byId("teclas").childNodes.length;
 assert(visibles >= 10,
   "tienen que quedar al menos 10 teclas a la vista, y hay " + visibles);
 assert.strictEqual(visibles, 13,
-  "hoy son 13: las 9 de ahora y las 4 herramientas");
+  "hoy son 13: las 5 de ahora y las 8 herramientas");
 var ocultas = registered.actions.filter(function (item) {
   return item.tier === "done";
 }).length;
@@ -353,8 +374,8 @@ var pintadas = byId("teclas").childNodes.map(function (row) {
 assert.strictEqual(pintadas[0], "op now",
   "la primera de la leyenda es lo que hay que probar");
 assert.strictEqual(
-  byId("teclas").childNodes[0].childNodes[0].childNodes[0].data, "80",
-  "y esa primera es el lote de la visita");
+  byId("teclas").childNodes[0].childNodes[0].childNodes[0].data, "84",
+  "y esa primera es la cache, que es lo que la caja todavia debe");
 var orden = pintadas.join(" ");
 assert(orden.indexOf("op tool") > orden.lastIndexOf("op now"),
   "las herramientas van despues de lo que hay que probar");
@@ -434,7 +455,7 @@ assert.strictEqual(fuenteBuf.slice(0, 4).toString("latin1"), "OTTO",
 action("5").run();
 assert.strictEqual(filas.childNodes.length, 8,
   "la primera prueba de paquete agrega su fila sintetica");
-reporte = byId("report").value;
+reporte = reporteTexto();
 assert(/\nmse:h264\t.*sin MSE/.test(reporte),
   "sin MediaSource la fila mse:h264 dice por que no corrio");
 assert(/\n# id\tdice\tarranco\t1er_ms\tcaidos\ttotal\tderiva_ms\tatascos\tcongel\tcambio_ms\tnota\n/.test(reporte),
@@ -461,7 +482,7 @@ assert.strictEqual(byId("capa").width, Math.round(cssW * 1280 / 3840),
   "el buffer del canvas se dimensiona al PANEL (1280), nunca a la superficie (3840)");
 assert.strictEqual(byId("capa").height, Math.round(cssH * 1280 / 3840),
   "idem en alto");
-assert(byId("report").value.indexOf("\ncapa\t" + byId("capa").width + "x" +
+assert(reporteTexto().indexOf("\ncapa\t" + byId("capa").width + "x" +
        byId("capa").height + "\tk 0.333") >= 0,
   "el reporte dice el tamano del buffer del canvas y la escala panel/superficie");
 ["function setCapa", "function paintCapa", "function stepCapa",
@@ -551,13 +572,13 @@ assert(/borrar/.test(action("86").label), "86 = borrar la cache");
 
 /* Sin IndexedDB (este stub no la tiene), la cabecera lo dice y la fila del 85
  * explica por que no corrio, sin explotar. */
-reporte = byId("report").value;
+reporte = reporteTexto();
 assert(reporte.indexOf("\ncache\tno\tguardadas 0\t0 B") >= 0,
   "la cabecera del reporte dice si hay IndexedDB y cuanto hay guardado");
 action("85").run();
 assert.strictEqual(filas.childNodes.length, 8,
   "la primera fila de cache aparece aunque no haya base");
-reporte = byId("report").value;
+reporte = reporteTexto();
 assert(/\ncache:base\t.*sin indexedDB/.test(reporte),
   "sin IndexedDB la fila cache:base dice por que");
 action("0").run();
@@ -613,8 +634,14 @@ assert(page.indexOf('<canvas id="capa" class="off"></canvas>\n<video id="efecto"
 assert(/placeEfecto\(stageX, midTop \+ Math\.round\(\(midH - vh\) \/ 2\), vw, vh\)/
   .test(inline[1]),
   "el layout lo coloca sobre el recuadro del video, no en otro lado");
-assert(/Math\.round\(w \* 0\.26\), Math\.round\(h \* 0\.3\)/.test(inline[1]),
-  "del tamano del rectangulo de la capa: nunca crece hacia abajo (regla 10)");
+/* H-18b (operador, 2026-09-04): EXACTAMENTE el mismo rectangulo que el de
+ * abajo. Un recuadro encogido y corrido mide otra cosa -un video chico- y
+ * ademas no deja ver si la composicion ocurrio. */
+assert(/function placeEfecto\(x, y, w, h\) \{\n  px\(byId\("efecto"\), x, y, w, h\);\n\}/
+  .test(inline[1]),
+  "el efecto va exactamente sobre el video de abajo, sin encoger ni correr");
+assert(!/Math\.round\(w \* 0\.26\)/.test(inline[1]),
+  "y no queda rastro del recuadro chico que el operador rechazo");
 
 assert(/function stepDosVideos\(\)/.test(inline[1]),
   "la prueba de los dos videos existe");
@@ -650,3 +677,73 @@ assert(/if \(o\.efecto\) \{ armEfecto\(\); \}/.test(inline[1]),
   "se intenta armar en cada vuelta de la medicion");
 assert(/efecto\.error = "el de arriba no arranco"/.test(inline[1]),
   "si nunca sono, la fila lo dice en vez de mostrar un cero enganoso");
+
+/* --- H-20: a pantalla entera, y el reporte en dos columnas --- */
+
+/* Dos pedidos del operador del 2026-09-04, despues de la foto de esa noche:
+ * medir con el video ocupando toda la superficie ("suele bajar rendimiento") y
+ * que el reporte entre en la pantalla, porque la foto corto en la novena fila.
+ * En una TV no se scrollea ni se copia texto: lo que no entra, no existe. */
+
+assert(page.indexOf('<pre id="colA">') >= 0 && page.indexOf('<pre id="colB">') >= 0,
+  "el reporte se pinta en dos columnas");
+assert.strictEqual(/<textarea/.test(page), false,
+  "y ya no en un <textarea>: con el foco adentro, los numeros eran texto y el " +
+  "mando dejaba de responder");
+assert(/#reportCols pre\s*\{[^}]*white-space:\s*pre-wrap/.test(page),
+  "las columnas envuelven: una linea larga no puede salirse de su columna");
+assert(/#reportCols pre\s*\{[^}]*overflow:\s*hidden/.test(page),
+  "y no scrollean: lo que no entra hay que achicarlo, no esconderlo");
+assert(/function paintReport\(\)/.test(inline[1]), "el reporte se pinta aparte");
+assert(/for \(cien = 140; cien >= 24; cien -= 6\)/.test(inline[1]),
+  "la letra arranca grande y se achica hasta que entra, con un piso");
+assert(/colA\.scrollHeight <= colA\.clientHeight/.test(inline[1]),
+  "quien decide si entro es el alto MEDIDO, no la estimacion del reparto");
+
+/* Las dos columnas se reparten de verdad: si todo cayera en una, seguiriamos
+ * con el mismo problema con otra forma. */
+action("95").run();
+assert(textoDe(byId("colA")).indexOf("# pack v0") === 0,
+  "la primera columna arranca con la cabecera del reporte");
+assert(textoDe(byId("colB")).length > 0,
+  "y la segunda recibe su mitad: el reparto no puede quedar todo de un lado");
+action("88").run();
+assert.strictEqual(byId("full").className, "",
+  "el 88 cierra el reporte: es la tecla de volver que pidio el operador");
+assert(/cerrar reporte/.test(action("88").label));
+assert(/dos columnas/.test(action("95").detail));
+
+/* La pantalla entera. Lo que se mide es el video ocupando la superficie -en la
+ * caja, 3840x2160 sobre un panel de 1280x720-; la API de fullscreen es un
+ * extra que se pide y se DECLARA, nunca se supone. */
+assert(/pantalla entera/.test(action("70").label), "70 = pantalla entera");
+assert(/H-20/.test(action("70").detail));
+assert(/entera a ojo/.test(action("73").label), "73 = prender y apagar, sin medir");
+assert(/function layoutEntera\(w, h\)/.test(inline[1]),
+  "la pantalla entera tiene su propio layout");
+assert(/vh = Math\.round\(w \* 9 \/ 16\)/.test(inline[1]),
+  "respeta 16:9 en vez de estirar: un video deformado se compara contra otra cosa");
+assert(/if \(entera\.on\) \{ layoutEntera\(w, h\); return; \}/.test(inline[1]),
+  "y el layout normal se aparta cuando esta prendida");
+assert(/function esconderTodo\(si\)/.test(inline[1]) &&
+       /\["head", "keys", "side"\]/.test(inline[1]),
+  "se esconde todo menos el zocalo, que dice como se sale");
+assert(/function dioLaApi\(\)/.test(inline[1]),
+  "la fila declara si el WebView concedio la pantalla completa de verdad");
+assert(/webkitRequestFullscreen/.test(inline[1]),
+  "se prueban los dos nombres: este WebView es Chromium 70");
+assert(/salirEntera\(\);/.test(inline[1].slice(inline[1].indexOf("function stopAll"))),
+  "el 0 tambien devuelve la pantalla: en una TV no hay otra salida");
+
+/* Cuatro escalones, porque lo que importa no es un numero sino donde se rompe:
+ * el video solo, con la capa, con el efecto, y todo junto (la forma del
+ * producto). Entre medio, entrar y salir. */
+assert(/function enteraSteps\(\)/.test(inline[1]));
+["entera:solo", "entera:capa", "entera:dos", "entera:todo"].forEach(function (id) {
+  assert(inline[1].indexOf('"' + id + '"') >= 0, "falta el paso " + id);
+});
+assert(/return techoSteps\(\)\.concat\(\[stepDosVideos\(\)\], enteraSteps\(\)\)/
+  .test(inline[1]),
+  "el 1 suma la pantalla entera: es lo que la caja todavia no contesto");
+
+console.log("v0 page tests (H-18b + H-20): OK");

@@ -1,3 +1,4 @@
+import inspect
 import os
 import shutil
 import sys
@@ -155,31 +156,55 @@ class SegmentCommandTest(unittest.TestCase):
 
 
 class AlphaTest(unittest.TestCase):
-    """La pieza con alfa prueba COMPOSICION, no arte: mascara deterministica,
-    borde duro (el caso que mas sufre) y movimiento derivado del indice."""
+    """H-18b: la pieza con alfa prueba COMPOSICION, no arte. Lleva CONTENIDO
+    QUE NO EXISTE ABAJO -papelitos- sobre transparencia total, porque la version
+    anterior copiaba el RGB del master y, superpuesta exacta, era indistinguible
+    de lo que ya se veia: no contestaba la pregunta."""
 
-    def test_mascara_es_binaria_y_deterministica(self):
-        first = emit_pieces.alpha_channel(64, 32, 5, 20)
-        again = emit_pieces.alpha_channel(64, 32, 5, 20)
+    def test_el_cuadro_es_rgba_y_deterministico(self):
+        first = emit_pieces.confetti_rgba(64, 48, 5)
+        again = emit_pieces.confetti_rgba(64, 48, 5)
+        self.assertEqual(first.shape, (48, 64, 4))
         self.assertTrue(np.array_equal(first, again))
-        self.assertEqual(sorted(np.unique(first).tolist()), [0, 255])
 
-    def test_el_disco_cruza_el_cuadro(self):
-        width, height, count = 64, 32, 20
-        centers = []
-        for index in range(count):
-            mask = emit_pieces.alpha_channel(width, height, index, count)
-            columns = np.nonzero(mask.any(axis=0))[0]
-            centers.append(float(columns.mean()) if columns.size else None)
-        visibles = [value for value in centers if value is not None]
-        self.assertGreater(len(visibles), 2)
-        self.assertLess(visibles[0], visibles[-1])
+    def test_el_alfa_es_binario(self):
+        frame = emit_pieces.confetti_rgba(128, 96, 3)
+        self.assertEqual(sorted(np.unique(frame[:, :, 3]).tolist()), [0, 255])
 
-    def test_rgba_conserva_el_color_del_master(self):
-        rgb = np.random.RandomState(7).randint(0, 256, (8, 8, 3)).astype(np.uint8)
-        frame = emit_pieces.rgba_frame(rgb, 0, 4)
-        self.assertEqual(frame.shape, (8, 8, 4))
-        self.assertTrue(np.array_equal(frame[:, :, :3], rgb))
+    def test_el_fondo_es_transparente_y_los_papelitos_son_pocos(self):
+        """Un efecto tapa poco: si cubriera el cuadro no se veria el de abajo,
+        que es justamente lo que la prueba tiene que poder ver."""
+        frame = emit_pieces.confetti_rgba(320, 180, 7)
+        cubierto = float(np.count_nonzero(frame[:, :, 3])) / (320 * 180)
+        self.assertGreater(cubierto, 0.002)
+        self.assertLess(cubierto, 0.25)
+
+    def test_donde_no_hay_papelito_el_color_es_negro(self):
+        """Nada del master se filtra: fuera de los papelitos no hay imagen."""
+        frame = emit_pieces.confetti_rgba(160, 120, 11)
+        fuera = frame[:, :, 3] == 0
+        self.assertTrue(fuera.any())
+        self.assertEqual(int(frame[:, :, :3][fuera].max()), 0)
+
+    def test_los_papelitos_caen(self):
+        def fila_media(index):
+            frame = emit_pieces.confetti_rgba(96, 720, index)
+            filas = np.nonzero(frame[:, :, 3].any(axis=1))[0]
+            return float(filas.mean()) if filas.size else None
+        primera, despues = fila_media(0), fila_media(3)
+        self.assertIsNotNone(primera)
+        self.assertIsNotNone(despues)
+        self.assertGreater(despues, primera)
+
+    def test_no_se_usan_trascendentes(self):
+        """Invariante 7: dos maquinas tienen que emitir el MISMO archivo. Un
+        seno que difiere en 1 ULP entre dos libm mueve un borde y cambia los
+        bytes, asi que el generador se escribe con enteros y se verifica aca."""
+        fuente = "".join(inspect.getsource(objeto) for objeto in
+                         (emit_pieces.confetti_rgba, emit_pieces._sorteo,
+                          emit_pieces._triangulo))
+        for prohibido in ("sin(", "cos(", "sqrt(", "random", "float("):
+            self.assertNotIn(prohibido, fuente)
 
 
 class ManifestTest(unittest.TestCase):
