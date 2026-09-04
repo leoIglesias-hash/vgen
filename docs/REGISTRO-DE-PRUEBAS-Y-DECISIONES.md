@@ -5289,3 +5289,78 @@ Para que la **foto** lo pruebe y no haya que creerle a nadie, se agregó el camp
 (`navigator.onLine`; dice `?` si el navegador no lo declara, nunca supone que
 había red). Con eso, una sola foto muestra `red no` y las dos filas sonando.
 
+
+---
+
+## 2026-09-04 (noche) — H-22: en el Smart TV no entraba ningún número, y ya sabemos por qué
+
+Reporte del operador, textual: *«quisimos hacer una prueba con el webview de un
+smart tv con android, pero al cargar ir.html no me toma los numeros ni del
+control remoto ni de un pad numerico que le conecte»*.
+
+Que fallen **las dos** entradas —el control y un pad USB— descarta el control
+remoto como culpable y apunta a la página. Dos hipótesis, las dos plausibles, y
+ninguna se podía elegir a distancia:
+
+1. **El dígito llega por un campo que no estábamos mirando.** `digitOf()`
+   preguntaba **solo** por `keyCode`/`which`. Hay WebViews que mandan
+   **`keyCode: 0`** y pueblan únicamente `key` —sobre todo cuando el número pasa
+   por un IME, que es como varios controles de TV escriben dígitos—.
+2. **El foco se lo come el campo de texto.** `ir.html` tiene un `<input>` para
+   escribir la versión a mano, y el manejador **se retira sin hacer nada** si el
+   foco está en un INPUT. En un Smart TV la navegación espacial puede dejarle el
+   foco ahí sola al cargar. **Ya nos pasó una vez**, con el `<textarea>` del
+   reporte en H-20: *«el foco adentro apagaba el mando entero»*.
+
+### La primera quedó confirmada acá, sin ir al aparato
+
+El navegador de esta sesión (Chromium 148) **reproduce el síntoma**, y por eso
+las teclas sintéticas nunca movieron nada en las pruebas de hoy. Con la línea de
+diagnóstico nueva, la página lo escribió sola:
+
+```
+tecla 1: keydown kc=0 w=0 cc=0 key=9 code= foco=BODY
+```
+
+**`keyCode 0`, `which 0`, `charCode 0`. El dígito viaja únicamente en `key`.**
+No es una teoría sobre el Smart TV: es un aparato real haciéndolo, y el mismo
+comportamiento que explica el reporte del operador.
+
+### Lo que se hizo
+
+- **Cuatro caminos para leer un dígito, y se prueban todos**, en `keypad.js` y
+  en la copia de `ir.html`: `keyCode` 48–57, `keyCode` 96–105 (bloque numérico),
+  **`key`**, y `code` (`Digit3`/`Numpad3`) / `charCode`. Cuesta cuatro
+  comparaciones por tecla; preguntar de una sola forma costaba una visita.
+- **`keypress` como plan B**, solo si el `keydown` de esa misma tecla no dio
+  dígito —con guarda, para que un aparato que manda los dos eventos no dispare
+  cada número dos veces—. Y enganche en `document` **y** `window`, con el evento
+  marcado para no atenderlo dos veces.
+- **El foco, atacado por los tres lados** en `ir.html`: el campo sale del
+  recorrido (`tabindex="-1"`), el `body` es focusable y **se le devuelve el foco
+  al terminar de armar la página**, `Volver`/`Escape` suelta el campo, y si aun
+  así el foco termina adentro **la página lo dice** en vez de quedarse muda.
+- **La línea de diagnóstico**, que es la parte que sobrevive a esta tarea:
+  `ir.html` la muestra fija y `v0/` la pone en el zócalo. Dice tipo de evento,
+  `keyCode`, `which`, `charCode`, `key`, `code` y **dónde estaba el foco**.
+
+### Por qué el diagnóstico importa más que el arreglo
+
+Porque **separa dos fallas que se ven idénticas**: «no toma los números». Si la
+línea nunca sale de `tecla 0: ninguna todavía`, los eventos **no llegan a la
+página** —el sistema se los queda— y eso no se arregla desde acá. Si la línea
+cambia y el número igual no hace nada, llegan por un campo que no miramos. Son
+dos arreglos distintos, y hasta hoy no teníamos cómo distinguirlos sin viajar.
+
+### Verificado
+
+En el navegador, contra la página servida: `3` en `ir.html` navega a
+`https://iargen.com/player/1280-15/`, y `83` en `v0/` enciende la capa sobre el
+VP9 — **las dos, en el aparato que mandaba `keyCode 0`**. Antes de este cambio,
+ninguna de las dos hacía nada.
+
+**Falta**: que el operador lo abra en el Smart TV. Si anda, el aparato entra en
+la tabla de PLAN-DE-MEDICION §5 con el resto de las columnas. Si no anda, **la
+línea de diagnóstico va a decir cuál de las dos fallas es**, y esa foto vale más
+que cualquier hipótesis nueva.
+

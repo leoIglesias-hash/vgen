@@ -818,4 +818,19 @@ navigatorStub.onLine = true;
 action("0").run();
 assert(/red\tsi/.test(reporteTexto()));
 
-console.log("v0 page tests (H-18b + H-20 + H-21 + red): OK");
+/* H-22: el zocalo dice lo ultimo que el aparato mando por el teclado.
+ *
+ * En el WebView de un Smart TV con Android no entraba ningun numero. Con esta
+ * linea, una foto separa dos fallas que se ven iguales: si nunca cambia de
+ * "ninguna todavia", los eventos no llegan a la pagina; si cambia y el numero
+ * igual no hace nada, llegan por un campo que no estabamos mirando. */
+assert(/ninguna todavia/.test(textoDe(byId("env"))),
+  "antes de la primera tecla, el zocalo lo dice");
+assert(typeof registered.onKey === "function",
+  "la pagina le pide al mando que le cuente cada tecla");
+registered.onKey("keydown kc=0 w=0 cc=0 key=7 code= foco=BODY", 1);
+assert(/tecla 1: keydown/.test(textoDe(byId("env"))) &&
+       /key=7/.test(textoDe(byId("env"))),
+  "y despues trae los campos crudos: " + textoDe(byId("env")));
+
+console.log("v0 page tests (H-18b + H-20 + H-21 + red + H-22): OK");

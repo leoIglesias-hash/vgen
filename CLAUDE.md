@@ -227,6 +227,21 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
      lleva los **caídos vivos de los dos**. Porque «2,6 % de caídos» y «se ve
      fluido dos minutos» son dos datos distintos, y el segundo lo firma el ojo.
 
+  9. **H-22** — en el WebView de un **Smart TV con Android** no entraba ningún
+     número, **ni por control remoto ni por un pad USB**. Dos causas posibles,
+     las dos atacadas: el dígito llegando por un campo que no mirábamos
+     (`digitOf` preguntaba solo por `keyCode`) y el `<input>` quedándose con el
+     foco —el mismo defecto del `<textarea>` de H-20—. **La primera quedó
+     confirmada sin ir al aparato:** el navegador de esta sesión reproduce el
+     síntoma y la línea de diagnóstico nueva lo escribió sola: `keydown kc=0
+     w=0 cc=0 key=9 code= foco=BODY`. Ahora hay **cuatro caminos** para leer un
+     dígito (`keyCode` 48–57, 96–105, **`key`**, `code`/`charCode`), `keypress`
+     como plan B con guarda, y el campo fuera del recorrido del foco. **Lo que
+     sobrevive a la tarea es la línea de diagnóstico** —fija en `ir.html`, en el
+     zócalo de `v0/`—: separa dos fallas que se ven idénticas, «los eventos no
+     llegan a la página» (no se arregla desde acá) de «llegan por otro campo»
+     (sí), y hasta hoy no se podían distinguir sin viajar.
+
   **Queda UNA SOLA VISITA a la caja** (qué traer: `RUNBOOK-ESTADO.md`): `85` con
   la red cortada, `83` sola, y `71` como opcional. Después
   siguen **H-6** (matriz por bytes a igual look),

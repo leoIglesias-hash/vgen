@@ -23,22 +23,30 @@
   button { font: inherit; font-size: 1em; background: #2a2f45; color: #e8e8ee;
            border: 1px solid #4a5170; padding: 0.32em 0.7em; }
   #dest { color: #6f7690; font-size: 0.5em; margin-top: 0.6em; }
+  /* H-22: lo que el aparato manda de verdad. Sin esto, "no toma los numeros"
+   * no se puede diagnosticar a distancia. */
+  #tecla { color: #7fd7a0; font-size: 0.52em; margin-top: 0.5em;
+           word-break: break-all; }
+  #aviso { color: #ff9d6b; font-size: 0.6em; min-height: 1.1em; }
 </style>
 </head>
-<body>
+<body tabindex="-1">
 <h1>ir a</h1>
 <p class="sub">Apreta el numero. OK dispara sin esperar; Volver borra.</p>
 
 <div id="buffer"></div>
+<div id="aviso"></div>
 <div id="ops"></div>
 
 <div id="libre">
-  version: <input id="v" type="text" autocomplete="off" spellcheck="false">
+  version: <input id="v" type="text" autocomplete="off" spellcheck="false"
+    tabindex="-1">
   <button id="go">ir</button>
   <div class="d">Escribi solo el nombre (por ejemplo <b>v0</b>). Tambien acepta
     una ruta o una URL entera.</div>
 </div>
 <div id="dest"></div>
+<div id="tecla"></div>
 
 <script>
 "use strict";
@@ -180,21 +188,94 @@ function push(digit) {
   fire(value);
 }
 
+/* H-22 (2026-09-04): en el WebView de un Smart TV con Android, ni el control
+ * remoto ni un pad numerico USB movian esta pagina. CUATRO caminos para leer un
+ * digito, y se prueban todos, porque preguntar de una sola forma es suponer:
+ * keyCode 48..57, keyCode 96..105 (bloque numerico), `key` -hay WebViews que
+ * mandan keyCode 0 y solo pueblan esta, sobre todo con IME de por medio- y
+ * `code`/`charCode`. Misma regla que keypad.js; aca va copiada porque el
+ * archivo es suelto (ver cabecera). */
 function digitOf(event) {
   var code = event.keyCode || event.which || 0;
+  var key, name, letra;
   if (code >= 48 && code <= 57) { return String(code - 48); }
   if (code >= 96 && code <= 105) { return String(code - 96); }
+  key = event.key;
+  if (typeof key === "string" && key.length === 1 &&
+      key >= "0" && key <= "9") { return key; }
+  name = event.code;
+  if (typeof name === "string") {
+    if (name.length === 6 && name.substring(0, 5) === "Digit") {
+      letra = name.charAt(5);
+      if (letra >= "0" && letra <= "9") { return letra; }
+    }
+    if (name.length === 7 && name.substring(0, 6) === "Numpad") {
+      letra = name.charAt(6);
+      if (letra >= "0" && letra <= "9") { return letra; }
+    }
+  }
+  code = event.charCode || 0;
+  if (code >= 48 && code <= 57) { return String(code - 48); }
   return "";
 }
 
-function onKeyDown(event) {
+/* Lo que el aparato mando de verdad, escrito en pantalla. Es la parte que
+ * convierte "no toma los numeros" en un dato: o la linea aparece y dice por
+ * que campo vino el digito y donde estaba el foco, o no aparece nunca y
+ * entonces los eventos no llegan a la pagina, que tambien es una respuesta. */
+function describe(event) {
+  var node = event.target || event.srcElement;
+  return (event.type || "?") +
+         " kc=" + (event.keyCode === undefined ? "-" : event.keyCode) +
+         " w=" + (event.which === undefined ? "-" : event.which) +
+         " cc=" + (event.charCode === undefined ? "-" : event.charCode) +
+         " key=" + (event.key === undefined ? "-" : event.key) +
+         " code=" + (event.code === undefined ? "-" : event.code) +
+         " foco=" + (node && node.nodeName ? node.nodeName : "-");
+}
+
+/* El campo de texto se lleva TODOS los numeros mientras tenga el foco, y en un
+ * Smart TV la navegacion espacial puede dejarselo sola al cargar. Ya paso una
+ * vez con un <textarea> (H-20). Aca: el campo esta fuera del recorrido
+ * (tabindex -1), el foco arranca en el body, y si igual termina adentro, la
+ * pagina lo DICE en vez de quedarse muda. */
+function soltarCampo() {
+  var campo = byId("v");
+  if (campo.blur) { campo.blur(); }
+  if (document.body && document.body.focus) { document.body.focus(); }
+  text(byId("aviso"), "");
+}
+
+function avisarFoco(tag) {
+  if (tag === "INPUT" || tag === "TEXTAREA") {
+    text(byId("aviso"), "el foco esta en el campo: los numeros van ahi. " +
+                        "Apreta Volver para salir.");
+    return true;
+  }
+  return false;
+}
+
+var vistos = 0;
+var ultimoDigitoEn = 0;
+
+function ahora() { return new Date().getTime(); }
+
+function atender(event) {
   var code = event.keyCode || event.which || 0;
   var node = event.target || event.srcElement;
   var tag = node && node.nodeName ? node.nodeName.toUpperCase() : "";
   var digit;
-  if (tag === "INPUT" || tag === "TEXTAREA") { return; }
+  vistos++;
+  text(byId("tecla"), "tecla " + vistos + ": " + describe(event));
+  if (tag === "INPUT" || tag === "TEXTAREA") {
+    if (code === 27 || code === 8) { soltarCampo(); }
+    else { avisarFoco(tag); }
+    return;
+  }
+  text(byId("aviso"), "");
   digit = digitOf(event);
   if (digit) {
+    ultimoDigitoEn = ahora();
     if (event.preventDefault) { event.preventDefault(); }
     push(digit);
     return;
@@ -208,6 +289,27 @@ function onKeyDown(event) {
     if (event.preventDefault) { event.preventDefault(); }
     clearBuffer();
   }
+}
+
+/* El mismo evento pasa por document y por window: se lo marca una sola vez. */
+function yaVisto(event) {
+  if (event.__asclIr) { return true; }
+  event.__asclIr = 1;
+  return false;
+}
+
+function onKeyDown(event) {
+  if (yaVisto(event)) { return; }
+  atender(event);
+}
+
+/* `keypress` es el PLAN B, no un segundo camino: solo se atiende si el
+ * `keydown` de esa misma tecla no dio un digito. Sin la guarda, un aparato que
+ * manda los dos eventos dispararia cada numero dos veces. */
+function onKeyPress(event) {
+  if (yaVisto(event)) { return; }
+  if (ahora() - ultimoDigitoEn < 300) { return; }
+  atender(event);
 }
 
 function render() {
@@ -241,8 +343,14 @@ function start() {
   if (param("delay")) { delay = parseInt(param("delay"), 10) || 900; }
   render();
   text(byId("dest"), "base: " + baseUrl());
+  text(byId("tecla"), "tecla 0: (todavia no llego ninguna)");
   if (document.addEventListener) {
     document.addEventListener("keydown", onKeyDown, false);
+    document.addEventListener("keypress", onKeyPress, false);
+    if (window.addEventListener) {
+      window.addEventListener("keydown", onKeyDown, false);
+      window.addEventListener("keypress", onKeyPress, false);
+    }
   } else {
     document.onkeydown = onKeyDown;
   }
@@ -251,6 +359,9 @@ function start() {
     var code = event.keyCode || event.which || 0;
     if (code === 13) { go(target(byId("v").value)); }
   };
+  /* Ultimo paso a proposito: cualquier foco que la navegacion espacial del TV
+   * haya dejado en el campo se suelta ACA, con la pagina ya armada. */
+  soltarCampo();
 }
 
 window.onresize = scaleUI;

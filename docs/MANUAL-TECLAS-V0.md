@@ -70,6 +70,23 @@ ya las contestó y repetirlas no agrega información.
 | `98` | orden alterado (1-8, 13-16, 9-12) por MSE y por Blob | **solo por MSE `sequence`**; por Blob «se tilda» |
 | `99` | bucle de 60 s con `loop` | el `loop` progresivo quedó refutado |
 
+## Si no entran los números (H-22)
+
+Las dos páginas dicen **lo último que el aparato mandó por el teclado**: en
+`ir.html` es la línea verde de abajo de todo; en `v0/` es el final del zócalo.
+Dice tipo de evento, `keyCode`, `which`, `charCode`, `key`, `code` y **dónde
+estaba el foco**.
+
+- Si nunca sale de **`tecla 0: ninguna todavía`**, los eventos **no llegan a la
+  página**: se los queda el sistema o el lanzador del aparato. Eso no se arregla
+  desde acá, pero saberlo evita seguir buscando en el lugar equivocado.
+- Si **cambia** y el número igual no hace nada, el dígito llega por un campo que
+  falta contemplar, y la línea dice exactamente cuál.
+- Si dice **`foco=INPUT`**, los números se los está comiendo el campo de texto:
+  apretá **Volver** para soltarlo (en `ir.html` además aparece el aviso naranja).
+
+Una foto de esa línea contesta la pregunta entera.
+
 ## Parámetros de la dirección
 
 Se agregan a la URL, separados por `&` después de un `?`.

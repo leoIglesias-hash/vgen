@@ -35,6 +35,7 @@ function makeNode(name) {
     return child;
   };
   node.focus = function () { node.focused = true; };
+  node.blur = function () { node.focused = false; };
   return node;
 }
 
@@ -47,6 +48,7 @@ function byId(id) {
 var listeners = [];
 var documentStub = {
   documentElement: makeNode("html"),
+  body: makeNode("BODY"),
   getElementById: byId,
   createElement: makeNode,
   createTextNode: function (value) {
@@ -67,7 +69,9 @@ var windowStub = {
 };
 
 new Function("window", "document",
-  inline[1] + "\nwindow.__t = { target: target, push: push, BASE: BASE };")
+  inline[1] + "\nwindow.__t = { target: target, push: push, BASE: BASE," +
+  " digitOf: digitOf, describe: describe, soltarCampo: soltarCampo," +
+  " onKeyDown: onKeyDown, onKeyPress: onKeyPress };")
   (windowStub, documentStub);
 var api = windowStub.__t;
 
@@ -120,8 +124,59 @@ api.push("0");
 assert.strictEqual(windowStub.location.href, "");
 assert.strictEqual(byId("v").focused, true);
 
-/* El teclado queda enganchado al documento (control remoto, sin mouse). */
-assert.strictEqual(listeners.length, 1);
+/* El teclado queda enganchado al documento (control remoto, sin mouse), por
+ * los DOS eventos: H-22 sumo `keypress` como plan B. */
+assert.strictEqual(listeners.length, 2);
 assert.strictEqual(listeners[0][0], "keydown");
+assert.strictEqual(listeners[1][0], "keypress");
 
-console.log("ir page tests: OK");
+/* --- H-22: el mando en un Smart TV con Android --- */
+
+/* Cuatro caminos para leer un digito: hay WebViews que mandan keyCode 0 y solo
+ * pueblan `key`, y del `keypress` a veces solo llega `charCode`. */
+assert.strictEqual(api.digitOf({ keyCode: 51 }), "3");
+assert.strictEqual(api.digitOf({ keyCode: 99 }), "3");
+assert.strictEqual(api.digitOf({ keyCode: 0, key: "3" }), "3");
+assert.strictEqual(api.digitOf({ keyCode: 0, code: "Digit3" }), "3");
+assert.strictEqual(api.digitOf({ keyCode: 0, code: "Numpad3" }), "3");
+assert.strictEqual(api.digitOf({ charCode: 51 }), "3");
+assert.strictEqual(api.digitOf({ keyCode: 0, key: "Enter" }), "");
+
+/* La pagina ESCRIBE lo que llego. Si el aparato no manda nada, la linea se
+ * queda en 0 y eso ya es la respuesta. */
+assert(/todavia no llego ninguna/.test(byId("tecla").firstChild.data),
+  "antes de la primera tecla, la linea lo dice");
+windowStub.location.href = "";
+api.onKeyDown({ keyCode: 0, key: "3", target: { nodeName: "BODY" },
+                preventDefault: function () {} });
+assert(/key=3/.test(byId("tecla").firstChild.data),
+  "y despues trae los campos crudos: " + byId("tecla").firstChild.data);
+assert.strictEqual(windowStub.location.href,
+  "https://iargen.com/player/1280-15/",
+  "un digito que solo viene en `key` tiene que navegar igual");
+
+/* El campo de texto se lleva TODOS los numeros mientras tenga el foco, y en un
+ * Smart TV la navegacion espacial puede dejarselo sola al cargar (ya paso con
+ * un <textarea> en H-20). Con el foco adentro no se dispara nada, pero la
+ * pagina lo DICE en vez de quedarse muda. */
+windowStub.location.href = "";
+api.onKeyDown({ keyCode: 51, target: { nodeName: "INPUT" },
+                preventDefault: function () {} });
+assert.strictEqual(windowStub.location.href, "",
+  "con el foco en el campo, los numeros son texto");
+assert(/el foco esta en el campo/.test(byId("aviso").firstChild.data),
+  "y la pagina lo avisa: " + byId("aviso").firstChild.data);
+
+/* Volver saca el foco del campo. */
+byId("v").focused = true;
+api.onKeyDown({ keyCode: 8, target: { nodeName: "INPUT" },
+                preventDefault: function () {} });
+assert.strictEqual(byId("v").focused, false, "Volver suelta el campo");
+assert.strictEqual(documentStub.body.focused, true, "y el foco vuelve al body");
+
+/* Y arrancar la pagina ya lo suelta, sin que haya que apretar nada. */
+byId("v").focused = true;
+api.soltarCampo();
+assert.strictEqual(byId("v").focused, false);
+
+console.log("ir page tests (H-22): OK");

@@ -610,6 +610,24 @@ function reportLine(piece) {
          "\t" + r.switchMs + "\t" + noteOf(piece, r);
 }
 
+/* H-22: lo ultimo que el aparato mando por el teclado, siempre a la vista.
+ *
+ * En el WebView de un Smart TV con Android no entraba ningun numero, y sin esta
+ * linea la unica forma de saber por que era ir hasta el aparato. Ahora el
+ * zocalo lo dice solo: si nunca cambia de "ninguna todavia", los eventos no
+ * llegan a la pagina; si cambia y el numero no hace nada, llegan pero por un
+ * campo que no estabamos mirando. Son dos fallas distintas y dos arreglos
+ * distintos. */
+var ultimaTecla = "tecla 0: ninguna todavia";
+
+function escribirPie() {
+  text(byId("env"), "panel " + screen.width + "x" + screen.height +
+       " · superficie " + window.innerWidth + "x" + window.innerHeight +
+       (entera.on ? " · PANTALLA ENTERA · 73 vuelve · 0 corta"
+                  : " · 95 para ver el reporte entero") +
+       " · " + ultimaTecla);
+}
+
 function writeReport() {
   var lines = ["# pack v0 - reporte de aparato"];
   var i, line;
@@ -627,10 +645,7 @@ function writeReport() {
   }
   reportLines = lines;
   if (byId("full").className === "on") { paintReport(); }
-  text(byId("env"), "panel " + screen.width + "x" + screen.height +
-       " · superficie " + window.innerWidth + "x" + window.innerHeight +
-       (entera.on ? " · PANTALLA ENTERA · 73 vuelve · 0 corta"
-                  : " · 95 para ver el reporte entero"));
+  escribirPie();
 }
 
 /* H-20: el reporte en DOS COLUMNAS, achicandose hasta que entra.
@@ -2012,6 +2027,10 @@ function start() {
       actions: TECLAS,
       onBuffer: function (buffer) {
         text(byId("buffer"), buffer ? buffer + "_" : "");
+      },
+      onKey: function (linea, n) {
+        ultimaTecla = "tecla " + n + ": " + linea;
+        escribirPie();
       }
     });
   }

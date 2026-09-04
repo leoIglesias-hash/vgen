@@ -91,4 +91,52 @@ typing.pad.onKeyDown({ keyCode: 50, target: { nodeName: "BODY" },
                        preventDefault: function () {} });
 assert.deepStrictEqual(typing.fired, ["2"]);
 
-console.log("keypad tests: OK");
+/* H-22: CUATRO caminos para leer un digito. En el WebView de un Smart TV con
+ * Android no entraba ni el control ni un pad USB; preguntar de una sola forma
+ * es suponer, y una suposicion cuesta una visita. */
+assert.strictEqual(ASCLKeypad.digitOf({ keyCode: 0, key: "3" }), "3",
+  "hay WebViews que mandan keyCode 0 y solo pueblan key");
+assert.strictEqual(ASCLKeypad.digitOf({ keyCode: 0, code: "Digit8" }), "8");
+assert.strictEqual(ASCLKeypad.digitOf({ keyCode: 0, code: "Numpad4" }), "4");
+assert.strictEqual(ASCLKeypad.digitOf({ charCode: 53 }), "5",
+  "y del keypress solo llega charCode");
+assert.strictEqual(ASCLKeypad.digitOf({ key: "Enter" }), "",
+  "key con mas de un caracter no es un digito");
+assert.strictEqual(ASCLKeypad.digitOf({ code: "KeyA" }), "");
+assert.strictEqual(ASCLKeypad.digitOf({ key: "a" }), "");
+
+/* La linea de diagnostico dice por que campo vino y donde estaba el foco: sin
+ * eso, "no toma los numeros" no se puede contestar a distancia. */
+var linea = ASCLKeypad.describe({ type: "keydown", keyCode: 0, key: "7",
+                                  target: { nodeName: "BODY" } });
+assert(/keydown/.test(linea) && /key=7/.test(linea) && /foco=BODY/.test(linea),
+  "la linea trae tipo, campos y foco: " + linea);
+
+/* El MISMO evento pasa por document y por window: se atiende una sola vez. */
+var doble = build(["1", "2"]);
+var mismo = { keyCode: 50, target: { nodeName: "BODY" },
+              preventDefault: function () {} };
+doble.pad.onKeyDown(mismo);
+doble.pad.onKeyDown(mismo);
+assert.deepStrictEqual(doble.fired, ["2"],
+  "el evento queda marcado: engancharse en dos lugares no dispara dos veces");
+
+/* `keypress` es PLAN B, no un segundo camino: si el keydown ya dio el digito,
+ * no repite. */
+var planB = build(["1", "2"]);
+planB.pad.onKeyDown({ keyCode: 50, target: { nodeName: "BODY" },
+                      preventDefault: function () {} });
+planB.pad.onKeyPress({ charCode: 50, target: { nodeName: "BODY" },
+                       preventDefault: function () {} });
+assert.deepStrictEqual(planB.fired, ["2"],
+  "el keypress no repite lo que el keydown ya atendio");
+
+/* Pero si el keydown no trajo digito, el keypress es la unica puerta. */
+var soloPress = build(["1", "2"]);
+soloPress.pad.onKeyDown({ keyCode: 0, target: { nodeName: "BODY" } });
+soloPress.pad.onKeyPress({ charCode: 50, target: { nodeName: "BODY" },
+                           preventDefault: function () {} });
+assert.deepStrictEqual(soloPress.fired, ["2"],
+  "sin keydown util, el keypress tiene que alcanzar");
+
+console.log("keypad tests (H-22): OK");
