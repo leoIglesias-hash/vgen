@@ -565,3 +565,14 @@ assert(/Math\.min\(200, Math\.round\(w \* 0\.34\)\)/.test(inline[1]),
   "y ese piso no puede comerse mas de un tercio de una pantalla angosta");
 assert(/#keys\s*\{[^}]*box-sizing:\s*border-box/.test(page),
   "el ancho de la columna incluye su relleno: si no, se monta sobre el video");
+
+/* H-12b/H-16: el 83 apretado apenas abre la pagina. Probado en el navegador el
+ * 2026-09-04: si el manifiesto todavia no llego, la capa quedaba encendida
+ * sobre un <video> vacio, que es el mismo sintoma que el operador reporto en la
+ * caja. Reintentar es mas util que avisar: el operador aprieta una vez. */
+assert(/CAPA_OJO_ESPERA_MS = 6000/.test(inline[1]),
+  "el 83 espera al manifiesto en vez de rendirse");
+assert(/capaOjoArranca\(desde\)/.test(inline[1]),
+  "y reintenta hasta que la pieza base este");
+assert(/if \(capa\.load !== "rect"\) \{ return; \}/.test(inline[1]),
+  "si mientras tanto se apago la capa, el reintento se corta solo");

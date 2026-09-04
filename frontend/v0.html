@@ -917,13 +917,33 @@ function capaOjoPieza() {
   return findPiece("v0-vp9") || findPiece("v0-h264-baseline");
 }
 
+/* Cuanto se espera al manifiesto si el `83` se aprieta apenas abre la pagina.
+ * Probado en el navegador el 2026-09-04: apretarla antes de que llegara el
+ * manifiesto dejaba la capa encendida sobre un <video> vacio -el mismo sintoma
+ * que el operador reporto en la caja, por otra causa-. Reintentar es mas util
+ * que avisar: el operador aprieta una vez, no dos. */
+var CAPA_OJO_ESPERA_MS = 6000;
+
 function toggleCapa() {
-  var video = byId("video"), src;
   if (capa.load === "rect") { setCapa("none"); say("capa a ojo: apagada"); return; }
   setCapa("rect");
+  capaOjoArranca(new Date().getTime());
+}
+
+function capaOjoArranca(desde) {
+  var video = byId("video"), src;
+  if (capa.load !== "rect") { return; }
   if (!video.currentSrc && !video.src) {
     src = capaOjoPieza();
-    if (!src) { say("capa a ojo: no esta la pieza base"); return; }
+    if (!src) {
+      if (new Date().getTime() - desde < CAPA_OJO_ESPERA_MS) {
+        say("capa a ojo: esperando el manifiesto");
+        window.setTimeout(function () { capaOjoArranca(desde); }, 300);
+      } else {
+        say("capa a ojo: no llego la pieza base");
+      }
+      return;
+    }
     stopFeeding();
     video.loop = true;
     video.src = base + src.file;
@@ -935,6 +955,7 @@ function toggleCapa() {
   }
   window.setTimeout(function () {
     var v = byId("video");
+    if (capa.load !== "rect") { return; }
     say(v.paused ? "capa a ojo: el aparato pide un gesto, aprete play"
                  : "capa a ojo: encendida sobre " + (v.currentSrc || "el video"));
   }, 900);
