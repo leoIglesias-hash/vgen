@@ -400,3 +400,23 @@ primero. El generador usa **enteros y ondas triangulares, nunca `sin`/`cos`**:
 escalones (teclas `70` y `73`) y el reporte en **dos columnas** con el `88` para
 volver, con la letra buscada por medición hasta que entra. Deja de vivir en un
 `<textarea>`, donde el foco adentro apagaba el mando numérico entero.
+
+## 2026-09-04 (noche, 2ª foto) — H-21: una key
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/index.html` | 80.329 | `ad073ac10fa236754b02b3844b7a9316` |
+
+La foto de la caja cerró H-18b y H-20 —dos planos de video se sostienen (2/154
+y 1/141), la superficie 4K no le cuesta al `<video>` (1/155), pero **video +
+video alfa + canvas juntos dan 11 %**: el presupuesto de composición es **dos
+planos, no tres**—. Sobre esa foto el operador pidió mirar los dos planos **sin
+los cortes de la medición**: los cortes son del `70`, que corre cuatro
+escalones y para entre uno y otro.
+
+**Qué cambió en la página**: tecla **`71`**, los dos planos a toda la
+superficie, **en bucle y sin un solo corte**, hasta que se apague. No agrega
+fila al reporte —no mide, muestra— pero el zócalo lleva los **caídos vivos de
+los dos**, para que el ojo y los números se miren juntos. El reloj se apaga en
+`stopAll()`, no en la tecla, para que las dos no se llamen en círculo. Son
+**14 teclas a la vista**.
