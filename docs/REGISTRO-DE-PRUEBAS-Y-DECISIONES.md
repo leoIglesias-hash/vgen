@@ -4802,3 +4802,115 @@ a la fuente, es una prueba.. luego usaremos otras»*. Con eso deja de ser un
 riesgo anotado: la fuente queda como la de la página de pruebas, no hay nada que
 revisar para el producto, y se puede sacar del bucket el día que deje de hacer
 falta. La del producto se elige después.
+
+---
+
+## 2026-09-04 (noche) — Foto de la caja: el techo aguanta 50 MB, Hobo entra, y los dos planos se sostienen (pero la prueba estaba mal armada)
+
+Una sola foto del operador, del reporte a pantalla completa (`95`). Se
+transcribe **textual** antes de tocar nada. Misma caja de siempre.
+
+### Cabecera, verbatim
+
+```
+# pack v0 - reporte de aparato
+ua	Mozilla/5.0 (Linux; Android 9; TVBOX Build/PPR1.180610.011; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/70.0.3538.80 Safari/537.36
+panel	1280x720	dpr 1	superficie 3840x2160
+capa	560x315	k 0.333	fuente hobo (166 ms)
+mse	si	changeType	si	blob	si
+mse.h264	si	mse.vp9	si
+rvfc	no	indexeddb	si	quality	no
+cache	si	guardadas 0	0 B	cuota 43/225 MB
+hls	maybe	dash	no
+```
+
+### Filas, verbatim (columnas `id dice arranco 1er_ms caidos total deriva_ms atascos congel cambio_ms nota`)
+
+| id | dice | arrancó | 1er_ms | caídos | total | deriva | atascos | congel | cambio | nota |
+|---|---|---|---|---|---|---|---|---|---|---|
+| cache:techo | | sí | 4.739 | 0 | 0 | 0 | 0 | 0 | −1 | declara 13/225 MB; tandas de 5 MB; **entraron 50 MB (tope de la prueba)** |
+| dos:vp9+alfa | probably | sí | 1.584 | **2** | 155 | 0 | 0 | 0 | −1 | loop VP9 + alfa encima; el de arriba dice probably, **caídos 2/138** |
+| capa0:base | probably | sí | 1.893 | 0 | 155 | 0 | 0 | 0 | −1 | sin canvas |
+| capa1:base | probably | sí | 600 | 0 | 155 | 0 | 0 | 0 | −1 | rect 15 fps; pintadas 154 (560×315); **fuente: hobo** |
+| capa2:base | probably | sí | 469 | 0 | 155 | 0 | 0 | 0 | −1 | pantalla una vez; pintadas 1 (560×315); fuente: hobo |
+| capa0:vp9 | probably | sí | 729 | 1 | 155 | 0 | 0 | 0 | −1 | sin canvas |
+| capa1:vp9 | probably | sí | 247 | 0 | 155 | 1 | 0 | 0 | −1 | rect 15 fps; pintadas 147 (560×315); fuente: hobo |
+| capa2:vp9 | probably | sí | 234 | 0 | 155 | 1 | 0 | 0 | −1 | pantalla una vez; pintadas 1 (560×315); fuente: hobo |
+| blob:v0-h264-baseline | probably | sí | 820 | 0 | 156 | 1 | 0 | 0 | −1 | (la foto corta acá) |
+
+La foto se corta en la novena fila: lo que siguiera del lote quedó fuera de
+cuadro. **Ese corte es, él mismo, un dato** — abajo.
+
+### Lo que la foto CIERRA
+
+- **H-12b, techo: la prueba dejó de matar la app.** `entraron 50 MB (tope de la
+  prueba)` con la app viva: en tandas de 5 MB el aparato se tragó **todo lo que
+  la prueba tenía para darle** y el techo real quedó por encima del tope que
+  nos pusimos. Contra la visita anterior, donde 50 MB de una sola vez cerraban
+  el WebView a los 25 MB: **era un defecto de la prueba, confirmado**. El pack
+  entero (≈ 27 MB) cabe con margen holgado.
+- **La cuota declarada NO es un número fijo.** La fila dice `declara 13/225 MB`
+  al arrancar la prueba y la cabecera, leída después, dice `43/225 MB` — con
+  `guardadas 0` y `0 B` en la base. O sea: `usage` de la Storage API en este
+  WebView **sube por lo que la prueba escribió y no vuelve a bajar al borrar**,
+  y no describe lo nuestro. **Se reporta como referencia, nunca como gate.** El
+  techo útil se mide escribiendo, que es lo que hace `84`.
+- **H-16: Hobo entra en la caja.** `fuente hobo (166 ms)` en la cabecera y
+  `fuente: hobo` en las tres filas de capa. La fuente se descarga y se usa en
+  Chromium 70 servida como `application/octet-stream`, con `format("opentype")`
+  sobre un archivo `.ttf`. La detección `MMMMM` contra `iiiii` no dio un falso
+  positivo. **H-16 cerrada.**
+- **La capa sigue sin costar nada, ahora también a 560×315.** 0 caídos en las
+  seis filas de capa, 154 y 147 pintadas de 155, deriva 0–1 ms. Confirma H-11
+  en otra geometría.
+
+### Lo que la foto dice y NO esperábamos
+
+**Los dos planos de video se sostienen en la caja, y mejor que en la PC.**
+2/155 abajo y 2/138 arriba — 1,3 % y 1,4 %, dentro del gate de 3 % — contra
+5..12/157 y 4..8/153 en la PC. Coherente con todo lo demás: en la caja el
+decodificador es hardware y el reparto es distinto. **Pero esto no cierra
+H-18**, por lo que sigue.
+
+### Lo que la foto NO contesta
+
+1. **`85` después de apagar y prender.** La cabecera dice `guardadas 0`: la
+   base estaba vacía, así que ni siquiera había qué buscar. Sigue abierta la
+   pregunta que separa «sobrevive al cierre de la app» de «sobrevive al
+   reinicio».
+2. **La tecla `6` del lanzador → la raíz sin WebGL.** No se probó.
+3. **El reporte no entra en la pantalla.** La foto corta en la novena fila. Es
+   un defecto de la página, no del aparato, y el operador lo pidió arreglado.
+
+### Los dos pedidos del operador, textuales
+
+1. *«Pusiste un video que se mueve sobre otro, mostrando solo una parte del
+   video, no es lo que queremos probar. Debería ser un video sobre otro de
+   exactamente el mismo tamaño (para probar) pero el video del layer de arriba
+   debe tener fondo transparente, entonces vería todo exactamente igual en el
+   video de abajo pero tal vez el video de arriba tiene, por tirar un ejemplo
+   cualquiera: copetines de papelitos de colores. Al ser transparente el video
+   de arriba se vería el de abajo con los papelitos de festejo como si fuera un
+   solo video. Es muy distinto a lo que hiciste.»*
+
+   **Tiene razón, y el defecto es doble.** (a) Geometría: el segundo `<video>`
+   se ubicaba en el rectángulo de la capa, encogido y corrido, así que se veía
+   como un recuadro flotando y no como una composición. (b) Contenido: la pieza
+   con alfa lleva **el RGB del propio máster** con una máscara de disco, así
+   que aun superponiéndola exacta se vería *lo mismo de abajo* y no se
+   distinguiría si la composición ocurrió. Lo que hay que emitir es una pieza
+   **cuyo contenido no exista abajo** —papelitos— sobre transparencia total.
+   → **H-18b**.
+
+2. *«no tenemos probado un fullscreen de estas cosas (que suele bajar
+   rendimiento) podríamos hacerlo… al final presiono 95 y nos dará el reporte
+   igual. (aunque todo el reporte no entra en la pantalla, deberías achicarlo
+   poniéndolo en dos columnas al reporte y agregarle un botón back que sea un
+   número no usado.»*
+
+   → **H-20**: el video ocupando **toda la superficie** (que en esta caja son
+   3840×2160 sobre un panel de 1280×720 — el caso que más puede doler), y el
+   reporte en dos columnas con tecla propia para salir.
+
+**El pedido 1 obliga a re-emitir el pack**, que es la primera vez que el
+contenido de una pieza cambia por una razón de prueba y no de codec.
