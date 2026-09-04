@@ -33,3 +33,6 @@ Desktop.ini
 
 # Config local de Claude Code (no compartida)
 .claude/settings.local.json
+
+# Configuracion local de herramientas de sesion (no es del proyecto)
+.claude/
