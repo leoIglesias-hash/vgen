@@ -141,23 +141,35 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   `init+16` = archivo, intercambio de orden solo por MSE `sequence`, bucle por
   `loop` refutado, cambio a demanda 305 ms a VP9 y >1 s a Baseline → muxer A =
   concatenación, B = MSE `sequence`; REGISTRO «H-13: reporte de la caja»),
-  **H-11 CERRADA 2026-09-04: ENCIMA** (0/155 caídos con canvas a 15 fps), **H-12
-  CERRADA en lo que decide** (persiste al cierre de la app, cuota 225 MB, 25 MB
-  entran; H-12b arregla la prueba de techo), **H-6** matriz por bytes a igual
-  look, **H-7** spec `SPEC-VGEN.md` (con **H-15** residencia adentro), **H-8**
-  muxer ES5 + player.
-  **H-14 y H-14b CERRADAS 2026-09-04:** `cpu-independent=1` adoptada en la
-  receta de x264, pack re-emitido y **54 keys de `v0/` republicadas**; las dos
-  piezas H.264 dan ahora el mismo archivo en cuatro CPUs de runner y las dos
-  VP9 salieron byte-idénticas a las del 09-01 → **invariante 7 saldado**.
-  **W-26 y W-26b CERRADAS 2026-09-04**: raíz auditada (64 rutas, 56 ya iguales)
-  y las 8 del player republicadas; medido que sin `?renderer=canvas2d` la raíz
-  pasa 240 ms en WebGL al abrir, que es el pantallazo blanco de la caja. **Nuevas 2026-09-04:**
-  **H-12b ejecutada 2026-09-04** (techo en tandas de 5 MB, `83` que arranca VP9,
-  caídos no negativos; publicada; **debe la foto de la caja**), **H-16 ejecutada 2026-09-04** (Hobo por defecto, tres columnas, 12 teclas a la vista, manual aparte; publicada; **debe la foto**) (Hobo por defecto + `1` reducido + `docs/MANUAL-TECLAS-V0.md`
-  + ≥ 10 teclas a la izquierda), W-26b, **H-18** (dos `<video>` a la vez),
-  **H-15** (residencia). **Orden: H-18 → H-6 →
-  H-7 → H-8.** Externo: pedir
+  **H-11 CERRADA 2026-09-04: ENCIMA** (0/155 caídos con canvas a 15 fps) y
+  **H-12 CERRADA en lo que decide** (persiste al cierre de la app, cuota
+  225 MB, 25 MB entran).
+
+  **La cola acordada el 2026-09-04 está TERMINADA en código y publicada.** Las
+  cinco, en orden:
+
+  1. **H-14b** — `cpu-independent=1` en la receta de x264, pack re-emitido y
+     **54 keys de `v0/` republicadas**. Las dos piezas H.264 dan el mismo
+     archivo en **cuatro CPUs** de runner y las dos VP9 salieron byte-idénticas
+     a las del 09-01 → **invariante 7 saldado**. CERRADA.
+  2. **H-12b** — el techo se mide **sumando tandas de 5 MB** (antes 50 MB de
+     una vez cerraban la app), la cuota declarada se reporta primero, `83`
+     arranca VP9 en bucle y los caídos no pueden ser negativos.
+  3. **H-16** — **Hobo por defecto** en la capa (detección midiendo `MMMMM`
+     contra `iiiii`), página en tres columnas con la tabla alta, **13 teclas a
+     la vista** y el resto en [`docs/MANUAL-TECLAS-V0.md`](docs/MANUAL-TECLAS-V0.md);
+     el `1` corre solo lo no consagrado y «correr todo» se mudó al `89`.
+  4. **W-26b** — raíz **auditada** (64 rutas, 56 ya iguales) y las 8 del player
+     republicadas. Medido: sin `?renderer=canvas2d` la raíz pasa **240 ms en
+     WebGL** al abrir, que es el pantallazo blanco de la caja. W-26 CERRADA.
+  5. **H-18** — un **segundo `<video>` con alfa encima** del loop (tecla `87`).
+     Medido en la PC: VP9 solo 0/156 caídos; con el segundo plano 5..12/157
+     abajo y 4..8/153 arriba: **se sostienen los dos, pero el segundo cuesta**.
+
+  **Las cuatro últimas esperan UNA SOLA VISITA a la caja** (qué traer:
+  `RUNBOOK-ESTADO.md`). Después siguen **H-6** (matriz por bytes a igual look),
+  **H-7** (spec `SPEC-VGEN.md`, con **H-15** residencia adentro) y **H-8**
+  (muxer ES5 + player). Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
 - **Lo que la caja dijo (2026-09-01, Android 9 / Chromium 70):** todo lo
   progresivo reproduce **fluido por hardware** a 720p@15 con la superficie 4K

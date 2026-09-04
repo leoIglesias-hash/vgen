@@ -4698,3 +4698,79 @@ contestar, porque acá la GPU sí presenta.
 
 **Sigue H-18** (dos `<video>` a la vez: el loop VP9 y un efecto con alfa
 encima).
+
+---
+
+## 2026-09-04 — H-18: un segundo `<video>` con alfa encima, para ver si un efecto puede SER video
+
+La pregunta la hizo el operador el mismo día, cerrando la conversación de la
+visita: *«probamos entonces videos "transparentes"? como para crear efectos que
+en realidad sean video?»*. Vale la pena decir qué está en juego: si el aparato
+sostiene **dos planos de video a la vez** —el loop abajo y una pieza con alfa
+encima, compuesta por el navegador—, un efecto **deja de tener que estar
+horneado** en el video o dibujado a mano en el canvas. Pasa a ser una pieza más
+del paquete, intercambiable como cualquier otra.
+
+### Lo que se agregó
+
+Tecla **`87`**: `v0-vp9` en bucle en el `<video>` principal y `v0-vp9-alpha` en
+un **segundo `<video>` encima**, del tamaño del rectángulo de la capa y sin
+crecer hacia abajo (regla 10). La fila mide el de abajo como cualquier otra y la
+nota trae los cuadros del de arriba, porque **si solo se midiera uno la prueba
+no contestaría la pregunta**. Entra en lo que corre el `1`, porque la caja
+todavía no la contestó.
+
+### Dos gates viejos chocaron con esto, y se reformularon en vez de aflojarse
+
+1. *«una sola etiqueta `<video>`»* → lo que la regla protege es que **todas las
+   piezas suenen en el mismo `<video>`**, nunca uno por pieza. Eso sigue
+   afirmado, y ahora además hay un **techo en dos**: el de las piezas y el del
+   efecto. Dos planos, no N.
+2. *«una sola `.pause()`»* → lo que protege es que **una medición no pause lo
+   que mide**: la pieza sigue sonando hasta que la próxima la reemplace, para
+   que se vea si de verdad seguía. El `<video>` de las piezas conserva su única
+   pausa, la del `0`. La otra es la del efecto al terminar **su** prueba, y esa
+   corresponde: un efecto que quedara sonando encima de las mediciones
+   siguientes las ensuciaría.
+
+### Un contador que solo acertaba la primera vez
+
+Corriendo la prueba **dos veces seguidas** —única forma de verlo— la segunda
+informaba **«1/2 caídos»** arriba. La línea de base del segundo video se tomaba
+al *pedirle* que suene, o sea contra los contadores de la pasada anterior, que
+`load()` acababa de poner en cero. Ahora se arma en la primera vuelta con
+`currentTime > 0`, y si el de arriba nunca llegó a sonar la fila lo dice («el de
+arriba no arrancó») en vez de mostrar un cero que se leería como «no perdió un
+cuadro».
+
+### Lo medido en la PC (que refuta, no consagra)
+
+| corrida | abajo (VP9) | arriba (alfa) |
+|---|---|---|
+| VP9 **solo**, sin segundo plano | **0/156** | — |
+| dos planos, pasada 1 | 5/157 | 4/153 |
+| dos planos, pasada 2 | 12/157 | 7/151 |
+| dos planos, corrida anterior | 8/156 | 8/157 |
+
+**Los dos planos se sostienen y los dos cuentan**, pero **el segundo cuesta**:
+el mismo loop que solo no pierde un cuadro pierde entre 3 % y 8 % con el efecto
+encima, en este navegador y en esta máquina. Eso **no decide nada**: la PC
+refuta, la caja consagra (VISION §8.11), y en la caja el decodificador es
+hardware y el reparto puede ser completamente distinto.
+
+### Publicado
+
+`v0/index.html` → 66.267 B, md5 `5946130981042e522864d86c2e3d4aad`. Copias
+previas commiteadas antes de cada subida; verificada contra lo servido; los dos
+tokens quemados y confirmados con 403.
+
+### Lo que falta de H-18
+
+La foto de la caja con `87`. **Si ahí se sostiene**, los efectos pueden ser
+piezas alfa (DISENO §9) y el techo de planos simultáneos pasa a **≥ 2**. **Si
+no**, los efectos van horneados en el video o dibujados en el canvas, y esta
+tecla queda como la evidencia de por qué.
+
+**Con esto se termina la cola acordada el 2026-09-04.** Lo que sigue depende de
+la próxima visita: H-12b, H-16, W-26b y H-18 esperan **una sola visita** a la
+caja, y después vienen H-6, H-7 (con H-15 adentro) y H-8.

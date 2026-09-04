@@ -287,7 +287,7 @@ Ni por analogía, ni por «es lo normal», ni por `canPlayType`.
 
 ## 4. Fases y tareas
 
-Orden (actualizado 2026-09-04): ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ → **H-18 → H-6 →
+Orden (actualizado 2026-09-04): ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ ~~H-18~~ → **H-6 →
 H-7 (con H-15 adentro) → H-8**; lo que falte de **H-10** corre aparte.
 H-13, H-11 y H-12 están cerradas con la caja; H-14b cerrada el 2026-09-04. Cuerpos ejecutables (archivo, acción, cierre)
 en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
@@ -307,7 +307,7 @@ en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | **H-12b — cierre técnico de la caché** (**ejecutada hasta la pantalla 2026-09-04; debe la foto**) | ¿hasta cuántos MB en tandas chicas sin cerrar la app? ¿persiste tras apagar y prender? | techo en tandas ≤ 5 MB, cuota declarada como primer techo, caídos nunca negativos, `83` sola arranca | foto de la caja con `techo` completo y `85` tras reiniciar |
 | **H-16 — Hobo por defecto + página reformada** (**ejecutada hasta la pantalla 2026-09-04; debe la foto**) | ¿la capa con fuente propia por hardware se ve y cuánto tarda en estar lista? | `@font-face` desde `v0/`, espera por `measureText`, `1` solo con lo no consagrado, ≥ 10 teclas a la izquierda, `docs/MANUAL-TECLAS-V0.md` | foto con `fuente: hobo` en la fila `capa*` |
 | **W-26b — terminar la raíz** (**ejecutada 2026-09-04; debe la foto**) | ¿la raíz con `?renderer=canvas2d` deja de dar pantallazo blanco? | auditoría servido-vs-repo escrita; las cuatro carpetas republicadas | foto de la caja sin pantallazo |
-| **H-18 — dos `<video>` a la vez** | ¿el loop y un efecto alfa encima sostienen los dos el gate? | tecla con segundo `<video>` posicionado como la capa; contador en ambos | fila en el REGISTRO; techo de planos simultáneos escrito en DISENO §10 |
+| **H-18 — dos `<video>` a la vez** (**ejecutada hasta la pantalla 2026-09-04; debe la foto**) | ¿el loop y un efecto alfa encima sostienen los dos el gate? | tecla con segundo `<video>` posicionado como la capa; contador en ambos | fila en el REGISTRO; techo de planos simultáneos escrito en DISENO §10 |
 | **H-15 — residencia** | ¿reproduce el día entero con la red cortada, arrancando desde el aparato en ≤ 1 s? | `residente`/`prioridad` por pieza en el manifiesto (H-7); presupuesto por navegador y conservación por prioridad (H-8) | medido en la caja con la red cortada |
 
 **Regla de dependencia:** H-7 no empieza sin H-13 **y** H-11 cerradas (lo están
@@ -356,7 +356,7 @@ pieza y presupuesto fijo por navegador (H-15); **W-26** → terminar y
 republicar la raíz (W-26b); **muxer** → A = concat principal, B = MSE reserva;
 **fuente Hobo** → por defecto en la capa, y la página de pruebas se reforma
 (H-16). Pregunta nueva del operador —«¿efectos que en realidad sean video?»—
-→ H-18. **Orden:** ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ (hechas) → H-18 → H-6 → H-7 (con
+→ H-18. **Orden:** ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ ~~H-18~~ (hechas) → H-6 → H-7 (con
 H-15) → H-8. **No queda ninguna decisión pendiente del operador**; debe una
 foto (tras apagar y prender, `85`) y, para el producto, la licencia de Hobo.
 
