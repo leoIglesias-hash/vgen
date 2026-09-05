@@ -209,6 +209,16 @@ nada.
 > ([`ENCODER-PORTATIL.md`](ENCODER-PORTATIL.md), P-008): recomendación =
 > bundle portátil **después de H-8**, con el CI como árbitro de bytes.
 >
+> **H-23 (2026-09-05, después del compact):** el operador pidió la prueba que
+> faltaba — *«video con transparencia y canvas pero con una imagen girando…
+> siempre pensando en eficiencia»*. Hecha en `producto.html`: la tecla `7`
+> **cicla** números → **números + el logo girando** (`drawImage` rotado con
+> el reloj del video, una vuelta cada 4 s, pedido una vez, con emblema de
+> respaldo) → apagada; cada pintada cronometrada por carga; `logo.png` nuevo
+> en `frontend/`; el incentivador cuenta caídos en vivo. Medido en la PC a
+> 1280×720: **0,20 ms med / 2,2 max por pintada** (los números solos 0,09).
+> Lo consagra la caja: `7` `7`, `4`, `9`.
+>
 > **Lo que el operador hace mañana, en la caja y en el Smart TV:** desde el
 > lanzador `7` (o `77` desde `v0/`); dejar el `1` ≥ 10 min y `9` para la foto;
 > `5` y esperar que vuelva, `9`; `4`, `9`; cerrar y volver a abrir (**`leidas
@@ -437,6 +447,7 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido, borrado de claves viejas y techo medido | **CERRADA en lo que decide, 2026-09-04**: persiste al cierre de la app (`guardadas 2`), cuota declarada 225 MB, 25 MB entran; la tanda de 50 MB cerró la app (defecto de la prueba → H-12b). Debe la foto tras apagar y prender + `85` | no |
 | H-7 | H | **spec normativa `SPEC-VGEN.md`**: contenedor, manifiesto (texto tabulado, **no JSON**), segmentos, sprites, cues, huecos, perfil → camino de runtime | **borrador 0.1 escrito 2026-09-05 (noche)** sobre lo que `producto.html` ejecuta, con ⏳ en lo no reproducido y la lista de firma en §12; **pendiente de la firma del operador** | define bytes |
 | H-8a | H | **el player mínimo del producto como prototipo** (`frontend/producto.html` + `GUION.tsv`; `ring()` en `vgenfeed.js`; H-15 en `vgencache.js`): loop por anillo MSE desde la caché, publicidad, incentivador, radio con rampa, capa, teclas de una cifra, reporte | **ejecutada 2026-09-05 (noche) hasta la pantalla**, CI verde, publicada en `v0/`; medida en la PC (refuta): 0 atascos, 48/186/163 ms; **falta la foto** de la caja y del Smart TV | no |
+| H-23 | H | **la imagen que gira encima del alfa** (`producto.html`: `7` cicla números → números + `logo.png` por `drawImage` rotado → apagada; costo por pintada en el reporte; `?capa=imagen`) | **ejecutada 2026-09-05 hasta la pantalla**, CI verde, publicada en `v0/`; PC: 0,20 ms med / 2,2 max por pintada a 1280×720, sin caídos atribuibles; **falta la foto** (`7` `7`, `4`, `9`) | no |
 | H-8 | H | **muxer ES5 + player híbrido mínimo** (incluye «cambiar solo la música») | pendiente (precondición: H-7 firmada); el player ya existe como H-8a, falta el muxer offline y el archivo único | no |
 | H-14 | H | **determinismo del carril H.264** (deuda contra el invariante 7) | **CERRADA**: causa establecida 2026-09-02 (determinista por máquina, distinto por CPU, `cpu-independent=1` lo cura), decidida y ejecutada el 2026-09-04 en H-14b | define bytes |
 | W-26 | — | escape `?renderer=` en la raíz publicada + default para TV box | **cerrada en código 2026-09-02** (`522bdf8` → `730c5f4`); **CERRADA 2026-09-04**: publicada en las cuatro carpetas por W-26b | no |
@@ -636,3 +647,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-09-05 | **H-6 EJECUTADA hasta la pantalla.** Matriz de 28 variantes en seis ejes (`tools/emit_matrix.py`, run `33936095399`), con autocontrol que probó bitstream y píxeles idénticos a v0 (`33936615188`). Emisión **v1** con la pista de audio del máster (`tools/emit_v1.py`, run `33936096738`): VP9 crf 38 + Opus 2.941.449 B, H.264 High+3B crf 23 + AAC 5.254.272 B, radio mp3, `dash-vp9/`; dos pasadas byte-idénticas. Publicadas 23 keys en `v0/`; teclas `72`/`74`/`75`/`76`. **S6 refutada** para este máster. `PROPUESTAS.md` + plantilla de issue; README «Cómo colaborar»; el repo pasa a llamarse **`vgen`** y a ser público de **solo lectura** (aclaración del operador). Falta la foto (`76`+`95`) y el ojo sobre v1. Detalle: REGISTRO 2026-09-05, [`EMISION-V1.md`](EMISION-V1.md) |
 | 2026-09-05 (cierre) | **Repo renombrado a `vgen` y PÚBLICO de solo lectura** (decisión del operador: sacar `assets` del remoto y `HoboStd.ttf` del árbol antes; Issues sí, wiki/projects no, sin LICENSE). REGISTRO 2026-09-05 (cierre) |
 | 2026-09-05 (noche) | **Turno nocturno sin operador** (pedido: *«trabajar en puntos para adelantar… pensalo vos a ver qué conviene»*). Se eligió **la reproducción antes que el encoder** (su propio segundo orden): **H-8a** `producto.html` + `GUION.tsv` + `ring()` + residencia H-15, CI verde (`84aaa9b`→`edd39a4`), publicada en `v0/` con las teclas `77` (v0) y `7` (lanzador). **H-7 como BORRADOR 0.1** escrito después del prototipo y sobre él. **El encoder evaluado por escrito** (`ENCODER-PORTATIL.md`, P-008), no implementado: bundle portátil después de H-8, CI árbitro. Dato nuevo: minutos de Actions gratis (repo público). REGISTRO «turno nocturno» |
+| 2026-09-05 | **H-23 — la imagen que gira encima del alfa**, pedida por el operador al volver (*«esa prueba no la hicimos… siempre pensando en eficiencia»*): `7` cicla números → números + el logo girando → apagada; una pintada cronometrada por carga; incentivador con caídos en vivo. PC a 1280×720: 0,20 ms med / 2,2 max por pintada; caídos no atribuibles a la imagen (la corrida sin capa cayó más). Publicada en `v0/` (`producto.html` + `logo.png`). Falta la foto: `7` `7`, `4`, `9`. REGISTRO «H-23» |

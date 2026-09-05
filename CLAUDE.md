@@ -43,6 +43,11 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 > de **una cifra**, reporte a dos columnas), con `GUION.tsv`, `ring()` en
 > `vgenfeed.js` y la residencia **H-15** en `vgencache.js`; CI verde y
 > **publicada en `v0/`** (tecla `77` desde `v0/`, `7` desde el lanzador).
+> **H-23 (2026-09-05, al volver el operador):** la prueba que faltaba — la
+> **imagen girando** (`logo.png`, `drawImage` rotado) encima del incentivador
+> con alfa: la tecla `7` **cicla** números → números + imagen → apagada, con el
+> costo por pintada en el reporte (PC: 0,20 ms med / 2,2 max a 1280×720).
+> Publicada; **la misma foto la cubre: `7` `7`, `4`, `9`.**
 > **H-7 es BORRADOR 0.1** ([`docs/SPEC-VGEN.md`](docs/SPEC-VGEN.md)): describe
 > lo que el prototipo ejecuta, marca ⏳ lo no reproducido y pide la firma del
 > operador con la lista de §12. **El encoder quedó evaluado, no hecho**

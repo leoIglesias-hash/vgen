@@ -238,6 +238,15 @@ en cada pintada** (H-11): una pintada tardía muestra lo correcto, después.
 Fuente Hobo por `@font-face`, cae a `monospace`, llegada detectada midiendo
 `MMMMM` contra `iiiii` (H-16).
 
+**Imagen encima (H-23, ⏳ la caja):** la capa puede girar una imagen
+(`drawImage` con `translate/rotate`, ángulo = `currentTime` del video, una
+vuelta cada 4 s) sobre el incentivador con alfa. La imagen se pide **una
+vez**, al primer uso; si no llega, se dibuja un emblema en un canvas aparte y
+se gira ese (el reporte dice cuál). Se limpia solo el cuadrado de su
+diagonal, nunca el canvas entero. Cada pintada se cronometra por carga
+(`numeros`, `numeros+imagen`: media, máximo, cantidad) para que la foto diga
+cuánto cuesta la imagen y no solo si se ve.
+
 ### 6.7 Vigilancia
 - `play()` **reintentado cada 2 s** mientras el video esté en pausa sin haberla
   pedido (pestaña oculta, política de gestos), y **contado** (`reintentos`,
@@ -250,7 +259,8 @@ Fuente Hobo por `@font-face`, cae a `monospace`, llegada detectada midiendo
 ### 6.8 Mando
 En el producto, **teclas de una cifra**, todas instantáneas: `1` anillo MSE,
 `2` blob con costura, `3` loop nativo (comparación), `4` incentivador,
-`5` publicidad, `6` radio, `7` capa, `8` leyenda, `9` reporte, `0` cortar.
+`5` publicidad, `6` radio, `7` capa (cicla números → números + imagen girando
+→ apagada), `8` leyenda, `9` reporte, `0` cortar.
 
 ## 7. Audio: tres clases (DISENO §7, operador 2026-09-01)
 
@@ -293,6 +303,7 @@ paquete lo emite Python en CI).
 | Bucle por MSE `sequence`, `loop` nativo refutado | H-13 (REGISTRO «H-13: reporte de la caja»), S12 |
 | Blob concatenado = archivo | S10 |
 | Capa encima, lee `currentTime` | H-11 (0/155 caídos) |
+| Imagen girando por `drawImage` sobre el alfa, medida por pintada | H-23 (PC: 0,20 ms med / 2,2 max a 1280×720; ⏳ la caja) |
 | Efecto = video con alfa, mismo rectángulo | H-18b (2/154, 1/141) |
 | Tres planos | H-20 + ojo del operador («se ven perfecto») |
 | Persistencia y techo de residencia | H-12, H-12b (50 MB en tandas) |
@@ -314,5 +325,8 @@ Con `producto.html` (`9` para la foto), en la caja **y** en el Smart TV:
 4. **Residencia**: segunda apertura con `leidas N, guardadas 0`; y con la red
    cortada y la página ya abierta, `1` sigue sonando (`red no`).
 5. **Radio**: `arranco` sin gesto, o declarado.
+6. **Imagen girando** (`7` `7`, después `4`): `capa numeros+imagen` con su
+   costo por pintada, `imagen lista logo.png`, los `caidos` del incentivador y
+   del loop no peores que sin la imagen, y el ojo: gira suave encima del alfa.
 
 Lo que falle refuta la regla correspondiente de §6 y vuelve a ⏳.

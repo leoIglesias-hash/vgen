@@ -133,18 +133,24 @@ cuántas piezas están residentes, `red si|no` y el tiempo prendido.
 | `4` | **incentivador** — los papelitos con alfa entran **encima**, suenan una vez y salen solos. Se mide el arranque desde la caché |
 | `5` | **publicidad** — reemplaza al loop **con su propio audio**, la radio baja con una rampa, y **vuelve sola** al loop. Se miden `ida` y `vuelta` |
 | `6` | **radio** — prende o apaga la ambiente (`<audio>` aparte, en bucle). Si el aparato pide un gesto, el reporte lo dice |
-| `7` | **capa** — los números encima, 15 fps, leyendo el reloj del video; cambian con el papel (`RULETA` durante el incentivador) |
+| `7` | **capa** — **cicla**: los números encima (15 fps, leyendo el reloj del video; cambian con el papel, `RULETA` durante el incentivador) → **números + la imagen girando** (H-23: el logo, `drawImage` rotado con el reloj del video, una vuelta cada 4 s, encima del alfa) → apagada. El zócalo dice `capa num`, `capa num+img` o `capa no`; el reporte trae el costo de cada pintada por carga y la línea `imagen` (de dónde salió y cuánto tardó en llegar) |
 | `8` | **teclas** — muestra o esconde la leyenda |
 | `9` | **reporte** — a pantalla completa, dos columnas, para la foto; `9` vuelve |
 | `0` | **cortar** — para todo; `1` vuelve a arrancar |
 
 **Parámetros:** `?modo=mse|blob|loop` fuerza el bucle; `?radio=no` no la
-prende sola; `?capa=si` la prende al abrir; `?tope=<MB>` y `?fraccion=<0..1>`
+prende sola; `?capa=si` prende los números al abrir y `?capa=imagen` también
+la imagen girando; `?tope=<MB>` y `?fraccion=<0..1>`
 ajustan el presupuesto de residencia (SPEC §5.2); `?base=` como en `v0/`.
 
 **Lo que hay que traer de la foto** (SPEC-VGEN §12): `1` durante ≥ 10 min y
 `9`; después `5`, esperar que vuelva, `9`; `4`, `9`; y la segunda apertura
 (`leidas N, guardadas 0`) con la red cortada y la página ya abierta.
+**Y la prueba que faltaba (H-23):** `7` dos veces (zócalo `capa num+img`, la
+imagen girando en el medio), `4`, esperar que el incentivador salga solo, `9`:
+mirar la línea `capa numeros+imagen … ms med / … max`, la línea `imagen lista
+logo.png 210x150` y los `caidos` del incentivador y del loop. Y el ojo: si la
+imagen gira suave encima de los papelitos con alfa.
 
 ## El lanzador (`ir.html`)
 

@@ -5681,3 +5681,68 @@ C#; encoder nuevo) y la recomendación: **bundle portátil después de H-8, con
 el CI como árbitro de bytes**. Sobre «más rápido»: la matriz H-6 ya midió que
 `cpu-used` no regala velocidad (4 = +2,9 % de bytes por −14 % de tiempo).
 Tres preguntas al operador en §5.
+
+## 2026-09-05 — H-23: la imagen que gira encima del alfa (la prueba que faltaba)
+
+**Pedido del operador, al volver del compact:** *«pusiste una forma a girar en
+el canvas junto a los números, y si pones video con transparencia y canvas
+pero con una imagen girando? esa prueba no la hicimos.. siempre pensando en
+eficiencia»*. Tiene razón: H-11 y H-8a giran una **aguja** (un `arc` y una
+línea, vectores baratos); nunca se giró un **bitmap** encima del alfa. Un
+`drawImage` rotado es otro costo: el canvas rasteriza una textura
+transformada por pintada, y la caja compone eso sobre **dos** videos por
+hardware.
+
+### Qué se hizo (`producto.html`, `9aa9f37`)
+
+- La tecla `7` **cicla**: apagada → números → **números + la imagen girando**
+  → apagada. La imagen es **`frontend/logo.png`** (el logo de INT-007, 210×150
+  RGBA, 42.553 B; ahora vive en el repo y se publica como `v0/logo.png`).
+- Se pide **una vez**, al primer `7` que la necesita (`pedirLogo`); si el
+  aparato no tiene `Image` o el PNG no llega, se dibuja un emblema en un
+  canvas aparte una sola vez y se gira ese (`logoFallback`): la prueba sigue
+  midiendo `drawImage` rotado, y el reporte dice cuál de las dos fuentes giró.
+- Gira con el **reloj del video** (`currentTime`, una vuelta cada 4 s; el del
+  efecto mientras suena el incentivador), en el centro del cuadro, al 30 % de
+  la altura, sin tocar el rectángulo de los números; un
+  `save/translate/rotate/drawImage/restore` por pintada, limpiando **solo el
+  cuadrado de su diagonal** (regla 3: menos trabajo por cuadro).
+- **Cada pintada se cronometra** (`performance.now` si hay, si no el reloj de
+  pared) por carga: la línea `capa` del reporte trae `numeros X ms med / Y max
+  (n)` y `numeros+imagen …`; línea nueva `imagen <estado> <fuente> <ancho x
+  alto> llego N ms`; el zócalo dice `capa num`, `capa num+img` o `capa no`;
+  `?capa=imagen` la prende al abrir.
+- De paso: el **incentivador ahora cuenta caídos en cada tick** (antes solo al
+  terminar: una foto a mitad del clip decía `caidos 0/0`).
+- Tests: el ciclo de `7`, el respaldo sin `Image`, la imagen pedida una sola
+  vez (con un `Image` falso), la línea del reporte cuando llega.
+
+### Medido en la PC (refuta, no consagra)
+
+| corrida | superficie / capa | carga | pintada med / max (n) | loop caídos | incentivador |
+|---|---|---|---|---|---|
+| sin capa | 399×635 / 399×224 | apagada | — | **18/319** | — |
+| números | 399×635 / 399×224 | `numeros` | 0,09 / 1 ms (274) | 0/316 | — |
+| números + imagen | 399×635 / 399×224 | `numeros+imagen` | 0,21 / 1,2 ms (286) | 0/332 | — |
+| números + imagen, con `4` | 1280×720 / 1280×720 | `numeros+imagen` | **0,20 / 2,2 ms (664)** | 15/757 | arrancó 27 ms, **13/227** |
+
+Lectura: en la PC la imagen cuesta **~0,1 ms más por pintada** que los
+números solos (a 15 fps, ~3 ms de CPU por segundo); a 1280×720 el máximo fue
+2,2 ms. Los caídos **no son atribuibles a la imagen**: la corrida **sin capa**
+cayó 18/319 y la de números + imagen 0/332; el panel del navegador de la
+sesión está emulado y escalado, y eso mete ruido. El logo llegó en 3–14 ms
+(local). El ojo de la sesión: la imagen gira suave sobre el huevo y sobre los
+papelitos del incentivador (captura en la sesión, no es foto de aparato).
+
+**Sobre la eficiencia, para cuando la caja hable:** si a la caja le cuesta,
+hay dos caminos ya abiertos, sin inventar nada: (a) la imagen como un
+**tercer video** con alfa (la regla «dos planos, no tres» se retiró en H-20 y
+H-18b probó que «un efecto puede SER video»); (b) **sprites** pre-rotados
+(SPEC ⏳ sprites): N cuadros del logo en una tira y `drawImage` sin `rotate`.
+Ninguno se implementa hasta que la foto diga que hace falta.
+
+**Qué tiene que traer la foto** (SPEC §12.6, manual «El producto»): en la
+caja y en el Smart TV, `7` `7` (zócalo `capa num+img`), `4`, esperar que el
+incentivador salga solo, `9`: la línea `capa numeros+imagen … ms med / … max`,
+la línea `imagen lista logo.png 210x150 llego N ms`, los `caidos` del
+incentivador y del loop, y el ojo: si gira suave encima de los papelitos.

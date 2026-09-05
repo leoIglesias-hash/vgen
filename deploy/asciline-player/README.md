@@ -517,3 +517,19 @@ publicadas. Todo sale del repo en `da43e8b` (CI verde en `edd39a4`).
 
 **El Worker no se tocó.** Verificación: las 5 keys bajadas con cache-buster y
 comparadas por SHA-256 contra el árbol; token quemado y 403 comprobado.
+
+## 2026-09-05 — H-23: la imagen que gira encima del alfa (2 keys: 1 nueva + 1 regenerada)
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/producto.html` | 49565 | `40572662c2aa4d30887f51402c04956b` |
+| `v0/logo.png` | 42.553 | `f46b9b5db4d9b7eb1b745a64695a17ad` |
+
+**Qué es:** la tecla `7` del producto ahora cicla números → números + la
+imagen girando (`logo.png`, el logo de INT-007, 210×150 RGBA, `drawImage`
+rotado con el reloj del video sobre el incentivador con alfa) → apagada, con
+el costo por pintada en el reporte (H-23). El logo se sirve al lado de la
+página. Todo sale del repo en `9aa9f37` (CI verde).
+
+**El Worker no se tocó.** Verificación: las 2 keys bajadas con cache-buster y
+comparadas por SHA-256 contra el árbol; token quemado y 403 comprobado.
