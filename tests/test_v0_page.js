@@ -476,7 +476,7 @@ assert.strictEqual(fuenteBuf.slice(0, 4).toString("latin1"), "OTTO",
 /* --- Correr el 5 en un aparato sin MSE: la fila aparece con su error y el
  * resto no explota; el 0 la limpia. --- */
 action("5").run();
-assert.strictEqual(filas.childNodes.length, 8,
+assert.strictEqual(filas.childNodes.length, 12,
   "la primera prueba de paquete agrega su fila sintetica");
 reporte = reporteTexto();
 assert(/\nmse:h264\t.*sin MSE/.test(reporte),
@@ -484,7 +484,7 @@ assert(/\nmse:h264\t.*sin MSE/.test(reporte),
 assert(/\n# id\tdice\tarranco\t1er_ms\tcaidos\ttotal\tderiva_ms\tatascos\tcongel\tcambio_ms\tnota\n/.test(reporte),
   "cabecera de columnas del reporte (PLAN-IMPLEMENTACION-VGEN §3.1)");
 action("0").run();
-assert.strictEqual(filas.childNodes.length, 7, "el 0 limpia las filas sinteticas");
+assert.strictEqual(filas.childNodes.length, 11, "el 0 limpia las filas sinteticas");
 assert.strictEqual(byId("video").loop, false, "el 0 apaga el loop del bucle");
 
 /* --- H-11: la capa de intervencion encima del video --- */
@@ -599,13 +599,13 @@ reporte = reporteTexto();
 assert(reporte.indexOf("\ncache\tno\tguardadas 0\t0 B") >= 0,
   "la cabecera del reporte dice si hay IndexedDB y cuanto hay guardado");
 action("85").run();
-assert.strictEqual(filas.childNodes.length, 8,
+assert.strictEqual(filas.childNodes.length, 12,
   "la primera fila de cache aparece aunque no haya base");
 reporte = reporteTexto();
 assert(/\ncache:base\t.*sin indexedDB/.test(reporte),
   "sin IndexedDB la fila cache:base dice por que");
 action("0").run();
-assert.strictEqual(filas.childNodes.length, 7);
+assert.strictEqual(filas.childNodes.length, 11);
 
 console.log("v0 page tests: OK");
 

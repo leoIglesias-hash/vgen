@@ -18,6 +18,7 @@ spec de formato → estado de ejecución → diseño en obra → registro de dec
 
 | Documento | Función |
 |---|---|
+| [`../PROPUESTAS.md`](../PROPUESTAS.md) | **el espacio de ideas** (2026-09-05): plantilla de propuesta (problema · idea · qué compra · qué cuesta · cómo se mide · qué la refutaría), estados, y las abiertas P-001..P-007. Las ideas de afuera entran por *issue*; el repo es público de solo lectura |
 | [`../CLAUDE.md`](../CLAUDE.md) | arranque de sesión: identidad del proyecto, modelo de trabajo, ayuda-memoria, estado grueso |
 | [`RUNBOOK-ESTADO.md`](RUNBOOK-ESTADO.md) | **el archivo vivo**: próxima acción y máster vigente arriba, tabla de tareas de la fase H, referencias de clips por SHA, bitácora al final |
 | [`PLAN-IMPLEMENTACION-VGEN.md`](PLAN-IMPLEMENTACION-VGEN.md) | **el rumbo** (vigente desde el primer reporte de aparato, 2026-09-01): evidencia medida fila por fila, los caminos de runtime con lo que la caja dijo de cada uno, **gates numéricos** de reproducción, el orden H-13 → H-11 → H-12 → H-6 → H-7 → H-8 y las decisiones que necesita el operador |

@@ -306,6 +306,37 @@ El workflow de CI (`regression`) corre la misma regresión en cada push, sin des
 videos de producto ni iniciar servidores. El workflow `encode` (dispatch manual) genera
 el clip de producto desde la rama `assets` y publica artifacts con SHA y preview.
 
+## Cómo colaborar (repositorio público de solo lectura)
+
+Este repositorio se puede **leer, clonar y correr entero**; nadie de afuera
+escribe en él. Lo que buscamos de afuera son **ideas**: el espacio para eso es
+[`PROPUESTAS.md`](PROPUESTAS.md), y la puerta de entrada es un *issue* con la
+plantilla «Propuesta» (problema, idea, qué compra, qué cuesta, cómo se mide,
+qué la refutaría). Una propuesta se adopta cuando tiene **una fila medida** en
+un aparato real; hasta entonces es una apuesta escrita, que también vale.
+
+Para reproducir lo que hay:
+
+- **Leer:** empezá por [`docs/VISION-Y-OBJETIVOS.md`](docs/VISION-Y-OBJETIVOS.md)
+  (qué es el formato), después
+  [`docs/PLAN-IMPLEMENTACION-VGEN.md`](docs/PLAN-IMPLEMENTACION-VGEN.md) (evidencia
+  medida y gates) y el estado vivo en [`docs/RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md).
+  Toda decisión tiene su porqué en
+  [`docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md`](docs/REGISTRO-DE-PRUEBAS-Y-DECISIONES.md).
+- **Correr:** `python tests/run_all.py` (Python 3.8+ y Node 20) corre la misma
+  regresión que el CI. Los workflows `emitir-v0`, `matriz-h6` y `emitir-v1`
+  (carpeta `.github/workflows/`) emiten los packs desde el máster publicado; se
+  pueden correr en un *fork* sin ningún secreto.
+- **Mirar:** la página de banco está en producción en
+  `https://iargen.com/player/v0/` con el manual de teclas en
+  [`docs/MANUAL-TECLAS-V0.md`](docs/MANUAL-TECLAS-V0.md).
+
+Reglas que no se negocian, porque el parque las impone: frontend **ES5.1
+estricto** (Chromium 70 en las cajas), **`<video>` como única puerta al
+hardware**, **determinismo** (mismo máster → mismos bytes, en cualquier máquina)
+y todo lo caro **offline**. Lo que necesita pantalla lo firma el operador del
+proyecto, que es quien tiene los aparatos.
+
 ## Licencia
 
 La licencia de publicación todavía no está definida. El proyecto declara una relación
