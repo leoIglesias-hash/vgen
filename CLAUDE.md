@@ -34,7 +34,22 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-> ## ▶ Próxima acción: **H-7** — la spec, con la foto de v1 pendiente
+> ## ▶ Próxima acción: **la foto del producto** (`7` desde el lanzador) y la firma de la spec
+>
+> **Turno nocturno del 2026-09-05:** **H-8a EJECUTADA hasta la pantalla** —
+> `frontend/producto.html`, la forma del producto entera desde la caché del
+> aparato (loop por **anillo MSE** `sequence`, publicidad que reemplaza y
+> vuelve, incentivador con alfa encima, radio en rampa, capa por papel, teclas
+> de **una cifra**, reporte a dos columnas), con `GUION.tsv`, `ring()` en
+> `vgenfeed.js` y la residencia **H-15** en `vgencache.js`; CI verde y
+> **publicada en `v0/`** (tecla `77` desde `v0/`, `7` desde el lanzador).
+> **H-7 es BORRADOR 0.1** ([`docs/SPEC-VGEN.md`](docs/SPEC-VGEN.md)): describe
+> lo que el prototipo ejecuta, marca ⏳ lo no reproducido y pide la firma del
+> operador con la lista de §12. **El encoder quedó evaluado, no hecho**
+> ([`docs/ENCODER-PORTATIL.md`](docs/ENCODER-PORTATIL.md), P-008). Manual del
+> producto en [`docs/MANUAL-TECLAS-V0.md`](docs/MANUAL-TECLAS-V0.md) «El
+> producto». Detalle: REGISTRO «turno nocturno» y
+> [`RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) §Próxima acción.
 >
 > **H-6 EJECUTADA el 2026-09-05** hasta la pantalla (matriz de 28 variantes +
 > **emisión v1 con audio**, publicada en `v0/`, teclas `72`/`74`/`75`/`76`;
@@ -278,9 +293,10 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   **Queda UNA SOLA VISITA a la caja** (qué traer: `RUNBOOK-ESTADO.md`): `85` con
   la red cortada, `83` sola, y `71` como opcional. Después de
   ~~H-6~~ (ejecutada 2026-09-05: matriz + v1 publicada; falta la foto con
-  `76`/`95`) siguen
-  **H-7** (spec `SPEC-VGEN.md`, con **H-15** residencia adentro) y **H-8**
-  (muxer ES5 + player). Externo: pedir
+  `76`/`95`) y de **H-8a** (el player del producto como prototipo, ejecutado
+  la noche del 2026-09-05; falta la foto con `7` del lanzador) siguen la
+  **firma de H-7** (spec `SPEC-VGEN.md`, borrador 0.1, con **H-15** residencia
+  adentro) y **H-8** (muxer ES5 + archivo único). Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).
 - **Lo que la caja dijo (2026-09-01, Android 9 / Chromium 70):** todo lo
   progresivo reproduce **fluido por hardware** a 720p@15 con la superficie 4K

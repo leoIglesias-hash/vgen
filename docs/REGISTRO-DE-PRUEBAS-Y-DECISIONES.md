@@ -5572,3 +5572,104 @@ Con esa foto cierra H-6 y sigue **H-7** (la spec, con H-15 adentro).
 ### 2026-09-05 (cierre) — el repo se llama `vgen` y es público de solo lectura
 
 Renombrado por API (`leoIglesias-hash/ASCILINE-hybrid` → **`leoIglesias-hash/vgen`**; GitHub redirige el nombre viejo; la carpeta local conserva `ASCILINE-hybrid`). Antes de publicarlo se le presentó al operador el choque con **PUB-001** (README §Licencia: «no debe hacerse un release público hasta resolver procedencia…») y lo que quedaría expuesto: `frontend/HoboStd.ttf` (fuente comercial) y la rama `assets` con el clip fuente del cliente. **Eligió «sacar assets y la fuente, y publicar»**: la rama `assets` se borró del remoto (queda local; `encode` no corre en CI hasta que tenga otra fuente), la fuente salió del árbol (`git rm --cached` + `.gitignore`; sigue en la historia y servida desde Cloudflare) y el test la verifica solo si hay copia local. Público con **Issues sí, wiki y projects no, sin LICENSE** (= mirar, no reutilizar). Verificado anónimo: API 200, `raw/main/PROPUESTAS.md` 200, una sola rama `main`.
+
+## 2026-09-05 (noche) — turno nocturno: H-8a el player del producto, H-7 borrador, el encoder evaluado
+
+**El pedido del operador, textual, antes de irse a dormir:** *«me voy a ir a
+dormir, podrías trabajar en puntos para adelantar nuestro trabajo? así mañana
+cuando pruebe pruebo esto que hiciste pero también más cosas. luego deberíamos
+pensar en mejorar el encoder para que sea más rápido y corra sin instalar
+python ni node en windows, porque lo basamos en una idea para ejecutar una
+tarea y ahora necesitamos otro resultado como vp9. total las versiones
+anteriores las vamos a tener igual. de esta manera dejamos de usar tanto el ci
+de github. tal vez ese sea el adelanto pero pensalo vos a ver qué conviene.
+capaz conviene mejorar la reproducción del video para probar más cosas mañana
+y recién con un producto más pulido trabajar en el encoder»*.
+
+**Decisión tomada por la sesión (a confirmar por el operador):** su segundo
+orden. Primero **la reproducción**, porque es lo que se prueba mañana con un
+aparato; el encoder se **evaluó por escrito** y queda como decisión suya
+([`ENCODER-PORTATIL.md`](ENCODER-PORTATIL.md), P-008). Un dato que cambia ese
+cálculo: **los minutos de Actions son gratis desde que el repo es público**
+(2026-09-05); la ganancia de un encoder local es de latencia, no de costo.
+
+### H-8a — `producto.html`, la forma del producto entera (adelantado a H-7 como prototipo)
+
+El plan decía H-7 (spec) → H-8 (muxer + player). Se adelantó **el player**
+como **prototipo** que consume lo ya publicado, porque una spec sin aparato
+que la ejecute es una suposición, y la regla es suponer explícito y reproducir.
+La spec ([`SPEC-VGEN.md`](SPEC-VGEN.md), borrador 0.1) se escribió **después**,
+describiendo exactamente lo que el prototipo hace y marcando ⏳ lo que ningún
+aparato dijo todavía.
+
+**Qué hace** (`frontend/producto.html`, tecla `77` desde `v0/` y `7` desde el
+lanzador): al abrir lee `MANIFEST.tsv` + `MANIFEST-v1.tsv` + **`GUION.tsv`**
+(nuevo: qué pieza hace cada papel — loop, incentivador, publicidad, radio —
+con `residente`, `prioridad`, la representación segmentada y el MIME del
+SourceBuffer), elige el **primer loop que `canPlayType` acepte** (VP9 base,
+Baseline piso), **asegura la residencia** (H-15: presupuesto
+`min(150 MB, 0,5 × cuota)`, plan por prioridad, bajada secuencial con progreso,
+un registro por pieza con **rangos** para la representación segmentada) y
+arranca solo: **el loop por anillo MSE en modo `sequence` desde la caché**
+(`VGenFeed.ring`, nuevo), mudo, con la radio aparte. Teclas de una cifra: `1`
+anillo MSE, `2` blob con costura medida, `3` loop nativo (para comparar), `4`
+incentivador (alfa encima, una vez), `5` publicidad (reemplaza con su audio,
+la radio baja con rampa, vuelve sola), `6` radio, `7` capa, `8` teclas, `9`
+reporte a dos columnas, `0` cortar. Zócalo a 1 Hz con qué suena y de dónde
+salió (`cache`/`red`), vueltas, atascos, caídos, residentes y `red si|no`.
+
+**Módulos:** `vgenfeed.js` gana `ring()` (anillo: anexa solo cuando lo
+bufereado por delante baja de 4 s, borra lo visto con `remove`, cuenta
+vueltas); `vgencache.js` gana `budget/plan/join/part/ensure` (H-15). Tests:
+`test_producto_page.js` (nuevo; corre el guion real contra dos aparatos
+falsos, uno sin VP9 y otro con MSE), `test_vgenfeed.js` y `test_vgencache.js`
+ampliados; `test_v0_page.js` e `test_ir_page.js` por las teclas nuevas.
+CI verde (`84aaa9b`→`edd39a4`).
+
+**Medido en el navegador de la sesión (la PC refuta, no consagra), sirviendo
+las piezas publicadas desde `outputs/v0/` con `serve-local.ps1`:**
+
+| qué | resultado |
+|---|---|
+| primera apertura | 5 de 5 piezas bajadas y guardadas por prioridad (alfa → VP9 → segmentos → publicidad → radio), 15,1 MB; cuota declarada 2.506 MB, presupuesto 150 MB |
+| segunda apertura | `guardadas 0, leidas 5`: **cero red**; loop por anillo MSE `48 ms` al primer cuadro |
+| loop por anillo MSE | 2 vueltas, **atascos 0**, caídos 0, deriva 41 ms |
+| incentivador (`4`) | arranca en **163 ms** desde caché, compone encima (papelitos + `RULETA` en la capa), 0/227 caídos, sale solo |
+| publicidad (`5`) | ida **186 ms**, vuelta al anillo **48 ms**; la radio baja a 0,1 y vuelve a 1 |
+| loop por blob (`2`) | costura **42 ms** por vuelta, con 1 `waiting` por costura (2 vueltas = 2 atascos): es la caída, no el producto |
+| radio | arranca sola en 250–717 ms (este navegador no pide gesto) |
+| capa | Hobo detectada (429 ms), 1280×720 al panel, 15 fps |
+
+**Un artefacto del banco, no del producto:** el navegador de la sesión pausa
+un video mudo cuando la pestaña queda oculta (`play() was interrupted…
+paused to save power`). Se vio dos veces. De ahí salió la **vigilancia**:
+`play()` se reintenta cada 2 s mientras el video esté en pausa sin haberla
+pedido, y el reporte cuenta `reintentos` y `pausado` — un aparato que pausa
+solo es un dato, no un misterio.
+
+**Qué tiene que traer la foto mañana** (SPEC §12, manual «El producto»): en
+la caja y en el Smart TV, `7` desde el lanzador; dejar el `1` ≥ 10 min y `9`;
+`5` y esperar la vuelta, `9`; `4`, `9`; y la segunda apertura con la red
+cortada y la página ya abierta. Lo que consagra: atascos 0 en el anillo, ida y
+vuelta ≤ 1 s, incentivador ≤ 1 s, `leidas N, guardadas 0`.
+
+### H-7 — `SPEC-VGEN.md`, borrador 0.1
+
+Escrita como **contrato de lo que el prototipo ejecuta**, con cada regla
+citando su fila (§11) y lo no reproducido marcado ⏳: archivo único `.vgen`,
+chequeo diario del manifiesto, borrado de claves, sprites, cues, huecos, N3/N4.
+Pide firma con una lista concreta de lo que el aparato tiene que devolver
+(§12). **No es contrato hasta que el operador la apruebe.**
+
+### El encoder — evaluación, no tarea
+
+[`ENCODER-PORTATIL.md`](ENCODER-PORTATIL.md): las dos mitades (máster en
+Python/numpy; emisión = decodificar el máster + ffmpeg), tres hechos (minutos
+gratis; la regla de la máquina se mantiene si el bundle es portátil y el CI
+sigue validando; el determinismo es del binario, un ffmpeg de Windows puede
+dar otros bytes), cuatro opciones (seguir en CI; **bundle portátil** con
+Python embebido + ffmpeg estático corriendo el mismo `emit_v1.py`; decoder en
+C#; encoder nuevo) y la recomendación: **bundle portátil después de H-8, con
+el CI como árbitro de bytes**. Sobre «más rápido»: la matriz H-6 ya midió que
+`cpu-used` no regala velocidad (4 = +2,9 % de bytes por −14 % de tiempo).
+Tres preguntas al operador en §5.
