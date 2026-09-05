@@ -5962,3 +5962,6 @@ tardías ≈ 0, el cuello es el compositor y ahí sí: la imagen como **tercer
 video** (el hardware ya demostró que compone dos planos sin costo) o sprites.
 Si `capak=0.5` baja los caídos, el tamaño del canvas es el precio y la capa
 del producto se dimensiona por lo que dibuja, no por el panel.
+
+**Publicado en `v0/`** (copia de deploy en `bb8b8fd`): `producto.html` 52.491 B,
+SHA-256 igual al árbol, token quemado y 403 comprobado.
