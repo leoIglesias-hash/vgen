@@ -461,3 +461,37 @@ por un campo que no mirábamos».
 `ir.html` **no vive acá** (va en otro servidor, como archivo suelto): se le
 entrega al operador aparte, con el mismo arreglo y con la línea de diagnóstico
 fija en pantalla.
+
+## 2026-09-05 — H-6: el pack v1 (23 keys: 22 nuevas + `index.html`)
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/index.html` | 88.479 | `77fb38a4d9ccf30a7793c3d5b26460b7` |
+| `v0/MANIFEST-v1.tsv` | 1.053 | `f5f45d153ab42df118b2321edfa8c176` |
+| `v0/v1-vp9.webm` | 2.941.449 | `0c9f360a0c19638ad7385a3debd6c932` |
+| `v0/v1-h264.mp4` | 5.254.272 | `343b0496084b93b180f07137f6d4718f` |
+| `v0/v1-ambiente.mp3` | 183.353 | `51f4037df9e7fda9ad179e94f855ef8e` |
+| `v0/dash-vp9/manifest.mpd` + `init.webm` + `chunk-00001..16.webm` | 2.831.164 en total | en `MANIFEST.tsv` |
+
+**Qué es v1:** la receta que dejó la matriz H-6 (`tools/emit_matrix.py`, run
+33936095399) más la **pista de audio del máster** muxeada en cada pieza
+(S13) y suelta como radio (S14), y `v1-vp9` segmentado solo video por remux
+(S11). Receta: `--vp9-crf 38 --h264-profile high --h264-crf 23 --h264-bframes 3
+--h264-refs 4`. Emitido por el workflow `emitir-v1` (run 33936096738), **dos
+pasadas byte-idénticas** en la misma máquina; los SHA-256 están en el REGISTRO
+y en `v0/MANIFEST-v1.tsv`. Las piezas se sirven bajo `v0/` porque la página de
+banco (`v0/index.html`) anexa `MANIFEST-v1.tsv` al manifiesto de v0 y las mide
+con las teclas `72`, `74`, `75` y `76`.
+
+**Qué cambió en la página:** cuatro teclas nuevas (tier «ahora»), un `<audio
+id="radio">` para la ambiente, y el `1` corre v1 solo si está publicado.
+
+**El Worker no se tocó.** Se quiso sumar `mp3:'audio/mpeg'` a `TYPES` para
+`v1-ambiente.mp3`, pero el redeploy no se ejecutó en esta sesión (bloqueo de
+permisos del entorno); la copia de `worker.js` de acá sigue siendo el código
+exacto desplegado y el mp3 sale como `application/octet-stream`, igual que la
+fuente Hobo en H-16 —la fila del `74` dice si al `<audio>` le importa.
+
+Verificación: las 23 keys bajadas y comparadas por SHA-256 contra el artifact
+del run y contra `frontend/v0.html`; token quemado y 403 comprobado (ver
+abajo el resultado exacto).
