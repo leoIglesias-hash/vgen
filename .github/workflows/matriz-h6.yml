@@ -1,0 +1,160 @@
+name: matriz-h6
+
+# H-6: la matriz por BYTES a igual look (tools/emit_matrix.py).
+#
+# Cada eje de la matriz corre en un job propio, en paralelo: los seis jobs
+# decodifican el mismo master (verificado por SHA-256) a la misma referencia
+# y4m y emiten sus variantes con `-threads 1` y muxado bit-exacto. El job
+# final junta los MATRIZ-*.tsv en una sola tabla (bytes, % contra v0, SSIM,
+# PSNR, cuadros, segundos de encoder) y la escribe en el resumen del run.
+#
+# Las filas `ref-v0-*` tienen que reproducir los bytes del pack v0 publicado:
+# si la tabla dice "v0 DISTINTA", la corrida no compara contra v0 y se lee con
+# esa salvedad. La fluidez NO se mide aca: es un gate del aparato.
+
+on:
+  workflow_dispatch:
+    inputs:
+      master_url:
+        description: "URL del master .asclv (pineado por contenido)"
+        default: "https://iargen.com/player/outputs/clip.dcd6afb66907.asclv"
+        required: true
+      master_sha256:
+        description: "SHA-256 esperado del master (receta S-4, 1280x720 @15, v3)"
+        default: "dcd6afb669078a5b0d1bf4e4d42cdd2d8497ea70908a3e283183fe7d2431632a"
+        required: true
+      frames:
+        description: "Cortar en N cuadros (vacio = el clip entero; util para una corrida de humo)"
+        default: ""
+      grupos:
+        description: "Ejes a correr, separados por espacio (vacio = todos)"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  ejes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        grupo: [referencia, vp9-crf, vp9-velocidad, vp9-contenido, h264-piso, cadencia]
+    steps:
+      - name: Este eje corre?
+        id: corre
+        run: |
+          PEDIDOS="${{ inputs.grupos }}"
+          if [ -z "$PEDIDOS" ] || echo " $PEDIDOS " | grep -q " ${{ matrix.grupo }} "; then
+            echo "si=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "si=false" >> "$GITHUB_OUTPUT"
+            echo "eje ${{ matrix.grupo }} no pedido; nada que hacer"
+          fi
+      - name: Checkout main
+        if: steps.corre.outputs.si == 'true'
+        uses: actions/checkout@v4
+      - name: Python
+        if: steps.corre.outputs.si == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Dependencias
+        if: steps.corre.outputs.si == 'true'
+        run: python -m pip install -r backend/requirements.txt
+      - name: ffmpeg (libx264 + libvpx-vp9)
+        if: steps.corre.outputs.si == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -encoders | grep -E "libx264|libvpx-vp9"
+      - name: Maquina y builds
+        if: steps.corre.outputs.si == 'true'
+        run: |
+          {
+            echo "## Maquina (${{ matrix.grupo }})"
+            echo '```'
+            nproc
+            lscpu | grep -E "Model name" | cut -c1-200
+            ffmpeg -hide_banner -version | head -1
+            dpkg -l | grep -iE "libx264|libvpx" | awk '{print $2, $3}' || true
+            echo '```'
+          } | tee maquina-${{ matrix.grupo }}.txt | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Bajar y verificar el master
+        if: steps.corre.outputs.si == 'true'
+        run: |
+          mkdir -p work
+          curl -fsSL "${{ inputs.master_url }}" -o work/master.asclv
+          echo "${{ inputs.master_sha256 }}  work/master.asclv" | sha256sum -c -
+      - name: Emitir el eje ${{ matrix.grupo }}
+        if: steps.corre.outputs.si == 'true'
+        run: |
+          if [ -n "${{ inputs.frames }}" ]; then
+            FRAMES="--frames ${{ inputs.frames }}"
+          else
+            FRAMES=""
+          fi
+          /usr/bin/time -v -o time-${{ matrix.grupo }}.txt python tools/emit_matrix.py \
+            work/master.asclv --out work/matriz --grupo ${{ matrix.grupo }} $FRAMES \
+            | tee emision-${{ matrix.grupo }}.txt
+          grep -E "Maximum resident|Elapsed" time-${{ matrix.grupo }}.txt
+          rm -rf work/matriz/work
+          ls -l work/matriz
+      - name: Tabla del eje
+        if: steps.corre.outputs.si == 'true'
+        run: |
+          {
+            echo "## Eje ${{ matrix.grupo }}"
+            echo ""
+            python tools/emit_matrix.py --resumen "work/matriz/MATRIZ-*.tsv"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar el eje
+        if: steps.corre.outputs.si == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: matriz-h6-${{ matrix.grupo }}
+          path: |
+            work/matriz/
+            emision-${{ matrix.grupo }}.txt
+            time-${{ matrix.grupo }}.txt
+            maquina-${{ matrix.grupo }}.txt
+          retention-days: 14
+
+  tabla:
+    needs: ejes
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Bajar todos los ejes
+        uses: actions/download-artifact@v4
+        with:
+          pattern: matriz-h6-*
+          path: ejes
+      - name: Una sola tabla
+        run: |
+          mkdir -p tabla
+          find ejes -name "MATRIZ-*.tsv" -exec cp {} tabla/ \;
+          ls -l tabla
+          {
+            echo "## MATRIZ H-6 - todos los ejes"
+            echo ""
+            echo "Master: \`${{ inputs.master_sha256 }}\`  frames: '${{ inputs.frames }}'  grupos: '${{ inputs.grupos }}'"
+            echo ""
+            python tools/emit_matrix.py --resumen "tabla/MATRIZ-*.tsv"
+          } | tee tabla/MATRIZ-H6.md | tee -a "$GITHUB_STEP_SUMMARY"
+          cat tabla/MATRIZ-*.tsv > tabla/MATRIZ-H6.tsv
+      - name: Publicar la tabla
+        uses: actions/upload-artifact@v4
+        with:
+          name: matriz-h6-tabla
+          path: tabla/
+          retention-days: 30
