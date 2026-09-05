@@ -495,3 +495,25 @@ fuente Hobo en H-16 —la fila del `74` dice si al `<audio>` le importa.
 Verificación: las 23 keys bajadas y comparadas por SHA-256 contra el artifact
 del run y contra `frontend/v0.html`; token quemado y 403 comprobado (ver
 abajo el resultado exacto).
+
+## 2026-09-05 (noche) — H-8a: el producto (5 keys: 2 nuevas + 3 regeneradas)
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/producto.html` | 45.034 | `33e6f4395706016577fd322f0d3db2b7` |
+| `v0/GUION.tsv` | 1.021 | `205d5bbb2cfe89c23b505d4dee02e85d` |
+| `v0/vgenfeed.js` | 15.082 | `0b1e31192157128cdc69398ee073d34b` |
+| `v0/vgencache.js` | 17.685 | `740b416bd4eaad31dfd31c26ba2a53ff` |
+| `v0/index.html` | 89.020 | `4f4a360c381f9b43c7eaa7b68965da67` |
+
+**Qué es:** `producto.html` es el player mínimo del producto como prototipo
+(H-8a): lee los dos manifiestos y el **guion** (`GUION.tsv`, nuevo: qué pieza
+hace cada papel, con `residente`/`prioridad`), asegura la residencia en
+IndexedDB (H-15) y reproduce desde ahí el loop por **anillo MSE**
+(`VGenFeed.ring`, nuevo en `vgenfeed.js`), la publicidad, el incentivador y la
+radio. `vgencache.js` gana `budget/plan/join/part/ensure`. `index.html` suma la
+tecla `77` que salta al producto. No hay piezas nuevas: usa las de v0 y v1 ya
+publicadas. Todo sale del repo en `da43e8b` (CI verde en `edd39a4`).
+
+**El Worker no se tocó.** Verificación: las 5 keys bajadas con cache-buster y
+comparadas por SHA-256 contra el árbol; token quemado y 403 comprobado.
