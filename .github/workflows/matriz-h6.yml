@@ -102,6 +102,35 @@ jobs:
           grep -E "Maximum resident|Elapsed" time-${{ matrix.grupo }}.txt
           rm -rf work/matriz/work
           ls -l work/matriz
+      # Las filas ref-v0-* salieron "v0 DISTINTA" en las dos corridas completas
+      # (con y sin +bitexact en la referencia). Este paso dice QUE difiere:
+      # emite v0-vp9 por el camino de emit_pieces en este mismo runner y compara
+      # contra la fila de la matriz y contra el pack publicado, a nivel de
+      # bitstream (ivf), de pixeles decodificados (framemd5) y de contenedor.
+      - name: Autocontrol - que difiere entre la referencia y v0 (solo referencia)
+        if: steps.corre.outputs.si == 'true' && matrix.grupo == 'referencia'
+        run: |
+          mkdir -p work/v0check
+          python tools/emit_pieces.py work/master.asclv --out work/v0check --only v0-vp9 --no-segment > /dev/null
+          curl -fsSL https://iargen.com/player/v0/v0-vp9.webm -o work/v0check/publicado.webm
+          A=work/matriz/ref-v0-vp9.webm; B=work/v0check/v0-vp9.webm; C=work/v0check/publicado.webm
+          {
+            echo "## Autocontrol de la referencia (ref-v0-vp9 vs emit_pieces vs pack publicado)"
+            echo '```'
+            for F in $A $B $C; do echo "$F  $(stat -c %s $F) B  $(sha256sum $F | cut -c1-16)"; done
+            if cmp -s $B $C; then echo "emit_pieces en este runner == pack publicado"; else echo "emit_pieces en este runner != pack publicado"; fi
+            for F in $A $B; do
+              ffmpeg -nostdin -v error -i $F -c copy -f ivf ${F%.webm}.ivf
+              ffmpeg -nostdin -v error -i $F -f framemd5 ${F%.webm}.framemd5
+            done
+            if cmp -s ${A%.webm}.ivf ${B%.webm}.ivf; then echo "bitstream VP9 (ivf): IDENTICO -> solo difiere el contenedor"; else echo "bitstream VP9 (ivf): DISTINTO"; fi
+            if diff -q <(grep -v '^#' ${A%.webm}.framemd5) <(grep -v '^#' ${B%.webm}.framemd5) > /dev/null; then echo "pixeles decodificados (framemd5): IDENTICOS"; else echo "pixeles decodificados (framemd5): DISTINTOS"; fi
+            echo "-- primeros bytes distintos (matriz vs emit_pieces):"; cmp -l $A $B | head -5 || true
+            echo "-- cabecera de cada uno (200 B):"
+            od -A d -c -N 200 $A | head -14
+            od -A d -c -N 200 $B | head -14
+            echo '```'
+          } | tee autocontrol.txt | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Tabla del eje
         if: steps.corre.outputs.si == 'true'
         run: |
@@ -121,6 +150,7 @@ jobs:
             emision-${{ matrix.grupo }}.txt
             time-${{ matrix.grupo }}.txt
             maquina-${{ matrix.grupo }}.txt
+            autocontrol.txt
           retention-days: 14
 
   tabla:

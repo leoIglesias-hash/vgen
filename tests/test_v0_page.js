@@ -767,9 +767,9 @@ assert(/function enteraSteps\(\)/.test(inline[1]));
 ["entera:solo", "entera:capa", "entera:dos", "entera:todo"].forEach(function (id) {
   assert(inline[1].indexOf('"' + id + '"') >= 0, "falta el paso " + id);
 });
-assert(/return techoSteps\(\)\.concat\(\[stepDosVideos\(\)\], enteraSteps\(\)\)/
+assert(/return techoSteps\(\)\.concat\(\[stepDosVideos\(\)\], enteraSteps\(\),\n\s+hayV1\(\) \? v1Steps\(\) : \[\]\)/
   .test(inline[1]),
-  "el 1 suma la pantalla entera: es lo que la caja todavia no contesto");
+  "el 1 suma la pantalla entera y, si esta publicado, el pack v1 (H-6)");
 
 /* H-21: los dos planos A OJO, en bucle y sin cortes.
  *

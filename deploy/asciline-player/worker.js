@@ -38,7 +38,7 @@
    `asciline-player`. El secret `UPLOAD_TOKEN` NO viaja en el redeploy: los
    secrets sobreviven al despliegue del script. */
 
-var TYPES={html:'text/html; charset=utf-8',js:'application/javascript; charset=utf-8',png:'image/png',asclv:'application/octet-stream',slots:'application/octet-stream',txt:'text/plain; charset=utf-8',json:'application/json',mp4:'video/mp4',webm:'video/webm',tsv:'text/plain; charset=utf-8',m3u8:'application/vnd.apple.mpegurl',mpd:'application/dash+xml',ts:'video/mp2t',m4s:'video/iso.segment'};
+var TYPES={html:'text/html; charset=utf-8',js:'application/javascript; charset=utf-8',png:'image/png',asclv:'application/octet-stream',slots:'application/octet-stream',txt:'text/plain; charset=utf-8',json:'application/json',mp4:'video/mp4',webm:'video/webm',mp3:'audio/mpeg',tsv:'text/plain; charset=utf-8',m3u8:'application/vnd.apple.mpegurl',mpd:'application/dash+xml',ts:'video/mp2t',m4s:'video/iso.segment'};
 function ctype(key){var i=key.lastIndexOf('.');var ext=i<0?'':key.slice(i+1).toLowerCase();return TYPES[ext]||'application/octet-stream';}
 export default {
   async fetch(request, env) {
