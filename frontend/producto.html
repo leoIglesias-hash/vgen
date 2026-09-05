@@ -133,7 +133,7 @@ var loop = { modo: "", id: "", started: false, t0: 0, firstMs: -1, vueltas: 0,
              costuras: 0, gapMax: 0, gapUltimo: -1, atascos: 0, congel: 0,
              baseTotal: 0, baseDropped: 0, total: 0, dropped: 0, wall0: 0,
              played: 0, lastTime: 0, endedAt: 0, error: "", warn: "",
-             handle: null, arranques: 0 };
+             handle: null, arranques: 0, reintento: 0, reintentos: 0, pausado: 0 };
 var estado = "nada";       /* nada | loop | publicidad */
 var incentivador = { on: false, armed: false, t0: 0, ms: -1, veces: 0,
                      baseTotal: 0, baseDropped: 0, total: 0, dropped: 0, error: "" };
@@ -162,6 +162,16 @@ function text(node, value) {
 }
 
 function ahora() { return new Date().getTime(); }
+
+/* play() devuelve una Promise en los navegadores nuevos y nada en los viejos.
+ * No se espera (el piso ES5 no la conoce): solo se le cuelga un catch vacio
+ * para que un rechazo -"el aparato pide un gesto", "pestana oculta"- no
+ * ensucie la consola. Si no arranca, el reloj de la pagina lo reintenta. */
+function play(node) {
+  var p;
+  try { p = node.play(); } catch (e) { return; }
+  if (p && typeof p["catch"] === "function") { p["catch"](function () {}); }
+}
 
 function px(node, left, top, width, height) {
   node.style.left = left + "px";
@@ -515,6 +525,13 @@ function startLoop(modo) {
   var video = byId("video"), before, urls;
   if (!papeles.loop) { loop.error = "no hay loop reproducible en el guion"; return; }
   stopLoop();
+  /* Los contadores son del MODO: cambiar de modo (1, 2, 3) los pone a cero;
+   * la vuelta de la publicidad al mismo modo los sigue sumando, porque lo
+   * que se quiere leer a la tarde es cuantas vueltas dio el dia sin atascos. */
+  if (modo !== loop.modo) {
+    loop.vueltas = 0; loop.costuras = 0; loop.gapMax = 0; loop.gapUltimo = -1;
+    loop.atascos = 0; loop.congel = 0; loop.pausado = 0; loop.reintentos = 0;
+  }
   loop.modo = modo;
   loop.id = papeles.loop.id;
   loop.started = false; loop.t0 = ahora(); loop.firstMs = -1;
@@ -544,7 +561,7 @@ function startLoop(modo) {
   }
   video.src = srcDe(papeles.loop);
   video.load();
-  video.play();
+  play(video);
 }
 
 /* La costura del bucle por blob: al `ended` se vuelve a 0 y se mide cuanto
@@ -556,7 +573,7 @@ function onVideoEnded() {
   if (estado !== "loop" || loop.modo !== "blob") { return; }
   loop.endedAt = ahora();
   video.currentTime = 0;
-  video.play();
+  play(video);
 }
 
 function onVideoWaiting() {
@@ -575,6 +592,15 @@ function onVideoError() {
 function tickLoop(now) {
   var video = byId("video"), ct = video.currentTime, gap;
   if (estado !== "loop") { return; }
+  /* Un play() rechazado al abrir (pestana oculta, politica de gestos) o una
+   * pausa que no pedimos (el navegador ahorra energia con un video mudo en
+   * segundo plano) no pueden dejar el producto quieto 16 horas: se insiste
+   * cada 2 s, y se cuenta, porque un aparato que pausa solo es un dato. */
+  if (video.paused && !video.ended && now - loop.reintento > 2000) {
+    loop.reintento = now;
+    loop.reintentos++;
+    play(video);
+  }
   if (!loop.started) {
     if (ct > 0) {
       loop.started = true;
@@ -601,6 +627,7 @@ function tickLoop(now) {
   }
   if (ct >= loop.lastTime) { loop.played += ct - loop.lastTime; } else { loop.played += ct; }
   if (ct === loop.lastTime && !video.paused && !video.ended && !loop.endedAt) { loop.congel++; }
+  if (video.paused && !video.ended) { loop.pausado++; }
   loop.lastTime = ct;
 }
 
@@ -618,7 +645,7 @@ function startIncentivador() {
   node.muted = true;
   node.src = srcDe(piece);
   node.load();
-  node.play();
+  play(node);
   avisar("incentivador desde " + origenDe(piece));
 }
 
@@ -673,7 +700,7 @@ function startPublicidad() {
   radioRampa(0.1);
   video.src = srcDe(piece);
   video.load();
-  video.play();
+  play(video);
   avisar("publicidad desde " + origenDe(piece) + "; vuelve sola al loop");
 }
 
@@ -724,7 +751,7 @@ function startRadio() {
   node.volume = 1;
   radio.objetivo = 1;
   if (node.src !== srcDe(piece) || !node.src) { node.src = srcDe(piece); node.load(); }
-  node.play();
+  play(node);
 }
 
 function tickRadio(now) {
@@ -958,7 +985,8 @@ function writeReport() {
              "\tatascos " + loop.atascos + "\tcongel " + loop.congel +
              "\tcaidos " + q.dropped + "/" + q.total +
              "\tderiva " + (loop.started ? Math.round(((ahora() - loop.wall0) / 1000 - loop.played) * 1000) : 0) + " ms" +
-             "\tarranques " + loop.arranques +
+             "\tarranques " + loop.arranques + "\treintentos " + loop.reintentos +
+             "\tpausado " + loop.pausado + " x100ms" +
              (loop.warn ? "\t" + loop.warn : "") + (loop.error ? "\tERR " + loop.error : ""));
   lines.push("incentivador\t" + (papeles.incentivador ? papeles.incentivador.id : "-") +
              "\tveces " + incentivador.veces + "\tarranco " + incentivador.ms + " ms" +
