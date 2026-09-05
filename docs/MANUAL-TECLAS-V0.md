@@ -141,7 +141,9 @@ cuántas piezas están residentes, `red si|no` y el tiempo prendido.
 **Parámetros:** `?modo=mse|blob|loop` fuerza el bucle; `?radio=no` no la
 prende sola; `?capa=si` prende los números al abrir y `?capa=imagen` también
 la imagen girando; `?giro=<segundos por vuelta>` (2 por defecto, `4` la
-lenta); `?tope=<MB>` y `?fraccion=<0..1>`
+lenta); `?cada=<vsyncs por pintada>` (4 = 15 fps, `2` = 30 fps);
+`?capak=<0..1>` achica el buffer del canvas (`0.5` = 640×360);
+`?reloj=timeout` vuelve al timer viejo; `?tope=<MB>` y `?fraccion=<0..1>`
 ajustan el presupuesto de residencia (SPEC §5.2); `?base=` como en `v0/`.
 
 **Lo que hay que traer de la foto** (SPEC-VGEN §12): `1` durante ≥ 10 min y

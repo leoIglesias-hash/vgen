@@ -5908,3 +5908,57 @@ las ya anotadas: la imagen como tercer video, o sprites pre-rotados.
 
 **Publicado en `v0/`** (copia de deploy en `cfdbf03`): `producto.html` 51.026 B,
 SHA-256 igual al árbol, token quemado y 403 comprobado.
+
+### Foto 4 — `7` `7` + `4` con H-23b (`abierta hace 353 s`): «se traba al girar, de eso no hay duda»
+
+```
+cache  guardadas 0, leidas 5  cuota 225.1 MB  presupuesto 112.6 MB  plan 5 de 5 (13 MB de 112.6 MB)  red si
+loop  v1-vp9  cache (en memoria)  74 ms  2941449 B
+loop-segs  v1-dash-vp9  cache (en memoria)  68 ms  2829937 B
+incentivador  v0-vp9-alpha  cache (en memoria)  71 ms  2434369 B
+publicidad  v1-h264  cache (en memoria)  148 ms  5254272 B
+radio  v1-ambiente  cache (en memoria)  10 ms  183353 B
+loop  v1-vp9  modo mse  arranco 274 ms  vueltas 23  costuras 0 (max 0 ms)  atascos 0  congel 0  caidos 78/5270  deriva 65 ms  arranques 1  reintentos 0  pausado 0 x100ms
+incentivador  v0-vp9-alpha  veces 1  arranco 737 ms  caidos 17/227
+publicidad  v1-h264  veces 0  ida -1 ms  vuelta -1 ms
+radio  v1-ambiente  prendida  arranco -1 ms  volumen 1  el aparato pide un gesto (6 la prende)
+capa  numeros+imagen  pintadas 5075  1280x720  fuente hobo (155 ms)  ritmo 14.7/s (pide 15)  gap max 562 ms  tardias 206  numeros 2.66 ms med / 23.3 max (55)  numeros+imagen 1.67 ms med / 37.9 max (5020)
+imagen  lista  logo.png  210x150  llego 272 ms  gira 1 vuelta / 2 s del reloj del video
+# tecla 4: keydown kc=57 w=57 cc=0 key=9 code=Digit9 foco=BODY
+```
+
+**Lectura — dibujar es barato, la cadencia no:**
+
+- La pintada con la imagen cuesta **1,67 ms de mediana** en la caja (máximo
+  37,9). No es el `drawImage` rotado: a 15 fps son 25 ms de CPU por segundo.
+- El reloj sí falla: **206 de 5.075 ticks llegaron más de dos periodos
+  tarde** (4 %), `gap max` **562 ms** (media vuelta entera sin pintar), y el
+  ritmo medio 14,7/s esconde que los intervalos no son parejos. Con
+  `setTimeout` a 66,7 ms, una pintada cae a veces 4 y a veces 5 vsyncs
+  después de la anterior; el ojo ve una imagen que **avanza a saltos
+  desiguales**, y eso es «se traba», aunque cada pintada tarde 2 ms.
+- **La capa le cuesta a los videos:** el loop pasó de 3/1870 (0,16 %, sin
+  capa) a **78/5270 (1,5 %)** y el incentivador de 1/226 a **17/227 (7,5 %,
+  fuera del gate del 3 %)**. Subir un canvas de 1280×720 al compositor 15
+  veces por segundo, encima de dos videos por hardware sobre una superficie
+  4K, no es gratis en esta caja.
+- El logo llegó en 272 ms por red (la primera vez; después el navegador lo
+  tiene).
+
+**Lo que se hizo (H-23c, `6e9ba5e`, publicada):** la capa **se pinta en el
+vsync** (`requestAnimationFrame`, una de cada `cada` señales; 4 = 15 fps en
+un panel de 60 Hz), con lo que el intervalo entre pintadas es siempre el
+mismo número de cuadros del panel. Tres perillas para la próxima foto:
+`?cada=2` (30 fps: más suave, el doble de subidas), `?capak=0.5` (buffer de
+640×360: si los caídos bajan, lo que pesa es el tamaño de lo que se sube),
+`?reloj=timeout` (el timer de antes, para comparar). El reporte dice `reloj
+raf`, `pide 1 de N vsync` y los **vsync/s medidos** (dice a cuánto corre el
+panel de la caja). PC: 15/s exactos, gap max 69 ms, tardías 0; con `cada=2`
++ `capak=0.5`: 30,1/s.
+
+**Lo que decide la caja:** si con `reloj raf` el ojo la ve girar pareja, era
+la cadencia y H-23 cierra con «cuesta 1,5 % del loop». Si sigue trabada con
+tardías ≈ 0, el cuello es el compositor y ahí sí: la imagen como **tercer
+video** (el hardware ya demostró que compone dos planos sin costo) o sprites.
+Si `capak=0.5` baja los caídos, el tamaño del canvas es el precio y la capa
+del producto se dimensiona por lo que dibuja, no por el panel.

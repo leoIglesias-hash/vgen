@@ -546,3 +546,15 @@ la línea `capa` del reporte suma `ritmo N/s (pide 15)`, `gap max` y
 llegada dice «7 dos veces: la imagen girando». Sale del repo en `0651523`
 (CI verde). **El Worker no se tocó.** Verificación: SHA-256 contra el árbol,
 token quemado y 403 comprobado.
+
+## 2026-09-05 — H-23c: la capa en el vsync (1 key regenerada)
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/producto.html` | 52.491 | `64b003ed7e31c37d0e3c1b64f60dc2be` |
+
+**Qué es:** la capa se pinta con `requestAnimationFrame`, una de cada 4
+señales (`?cada=2` → 30 fps; `?capak=0.5` achica el buffer; `?reloj=timeout`
+vuelve al timer). El reporte dice `reloj raf` y los vsync/s. Sale del repo en
+`6e9ba5e` (CI verde). **El Worker no se tocó.** Verificación: SHA-256 contra
+el árbol, token quemado y 403 comprobado.

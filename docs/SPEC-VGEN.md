@@ -248,8 +248,11 @@ diagonal, nunca el canvas entero. Cada pintada se cronometra por carga
 cuánto cuesta la imagen y no solo si se ve. El tick de la capa se agenda por
 **reloj absoluto** (el costo de la pintada no estira el periodo) y el reporte
 trae el **ritmo real** (`N/s`, `gap max`, `tardias`). Vuelta cada 2 s
-(`?giro=`). En la caja (2026-09-05, sin foto todavía): *«se ve, se traba un
-poco»*.
+(`?giro=`). **La capa se pinta en el vsync** (`requestAnimationFrame`, una de
+cada 4 señales; cae al timer si no hay): en la caja el timer dio pintadas de
+1,67 ms pero 206 ticks tardíos y `gap max` 562 ms, y el ojo lo vio como
+«se traba al girar, de eso no hay duda» (foto 4 del 2026-09-05). ⏳ la foto
+con `reloj raf`.
 
 ### 6.7 Vigilancia
 - `play()` **reintentado cada 2 s** mientras el video esté en pausa sin haberla
