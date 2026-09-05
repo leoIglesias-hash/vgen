@@ -5647,6 +5647,14 @@ paused to save power`). Se vio dos veces. De ahí salió la **vigilancia**:
 pedido, y el reporte cuenta `reintentos` y `pausado` — un aparato que pausa
 solo es un dato, no un misterio.
 
+**Publicado en `v0/`** (copia de deploy en `86d6f11` antes de subir): 5 keys
+(`producto.html`, `GUION.tsv`, `vgenfeed.js`, `vgencache.js`, `index.html`),
+cada una bajada con cache-buster y comparada por SHA-256 contra el árbol
+(**5/5 iguales**), token quemado y **403** comprobado. Abierto
+`https://iargen.com/player/v0/producto.html` desde el navegador de la sesión:
+primera apertura baja las 5 piezas (13 MB, `guardadas 5`), loop por anillo MSE
+**827 ms** al primer cuadro desde la caché, `atascos 0`, caídos 0/221.
+
 **Qué tiene que traer la foto mañana** (SPEC §12, manual «El producto»): en
 la caja y en el Smart TV, `7` desde el lanzador; dejar el `1` ≥ 10 min y `9`;
 `5` y esperar la vuelta, `9`; `4`, `9`; y la segunda apertura con la red
