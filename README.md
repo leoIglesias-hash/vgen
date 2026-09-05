@@ -1,4 +1,6 @@
-# ASCILINE-hybrid → máster `.ascl`/`.asclv` + formato propio por hardware
+# vgen — máster `.ascl`/`.asclv` + formato de video propio para el `<video>` de las TV
+
+> Repositorio `leoIglesias-hash/vgen` (hasta el 2026-09-05, `ASCILINE-hybrid`; la carpeta local conserva ese nombre). **Público de solo lectura**: las ideas entran por *issue* → [`PROPUESTAS.md`](PROPUESTAS.md).
 
 **Sucesor de `ASCILINE-video` (2026-09-01).** El encoder Python **offline** sigue
 decidiendo todo (paleta perceptual, trellis, look) y emitiendo el `.asclv` como
