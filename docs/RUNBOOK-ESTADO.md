@@ -191,7 +191,7 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **la foto del producto** (`7` desde el lanzador) y la firma de la spec
+> ## ▶ PRÓXIMA ACCIÓN: **la foto de la imagen girando con `reloj raf`** (`7` `7`, `4`, `9`), `5` publicidad, y la firma de la spec
 >
 > **Turno nocturno del 2026-09-05** (REGISTRO, entrada «turno nocturno»):
 > **H-8a EJECUTADA hasta la pantalla** — `producto.html`, la forma del

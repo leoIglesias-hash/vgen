@@ -34,7 +34,7 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-> ## ▶ Próxima acción: **la foto del producto** (`7` desde el lanzador) y la firma de la spec
+> ## ▶ Próxima acción: **la foto de la imagen girando con `reloj raf`** (`7` `7`, `4`, `9`), `5`, y la firma de la spec
 >
 > **Turno nocturno del 2026-09-05:** **H-8a EJECUTADA hasta la pantalla** —
 > `frontend/producto.html`, la forma del producto entera desde la caché del
@@ -52,6 +52,12 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 > `leidas 5, guardadas 0`), v1 VP9 «joya», incentivador 627/684 ms (el
 > operador lo ve lento → propuesta H-24: efecto armado), radio pide gesto.
 > **H-23 quedó sin prender**: es `7` dos veces DENTRO del producto, luego `4`.
+> **Foto 4 (con `7` `7`): «se traba al girar, de eso no hay duda»** — pintada
+> 1,67 ms (barata) pero **206 ticks tardíos, gap 562 ms**, y la capa cuesta
+> caídos (loop 1,5 %, incentivador 7,5 %). → **H-23c publicada: la capa en el
+> vsync** (`requestAnimationFrame` 1 de 4; `?cada=2`, `?capak=0.5`,
+> `?reloj=timeout`). **Próxima foto: `7` `7`, `4`, `9` con `reloj raf`**; si
+> sigue trabada, la imagen pasa a ser un tercer video. `5` sin probar.
 > **H-7 es BORRADOR 0.1** ([`docs/SPEC-VGEN.md`](docs/SPEC-VGEN.md)): describe
 > lo que el prototipo ejecuta, marca ⏳ lo no reproducido y pide la firma del
 > operador con la lista de §12. **El encoder quedó evaluado, no hecho**
