@@ -5746,3 +5746,11 @@ caja y en el Smart TV, `7` `7` (zócalo `capa num+img`), `4`, esperar que el
 incentivador salga solo, `9`: la línea `capa numeros+imagen … ms med / … max`,
 la línea `imagen lista logo.png 210x150 llego N ms`, los `caidos` del
 incentivador y del loop, y el ojo: si gira suave encima de los papelitos.
+
+**Publicado en `v0/`** (copia de deploy en `e82a373` antes de subir): 2 keys
+(`producto.html` 49.565 B, `logo.png` 42.553 B), bajadas con cache-buster y
+comparadas por SHA-256 contra el árbol (**2/2 iguales**), `logo.png` servido
+como `image/png`, token quemado y **403** comprobado. Abierto
+`https://iargen.com/player/v0/producto.html?capa=imagen` desde el navegador
+de la sesión: `imagen lista logo.png 210x150 llego 205 ms`, `numeros+imagen
+0,19 ms med / 0,9 max (265)`, loop `caidos 0/308`, `atascos 0`.
