@@ -249,8 +249,15 @@ assert(/radio\tv1-ambiente\tprendida/.test(reporte), "la radio se reporta prendi
 
 action("7").run();
 assert.strictEqual(byId("capa").className, "", "7 prende la capa");
+assert(/capa\tnumeros\t/.test(reporteTexto()), "con los numeros solos");
 action("7").run();
-assert.strictEqual(byId("capa").className, "off", "y la apaga");
+assert.strictEqual(byId("capa").className, "", "el segundo 7 la deja prendida");
+reporte = reporteTexto();
+assert(/capa\tnumeros\+imagen\t/.test(reporte), "y suma la imagen que gira (H-23)");
+assert(/imagen\tsin imagen \(sin Image\)/.test(reporte),
+  "sin Image ni canvas el reporte dice que no hubo imagen: " + reporte);
+action("7").run();
+assert.strictEqual(byId("capa").className, "off", "y el tercero la apaga");
 
 action("4").run();
 assert.strictEqual(byId("efecto").className, "", "4 muestra el efecto encima");
@@ -295,6 +302,9 @@ FakeMediaSource.prototype.addSourceBuffer = function () {
   var sb = new FakeSourceBuffer(); this.buffers.push(sb); return sb;
 };
 var created = [];
+var imagenes = [];
+function FakeImage() { this.src = ""; this.onload = null; this.onerror = null; imagenes.push(this); }
+windowStub.Image = FakeImage;
 windowStub.MediaSource = FakeMediaSource;
 windowStub.URL = { createObjectURL: function (thing) { created.push(thing); return "blob:fake/" + created.length; },
                    revokeObjectURL: function () {} };
@@ -315,5 +325,23 @@ reporte = reporteTexto();
 assert(/loop\tv1-vp9\tsin base/.test(reporte), "VP9 elegido");
 assert(/loop\tv0-h264-baseline\tno elegido/.test(reporte), "y el piso, no elegido");
 assert(/mse\.loop\tsi/.test(reporte), "la cabecera dice que el MIME del anillo se sostiene");
+
+/* --- H-23: la imagen que gira se pide una vez y se mide --- */
+
+action("7").run();
+assert.strictEqual(imagenes.length, 0, "los numeros solos no piden ninguna imagen");
+action("7").run();
+assert.strictEqual(imagenes.length, 1, "la imagen se pide UNA vez, al primer 7 que la necesita");
+assert.strictEqual(imagenes[0].src, "logo.png", "el logo, al lado de la pagina");
+assert(/imagen\tcargando/.test(reporteTexto()), "y el reporte dice que viene");
+imagenes[0].naturalWidth = 210; imagenes[0].naturalHeight = 150;
+imagenes[0].onload();
+reporte = reporteTexto();
+assert(/imagen\tlista\tlogo\.png\t210x150\tllego \d+ ms/.test(reporte),
+  "cuando llega, el reporte la mide: " + reporte);
+action("7").run();
+assert.strictEqual(byId("capa").className, "off", "el tercer 7 apaga");
+action("7").run(); action("7").run();
+assert.strictEqual(imagenes.length, 1, "y al volver a pedirla no se baja de nuevo");
 
 console.log("producto page tests (H-8a): OK");

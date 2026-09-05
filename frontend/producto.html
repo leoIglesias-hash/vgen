@@ -95,7 +95,8 @@
  * Lo que la caja decidio y aca se aplica: VP9 base y Baseline de piso (E13);
  * el bucle por `loop` esta refutado (H-13) y el intercambio por MSE `sequence`
  * en pie (S12) -> el bucle del producto es un ANILLO MSE desde la cache
- * (VGenFeed.ring); la capa va ENCIMA y lee currentTime en cada pintada (H-11);
+ * (VGenFeed.ring); la capa va ENCIMA y lee currentTime en cada pintada (H-11)
+ * y, si se le pide, gira una IMAGEN por drawImage sobre el alfa (H-23);
  * los efectos SON video con alfa en un segundo <video> (H-18b); los tres planos
  * estan habilitados por el ojo del operador (H-20).
  *
@@ -141,7 +142,10 @@ var publicidad = { on: false, t0: 0, idaMs: -1, vueltaMs: -1, veces: 0, error: "
                    modoPrevio: "", esperandoVuelta: false, t1: 0 };
 var radio = { on: false, t0: 0, arrancoMs: -1, error: "", rampa: 0, objetivo: 1,
               pedida: false };
-var capa = { load: "none", paints: 0, n: 0, timer: 0, w: 0, h: 0, k: 1 };
+var capa = { load: "none", paints: 0, n: 0, timer: 0, w: 0, h: 0, k: 1,
+             stat: { rect: { n: 0, ms: 0, max: 0 }, imagen: { n: 0, ms: 0, max: 0 } } };
+/* H-23: la imagen que gira encima (el logo, 210x150 con alfa), pedida una vez */
+var logo = { node: null, estado: "sin pedir", detalle: "", fuente: "-", w: 0, h: 0, ms: 0, t0: 0 };
 var capaFuente = { name: "fallback", ms: 0, timer: 0 };
 var capaRegla = null;
 /* Todo lo que los modulos tocan del mundo se les pasa desde aca: en el
@@ -162,6 +166,13 @@ function text(node, value) {
 }
 
 function ahora() { return new Date().getTime(); }
+
+/* Para medir una pintada: performance.now si el aparato lo tiene (fraccion de
+ * ms), si no el reloj de pared (1 ms). */
+function reloj() {
+  var p = window.performance;
+  return (p && typeof p.now === "function") ? p.now() : new Date().getTime();
+}
 
 /* play() devuelve una Promise en los navegadores nuevos y nada en los viejos.
  * No se espera (el piso ES5 no la conoce): solo se le cuelga un catch vacio
@@ -664,7 +675,7 @@ function stopIncentivador() {
 }
 
 function tickIncentivador(now) {
-  var node = byId("efecto"), before;
+  var node = byId("efecto"), before, after;
   if (!incentivador.on) { return; }
   if (!incentivador.armed) {
     if (node.currentTime > 0) {
@@ -679,6 +690,8 @@ function tickIncentivador(now) {
     }
     return;
   }
+  after = resta(quality(node), incentivador.baseTotal, incentivador.baseDropped);
+  incentivador.total = after.total; incentivador.dropped = after.dropped;
   if (node.ended) { stopIncentivador(); }
 }
 
@@ -851,15 +864,80 @@ function paintCapa(ctx, x, y, w, h) {
   ctx.fillText(titulo, x + w * 0.06, y + h * 0.82);
 }
 
+/* H-23: la imagen que gira. Se pide UNA vez, al primer 7 que la necesita. Si
+ * el aparato no tiene Image o el PNG no llega, se dibuja un emblema en un
+ * canvas aparte (una sola vez) y se gira ese: la prueba sigue midiendo
+ * drawImage rotado, y el reporte dice cual de las dos fuentes giro. */
+function pedirLogo() {
+  var Ctor = HOOKS.host.Image, img;
+  if (logo.estado !== "sin pedir") { return; }
+  logo.t0 = ahora();
+  if (typeof Ctor !== "function") { logoFallback("sin Image"); return; }
+  img = new Ctor();
+  logo.estado = "cargando";
+  img.onload = function () {
+    logo.node = img;
+    logo.w = img.naturalWidth || img.width || 0;
+    logo.h = img.naturalHeight || img.height || 0;
+    logo.estado = "lista"; logo.fuente = "logo.png"; logo.ms = ahora() - logo.t0;
+  };
+  img.onerror = function () { logoFallback("logo.png no llego"); };
+  img.src = "logo.png";
+}
+
+function logoFallback(motivo) {
+  var lienzo = document.createElement("canvas"), ctx, i;
+  logo.ms = ahora() - logo.t0;
+  logo.detalle = motivo;
+  lienzo.width = 210; lienzo.height = 150;
+  ctx = lienzo.getContext ? lienzo.getContext("2d") : null;
+  if (!ctx) { logo.estado = "sin imagen"; return; }
+  ctx.fillStyle = "#ffd479";
+  ctx.translate(105, 75);
+  for (i = 0; i < 4; i++) { ctx.fillRect(-70, -10, 140, 20); ctx.rotate(Math.PI / 4); }
+  logo.node = lienzo; logo.w = 210; logo.h = 150;
+  logo.estado = "lista"; logo.fuente = "dibujada";
+}
+
+/* La imagen gira con el reloj del video (una vuelta cada 4 s), en el centro
+ * del cuadro, sin tocar el rectangulo de los numeros: se limpia solo el
+ * cuadrado que cubre su diagonal. Un save/translate/rotate/drawImage/restore
+ * por pintada: es exactamente el costo que se quiere medir. */
+function paintLogo(ctx) {
+  var video = byId("video"), efecto = byId("efecto");
+  var ct = incentivador.on ? (efecto.currentTime || 0) : (video.currentTime || 0);
+  var dh = Math.round(capa.h * 0.3);
+  var dw = logo.h ? Math.round(dh * logo.w / logo.h) : dh;
+  var cx = Math.round(capa.w * 0.5), cy = Math.round(capa.h * 0.55);
+  var lado = Math.ceil(Math.sqrt(dw * dw + dh * dh)) + 2;
+  ctx.clearRect(cx - Math.ceil(lado / 2), cy - Math.ceil(lado / 2), lado + 1, lado + 1);
+  if (!logo.node) { return; }
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(ct * Math.PI / 2);
+  ctx.drawImage(logo.node, -Math.round(dw / 2), -Math.round(dh / 2), dw, dh);
+  ctx.restore();
+}
+
+function contarPintada(load, dt) {
+  var s = capa.stat[load];
+  if (!s) { return; }
+  s.n++; s.ms += dt;
+  if (dt > s.max) { s.max = dt; }
+}
+
 function capaTick() {
-  var ctx;
+  var ctx, t0;
   capa.timer = 0;
-  if (capa.load !== "rect") { return; }
+  if (capa.load === "none") { return; }
   ctx = capaContext();
   if (ctx) {
+    t0 = reloj();
     capa.n++; capa.paints++;
     paintCapa(ctx, Math.round(capa.w * 0.04), Math.round(capa.h * 0.06),
               Math.round(capa.w * 0.26), Math.round(capa.h * 0.3));
+    if (capa.load === "imagen") { paintLogo(ctx); }
+    contarPintada(capa.load, reloj() - t0);
   }
   capa.timer = window.setTimeout(capaTick, Math.round(1000 / CAPA_FPS));
 }
@@ -870,15 +948,40 @@ function setCapa(load) {
   capa.load = load;
   node.className = load === "none" ? "off" : "";
   if (load === "none") { return; }
+  if (load === "imagen") { pedirLogo(); }
   ctx = capaContext();
   if (ctx) { ctx.clearRect(0, 0, capa.w, capa.h); }
   capaTick();
 }
 
+function capaNombre() {
+  return capa.load === "imagen" ? "numeros+imagen" : (capa.load === "rect" ? "numeros" : "apagada");
+}
+
+function capaCorto() {
+  return capa.load === "imagen" ? "num+img" : (capa.load === "rect" ? "num" : "no");
+}
+
+function pintadaMedia(s) {
+  if (!s.n) { return "-"; }
+  return (Math.round(s.ms / s.n * 100) / 100) + " ms med / " +
+         (Math.round(s.max * 100) / 100) + " max (" + s.n + ")";
+}
+
+/* 7 cicla: apagada -> numeros -> numeros + imagen girando -> apagada. */
 function toggleCapa() {
-  if (capa.load === "rect") { setCapa("none"); avisar("capa apagada"); return; }
-  setCapa("rect");
-  avisar("capa encendida (" + capa.w + "x" + capa.h + ", fuente " + capaFuente.name + ")");
+  if (capa.load === "none") {
+    setCapa("rect");
+    avisar("capa: numeros (" + capa.w + "x" + capa.h + ", fuente " + capaFuente.name + ") - 7 suma la imagen");
+    return;
+  }
+  if (capa.load === "rect") {
+    setCapa("imagen");
+    avisar("capa: numeros + imagen girando (" + logo.estado + ") - 7 apaga");
+    return;
+  }
+  setCapa("none");
+  avisar("capa apagada");
 }
 
 /* --- parar todo (0) --- */
@@ -933,7 +1036,7 @@ function escribirPie() {
        " · residente " + c.n + "/" + c.total + " (" + mb(c.bytes) + ")" +
        " · red " + redDice() +
        " · radio " + (radio.on ? (radio.arrancoMs >= 0 ? "si" : (radio.error ? "gesto" : "...")) : "no") +
-       " · capa " + (capa.load === "rect" ? "si" : "no") +
+       " · capa " + capaCorto() +
        " · " + segundos(ahora() - abierta) + "s" +
        " · 8 teclas · 9 reporte · 0 corta" +
        " · " + ultimaTecla);
@@ -1000,9 +1103,14 @@ function writeReport() {
              "\t" + (radio.on ? "prendida" : "apagada") + "\tarranco " + radio.arrancoMs + " ms" +
              "\tvolumen " + (Math.round(byId("radio").volume * 100) / 100) +
              (radio.error ? "\t" + radio.error : ""));
-  lines.push("capa\t" + (capa.load === "rect" ? "encendida" : "apagada") +
+  lines.push("capa\t" + capaNombre() +
              "\tpintadas " + capa.paints + "\t" + capa.w + "x" + capa.h +
-             "\tfuente " + capaFuente.name + (capaFuente.ms ? " (" + capaFuente.ms + " ms)" : ""));
+             "\tfuente " + capaFuente.name + (capaFuente.ms ? " (" + capaFuente.ms + " ms)" : "") +
+             "\tnumeros " + pintadaMedia(capa.stat.rect) +
+             "\tnumeros+imagen " + pintadaMedia(capa.stat.imagen));
+  lines.push("imagen\t" + logo.estado + (logo.detalle ? " (" + logo.detalle + ")" : "") +
+             "\t" + logo.fuente + "\t" + logo.w + "x" + logo.h +
+             "\tllego " + logo.ms + " ms\tgira 1 vuelta / 4 s del reloj del video");
   lines.push("# " + ultimaTecla);
   reportLines = lines;
 }
@@ -1080,7 +1188,7 @@ var TECLAS = [
     run: startPublicidad },
   { code: "6", label: "radio", detail: "prende o apaga la ambiente (<audio> aparte)",
     run: toggleRadio },
-  { code: "7", label: "capa", detail: "prende o apaga los numeros encima (15 fps, lee el reloj del video)",
+  { code: "7", label: "capa", detail: "cicla: numeros -> numeros + la imagen girando (logo por drawImage rotado, encima del alfa) -> apagada",
     run: toggleCapa },
   { code: "8", label: "teclas", detail: "muestra o esconde esta leyenda",
     run: toggleLeyenda },
@@ -1129,7 +1237,8 @@ function arrancar() {
     modo = modoPosible();
     startLoop(modo);
     if (param("radio") !== "no") { startRadio(); }
-    if (param("capa") === "si") { setCapa("rect"); }
+    if (param("capa") === "imagen") { setCapa("imagen"); }
+    else if (param("capa") === "si") { setCapa("rect"); }
     avisar("loop " + papeles.loop.id + " por " + loop.modo + " · 8 muestra las teclas", 6000);
     escribirPie();
   });
