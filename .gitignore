@@ -36,3 +36,7 @@ Desktop.ini
 
 # Configuracion local de herramientas de sesion (no es del proyecto)
 .claude/
+
+# Fuente comercial (Adobe Hobo Std): no se distribuye con el repo publico. Vive en el
+# aparato y en Cloudflare (v0/HoboStd.ttf); una copia local sirve para serve-local.
+frontend/HoboStd.ttf

@@ -464,14 +464,17 @@ assert(/"; fuente: " \+\s*\n?\s*capaFuente\.name/.test(inline[1]) ||
 assert(/"\\tfuente " \+ capaFuente\.name/.test(inline[1]),
   "y la cabecera del reporte tambien, que es lo que sale en la foto");
 
-/* El archivo servido, tal cual se publica. */
+/* El archivo servido. Desde el 2026-09-05 la fuente NO se distribuye con el
+ * repo (es una fuente comercial y el repo es publico): vive en el aparato y
+ * en Cloudflare (`v0/HoboStd.ttf`, 31.444 B, md5 en deploy/MANIFEST.tsv). Si
+ * hay una copia local, se verifica que sea la que paso el operador. */
 var fuentePath = path.join(__dirname, "..", "frontend", "HoboStd.ttf");
-assert(fs.existsSync(fuentePath),
-  "la fuente vive en el repo: lo desplegado se guarda antes de subirlo");
-var fuenteBuf = fs.readFileSync(fuentePath);
-assert.strictEqual(fuenteBuf.length, 31444, "la fuente que paso el operador");
-assert.strictEqual(fuenteBuf.slice(0, 4).toString("latin1"), "OTTO",
-  "OpenType con contornos CFF: por eso el format() dice opentype");
+if (fs.existsSync(fuentePath)) {
+  var fuenteBuf = fs.readFileSync(fuentePath);
+  assert.strictEqual(fuenteBuf.length, 31444, "la fuente que paso el operador");
+  assert.strictEqual(fuenteBuf.slice(0, 4).toString("latin1"), "OTTO",
+    "OpenType con contornos CFF: por eso el format() dice opentype");
+}
 
 /* --- Correr el 5 en un aparato sin MSE: la fila aparece con su error y el
  * resto no explota; el 0 la limpia. --- */
