@@ -105,6 +105,7 @@ jobs:
       - name: Tabla del eje
         if: steps.corre.outputs.si == 'true'
         run: |
+          set -o pipefail
           {
             echo "## Eje ${{ matrix.grupo }}"
             echo ""
@@ -134,6 +135,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+      - name: Dependencias (emit_matrix importa el decoder)
+        run: python -m pip install -r backend/requirements.txt
       - name: Bajar todos los ejes
         uses: actions/download-artifact@v4
         with:
@@ -141,6 +145,7 @@ jobs:
           path: ejes
       - name: Una sola tabla
         run: |
+          set -o pipefail
           mkdir -p tabla
           find ejes -name "MATRIZ-*.tsv" -exec cp {} tabla/ \;
           ls -l tabla

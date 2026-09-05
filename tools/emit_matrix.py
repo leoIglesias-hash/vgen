@@ -267,7 +267,9 @@ def build_metrics_command(ffmpeg, out_path, ref_path):
             "-lavfi", graph, "-f", "null", "-"]
 
 
-SSIM_RE = re.compile(r"SSIM Y:([0-9.]+) U:([0-9.]+) V:([0-9.]+) All:([0-9.]+)")
+# ffmpeg imprime cada valor seguido de su dB entre parentesis: "Y:0.98 (19.1) U:...".
+SSIM_RE = re.compile(r"SSIM Y:([0-9.]+)(?: \([^)]*\))? U:([0-9.]+)(?: \([^)]*\))?"
+                     r" V:([0-9.]+)(?: \([^)]*\))? All:([0-9.]+)")
 PSNR_RE = re.compile(r"PSNR y:([0-9.inf]+) u:([0-9.inf]+) v:([0-9.inf]+) average:([0-9.inf]+)")
 FRAME_RE = re.compile(r"frame=\s*(\d+)")
 
