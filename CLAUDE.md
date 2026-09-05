@@ -47,7 +47,11 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 > **imagen girando** (`logo.png`, `drawImage` rotado) encima del incentivador
 > con alfa: la tecla `7` **cicla** números → números + imagen → apagada, con el
 > costo por pintada en el reporte (PC: 0,20 ms med / 2,2 max a 1280×720).
-> Publicada; **la misma foto la cubre: `7` `7`, `4`, `9`.**
+> Publicada. **Foto de la caja del 2026-09-05 (REGISTRO «la foto de la
+> caja»): H-8a se sostiene** (anillo 8 vueltas, 0 atascos, 3/1870 caídos;
+> `leidas 5, guardadas 0`), v1 VP9 «joya», incentivador 627/684 ms (el
+> operador lo ve lento → propuesta H-24: efecto armado), radio pide gesto.
+> **H-23 quedó sin prender**: es `7` dos veces DENTRO del producto, luego `4`.
 > **H-7 es BORRADOR 0.1** ([`docs/SPEC-VGEN.md`](docs/SPEC-VGEN.md)): describe
 > lo que el prototipo ejecuta, marca ⏳ lo no reproducido y pide la firma del
 > operador con la lista de §12. **El encoder quedó evaluado, no hecho**

@@ -5754,3 +5754,126 @@ como `image/png`, token quemado y **403** comprobado. Abierto
 `https://iargen.com/player/v0/producto.html?capa=imagen` desde el navegador
 de la sesión: `imagen lista logo.png 210x150 llego 205 ms`, `numeros+imagen
 0,19 ms med / 0,9 max (265)`, loop `caidos 0/308`, `atascos 0`.
+
+## 2026-09-05 — la foto de la caja: H-8a se sostiene, v1 «joya», H-23 no se llegó a prender
+
+Tres fotos de la caja (Chromium 70, panel 1280×720, superficie 3840×2160),
+transcriptas tal cual. Palabras del operador: *«La incentivadora tarda
+bastante en el arranque. V1-vp9 joya, v1-264 un poco más lento pero corre
+igual. 77 y luego 4 no muestra la imagen girando»*.
+
+### Foto 1 — `producto.html`, primera apertura (`abierta hace 134 s`)
+
+```
+ua  Mozilla/5.0 (Linux; Android 9; TVBOX Build/PPR1.180610.011; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/70.0.3538.80 Safari/537.36
+panel 1280x720  superficie 3840x2160  capa 1280x720  fuente hobo
+mse si  mse.loop si  blob si  indexeddb si  quality no
+cache  guardadas 5, leidas 0  cuota 225.1 MB  presupuesto 112.6 MB  plan 5 de 5 (13 MB de 112.6 MB)  red si
+abierta hace  134 s
+# papel  pieza  origen  ms  bytes
+loop  v1-vp9  red (en memoria)  569 ms  2941449 B
+loop-segs  v1-dash-vp9  red (en memoria)  4948 ms  2829937 B
+loop  v0-h264-baseline  no elegido  0 ms  0 B
+incentivador  v0-vp9-alpha  red (en memoria)  526 ms  2434369 B
+publicidad  v1-h264  red (en memoria)  777 ms  5254272 B
+radio  v1-ambiente  red (en memoria)  294 ms  183353 B
+# medicion
+loop  v1-vp9  modo mse  arranco 210 ms  vueltas 8  costuras 0 (max 0 ms)  atascos 0  congel 0  caidos 3/1870  deriva 91 ms  arranques 1  reintentos 0  pausado 0 x100ms
+incentivador  v0-vp9-alpha  veces 1  arranco 627 ms  caidos 1/226
+publicidad  v1-h264  veces 0  ida -1 ms  vuelta -1 ms
+radio  v1-ambiente  prendida  arranco -1 ms  volumen 1  el aparato pide un gesto (6 la prende)
+capa  apagada  pintadas 0  1280x720  fuente hobo (5 ms)  numeros -  numeros+imagen -
+imagen  sin pedir  -  0x0  llego 0 ms  gira 1 vuelta / 4 s del reloj del video
+# tecla 2: keydown kc=57 w=57 cc=0 key=9 code=Digit9 foco=BODY
+```
+
+### Foto 3 — `producto.html`, segunda apertura (`abierta hace 63 s`)
+
+```
+cache  guardadas 0, leidas 5  cuota 225.1 MB  presupuesto 112.6 MB  plan 5 de 5 (13 MB de 112.6 MB)  red si
+loop  v1-vp9  cache (en memoria)  167 ms  2941449 B
+loop-segs  v1-dash-vp9  cache (en memoria)  166 ms  2829937 B
+loop  v0-h264-baseline  no elegido  0 ms  0 B
+incentivador  v0-vp9-alpha  cache (en memoria)  163 ms  2434369 B
+publicidad  v1-h264  cache (en memoria)  298 ms  5254272 B
+radio  v1-ambiente  cache (en memoria)  42 ms  183353 B
+loop  v1-vp9  modo mse  arranco 242 ms  vueltas 4  costuras 0 (max 0 ms)  atascos 0  congel 0  caidos 5/906  deriva 81 ms  arranques 1  reintentos 0  pausado 0 x100ms
+incentivador  v0-vp9-alpha  veces 1  arranco 684 ms  caidos 6/227
+publicidad  v1-h264  veces 0  ida -1 ms  vuelta -1 ms
+radio  v1-ambiente  prendida  arranco -1 ms  volumen 1  el aparato pide un gesto (6 la prende)
+capa  apagada  pintadas 0  1280x720  fuente hobo (158 ms)  numeros -  numeros+imagen -
+imagen  sin pedir  -  0x0  llego 0 ms  gira 1 vuelta / 4 s del reloj del video
+# tecla 5: keydown kc=57 w=57 cc=0 key=9 code=Digit9 foco=BODY
+```
+
+### Foto 2 — `v0/` (pack v0, «88 para volver»), con v1
+
+```
+panel 1280x720  dpr 1  superficie 3840x2160  capa 560x315 k 0.333 fuente hobo (207 ms)
+mse si  changeType si  blob si  mse.h264 si  mse.vp9 si  rvfc no  indexeddb si  quality no
+cache si  guardadas 5 13643380 B  cuota 30/225 MB  red si  hls maybe  dash no
+# id  dice  arranco  1er_ms  caidos  total  deriva_ms  atascos  congel  cambio_ms  nota
+v1-vp9  probably  si  7792  0  156  1  0  0  -1  VP9 crf 38 cpu-used 2 + Opus 64k; 231 cuadros
+v1-h264  probably  si  2119  0  155  8  0  0  -1  H.264 high crf 23 B=3 ref=4 + AAC 96k; 231 cuadros
+cache:techo  si  5364  0  0  0  0  0  -1  declara 13/225 MB; tandas de 5 MB; entraron 50 MB (tope de la prueba)
+dos:vp9+alfa  probably  si  1443  3  156  0  0  0  -1  loop VP9 + alfa encima; el de arriba dice probably, caidos 1/143
+entera:solo  probably  si  264  0  156  1  0  0  -1  entera 3840x2160 sobre 3840x2160; api no
+entera:capa  probably  si  528  3  154  0  0  0  -1  entera 3840x2160 sobre 3840x2160; api no; capa rect, pintadas 149 (1280x720)
+entera:dos  probably  si  493  5  150  408  1  3  -1  entera 3840x2160 sobre 3840x2160; api no; el de arriba dice probably, caidos 6/124
+entera:todo  probably  si  670  3  0  0  0  0  -1  ciego; entera 3840x2160 sobre 3840x2160; api no; capa rect, pintadas 151 (1280x720); el de arriba dice probably, caidos 9/150
+radio:mp3+vp9  probably  si  1096  0  155  0  0  0  -1  radio NO arranco; deriva radio 0 ms; deriva A/V 1 ms
+mse:vp9  probably  si  1107  0  3  0  0  0  -1  dur 15.4s; WebM segmentado por SourceBuffer, 16 segmentos
+```
+
+### Lectura
+
+**H-8a en la caja — se sostiene (SPEC §12.1, §12.4, §12.5 cumplidas; §12.2 sin
+probar; §12.3 con reparo):**
+
+- **Anillo MSE:** `vueltas 8`, `costuras 0`, `atascos 0`, `congel 0`,
+  **caídos 3/1870 = 0,16 %** en 134 s (segunda apertura: 5/906 = 0,55 %).
+  Arranque 210/242 ms. Faltan los 10 minutos, pero 8 vueltas sin una costura
+  es lo que el bucle por `loop` nunca dio en esta caja (H-13).
+- **Residencia:** primera apertura `guardadas 5, leidas 0`; segunda
+  **`guardadas 0, leidas 5`** — las cinco piezas salieron de IndexedDB
+  (167/166/163/298/42 ms) sin pedir un byte. La cuota declarada es **225 MB**
+  → presupuesto 112,6 MB, plan 5 de 5. La bajada por red del `loop-segs`
+  tardó **4.948 ms** (16 segmentos en serie): solo la primera vez.
+- **Incentivador:** `arranco 627 ms` (red) y **684 ms** (caché), `caidos
+  1/226` y `6/227`. Pasa el gate ≤ 1.000 ms, **pero el operador lo ve lento**
+  («tarda bastante»). El costo no es la caché (los bytes están en memoria a
+  los 163 ms): es el `<video>` del efecto que arranca **de cero** en cada `4`
+  (`src` → `load()` → `play()` → primer cuadro VP9+alfa). Propuesta abajo.
+- **Radio:** `arranco -1`, **«el aparato pide un gesto (6 la prende)»**: la
+  caja no deja sonar el `<audio>` sin gesto. Declarado, como pide §12.5. Se
+  puede resolver **sin tocar la spec**: la primera tecla que apriete el
+  operador es el gesto, y ahí se reintenta `play()` (propuesta abajo).
+- **Publicidad (`5`):** `veces 0` en las dos fotos — no se probó todavía.
+- `quality no`: los caídos salen de `webkitDroppedFrameCount`, como en v0.
+
+**H-23 — no se prendió:** `capa apagada, pintadas 0, imagen sin pedir`. El
+operador apretó `77` (ir al producto) y `4`; **la imagen se prende con `7`
+dos veces DENTRO del producto** (primer `7` números, segundo `7` números +
+imagen), y recién después `4`. La instrucción «`7` `7`, `4`, `9`» se leyó
+como `77`. Se corrige la leyenda de llegada y el manual para que digan
+«`7` dos veces». **La prueba sigue pendiente.**
+
+**v1 en la caja (foto 2):** `v1-vp9` 0/156 caídos, deriva 1 ms, **«joya»**;
+`v1-h264` 0/155, deriva 8 ms, «un poco más lento pero corre igual» (el ojo
+prefiere VP9; ya era la base por E13). El `1er_ms` alto (7.792 / 2.119) es la
+bajada por red de la pieza entera en la página v0, no el arranque desde
+caché. Resto de la foto (`entera:*`, `dos`, `mse:vp9`, `cache:techo`) coincide
+con H-20/H-21/H-12b ya registradas; `entera:dos` repite `atascos 1, congel 3,
+deriva 408` con `caidos 6/124` — el dato que el ojo del operador desacreditó
+en H-20.
+
+### Propuestas que salen de la foto (no implementadas hasta que el operador diga)
+
+1. **Incentivador armado (H-24):** dejar el `<video>` del efecto **cargado y
+   en pausa en el primer cuadro** desde el arranque (`src` desde la caché +
+   `load()` una vez; al terminar, `currentTime = 0` y queda armado). `4` solo
+   hace `play()` + mostrar. Costo: un decoder VP9 abierto en pausa mientras
+   dura el loop (H-18b ya sostuvo dos planos activos). Se mide con el mismo
+   `arranco`: la hipótesis es bajar de ~650 a ≤ 150 ms.
+2. **Radio con la primera tecla:** si la radio pidió gesto, cualquier tecla
+   reintenta `play()` (el `keydown` es gesto en Chromium). Sin cambio de spec.

@@ -146,8 +146,10 @@ ajustan el presupuesto de residencia (SPEC §5.2); `?base=` como en `v0/`.
 **Lo que hay que traer de la foto** (SPEC-VGEN §12): `1` durante ≥ 10 min y
 `9`; después `5`, esperar que vuelva, `9`; `4`, `9`; y la segunda apertura
 (`leidas N, guardadas 0`) con la red cortada y la página ya abierta.
-**Y la prueba que faltaba (H-23):** `7` dos veces (zócalo `capa num+img`, la
-imagen girando en el medio), `4`, esperar que el incentivador salga solo, `9`:
+**Y la prueba que faltaba (H-23):** ya **dentro del producto**, apretar `7`,
+y otra vez `7` (no es el `77` de v0: son dos pulsaciones de la tecla `7` del
+producto; el zócalo tiene que decir `capa num+img` y la imagen girar en el
+medio), después `4`, esperar que el incentivador salga solo, `9`:
 mirar la línea `capa numeros+imagen … ms med / … max`, la línea `imagen lista
 logo.png 210x150` y los `caidos` del incentivador y del loop. Y el ojo: si la
 imagen gira suave encima de los papelitos con alfa.
