@@ -578,6 +578,7 @@ function tickLoop(now) {
   if (!loop.started) {
     if (ct > 0) {
       loop.started = true;
+      if (loop.error.indexOf("no arranco") === 0) { loop.error = ""; }   /* arranco tarde, pero arranco */
       loop.firstMs = now - loop.t0;
       loop.wall0 = now;
       loop.lastTime = ct;
@@ -868,6 +869,7 @@ function stopAll() {
   if (radio.rampa) { window.clearInterval(radio.rampa); radio.rampa = 0; }
   setCapa("none");
   avisar("todo parado - 1 vuelve a arrancar el loop");
+  escribirPie();
 }
 
 /* --- el zocalo y el reporte --- */

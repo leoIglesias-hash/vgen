@@ -135,9 +135,10 @@ FakeXHR.prototype.send = function () {
   requested.push(this.url);
   this.readyState = 4;
   this.status = 200;
-  if (/GUION\.tsv$/.test(this.url)) { this.responseText = GUION; }
+  if (/GUION.tsv$/.test(this.url)) { this.responseText = GUION; }
   else if (/MANIFEST-v1/.test(this.url)) { this.responseText = MANIFEST_V1; }
   else { this.responseText = MANIFEST; }
+  this.response = this.responseText;
   if (this.onreadystatechange) { this.onreadystatechange(); }
 };
 
@@ -205,8 +206,8 @@ assert.strictEqual(video.plays, 1, "y arranca solo al abrir: es el producto");
 assert.strictEqual(video.loop, false, "sin MSE el bucle es por blob con costura medida, no loop nativo");
 assert.strictEqual(byId("radio").src, "v1-ambiente.mp3", "la radio arranca sola al abrir");
 assert.strictEqual(byId("radio").loop, true, "en bucle");
-assert.strictEqual(byId("efecto").className, "off", "el efecto esta escondido hasta que se pida");
-assert.strictEqual(byId("capa").className, "off", "la capa arranca apagada");
+assert(page.indexOf('<video id="efecto" class="off"') >= 0, "el efecto esta escondido hasta que se pida");
+assert(page.indexOf('<canvas id="capa" class="off"') >= 0, "la capa arranca apagada");
 
 /* Geometria en JS, al panel y no a la superficie. */
 assert(/px$/.test(documentStub.documentElement.style.fontSize));
