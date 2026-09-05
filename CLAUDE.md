@@ -34,11 +34,21 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-> ## ▶ Próxima acción: **H-6** — la matriz por bytes a igual look
+> ## ▶ Próxima acción: **H-7** — la spec, con la foto de v1 pendiente
 >
-> La cola del 2026-09-04 está **terminada** y nada de lo que sigue depende de un
-> aparato hasta el final. Detalle, y lo que se le pidió al operador sin que
-> bloquee nada, en [`RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) §Próxima acción.
+> **H-6 EJECUTADA el 2026-09-05** hasta la pantalla (matriz de 28 variantes +
+> **emisión v1 con audio**, publicada en `v0/`, teclas `72`/`74`/`75`/`76`;
+> [`docs/EMISION-V1.md`](docs/EMISION-V1.md)). Falta la **foto** de la caja y
+> del Smart TV (`76` + `95`) y el ojo del operador sobre `v1-vp9` (crf 38) y
+> `v1-h264` (High con B): las dos están **al borde** de la tolerancia de look
+> a propósito y el escalón anterior ya está medido. Detalle en
+> [`RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) §Próxima acción.
+>
+> **El repo se llama `vgen` desde el 2026-09-05** (`leoIglesias-hash/vgen`;
+> la carpeta local sigue siendo `Escritorio\ASCILINE-hybrid`) y es **público
+> de solo lectura**: las ideas de afuera entran por *issue* y viven en
+> [`PROPUESTAS.md`](PROPUESTAS.md). Nadie de afuera escribe; lo que necesita
+> pantalla lo firma el operador.
 >
 > **🔴 Al leer material escrito la mañana del 2026-09-04:** la regla «el
 > presupuesto de composición es DOS planos, no tres» **fue RETIRADA esa misma
@@ -266,8 +276,9 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
   el formato se diseña contra el piso, no contra el techo.
 
   **Queda UNA SOLA VISITA a la caja** (qué traer: `RUNBOOK-ESTADO.md`): `85` con
-  la red cortada, `83` sola, y `71` como opcional. Después
-  siguen **H-6** (matriz por bytes a igual look),
+  la red cortada, `83` sola, y `71` como opcional. Después de
+  ~~H-6~~ (ejecutada 2026-09-05: matriz + v1 publicada; falta la foto con
+  `76`/`95`) siguen
   **H-7** (spec `SPEC-VGEN.md`, con **H-15** residencia adentro) y **H-8**
   (muxer ES5 + player). Externo: pedir
   a la app que el WebView reporte el panel real (hoy 3840×2160 sobre 1280×720).

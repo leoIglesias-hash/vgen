@@ -18,7 +18,7 @@ abajo a la izquierda lo que se va tecleando (`8_`, `83_`) y ejecuta cuando pasan
 900 ms sin otra tecla, así que **una tecla de una cifra tarda un momento en
 salir**: es normal, está esperando a ver si viene la segunda.
 
-## Lo que se ve en pantalla (14 teclas)
+## Lo que se ve en pantalla (18 teclas)
 
 **Lo que hay que probar**
 
@@ -29,7 +29,11 @@ salir**: es normal, está esperando a ver si viene la segunda.
 | `87` | **dos videos a la vez** (H-18b): el loop VP9 abajo y los **papelitos con alfa encima, exactamente del mismo tamaño**. Si el aparato compone, se ve un solo video con papelitos. La fila trae los cuadros caídos de los dos |
 | `70` | **pantalla entera** (H-20): el video ocupando toda la superficie, en cuatro escalones — solo, con la capa, con el efecto, y todo junto. La nota dice a qué tamaño quedó y si el WebView concedió la pantalla completa de verdad |
 | `71` | **los dos a ojo** (H-21): los mismos dos planos del `87`, pero **a toda la superficie, en bucle y sin un solo corte**, para mirarlos el rato que haga falta. No mide: el zócalo va contando los caídos vivos de los dos. Se sale con `71` otra vez o con `0` |
-| `1` | **lo que falta**: corre solo lo que la caja todavía no consagró — el techo, los dos videos y la pantalla entera |
+| `72` | **v1 con audio** (H-6/S13): `v1-vp9` (VP9 crf 38 + Opus) y `v1-h264` (High con B + AAC), **con sonido** — el video se destapa solo mientras mide. Si el aparato exige un gesto para sonar, la fila dice «no arrancó» y eso también es un dato |
+| `74` | **radio + video** (H-6/S14): el mp3 del máster en un `<audio>` en bucle **y** el VP9 mudo en bucle a la vez. La nota trae «radio arrancó en N ms; deriva radio; **deriva A/V**» |
+| `75` | **MSE vp9** (H-6/S11): los 16 segmentos WebM de `v1-vp9` por `SourceBuffer` |
+| `76` | **lote v1**: las tres de arriba seguidas |
+| `1` | **lo que falta**: corre solo lo que la caja todavía no consagró — el techo, los dos videos, la pantalla entera y, si está publicado, el pack v1 |
 
 **Herramientas**
 

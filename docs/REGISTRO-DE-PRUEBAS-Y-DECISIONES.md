@@ -5437,3 +5437,134 @@ los dos refuerza que el camino D queda afuera por razones que no son de motor.
 `v0-vp9-alpha` **0/156 caídos, deriva 0 ms, arranque 601 ms**, con la nota nueva
 de la pieza. VP9 con alfa reproduce perfecto también en Chrome 142.
 
+
+## 2026-09-05 — H-6: la matriz por bytes a igual look, la emisión v1 con audio, y el espacio de propuestas
+
+**Pedido del operador (textual, tras el compact):** *«quiero que sigas, y al
+terminar hagas publico el repositorio para que alguien mas pueda trabajar con
+nosotros, y haremos un espacio de propuestas asi podemos crear nuevas ideas
+para mejorar el sistema. el objetivo es que mediante ese archivo podamos ver
+ideas y trabajar en conjunto mejorando el proyecto haciendolo bien eficiente.
+el nombre debe cambiar a vgen del repositorio.»* Y después: *«lo que debes
+hacer publico es de solo lectura, por las dudas por que solo necesito ideas de
+la otra parte»*.
+
+### La matriz (`tools/emit_matrix.py`, workflow `matriz-h6`)
+
+Seis ejes en seis jobs paralelos desde el mismo máster (`dcd6afb6…1632a`,
+231 cuadros): referencia (v0 tal cual + defaults de ffmpeg), VP9 crf, VP9
+velocidad, VP9 contenido, H.264 piso relajado, cadencia variable. Cada fila:
+bytes, SSIM/PSNR contra el máster (referencia y4m yuv420p, misma conversión
+que v0), cuadros, segundos de encoder, perfil. «Igual look» de trabajo: SSIM
+All que no baja más de 0,005 respecto de la referencia v0 del códec.
+
+**Tres corridas hasta que la tabla fue confiable**, y vale contarlas:
+
+1. Humo (30 cuadros, run `33935182505`): SSIM salía «-» —ffmpeg imprime
+   `Y:0.98 (19.1)` y el regex no admitía los dB entre paréntesis— y la tabla
+   unificada salía vacía (el job `tabla` no instalaba numpy y el `tee` tapaba
+   el error). Corregido con `pipefail`.
+2. Completa (`33935401278`): tabla entera, pero las tres filas `ref-v0-*`
+   «DISTINTAS» del pack publicado (4,39 M de 4,41 M bytes distintos en VP9).
+   Se supuso que la conversión rgb24 → yuv420p de la referencia corría sin
+   `+bitexact`; se agregó la bandera y se volvió a correr.
+3. Completa (`33936095399`): **la misma tabla byte a byte** —la bandera no
+   era la causa—. Se agregó al job `referencia` un **autocontrol** que emite
+   `v0-vp9` por el camino de `emit_pieces` en el mismo runner y compara:
+   *«emit_pieces en este runner == pack publicado · bitstream VP9 (ivf):
+   IDENTICO · pixeles decodificados (framemd5): IDENTICOS»* (run
+   `33936615188`). **Solo difiere el contenedor WebM en 8 bytes** (segmento
+   `C Q 005` vs `C P 375`: una etiqueta de color que el y4m arrastra). La
+   matriz midió exactamente lo que v0 emite. Para H.264 no se hizo la
+   comparación a nivel bitstream; queda anotado como no verificado.
+
+**Tabla (bytes, % contra la referencia v0 del códec, SSIM All, look):**
+
+| id | bytes | % | SSIM | look |
+|---|---:|---:|---:|:---:|
+| ref-v0-vp9 | 4.411.701 | 100,0 | 0,9793 | = |
+| ref-v0-h264-baseline | 9.553.195 | 100,0 | 0,9872 | = |
+| ref-v0-h264-main | 8.681.169 | 90,9 | 0,9871 | = |
+| ref-defaults-h264 (High, medium, crf 23, GOP 250) | 4.130.335 | 43,2 | 0,9814 | − |
+| vp9-crf26 / 29 / 35 | 6.852.233 / 5.512.801 / 3.541.869 | 155,3 / 125,0 / 80,3 | 0,9838 / 0,9816 / 0,9768 | = |
+| **vp9-crf38** | **2.830.345** | **64,2** | 0,9740 (−0,0053) | − |
+| vp9-crf42 / 46 | 2.119.031 / 1.610.846 | 48,0 / 36,5 | 0,9697 / 0,9646 | − |
+| vp9-cpu0 / 1 / 3 / 4 | 4.343.074 / 4.424.559 / 4.482.839 / 4.539.356 | 98,4 / 100,3 / 101,6 / 102,9 | 0,980 / 0,980 / 0,979 / 0,979 | = |
+| vp9-screen / aq0 / sin-altref | **4.411.701 las tres** | 100,0 | 0,9793 | = (idénticas a la referencia) |
+| vp9-film | 4.491.951 | 101,8 | 0,9785 | = |
+| h264-baseline-crf23 / crf26 | 6.348.025 / 4.337.650 | 66,4 / 45,4 | 0,9824 / 0,9769 | = / − |
+| h264-main-b2 / high-b3 | 7.777.404 / 7.648.888 | 81,4 / 80,1 | 0,9865 / 0,9865 | = |
+| **h264-high-b3-crf23** | **5.064.003** | **53,0** | 0,9819 (−0,0053) | − |
+| h264-main-animation | 8.735.840 | 91,4 | 0,9871 | = |
+| vp9-vfr-exactos / casi | 6.018.589 / 5.976.917 | 136,4 / 135,5 | 0,9798 / 0,9802 | = (230 / 227 cuadros) |
+| h264-baseline-vfr-exactos | 9.560.078 | 100,1 | 0,9872 | = (230 cuadros) |
+
+Tabla completa (SSIM Y, PSNR, s enc, perfil) en `docs/EMISION-V1.md` §1 y en el
+artifact `matriz-h6-tabla`.
+
+**Lo que enseña:** (1) el CRF de VP9 es el único eje que compra bytes de
+verdad, y la curva no tiene codo; (2) `cpu-used` no compra nada (−1,6 % por
+4,6× de tiempo); (3) `tune-content screen`, `aq-mode 0` y «sin alt-ref» dan
+**bytes idénticos** a la referencia —en `good` libvpx ya estaba ahí—; (4) en
+H.264 el **GOP cerrado de 1 s cuesta más que el perfil** (defaults GOP 250 =
+43 %; High+3B GOP 15 = 53 %): esos 10 puntos son el precio de cortar
+segmentos e intercambiar piezas, y se pagan a propósito; (5) **S6 (cadencia
+variable) refutada para este máster**: 1 duplicado exacto en 231, 4 «casi», y
+forzar cuadros clave por tiempo le subió 36 % a VP9. Queda abierta para clips
+con quietud real (P-004).
+
+### La emisión v1 (`tools/emit_v1.py`, workflow `emitir-v1`, run `33936096738`)
+
+Receta `--vp9-crf 38 --h264-profile high --h264-crf 23 --h264-bframes 3
+--h264-refs 4`: las dos variantes **al borde** de la tolerancia (−0,0053), a
+propósito, porque el criterio del operador es «pérdida mínima aceptable si el
+ahorro lo vale» y el escalón anterior ya está medido por si el ojo dice que no.
+Suma la **pista de audio del máster** (mp3 embebido en el `.asclv`):
+
+| pieza | bytes | SHA-256 | qué es |
+|---|---:|---|---|
+| `v1-vp9.webm` | 2.941.449 | `86014f17510521dd30dcb0839993269d8819d5535ca56e12fd6767b9b32785b4` | VP9 crf 38 + Opus 64k (S13); 66,7 % de v0-vp9 **con audio** |
+| `v1-h264.mp4` | 5.254.272 | `7992b0cc75a248b7bb0d35ed6e85eae57e169b99934e9a8bc70a1468562f0731` | High crf 23, 3 B, ref 4 + AAC 96k (S13); 55 % de baseline v0 |
+| `v1-ambiente.mp3` | 183.353 | `c886263508da44378b84bb38c32bec9fb94f4d5cb3a7af89e2ed973880534ea4` | la pista del máster byte a byte, para `<audio>` (S14) |
+| `dash-vp9/` | 2.831.164 | mpd `a61bde6c1a8a63eae59e8279daa22e68cdf038150567eaa672dbd557193d4125` | v1-vp9 segmentado solo video por remux, init + 16 chunks (S11) |
+
+**Dos pasadas byte-idénticas** en la misma máquina para las tres piezas
+(los encoders de audio no tienen `cpu-independent`; entre CPUs distintas
+queda por ver → P-006).
+
+### La página y la publicación
+
+`frontend/v0.html` anexa `MANIFEST-v1.tsv` al manifiesto de v0 (sin duplicar
+ids) y suma **cuatro teclas** (tier «ahora»): `72` v1 con audio (S13, el
+`<video>` se destapa solo durante la medición), `74` radio + video (S14:
+`<audio id="radio">` con el mp3 en bucle + VP9 mudo en bucle; la nota trae
+«radio arrancó en N ms; deriva radio; deriva A/V»), `75` MSE vp9 (S11: los
+16 chunks WebM por `SourceBuffer`) y `76` lote. El `1` las corre solo si v1
+está publicado; el `0` vuelve a tapar el video y calla la radio. 36 códigos,
+18 a la vista. Tests: `tests/test_emit_matrix.py`, `tests/test_emit_v1.py`
+(descubiertos por `unittest`), `tests/test_v0_page.js` ampliado.
+
+**Publicadas 23 keys** bajo `v0/` (22 nuevas + `index.html` de 88.479 B),
+con `x-sha256`, las 23 verificadas por SHA-256 contra el artifact, token
+quemado y `403` comprobado. `v1-ambiente.mp3` sale como
+`application/octet-stream`: el redeploy del Worker con `mp3:'audio/mpeg'`
+**no se ejecutó** (bloqueo de permisos del entorno) y la copia de
+`deploy/asciline-player/worker.js` se dejó igual a lo desplegado; la fila del
+`74` dice si al `<audio>` le importa.
+
+### El espacio de propuestas
+
+`PROPUESTAS.md` en la raíz: plantilla (problema · idea · qué compra · qué
+cuesta · cómo se mide · qué la refutaría), estados (🟡 propuesta → 🔵 en
+estudio → 🟢 adoptada | ⚪ descartada con el porqué) y las primeras siete
+sacadas de lo que el proyecto ya tenía anotado: P-001 tres planos (arbitrar
+en el Smart TV), P-002 `rvfc`, P-003 paletas por región, P-004 cadencia
+variable (descartada para este máster), P-005 audio por MSE, P-006 mp3 tal
+cual en mp4, P-007 la matriz por video. Con la aclaración del operador
+—**público de solo lectura, «solo necesito ideas de la otra parte»**— las
+ideas entran por *issue* (plantilla en `.github/ISSUE_TEMPLATE/propuesta.md`)
+y el archivo lo mantiene el equipo. README suma «Cómo colaborar».
+
+**Pendiente de la caja y del Smart TV:** `76` (o `72`, `74`, `75` sueltas)
+y `95` para la foto; el ojo sobre `v1-vp9` (crf 38) y `v1-h264` (High con B).
+Con esa foto cierra H-6 y sigue **H-7** (la spec, con H-15 adentro).

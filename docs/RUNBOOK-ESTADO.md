@@ -191,20 +191,28 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **H-6**
+> ## ▶ PRÓXIMA ACCIÓN: **H-7** (la spec), con la foto de v1 pendiente
 >
-> La cola del 2026-09-04 está **terminada** y nada de lo que sigue depende de un
-> aparato hasta el final. **H-6 = la matriz por bytes a igual look**, con la
-> fluidez como *gate* (ya está saturada) y no como objetivo: VP9 base, **fps
-> variable por segmento**, zonas estáticas, piso H.264 relajado. De ahí sale la
-> **emisión v1**, que suma la pista de audio del máster y pone a prueba S13
-> (pieza con audio muxeado sin perder fluidez) y S14 (`<audio>` + `<video>` sin
-> deriva). Después: **H-7** (spec `SPEC-VGEN.md`, con **H-15** adentro) y
-> **H-8** (muxer ES5 + player mínimo).
+> **H-6 EJECUTADA el 2026-09-05** hasta la pantalla: matriz de 28 variantes
+> en seis ejes ([`EMISION-V1.md`](EMISION-V1.md) §1), **emisión v1** con la
+> pista de audio del máster (VP9 crf 38 + Opus = 2,94 MB, 66,7 % de v0 con
+> audio adentro; H.264 High+3B crf 23 + AAC = 5,25 MB, 55 %), dos pasadas
+> byte-idénticas, **publicada** en `v0/` (23 keys) y medible con las teclas
+> `72`/`74`/`75`/`76`. Hallazgos: el CRF de VP9 es el único eje que compra
+> bytes; `tune-content`/`aq`/alt-ref no cambian un byte; el GOP de 1 s cuesta
+> más que el perfil en H.264; **S6 (cadencia variable) refutada** para este
+> máster. Las dos variantes están **al borde** de la tolerancia de look a
+> propósito: el ojo del operador decide, y el escalón anterior ya está medido.
 >
-> **Lo que se le pidió al operador y no bloquea a H-6:** en el **Smart TV**,
-> `1` y `95` (arbitra el 11 % con un contador confiable); en la **caja**, `85`
-> con la red cortada y `83` sola.
+> **Lo que falta para cerrar H-6 (foto):** en la **caja**, `76` y `95` (S13,
+> S14, S11) y el ojo sobre `v1-vp9` y `v1-h264`; en el **Smart TV** lo mismo.
+> Siguen en pie los pedidos anteriores: Smart TV `1`+`95` (P-001, el 11 % de
+> los tres planos); caja `85` con la red cortada y `83` sola.
+>
+> **Después: H-7** (spec `SPEC-VGEN.md`, con **H-15** adentro; manifiesto
+> tabulado, piezas, segmentos, audio con sus tres clases) y **H-8** (muxer
+> ES5 + player mínimo). El repo pasa a ser **público de solo lectura** con
+> [`PROPUESTAS.md`](../PROPUESTAS.md) como espacio de ideas (issues).
 
 
 ### Lo que hay que traer de la próxima visita (dos puntos, uno opcional, y el Smart TV)
@@ -402,7 +410,7 @@ cierre— está en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 | H-10 | H | **reproducirlo y que él nos diga** (`frontend/v0.html` + `keypad.js`): cuál arrancó de verdad, cuadros caídos, arranque, deriva, alfa, `blob:`, HLS/DASH, panel real — en la caja **y** 2-3 aparatos más | **en curso — la TV box está medida (2026-09-01)**: reporte transcripto en el REGISTRO, fila en PLAN-DE-MEDICION §5, veredictos en EMISION-V0 §4.b. Faltan el ojo del operador (alfa; VP9 y HLS-TS con contador ciego) y las otras clases, o su decisión manual. **No bloquea** | no |
 | H-13 | H | **por dónde entra el paquete** (`frontend/v0.html` crece, cero emisión nueva): MSE con los segmentos CMAF publicados (S9), `init + segmentos` concatenados en un Blob (S10), intercambio de orden (S12), bucle de 60 s, `changeType`, columna «congelados», «atascos» sin el `waiting` inicial, fila «contador ciego» | **CERRADA 2026-09-01 noche** (`85eebd1`→`b3d5837` código, `0589dc9` docs; publicado en `v0/`; foto de la caja en el REGISTRO «H-13: reporte de la caja»). S9 consagrada, S10 en dos clases (muxer A = `concat()`), S12 por MSE `sequence` sí / por Blob no («se tilda»), bucle por `loop` refutado, cambio a demanda 305 ms a VP9 y 1.468/1.180 a Baseline. Camino del muxer escrito en el plan | no |
 | H-11 | H | **la bifurcación de layout**: canvas de intervención **encima** del `<video>`, con tres cargas, sobre Baseline y VP9, contra la línea de base medida (suposición S5) | **CERRADA 2026-09-04 con la foto de la caja: ENCIMA** (0/155 caídos con canvas a 15 fps vs 1/156 sin, Baseline y VP9; `83` a ojo «se ve bien»; REGISTRO «Visita a la caja 2026-09-04») | no |
-| H-6 | H | **matriz por bytes a igual look, con la fluidez como gate** (reorientada por el reporte): VP9 × fps variable por segmento × H.264 piso relajado × zonas estáticas × paleta 4:2:0; emisión v1 con segmentos (WebM segmentado para VP9 → S11) + fila de referencia con los defaults | pendiente (precondición: H-13, H-11) | sí (variantes) |
+| H-6 | H | **matriz por bytes a igual look, con la fluidez como gate**: 28 variantes × 6 ejes (`tools/emit_matrix.py`, workflow `matriz-h6`, run `33936095399`, autocontrol `33936615188`: bitstream y píxeles idénticos a v0); **emisión v1** con audio (`tools/emit_v1.py`, run `33936096738`, dos pasadas idénticas) publicada en `v0/` (23 keys) y teclas `72`/`74`/`75`/`76` | **ejecutada 2026-09-05** hasta la pantalla; **falta la foto** (`76`+`95` y el ojo sobre v1) | sí (v1) |
 | H-12 | H | **caché**: XHR → `Blob` → IndexedDB → `blob:`, con pineo por contenido, borrado de claves viejas y techo medido | **CERRADA en lo que decide, 2026-09-04**: persiste al cierre de la app (`guardadas 2`), cuota declarada 225 MB, 25 MB entran; la tanda de 50 MB cerró la app (defecto de la prueba → H-12b). Debe la foto tras apagar y prender + `85` | no |
 | H-7 | H | **spec normativa `SPEC-VGEN.md`**: contenedor, manifiesto (texto tabulado, **no JSON**), segmentos, sprites, cues, huecos, perfil → camino de runtime | pendiente (precondición: H-10, H-11, H-6) | define bytes |
 | H-8 | H | **muxer ES5 + player híbrido mínimo** (incluye «cambiar solo la música») | pendiente (precondición: H-7) | no |
@@ -601,3 +609,4 @@ E-21 el SHA de producto se movió **a propósito** (Instancia 024). Regresión v
 | 2026-09-04 (noche) | **«Arranca sin red» se descarta como prueba** (operador: *«no pasa las validaciones intermedias de la app arrancar sin red, así que descartá eso»*), y cortar la red en el medio **no prueba residencia** —lo ya buffereado sigue sonando, como él mismo señaló— | la residencia se prueba por **de dónde salen los bytes**: red cortada con la página **ya abierta** y recién ahí `85`, que lee IndexedDB y reproduce desde `blob:` sin tocar la red. Se agrega el campo **`red`** (`navigator.onLine`) a la cabecera y a las filas `cache:*` para que **la foto lo pruebe sola**. Y el arranque conectado pasa a ser **un dato de diseño** (PLAN §2.9), no un problema a rodear |
 | 2026-09-04 (noche) | **H-22: el mando no entraba en el WebView de un Smart TV con Android**, ni por control remoto ni por un pad USB. Que fallen las dos entradas descarta el control. Se atacaron las dos causas posibles —el dígito llegando por un campo que no mirábamos, y el `<input>` quedándose con el foco, que es el mismo defecto del `<textarea>` de H-20— y **la primera quedó confirmada sin ir al aparato**: el navegador de esta sesión reproduce el síntoma y la línea de diagnóstico nueva lo escribió solo (`keydown kc=0 w=0 cc=0 key=9 code= foco=BODY`) | **cuatro caminos para leer un dígito y se prueban todos**; `keypress` como plan B con guarda; el campo fuera del recorrido del foco. Y lo que sobrevive a la tarea: **una línea que dice qué mandó el aparato**, porque separa dos fallas que se ven iguales —los eventos no llegan (no se arregla desde la página) o llegan por otro campo (sí)— y hasta hoy no se podían distinguir sin viajar |
 | 2026-09-04 (noche) | **H-22 CERRADA en el Smart TV, y aparece un SEGUNDO aparato que sí sabe contar.** Noblex, Android 11, **Chrome 142**: `quality si`, `rvfc si`, cuota **2.637 MB** (12× la caja), `v0-vp9-alpha` **0/156 con deriva 0**. Los números entran y el operador firmó «anda aun mejor asi que pasa perfecto» | **el contador de este aparato es de fiar**, así que es el que puede arbitrar la duda de E15 (los tres planos: 11 % del contador contra «se ven perfecto» del ojo) apretando `70`. `rvfc` abre sincronía de cuadro exacta **como mejora opcional por aparato, nunca requisito**. Y **la caja sigue siendo la clase principal**: el formato se diseña contra el piso, no contra el techo |
+| 2026-09-05 | **H-6 EJECUTADA hasta la pantalla.** Matriz de 28 variantes en seis ejes (`tools/emit_matrix.py`, run `33936095399`), con autocontrol que probó bitstream y píxeles idénticos a v0 (`33936615188`). Emisión **v1** con la pista de audio del máster (`tools/emit_v1.py`, run `33936096738`): VP9 crf 38 + Opus 2.941.449 B, H.264 High+3B crf 23 + AAC 5.254.272 B, radio mp3, `dash-vp9/`; dos pasadas byte-idénticas. Publicadas 23 keys en `v0/`; teclas `72`/`74`/`75`/`76`. **S6 refutada** para este máster. `PROPUESTAS.md` + plantilla de issue; README «Cómo colaborar»; el repo pasa a llamarse **`vgen`** y a ser público de **solo lectura** (aclaración del operador). Falta la foto (`76`+`95`) y el ojo sobre v1. Detalle: REGISTRO 2026-09-05, [`EMISION-V1.md`](EMISION-V1.md) |
