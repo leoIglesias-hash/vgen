@@ -5905,3 +5905,6 @@ cosas en `producto.html` (`0651523`, H-23b), publicadas en `v0/`:
 sigue viendo que traba, el sospechoso pasa a ser el compositor (la capa de
 1280×720 sobre la superficie 4K encima de dos videos), y ahí las salidas son
 las ya anotadas: la imagen como tercer video, o sprites pre-rotados.
+
+**Publicado en `v0/`** (copia de deploy en `cfdbf03`): `producto.html` 51.026 B,
+SHA-256 igual al árbol, token quemado y 403 comprobado.
