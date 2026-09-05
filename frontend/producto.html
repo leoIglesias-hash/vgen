@@ -144,6 +144,7 @@ var radio = { on: false, t0: 0, arrancoMs: -1, error: "", rampa: 0, objetivo: 1,
               pedida: false };
 var capa = { load: "none", paints: 0, n: 0, timer: 0, w: 0, h: 0, k: 1,
              on0: 0, paints0: 0, ultimo: 0, gapMax: 0, tardias: 0, proximo: 0,
+             reloj: "timeout", vsyncs: 0, vsyncs0: 0, cada: 4,
              stat: { rect: { n: 0, ms: 0, max: 0 }, imagen: { n: 0, ms: 0, max: 0 } } };
 /* H-23: la imagen que gira encima (el logo, 210x150 con alfa), pedida una vez */
 var logo = { node: null, estado: "sin pedir", detalle: "", fuente: "-", w: 0, h: 0, ms: 0, t0: 0 };
@@ -201,9 +202,11 @@ function panelScale() {
   return k > 1 ? 1 : k;
 }
 
+/* ?capak=0.5 achica el buffer del canvas (H-23c: medir si lo que cuesta es
+ * subir 1280x720 al compositor 15 veces por segundo). */
 function sizeCapa(cssW, cssH) {
-  var node = byId("capa");
-  capa.k = panelScale();
+  var node = byId("capa"), f = parseFloat(param("capak"));
+  capa.k = panelScale() * ((f > 0 && f <= 1) ? f : 1);
   capa.w = Math.max(1, Math.round(cssW * capa.k));
   capa.h = Math.max(1, Math.round(cssH * capa.k));
   if (node.width !== capa.w) { node.width = capa.w; }
@@ -934,6 +937,41 @@ function contarPintada(load, dt) {
   if (dt > s.max) { s.max = dt; }
 }
 
+/* H-23c: la capa se pinta en el vsync (requestAnimationFrame), una de cada
+ * `cada` senales (4 -> 15 fps en un panel de 60 Hz; ?cada=2 -> 30 fps).
+ * Con setTimeout a 66,7 ms la pintada caia a veces 4 y a veces 5 vsyncs
+ * despues de la anterior, y eso el ojo lo ve como una imagen que "se traba"
+ * aunque la pintada tarde 2 ms. Sin rAF, cae al timer de antes. */
+function capaRaf() {
+  return window.requestAnimationFrame || window.webkitRequestAnimationFrame || null;
+}
+
+function capaCancelRaf() {
+  return window.cancelAnimationFrame || window.webkitCancelAnimationFrame || null;
+}
+
+function capaAgendar() {
+  var raf = capaRaf(), t;
+  if (param("reloj") !== "timeout" && raf) {
+    capa.reloj = "raf";
+    capa.timer = raf(capaFrame);
+    return;
+  }
+  capa.reloj = "timeout";
+  t = ahora();
+  capa.proximo = (capa.proximo || t) + 1000 / CAPA_FPS;
+  if (capa.proximo < t) { capa.proximo = t; }
+  capa.timer = window.setTimeout(capaTick, Math.max(0, Math.round(capa.proximo - ahora())));
+}
+
+function capaFrame() {
+  capa.timer = 0;
+  if (capa.load === "none") { return; }
+  capa.vsyncs++;
+  if ((capa.vsyncs - capa.vsyncs0) % capa.cada !== 0) { capaAgendar(); return; }
+  capaTick();
+}
+
 /* El ritmo real: cada tick mide cuanto tardo en llegar desde el anterior.
  * Un gap > 2 periodos es un tick tardio (el timer se atraso: CPU ocupada). */
 function capaTick() {
@@ -955,21 +993,21 @@ function capaTick() {
     if (capa.load === "imagen") { paintLogo(ctx); }
     contarPintada(capa.load, reloj() - t0);
   }
-  /* El proximo tick se agenda por reloj absoluto (no "periodo despues de
-   * pintar"): asi el costo de la pintada no se suma al periodo y el ritmo
-   * queda en 15/s mientras la CPU llegue. */
-  capa.proximo = (capa.proximo || t) + 1000 / CAPA_FPS;
-  if (capa.proximo < t) { capa.proximo = t; }
-  capa.timer = window.setTimeout(capaTick, Math.max(0, Math.round(capa.proximo - ahora())));
+  capaAgendar();
 }
 
 function setCapa(load) {
-  var node = byId("capa"), ctx;
-  if (capa.timer) { window.clearTimeout(capa.timer); capa.timer = 0; }
+  var node = byId("capa"), ctx, cancel = capaCancelRaf(), cada = parseInt(param("cada"), 10);
+  if (capa.timer) {
+    if (capa.reloj === "raf" && cancel) { cancel(capa.timer); } else { window.clearTimeout(capa.timer); }
+    capa.timer = 0;
+  }
+  capa.cada = (cada > 0) ? cada : 4;
   capa.load = load;
   node.className = load === "none" ? "off" : "";
   if (load === "none") { return; }
   capa.on0 = ahora(); capa.paints0 = capa.paints; capa.ultimo = 0; capa.proximo = 0;
+  capa.vsyncs = 0; capa.vsyncs0 = 0;
   if (load === "imagen") { pedirLogo(); }
   ctx = capaContext();
   if (ctx) { ctx.clearRect(0, 0, capa.w, capa.h); }
@@ -985,9 +1023,10 @@ function capaCorto() {
 }
 
 function capaRitmo() {
-  var seg = (ahora() - capa.on0) / 1000;
+  var seg = (ahora() - capa.on0) / 1000, pide;
   if (capa.load === "none" || seg < 1) { return "-"; }
-  return (Math.round((capa.paints - capa.paints0) / seg * 10) / 10) + "/s (pide " + CAPA_FPS + ")";
+  pide = capa.reloj === "raf" ? ("1 de " + capa.cada + " vsync, vsync " + (Math.round(capa.vsyncs / seg * 10) / 10) + "/s") : (CAPA_FPS + "");
+  return (Math.round((capa.paints - capa.paints0) / seg * 10) / 10) + "/s (pide " + pide + ")";
 }
 
 function pintadaMedia(s) {
@@ -1134,7 +1173,7 @@ function writeReport() {
   lines.push("capa\t" + capaNombre() +
              "\tpintadas " + capa.paints + "\t" + capa.w + "x" + capa.h +
              "\tfuente " + capaFuente.name + (capaFuente.ms ? " (" + capaFuente.ms + " ms)" : "") +
-             "\tritmo " + capaRitmo() + "\tgap max " + capa.gapMax + " ms\ttardias " + capa.tardias +
+             "\treloj " + capa.reloj + "\tritmo " + capaRitmo() + "\tgap max " + capa.gapMax + " ms\ttardias " + capa.tardias +
              "\tnumeros " + pintadaMedia(capa.stat.rect) +
              "\tnumeros+imagen " + pintadaMedia(capa.stat.imagen));
   lines.push("imagen\t" + logo.estado + (logo.detalle ? " (" + logo.detalle + ")" : "") +

@@ -305,6 +305,9 @@ var created = [];
 var imagenes = [];
 function FakeImage() { this.src = ""; this.onload = null; this.onerror = null; imagenes.push(this); }
 windowStub.Image = FakeImage;
+var rafs = [];
+windowStub.requestAnimationFrame = function (fn) { rafs.push(fn); return rafs.length; };
+windowStub.cancelAnimationFrame = function () {};
 windowStub.MediaSource = FakeMediaSource;
 windowStub.URL = { createObjectURL: function (thing) { created.push(thing); return "blob:fake/" + created.length; },
                    revokeObjectURL: function () {} };
@@ -343,5 +346,13 @@ action("7").run();
 assert.strictEqual(byId("capa").className, "off", "el tercer 7 apaga");
 action("7").run(); action("7").run();
 assert.strictEqual(imagenes.length, 1, "y al volver a pedirla no se baja de nuevo");
+
+/* --- H-23c: con requestAnimationFrame la capa se pinta en el vsync, 1 de 4 --- */
+
+assert(rafs.length >= 1, "la capa pidio un frame al vsync");
+var antes = rafs.length;
+rafs[rafs.length - 1](); rafs[rafs.length - 1](); rafs[rafs.length - 1]();
+assert.strictEqual(rafs.length, antes + 3, "cada vsync vuelve a pedir el siguiente");
+assert(/capa\tnumeros\+imagen\t.*\treloj raf\t/.test(reporteTexto()), "y el reporte dice reloj raf");
 
 console.log("producto page tests (H-8a): OK");
