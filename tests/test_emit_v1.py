@@ -35,6 +35,7 @@ class RecipeTest(unittest.TestCase):
         self.assertEqual(h264["args"][h264["args"].index("-profile:v") + 1], "high")
         params = h264["args"][h264["args"].index("-x264-params") + 1]
         self.assertIn("bframes=3", params)
+        self.assertIn("b-adapt=2", params)    # como X264_B3 en la matriz
         self.assertIn("ref=4", params)
         self.assertIn("8x8dct=1", params)
         self.assertIn("cabac=1", params)

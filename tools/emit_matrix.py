@@ -240,10 +240,16 @@ def build_reference_command(ffmpeg, width, height, fps, ref_path):
     """rgb24 crudo por el pipe -> y4m yuv420p, con la MISMA conversion que en
     v0 hacia el propio comando del encoder (`-pix_fmt yuv420p` sobre entrada
     rawvideo rgb24). Es lo que permite que `ref-v0-*` reproduzca los bytes."""
-    return [ffmpeg, "-y", "-nostdin",
-            "-f", "rawvideo", "-pix_fmt", "rgb24",
-            "-s", "%dx%d" % (width, height), "-r", str(fps), "-i", "-",
-            "-pix_fmt", "yuv420p", "-f", "yuv4mpegpipe", ref_path]
+    # `+bitexact` tambien gobierna a swscale: sin la bandera, la conversion
+    # usa atajos SIMD y los planos difieren en el redondeo de los de v0 (que
+    # convertia dentro de un comando con la bandera puesta). Medido en la
+    # primera corrida completa: sin esto, `ref-v0-*` salio DISTINTA en casi
+    # todos sus bytes.
+    return ([ffmpeg, "-y", "-nostdin",
+             "-f", "rawvideo", "-pix_fmt", "rgb24",
+             "-s", "%dx%d" % (width, height), "-r", str(fps), "-i", "-"]
+            + list(BITEXACT)
+            + ["-pix_fmt", "yuv420p", "-f", "yuv4mpegpipe", ref_path])
 
 
 def build_command(ffmpeg, variant, ref_path, out_path):

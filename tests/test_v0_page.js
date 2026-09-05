@@ -61,8 +61,13 @@ assert(/if \(row\.started\) \{ row\.stalls\+\+; \}/.test(inline[1]),
  * encima de las mediciones siguientes las ensuciaria. */
 assert.strictEqual((inline[1].match(/video\.pause\(\)/g) || []).length, 1,
   "no se pausa al terminar una medicion: la unica pausa del video es la del 0");
-assert.strictEqual((inline[1].match(/\.pause\(\)/g) || []).length, 2,
-  "y la unica otra pausa es la del efecto de H-18, cuando su prueba termina");
+/* H-6 suma la radio (<audio>), que se calla en dos lugares y por la misma
+ * razon que el efecto: con el 0, y al terminar SU prueba, porque un mp3 en
+ * bucle sonando debajo de las mediciones siguientes las ensuciaria. */
+assert.strictEqual((inline[1].match(/\.pause\(\)/g) || []).length, 4,
+  "las otras pausas son la del efecto de H-18 y las dos de la radio de H-6");
+assert.strictEqual((inline[1].match(/radio\.pause\(\)|byId\("radio"\)\.pause\(\)/g) || []).length, 2,
+  "la radio se calla con el 0 y al terminar su propia prueba, nada mas");
 assert(/node\.pause\(\);\n  node\.className = "off";/.test(inline[1]),
   "esa pausa es la del efecto: se corta y se esconde en el mismo lugar");
 assert(inline[1].indexOf('"ciego"') >= 0,

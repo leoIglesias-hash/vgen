@@ -122,6 +122,10 @@ class BuildCommandTest(unittest.TestCase):
         self.assertEqual(command[-4], "yuv420p")
         self.assertEqual(command[-2], "yuv4mpegpipe")
         self.assertEqual(command[-1], "ref.y4m")
+        # Sin +bitexact la conversion rgb24 -> yuv420p usa atajos SIMD y los
+        # planos no son los de v0 (la primera corrida completa lo demostro).
+        self.assertIn("+bitexact", command)
+        self.assertLess(command.index("-i"), command.index("+bitexact"))
 
     def test_las_metricas_re_expanden_a_15_fps_y_miden_ssim_y_psnr(self):
         command = emit_matrix.build_metrics_command("ffmpeg", "out.webm", "ref.y4m")

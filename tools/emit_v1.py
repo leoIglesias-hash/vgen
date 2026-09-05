@@ -71,7 +71,11 @@ def x264_params(profile, bframes, refs):
     la matriz puede haber relajado: cuadros B y referencias."""
     params = ("bframes=%d:ref=%d:keyint=%d:min-keyint=%d:scenecut=0"
               ":threads=1:cpu-independent=1" % (bframes, refs, GOP, GOP))
-    if bframes > 0:
+    # Mismo b-adapt que la fila de la matriz que se reproduce (X264_B2 usa 1,
+    # X264_B3 usa 2): asi el video de v1 es el que la tabla midio.
+    if bframes >= 3:
+        params += ":b-adapt=2"
+    elif bframes > 0:
         params += ":b-adapt=1"
     if profile != "baseline":
         params += ":cabac=1"
