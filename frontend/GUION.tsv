@@ -1,0 +1,11 @@
+# guion del producto - prototipo H-8a (2026-09-05) - docs/SPEC-VGEN.md seccion 4
+# Una fila por papel. `loop` puede repetirse: el aparato toma el PRIMERO que su
+# <video> declare reproducible (canPlayType), y solo ese queda residente.
+# `segmentos` es la representacion segmentada de esa misma pieza (para el bucle
+# por MSE) y `mse` el MIME que se le da al SourceBuffer; `chunks` cuantos hay.
+# rol	id	residente	prioridad	segmentos	chunks	mse	nota
+loop	v1-vp9	si	2	v1-dash-vp9	16	video/webm; codecs="vp9"	VP9 crf 38 + Opus (H-6); el bucle por MSE usa dash-vp9/; suena mudo, la radio va aparte
+loop	v0-h264-baseline	si	3	v0-dash	16	video/mp4; codecs="avc1.42C01F"	piso H.264 para aparatos sin VP9; el bucle por MSE usa dash/
+incentivador	v0-vp9-alpha	si	1	-	-	-	los papelitos con alfa encima del loop; entra y sale a demanda (H-18b)
+publicidad	v1-h264	si	4	-	-	-	reemplaza al loop y vuelve; suena con su AAC mientras la radio baja (S13)
+radio	v1-ambiente	si	5	-	-	-	el mp3 del master en un <audio> aparte, en bucle (S14)

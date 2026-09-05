@@ -317,4 +317,116 @@ var hooks = { host: host, XHR: FakeXHR };
   assert.strictEqual(got, -1, "sin setTimeout avisa -1 en el acto");
 }());
 
+/* --- camino B en bucle: ring() (H-8a) --- */
+
+/* Un buffer falso con `buffered`, que es lo que el anillo mira para decidir si
+ * anexa o espera. Se hereda del FakeSourceBuffer de arriba. */
+function RingBuffer(mime) {
+  FakeSourceBuffer.call(this, mime);
+  this.ahead = 0;        /* segundos bufereados por delante, fijados a mano */
+  this.start0 = 0;
+  this.removed = [];
+  var self = this;
+  this.buffered = {
+    length: 1,
+    start: function () { return self.start0; },
+    end: function () { return self.video.currentTime + self.ahead; }
+  };
+}
+RingBuffer.prototype = FakeSourceBuffer.prototype;
+RingBuffer.prototype.remove = function (from, to) {
+  if (this.updating) { throw new Error("InvalidStateError: remove mientras updating"); }
+  this.removed.push([from, to]);
+  this.updating = true;
+  this.start0 = to;
+};
+
+function RingMediaSource() { FakeMediaSource.call(this); }
+RingMediaSource.prototype = FakeMediaSource.prototype;
+RingMediaSource.prototype.addSourceBuffer = function (mime) {
+  var sb = new RingBuffer(mime);
+  sb.video = this.video;
+  this.buffers.push(sb);
+  return sb;
+};
+
+(function testRingLoopsTheSegmentsInSequenceMode() {
+  var clock = fakeClock();
+  var video = fakeVideo();
+  var served = [], laps = [], errors = [];
+  var ringHost = { MediaSource: RingMediaSource, URL: fakeURL,
+                   setTimeout: clock.host.setTimeout, clearTimeout: clock.host.clearTimeout };
+  var handle, ms, sb;
+  RingMediaSource.prototype.video = video;
+  function provider(index, cb) { served.push(index); cb(null, "S" + index); }
+  handle = Feed.ring(video, 'video/webm; codecs="vp9"', 3, provider, {
+    host: ringHost, ahead: 4, keep: 6, step: 250,
+    onLap: function (n) { laps.push(n); },
+    onError: function (why) { errors.push(why); }
+  });
+  assert(handle, "con MSE devuelve un mango");
+  ms = handle.mediaSource;
+  assert.strictEqual(video.src, handle.url, "el MediaSource cuelga del <video>");
+  assert.strictEqual(video.plays, 1);
+  assert.deepStrictEqual(served, [], "nada se pide antes de sourceopen");
+  ms.video = video;
+  ms.open();
+  sb = ms.buffers[0];
+  assert.strictEqual(sb.mode, "sequence", "el anillo es MSE en modo sequence (S12)");
+  assert.deepStrictEqual(served, [0], "primero el init, y solo el init");
+  assert.deepStrictEqual(sb.appended, ["S0"]);
+  sb.digest();
+  assert.deepStrictEqual(served, [0, 1], "recien digerido el init se pide el segmento 1");
+  sb.digest();
+  sb.digest();
+  assert.deepStrictEqual(served, [0, 1, 2, 3], "1, 2 y 3 seguidos mientras no hay nada por delante");
+  assert.deepStrictEqual(laps, [1], "al pedir el ultimo se cuenta la vuelta");
+  sb.digest();
+  assert.deepStrictEqual(served, [0, 1, 2, 3, 1], "despues del 3 viene el 1 otra vez: es un anillo, no una lista");
+  /* Con 5 s por delante, espera en vez de anexar. */
+  sb.ahead = 5;
+  sb.digest();
+  assert.deepStrictEqual(served, [0, 1, 2, 3, 1], "con buffer por delante no pide nada");
+  clock.run(300);
+  assert.deepStrictEqual(served, [0, 1, 2, 3, 1], "y sigue esperando mientras sobre");
+  sb.ahead = 1;
+  clock.run(600);
+  assert.deepStrictEqual(served, [0, 1, 2, 3, 1, 2], "cuando baja de `ahead`, pide el siguiente");
+  assert.deepStrictEqual(errors, []);
+  assert.strictEqual(handle.laps(), 1);
+  /* Lo ya visto se suelta: currentTime muy por delante del comienzo del buffer. */
+  video.currentTime = 30;
+  sb.ahead = 9;
+  sb.digest();
+  assert.deepStrictEqual(sb.removed, [[0, 24]], "borra lo anterior a currentTime - keep, de a pedazos grandes");
+  sb.digest();          /* el remove termina y dispara updateend */
+  assert.deepStrictEqual(served, [0, 1, 2, 3, 1, 2], "el remove no hace anexar de mas");
+  handle.abort();
+  clock.run(2000);
+  assert.deepStrictEqual(served, [0, 1, 2, 3, 1, 2], "abortado, no pide nada mas");
+  assert(revoked.indexOf(handle.url) >= 0, "y libera la URL del MediaSource");
+}());
+
+(function testRingReportsProviderAndAppendErrors() {
+  var clock = fakeClock();
+  var video = fakeVideo();
+  var errors = [];
+  var ringHost = { MediaSource: RingMediaSource, URL: fakeURL,
+                   setTimeout: clock.host.setTimeout, clearTimeout: clock.host.clearTimeout };
+  var handle;
+  RingMediaSource.prototype.video = video;
+  handle = Feed.ring(video, "video/webm", 2, function (index, cb) {
+    if (index === 1) { cb("HTTP 404 chunk-00001", null); return; }
+    cb(null, "S" + index);
+  }, { host: ringHost, onError: function (why) { errors.push(why); } });
+  handle.mediaSource.open();
+  handle.mediaSource.buffers[0].digest();
+  assert.deepStrictEqual(errors, ["HTTP 404 chunk-00001"], "un segmento que falta corta el anillo y lo dice");
+  assert.strictEqual(Feed.ring(video, "video/webm", 2, function () {}, { host: {} }), null,
+    "sin MediaSource devuelve null: el que llama cae al bucle por blob");
+  assert.strictEqual(Feed.ring(video, "video/webm", 0, function () {}, { host: ringHost }), null,
+    "sin segmentos no hay anillo");
+}());
+
+
 console.log("vgenfeed tests: OK");

@@ -17,6 +17,9 @@
  *   noise(mb)                  bytes pseudoaleatorios para la prueba de techo
  *                              (hasta TANDA_MB de una vez, ni un byte mas)
  *   quota(hooks, cb)           lo que el aparato dice tener (API con callback)
+ *   budget / plan / ensure     H-15 (H-8a): presupuesto por navegador, que se
+ *                              guarda por prioridad, y bajar-o-leer cada pieza
+ *   join / part                un solo ArrayBuffer con rangos [offset, largo]
  *
  * Se guardan ArrayBuffers, no Blobs: el clon estructurado de un ArrayBuffer lo
  * soporta todo IndexedDB que exista, el de un Blob recien desde Chrome 37. El
@@ -278,6 +281,173 @@ var VGenCache = (function () {
     }
   }
 
+  /* --- H-15: residencia (H-8a, 2026-09-05) --- */
+
+  /* Presupuesto fijo por navegador: min(tope absoluto, fraccion de la cuota
+   * declarada). Los valores manuales del operador (hooks.tope, hooks.fraccion)
+   * prevalecen sobre los defaults. La cuota declarada NO es un gate (la caja
+   * dice 13/225 MB y despues 43/225 con la base vacia): por eso hay tope
+   * absoluto, y si el aparato no declara cuota, el tope manda solo. */
+  var TOPE_BYTES = 150 * 1048576;
+  var FRACCION = 0.5;
+
+  function budget(quotaBytes, hooks) {
+    var tope = (hooks && hooks.tope > 0) ? hooks.tope : TOPE_BYTES;
+    var fraccion = (hooks && hooks.fraccion > 0) ? hooks.fraccion : FRACCION;
+    var porCuota;
+    if (!(quotaBytes > 0)) { return tope; }
+    porCuota = Math.floor(quotaBytes * fraccion);
+    return porCuota < tope ? porCuota : tope;
+  }
+
+  /* Que se guarda y que va por red. `pieces` trae {id, residente ("si"|"no"),
+   * prioridad (entero, menor = antes), bytes}. Se ordena por prioridad -orden
+   * de llegada a igual prioridad- y se toma mientras entre en el presupuesto;
+   * lo que no entra se marca "por red". Nunca se pasa por alto una pieza chica
+   * porque una grande no entro antes: el orden lo fijo el operador a mano y se
+   * respeta, asi que lo que sigue a la primera que no entra tampoco entra. */
+  function plan(pieces, budgetBytes) {
+    var orden = [], keep = [], porRed = [], suma = 0, i, p, lleno = false;
+    for (i = 0; i < pieces.length; i++) {
+      p = pieces[i];
+      if (String(p.residente) !== "si") { porRed.push(p); continue; }
+      orden.push({ p: p, n: i });
+    }
+    orden.sort(function (a, b) {
+      var pa = parseInt(a.p.prioridad, 10), pb = parseInt(b.p.prioridad, 10);
+      if (isNaN(pa)) { pa = 1e9; }
+      if (isNaN(pb)) { pb = 1e9; }
+      if (pa !== pb) { return pa - pb; }
+      return a.n - b.n;
+    });
+    for (i = 0; i < orden.length; i++) {
+      p = orden[i].p;
+      if (!lleno && suma + (parseInt(p.bytes, 10) || 0) <= budgetBytes) {
+        suma += parseInt(p.bytes, 10) || 0;
+        keep.push(p);
+      } else {
+        lleno = true;
+        porRed.push(p);
+      }
+    }
+    return { keep: keep, porRed: porRed, bytes: suma };
+  }
+
+  /* Junta varios ArrayBuffers en uno, con la tabla de rangos [offset, largo]
+   * de cada parte. Es el "archivo unico con segmentos direccionados por rango"
+   * del formato: los mismos bytes sirven enteros (Blob, camino A) o de a
+   * pedazos (anillo MSE, camino B), sin copiar nada mas al reproducir. */
+  function join(parts) {
+    var total = 0, i, out, offset = 0, rangos = [];
+    for (i = 0; i < parts.length; i++) { total += parts[i].byteLength; }
+    out = new Uint8Array(total);
+    for (i = 0; i < parts.length; i++) {
+      out.set(new Uint8Array(parts[i]), offset);
+      rangos.push([offset, parts[i].byteLength]);
+      offset += parts[i].byteLength;
+    }
+    return { data: out.buffer, rangos: rangos };
+  }
+
+  /* Una vista sobre el rango `index` de un registro guardado con rangos. Sin
+   * rangos, la vista es el registro entero. Devuelve un Uint8Array (lo que
+   * appendBuffer acepta) sin copiar. */
+  function part(record, index) {
+    var r;
+    if (!record || !record.data) { return null; }
+    if (!record.rangos || !record.rangos.length) {
+      return new Uint8Array(record.data);
+    }
+    r = record.rangos[index];
+    if (!r) { return null; }
+    return new Uint8Array(record.data, r[0], r[1]);
+  }
+
+  /* Asegura que cada pieza de `list` este en la base; lo que falta se baja
+   * (todas sus partes, en orden) y se guarda. Secuencial: un WebView viejo no
+   * gana nada con 17 conexiones y asi el progreso es legible.
+   *
+   * list[i]: { key, id, sha, mime, urls: [..], bytes }
+   * hooks:   onPiece(id, origen "cache"|"red"|"error", ms, bytes, detalle),
+   *          onProgress(id, loaded, total) durante la bajada, + los de download
+   * cb(summary): { hits, downloaded, failed: [ids], bytes, ms } */
+  function ensure(db, list, hooks, cb) {
+    var now = nowOf(hooks);
+    var t0 = now();
+    var summary = { hits: 0, downloaded: 0, failed: [], bytes: 0, ms: 0 };
+    var events = hooks || {};
+
+    function tell(id, origen, ms, bytes, detalle) {
+      if (events.onPiece) { events.onPiece(id, origen, ms, bytes, detalle || ""); }
+    }
+
+    function fetchAll(item, cb2) {
+      var parts = [], i = 0, tStart = now();
+      function nextPart() {
+        if (i >= item.urls.length) { cb2(null, parts, now() - tStart); return; }
+        download(item.urls[i], {
+          XHR: events.XHR, now: events.now,
+          onProgress: function (loaded, total) {
+            if (events.onProgress) { events.onProgress(item.id, loaded, total, i, item.urls.length); }
+          }
+        }, function (error, bytes) {
+          if (error) { cb2(error, parts, now() - tStart); return; }
+          parts.push(bytes);
+          i++;
+          nextPart();
+        });
+      }
+      nextPart();
+    }
+
+    function one(index) {
+      var item, tGet;
+      if (index >= list.length) {
+        summary.ms = now() - t0;
+        cb(summary);
+        return;
+      }
+      item = list[index];
+      tGet = now();
+      get(db, item.key, function (error, record) {
+        if (!error && record && record.data) {
+          summary.hits++;
+          summary.bytes += record.bytes || 0;
+          tell(item.id, "cache", now() - tGet, record.bytes || 0);
+          one(index + 1);
+          return;
+        }
+        fetchAll(item, function (error2, parts, ms) {
+          var joined, record2;
+          if (error2) {
+            summary.failed.push(item.id);
+            tell(item.id, "error", ms, 0, error2);
+            one(index + 1);
+            return;
+          }
+          joined = join(parts);
+          record2 = { key: item.key, id: item.id, sha: item.sha, mime: item.mime,
+                      bytes: joined.data.byteLength, data: joined.data,
+                      rangos: joined.rangos, at: now() };
+          put(db, record2, function (error3) {
+            if (error3) {
+              /* No entro (cuota o lo que sea): se dice, y la pieza va por red. */
+              summary.failed.push(item.id);
+              tell(item.id, "error", ms, joined.data.byteLength, "guardar: " + error3);
+            } else {
+              summary.downloaded++;
+              summary.bytes += joined.data.byteLength;
+              tell(item.id, "red", ms, joined.data.byteLength);
+            }
+            one(index + 1);
+          });
+        });
+      });
+    }
+    if (!db) { cb(summary); return; }
+    one(0);
+  }
+
   return {
     DB_NAME: DB_NAME,
     STORE: STORE,
@@ -293,7 +463,14 @@ var VGenCache = (function () {
     keyFor: keyFor,
     TANDA_MB: TANDA_MB,
     noise: noise,
-    quota: quota
+    quota: quota,
+    TOPE_BYTES: TOPE_BYTES,
+    FRACCION: FRACCION,
+    budget: budget,
+    plan: plan,
+    join: join,
+    part: part,
+    ensure: ensure
   };
 })();
 

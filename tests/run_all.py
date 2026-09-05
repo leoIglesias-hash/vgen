@@ -33,6 +33,7 @@ JS_SUITES = (
     "test_player_page.js",
     "test_live_player_page.js",
     "test_v0_page.js",
+    "test_producto_page.js",
     "test_vgenfeed.js",
     "test_vgencache.js",
     "test_ir_page.js",

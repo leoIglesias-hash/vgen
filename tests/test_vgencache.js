@@ -346,4 +346,149 @@ function buffer(n) { return { byteLength: n, tag: "buf" + n }; }
     "queryUsageAndQuota es la unica API de cuota con callback: la moderna es Promise");
 }());
 
+
+/* --- H-15: presupuesto, plan, rangos y ensure (H-8a) --- */
+
+(function testBudgetIsMinOfCapAndFractionWithManualOverrides() {
+  var MB = 1048576;
+  assert.strictEqual(Cache.budget(0), Cache.TOPE_BYTES,
+    "sin cuota declarada manda el tope absoluto");
+  assert.strictEqual(Cache.budget(225 * MB), Math.floor(225 * MB * 0.5),
+    "la caja declara 225 MB: la mitad, 112,5 MB, que es menos que el tope");
+  assert.strictEqual(Cache.budget(2637 * MB), Cache.TOPE_BYTES,
+    "el Smart TV declara 2.637 MB: manda el tope, no la mitad");
+  assert.strictEqual(Cache.budget(225 * MB, { tope: 40 * MB }), 40 * MB,
+    "el tope manual del operador prevalece");
+  assert.strictEqual(Cache.budget(225 * MB, { fraccion: 0.1 }), Math.floor(22.5 * MB),
+    "y la fraccion manual tambien");
+}());
+
+(function testPlanKeepsByPriorityAndStopsAtTheFirstThatDoesNotFit() {
+  var pieces = [
+    { id: "loop", residente: "si", prioridad: "2", bytes: "5" },
+    { id: "stream", residente: "no", prioridad: "1", bytes: "1" },
+    { id: "ruleta", residente: "si", prioridad: "1", bytes: "3" },
+    { id: "pub", residente: "si", prioridad: "4", bytes: "6" },
+    { id: "radio", residente: "si", prioridad: "5", bytes: "1" }
+  ];
+  var p = Cache.plan(pieces, 9);
+  assert.deepStrictEqual(p.keep.map(function (x) { return x.id; }), ["ruleta", "loop"],
+    "por prioridad: el incentivador antes que el loop, y la publicidad no entra");
+  assert.deepStrictEqual(p.porRed.map(function (x) { return x.id; }), ["stream", "pub", "radio"],
+    "lo no residente y lo que no entro van por red; la radio chica NO se cuela: el orden es del operador");
+  assert.strictEqual(p.bytes, 8);
+  p = Cache.plan(pieces, 100);
+  assert.strictEqual(p.keep.length, 4, "con presupuesto entra todo lo residente");
+  assert.deepStrictEqual(p.porRed.map(function (x) { return x.id; }), ["stream"]);
+  p = Cache.plan([{ id: "a", residente: "si", prioridad: "x", bytes: "1" },
+                  { id: "b", residente: "si", prioridad: "3", bytes: "1" }], 10);
+  assert.deepStrictEqual(p.keep.map(function (x) { return x.id; }), ["b", "a"],
+    "una prioridad ilegible va al final, no rompe el plan");
+}());
+
+(function testJoinAndPartAddressSegmentsByRange() {
+  var a = new Uint8Array([1, 2, 3]).buffer;
+  var b = new Uint8Array([4]).buffer;
+  var c = new Uint8Array([5, 6]).buffer;
+  var joined = Cache.join([a, b, c]);
+  var record = { data: joined.data, rangos: joined.rangos };
+  var v;
+  assert.strictEqual(joined.data.byteLength, 6, "un solo ArrayBuffer con todo");
+  assert.deepStrictEqual(joined.rangos, [[0, 3], [3, 1], [4, 2]], "y la tabla de rangos");
+  v = Cache.part(record, 1);
+  assert.strictEqual(v.length, 1);
+  assert.strictEqual(v[0], 4, "la parte 1 es el segmento 1, sin copiar");
+  assert.strictEqual(v.buffer, joined.data, "es una vista sobre el mismo buffer");
+  v = Cache.part(record, 2);
+  assert.deepStrictEqual([v[0], v[1]], [5, 6]);
+  assert.strictEqual(Cache.part(record, 3), null, "fuera de rango: null");
+  v = Cache.part({ data: a }, 0);
+  assert.strictEqual(v.length, 3, "sin rangos, la vista es el registro entero (los guardados por v0)");
+  assert.strictEqual(Cache.part(null, 0), null);
+}());
+
+/* Un XHR que devuelve ArrayBuffers de verdad, para que join() los pueda pegar. */
+var ensureFiles = {};
+var ensureFetched = [];
+function EnsureXHR() { this.readyState = 0; this.status = 0; this.response = null; }
+EnsureXHR.prototype.open = function (method, url) { this.url = url; };
+EnsureXHR.prototype.send = function () {
+  ensureFetched.push(this.url);
+  this.readyState = 4;
+  if (ensureFiles[this.url] === undefined) {
+    this.status = 404; this.response = null;
+  } else {
+    this.status = 200; this.response = new Uint8Array(ensureFiles[this.url]).buffer;
+  }
+  if (this.onreadystatechange) { this.onreadystatechange(); }
+};
+
+(function testEnsureReadsWhatIsThereAndDownloadsTheRest() {
+  var idb = fakeIdb();
+  var db = null, told = [], summary = null, t = 100, got = null;
+  ensureFiles["init.webm"] = [9, 9];
+  ensureFiles["c1.webm"] = [1];
+  ensureFiles["c2.webm"] = [2, 2];
+  ensureFiles["loop.webm"] = [7, 7, 7];
+  Cache.open({ idb: idb }, function (e, d) { db = d; });
+  flush();
+  /* El loop ya esta guardado (lo dejo la pagina de pruebas con el 84). */
+  Cache.put(db, { key: "loop.aaaa", id: "loop", sha: "aaaa", mime: "video/webm",
+                  bytes: 3, data: new Uint8Array([7, 7, 7]).buffer, at: 1 }, function () {});
+  flush();
+  Cache.ensure(db, [
+    { id: "loop", key: "loop.aaaa", sha: "aaaa", mime: "video/webm", urls: ["loop.webm"], bytes: 3 },
+    { id: "segs", key: "segs.bbbb", sha: "bbbb", mime: "video/webm",
+      urls: ["init.webm", "c1.webm", "c2.webm"], bytes: 5 },
+    { id: "rota", key: "rota.cccc", sha: "cccc", mime: "video/mp4", urls: ["no-esta.mp4"], bytes: 1 }
+  ], { XHR: EnsureXHR, now: function () { return t; },
+       onPiece: function (id, origen, ms, bytes, detalle) { told.push(id + ":" + origen + ":" + bytes + (detalle ? ":" + detalle : "")); } },
+    function (s) { summary = s; });
+  flush();
+  assert(summary, "termina");
+  assert.deepStrictEqual(told, ["loop:cache:3", "segs:red:5", "rota:error:0:HTTP 404 no-esta.mp4"],
+    "cada pieza dice de donde salio: la guardada no toca la red, la nueva se baja, la rota se declara");
+  assert.deepStrictEqual(ensureFetched, ["init.webm", "c1.webm", "c2.webm", "no-esta.mp4"],
+    "las partes se bajan en orden y una a la vez; loop.webm no se pide");
+  assert.deepStrictEqual([summary.hits, summary.downloaded, summary.failed, summary.bytes],
+    [1, 1, ["rota"], 8]);
+  Cache.get(db, "segs.bbbb", function (e, r) { got = r; });
+  flush();
+  assert.deepStrictEqual(got.rangos, [[0, 2], [2, 1], [3, 2]],
+    "la representacion segmentada se guarda como UN registro con rangos");
+  assert.strictEqual(got.bytes, 5);
+  assert.deepStrictEqual(Array.prototype.slice.call(Cache.part(got, 2)), [2, 2],
+    "y el rango 2 devuelve el segmento 2");
+  /* Segunda pasada: todo desde la base, cero red. */
+  told = []; ensureFetched = [];
+  Cache.ensure(db, [
+    { id: "loop", key: "loop.aaaa", sha: "aaaa", mime: "video/webm", urls: ["loop.webm"], bytes: 3 },
+    { id: "segs", key: "segs.bbbb", sha: "bbbb", mime: "video/webm",
+      urls: ["init.webm", "c1.webm", "c2.webm"], bytes: 5 }
+  ], { XHR: EnsureXHR, now: function () { return t; },
+       onPiece: function (id, origen) { told.push(id + ":" + origen); } },
+    function (s) { summary = s; });
+  flush();
+  assert.deepStrictEqual(told, ["loop:cache", "segs:cache"], "la segunda vez nada sale de la red");
+  assert.deepStrictEqual(ensureFetched, [], "ni un pedido");
+  Cache.ensure(null, [{ id: "x", key: "x", urls: ["x"] }], {}, function (s) { summary = s; });
+  assert.deepStrictEqual([summary.hits, summary.downloaded], [0, 0], "sin base, termina en el acto");
+}());
+
+(function testEnsureReportsAWriteThatDoesNotFit() {
+  var idb = fakeIdb({ limit: 2 });
+  var db = null, told = [], summary = null;
+  ensureFiles["grande.webm"] = [1, 2, 3, 4];
+  Cache.open({ idb: idb }, function (e, d) { db = d; });
+  flush();
+  Cache.ensure(db, [{ id: "grande", key: "grande.dddd", sha: "dddd", mime: "video/webm",
+                      urls: ["grande.webm"], bytes: 4 }],
+    { XHR: EnsureXHR, onPiece: function (id, origen, ms, bytes, detalle) { told.push(origen + ":" + detalle); } },
+    function (s) { summary = s; });
+  flush();
+  assert.deepStrictEqual(told, ["error:guardar: QuotaExceededError"],
+    "lo que no entra en la base se dice con el nombre del error, y la pieza va por red");
+  assert.deepStrictEqual(summary.failed, ["grande"]);
+}());
+
 console.log("vgencache tests: OK");

@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vgen - producto</title>
+<style>
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  html { background: #000; color: #e8e8ee; font-family: monospace; }
+  #video { position: absolute; background: #000; }
+  /* H-18b: el efecto va EXACTAMENTE sobre el loop, del mismo tamano. */
+  #efecto { position: absolute; background: transparent; }
+  #efecto.off { display: none; }
+  #capa { position: absolute; }
+  #capa.off { display: none; }
+  /* El zocalo es una sola linea quieta, abajo: en la TV es lo unico que
+   * recuerda como se sale y como se pide el reporte. Se escribe a 1 Hz. */
+  #pie { position: absolute; left: 0; right: 0; bottom: 0; padding: 0.15em 0.5em;
+         font-size: 0.55em; color: #cdd3e6; background: rgba(5,6,10,0.72);
+         white-space: nowrap; overflow: hidden; }
+  #buffer { position: absolute; right: 0.5em; top: 0.3em; font-size: 1.3em;
+            color: #ffd479; letter-spacing: 0.08em; }
+  #aviso { position: absolute; left: 0.5em; top: 0.3em; font-size: 0.7em;
+           color: #ffd479; background: rgba(5,6,10,0.72); padding: 0.1em 0.3em;
+           max-width: 60%; white-space: nowrap; overflow: hidden; }
+  #aviso.off { display: none; }
+  #leyenda { position: absolute; left: 0; top: 0; bottom: 0; padding: 0.5em 0.7em;
+             background: rgba(5,6,10,0.88); font-size: 0.66em; display: none;
+             overflow: hidden; }
+  #leyenda.on { display: block; }
+  #leyenda .op { display: block; margin: 0.18em 0; white-space: nowrap;
+                 cursor: pointer; line-height: 1.3; }
+  #leyenda .n { display: inline-block; min-width: 1.7em; text-align: center;
+                background: #ffd479; border: 1px solid #ffd479; color: #101014;
+                margin-right: 0.4em; }
+  #leyenda .d { color: #9aa0b4; font-size: 0.85em; }
+  #leyenda .t { color: #9aa0b4; font-size: 0.8em; margin: 0 0 0.4em 0; }
+  @font-face { font-family: "Hobo"; src: url("HoboStd.ttf") format("opentype");
+               font-weight: normal; font-style: normal; }
+  #hobo { position: absolute; left: -9999px; top: 0; font-family: "Hobo";
+          font-size: 40px; }
+  /* El reporte a pantalla completa en DOS columnas (H-20): en una TV la unica
+   * salida es la foto, y lo que no entra no existe. Se abre y cierra con el 9. */
+  #full { position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+          background: #05060a; display: none; }
+  #full.on { display: block; }
+  #reportHead { position: absolute; left: 0.4em; top: 0.15em; font-size: 0.55em;
+                color: #8d93a8; }
+  #reportCols { position: absolute; left: 0.3em; right: 0.3em; top: 1.4em;
+                bottom: 0.2em; }
+  #reportCols pre { position: absolute; top: 0; bottom: 0; width: 49.4%; margin: 0;
+                    font-family: monospace; line-height: 1.22; color: #cdd3e6;
+                    white-space: pre-wrap; word-break: break-all; overflow: hidden;
+                    tab-size: 4; -moz-tab-size: 4; }
+  #colA { left: 0; }
+  #colB { right: 0; }
+</style>
+</head>
+<body>
+
+<video id="video" muted playsinline></video>
+<video id="efecto" class="off" muted playsinline></video>
+<canvas id="capa" class="off"></canvas>
+<audio id="radio"></audio>
+
+<div id="leyenda">
+  <div class="t">vgen - producto (prototipo H-8a). Apreta el numero; 8 esconde esto.</div>
+  <div id="teclas"></div>
+</div>
+<div id="aviso" class="off"></div>
+<div id="buffer"></div>
+<div id="pie"></div>
+<span id="hobo">Hobo</span>
+
+<div id="full">
+  <div id="reportHead">reporte del producto - 9 vuelve</div>
+  <div id="reportCols"><pre id="colA"></pre><pre id="colB"></pre></div>
+</div>
+
+<script src="keypad.js"></script>
+<script src="vgenfeed.js"></script>
+<script src="vgencache.js"></script>
+<script>
+"use strict";
+
+/* producto.html - el player minimo del producto (H-8a, 2026-09-05).
+ *
+ * No es una pagina de pruebas: es LA FORMA DEL PRODUCTO, con lo que la caja ya
+ * consagro, para mirarla entera. Un loop en bucle todo el dia con los numeros
+ * encima, una publicidad que lo reemplaza y vuelve, un incentivador que entra y
+ * sale a demanda, y la radio aparte (PLAN 2.7). Todo sale del aparato: al abrir,
+ * las piezas del guion se bajan UNA vez a IndexedDB (H-15) y de ahi en mas los
+ * bytes no vuelven a pedirse a la red.
+ *
+ * Lo que la caja decidio y aca se aplica: VP9 base y Baseline de piso (E13);
+ * el bucle por `loop` esta refutado (H-13) y el intercambio por MSE `sequence`
+ * en pie (S12) -> el bucle del producto es un ANILLO MSE desde la cache
+ * (VGenFeed.ring); la capa va ENCIMA y lee currentTime en cada pintada (H-11);
+ * los efectos SON video con alfa en un segundo <video> (H-18b); los tres planos
+ * estan habilitados por el ojo del operador (H-20).
+ *
+ * Lo que todavia no dijo ningun aparato y esta pagina mide: la COSTURA del
+ * anillo (vueltas sin `waiting`), la ida y vuelta de la publicidad, el arranque
+ * del incentivador desde la cache, la rampa de la radio y cuanto aguanta todo
+ * junto una tarde entera (el zocalo lleva el tiempo prendido).
+ *
+ * Mando: teclas de UNA cifra, todas instantaneas (no hay codigos compuestos).
+ * ES5.1 estricto (gate tests/test_frontend_compatibility.js): sin fetch, sin
+ * Promise, sin JSON, sin arrow, sin let/const. El guion y los manifiestos son
+ * texto tabulado. Sin dependencias fuera de keypad.js, vgenfeed.js, vgencache.js. */
+
+var CAPA_FPS = 15;
+var TICK_MS = 100;         /* el reloj de la pagina: mide, no pinta */
+var PIE_MS = 1000;         /* el zocalo se reescribe a 1 Hz, nunca por cuadro */
+var ARRANQUE_LIMITE_MS = 15000;
+
+var base = "";
+var pieces = [];           /* filas de MANIFEST.tsv + MANIFEST-v1.tsv */
+var guion = [];            /* filas de GUION.tsv */
+var db = null;
+var residencia = {};       /* id -> { origen, ms, bytes, record, url } */
+var cacheInfo = { says: "?", quota: 0, used: 0, budget: 0, plan: "", error: "" };
+var papeles = { loop: null, loopFila: null, segs: null, chunks: 0, mse: "",
+                incentivador: null, publicidad: null, radio: null };
+var abierta = new Date().getTime();
+var tickTimer = 0, pieTimer = 0;
+var reportLines = [];
+var ultimaTecla = "tecla 0: ninguna todavia";
+var avisoTimer = 0;
+
+/* El loop: lo que suena en el <video> de abajo cuando no hay publicidad. */
+var loop = { modo: "", id: "", started: false, t0: 0, firstMs: -1, vueltas: 0,
+             costuras: 0, gapMax: 0, gapUltimo: -1, atascos: 0, congel: 0,
+             baseTotal: 0, baseDropped: 0, total: 0, dropped: 0, wall0: 0,
+             played: 0, lastTime: 0, endedAt: 0, error: "", warn: "",
+             handle: null, arranques: 0 };
+var estado = "nada";       /* nada | loop | publicidad */
+var incentivador = { on: false, armed: false, t0: 0, ms: -1, veces: 0,
+                     baseTotal: 0, baseDropped: 0, total: 0, dropped: 0, error: "" };
+var publicidad = { on: false, t0: 0, idaMs: -1, vueltaMs: -1, veces: 0, error: "",
+                   modoPrevio: "", esperandoVuelta: false, t1: 0 };
+var radio = { on: false, t0: 0, arrancoMs: -1, error: "", rampa: 0, objetivo: 1,
+              pedida: false };
+var capa = { load: "none", paints: 0, n: 0, timer: 0, w: 0, h: 0, k: 1 };
+var capaFuente = { name: "fallback", ms: 0, timer: 0 };
+var capaRegla = null;
+/* Todo lo que los modulos tocan del mundo se les pasa desde aca: en el
+ * navegador es la ventana misma; en el test, un doble. */
+var HOOKS = { host: window, XHR: XMLHttpRequest };
+
+function byId(id) { return document.getElementById(id); }
+
+function param(name) {
+  var pattern = new RegExp("[?&]" + name + "=([^&]*)");
+  var found = pattern.exec(window.location.search);
+  return found ? decodeURIComponent(found[1]) : "";
+}
+
+function text(node, value) {
+  while (node.firstChild) { node.removeChild(node.firstChild); }
+  node.appendChild(document.createTextNode(value));
+}
+
+function ahora() { return new Date().getTime(); }
+
+function px(node, left, top, width, height) {
+  node.style.left = left + "px";
+  node.style.top = top + "px";
+  node.style.width = width + "px";
+  node.style.height = height + "px";
+}
+
+/* --- geometria: el video ocupa TODA la superficie, a 16:9, centrado --- */
+
+function panelScale() {
+  var sw = (typeof screen !== "undefined" && screen.width) ? screen.width : 0;
+  var vw = window.innerWidth || 0;
+  var k = (sw > 0 && vw > 0) ? sw / vw : 1;
+  return k > 1 ? 1 : k;
+}
+
+function sizeCapa(cssW, cssH) {
+  var node = byId("capa");
+  capa.k = panelScale();
+  capa.w = Math.max(1, Math.round(cssW * capa.k));
+  capa.h = Math.max(1, Math.round(cssH * capa.k));
+  if (node.width !== capa.w) { node.width = capa.w; }
+  if (node.height !== capa.h) { node.height = capa.h; }
+}
+
+function layout() {
+  var w = window.innerWidth || 1280;
+  var h = window.innerHeight || 720;
+  var vw = w, vh = Math.round(w * 9 / 16), x, y;
+  document.documentElement.style.fontSize =
+    Math.max(11, Math.round(w / 46)) + "px";
+  if (vh > h) { vh = h; vw = Math.round(h * 16 / 9); }
+  x = Math.round((w - vw) / 2);
+  y = Math.round((h - vh) / 2);
+  px(byId("video"), x, y, vw, vh);
+  px(byId("efecto"), x, y, vw, vh);
+  px(byId("capa"), x, y, vw, vh);
+  sizeCapa(vw, vh);
+  byId("leyenda").style.width = Math.round(w * 0.3) + "px";
+}
+
+/* --- avisos: una linea arriba a la izquierda, que se va sola --- */
+
+function avisar(valor, ms) {
+  var node = byId("aviso");
+  text(node, valor);
+  node.className = "";
+  if (avisoTimer) { window.clearTimeout(avisoTimer); }
+  avisoTimer = window.setTimeout(function () {
+    avisoTimer = 0;
+    node.className = "off";
+  }, ms > 0 ? ms : 4000);
+}
+
+/* --- manifiestos y guion: texto tabulado, nunca JSON --- */
+
+function get(url, onText, onFail) {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", url, true);
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) { return; }
+    if (xhr.status >= 200 && xhr.status < 300) { onText(xhr.responseText); }
+    else { onFail("HTTP " + xhr.status); }
+  };
+  xhr.send(null);
+}
+
+function parseManifest(body) {
+  var lines = body.split("\n");
+  var out = [], i, line, f;
+  for (i = 0; i < lines.length; i++) {
+    line = lines[i];
+    if (line.length === 0 || line.charAt(0) === "#") { continue; }
+    f = line.split("\t");
+    if (f.length < 6) { continue; }
+    out.push({ id: f[0], role: f[1], mime: f[2], file: f[3],
+               bytes: f[4], sha256: f[5], note: f.length > 6 ? f[6] : "" });
+  }
+  return out;
+}
+
+function parseGuion(body) {
+  var lines = body.split("\n");
+  var out = [], i, line, f;
+  for (i = 0; i < lines.length; i++) {
+    line = lines[i].replace(/\r$/, "");
+    if (line.length === 0 || line.charAt(0) === "#") { continue; }
+    f = line.split("\t");
+    if (f.length < 4) { continue; }
+    out.push({ rol: f[0], id: f[1], residente: f[2], prioridad: f[3],
+               segmentos: f.length > 4 && f[4] !== "-" ? f[4] : "",
+               chunks: f.length > 5 ? (parseInt(f[5], 10) || 0) : 0,
+               mse: f.length > 6 && f[6] !== "-" ? f[6] : "",
+               nota: f.length > 7 ? f[7] : "" });
+  }
+  return out;
+}
+
+function findPiece(id) {
+  var i;
+  for (i = 0; i < pieces.length; i++) {
+    if (pieces[i].id === id) { return pieces[i]; }
+  }
+  return null;
+}
+
+function filasDe(rol) {
+  var out = [], i;
+  for (i = 0; i < guion.length; i++) {
+    if (guion[i].rol === rol) { out.push(guion[i]); }
+  }
+  return out;
+}
+
+function dirOf(file) {
+  var k = file.lastIndexOf("/");
+  return k < 0 ? "" : file.substring(0, k + 1);
+}
+
+/* Las URLs de una representacion segmentada: init + chunk-00001..N, con la
+ * extension que dice el MIME del SourceBuffer. Es lo que emiten emit_pieces
+ * y emit_v1 por remux. */
+function urlsDe(piece, chunks, mse) {
+  var dir = base + dirOf(piece.file);
+  var ext = /webm/.test(mse) ? "webm" : "m4s";
+  var urls = [dir + "init." + ext], n, s;
+  for (n = 1; n <= chunks; n++) {
+    s = "0000" + n;
+    urls.push(dir + "chunk-" + s.slice(s.length - 5) + "." + ext);
+  }
+  return urls;
+}
+
+/* --- que pieza hace cada papel --- */
+
+/* El loop es el PRIMER candidato del guion que el <video> declara reproducible.
+ * canPlayType vacio es "no"; "maybe" y "probably" son "si": lo que decide es
+ * reproducir, y para eso hay que elegir uno. */
+function elegirPapeles() {
+  var video = byId("video"), loops = filasDe("loop"), i, piece, fila;
+  papeles.loop = null; papeles.segs = null; papeles.chunks = 0; papeles.mse = "";
+  for (i = 0; i < loops.length; i++) {
+    piece = findPiece(loops[i].id);
+    if (!piece) { continue; }
+    if (video.canPlayType && !video.canPlayType(piece.mime)) { continue; }
+    papeles.loop = piece;
+    papeles.loopFila = loops[i];
+    if (loops[i].segmentos) {
+      papeles.segs = findPiece(loops[i].segmentos);
+      papeles.chunks = loops[i].chunks;
+      papeles.mse = loops[i].mse;
+    }
+    break;
+  }
+  fila = filasDe("incentivador")[0];
+  papeles.incentivador = fila ? findPiece(fila.id) : null;
+  fila = filasDe("publicidad")[0];
+  papeles.publicidad = fila ? findPiece(fila.id) : null;
+  fila = filasDe("radio")[0];
+  papeles.radio = fila ? findPiece(fila.id) : null;
+}
+
+/* --- H-15: residencia --- */
+
+/* La lista de lo que este aparato tiene que tener guardado: cada papel con su
+ * pieza, y la representacion segmentada del loop elegido. Los otros candidatos
+ * a loop NO se guardan: son de otros aparatos. */
+function listaResidente() {
+  var out = [], i, fila, piece, item, segs;
+  for (i = 0; i < guion.length; i++) {
+    fila = guion[i];
+    piece = findPiece(fila.id);
+    if (!piece) {
+      residencia[fila.id] = { origen: "no esta", ms: 0, bytes: 0 };
+      continue;
+    }
+    if (fila.rol === "loop" && (!papeles.loop || papeles.loop.id !== piece.id)) {
+      residencia[fila.id] = { origen: "no elegido", ms: 0, bytes: 0 };
+      continue;
+    }
+    item = { id: piece.id, key: VGenCache.keyFor(piece.id, piece.sha256),
+             sha: piece.sha256, mime: piece.mime, urls: [base + piece.file],
+             bytes: parseInt(piece.bytes, 10) || 0, residente: fila.residente,
+             prioridad: fila.prioridad };
+    out.push(item);
+    if (fila.rol === "loop" && fila.segmentos) {
+      segs = findPiece(fila.segmentos);
+      if (segs) {
+        out.push({ id: segs.id, key: VGenCache.keyFor(segs.id, segs.sha256),
+                   sha: segs.sha256, mime: fila.mse || segs.mime,
+                   urls: urlsDe(segs, fila.chunks, fila.mse),
+                   bytes: parseInt(segs.bytes, 10) || 0, residente: fila.residente,
+                   prioridad: fila.prioridad });
+      } else {
+        residencia[fila.segmentos] = { origen: "no esta", ms: 0, bytes: 0 };
+      }
+    }
+  }
+  return out;
+}
+
+function conteoResidencia() {
+  var n = 0, total = 0, bytes = 0, k;
+  for (k in residencia) {
+    if (!residencia.hasOwnProperty(k)) { continue; }
+    if (residencia[k].origen === "no esta" || residencia[k].origen === "no elegido") { continue; }
+    total++;
+    if (residencia[k].record) { n++; bytes += residencia[k].bytes || 0; }
+  }
+  return { n: n, total: total, bytes: bytes };
+}
+
+function mb(bytes) { return (Math.round(bytes / 104857.6) / 10) + " MB"; }
+
+/* Baja lo que falta, lee lo que esta, y deja en `residencia` de donde salio
+ * cada pieza. cb() cuando termino, con o sin base. */
+function asegurarResidencia(cb) {
+  var lista = listaResidente(), planificado, i;
+  if (!db) {
+    for (i = 0; i < lista.length; i++) {
+      residencia[lista[i].id] = { origen: "sin base", ms: 0, bytes: 0 };
+    }
+    cb();
+    return;
+  }
+  VGenCache.quota(HOOKS, function (error, used, granted) {
+    cacheInfo.quota = granted || 0;
+    cacheInfo.used = used || 0;
+    cacheInfo.budget = VGenCache.budget(cacheInfo.quota, {
+      tope: parseInt(param("tope"), 10) * 1048576 || 0,
+      fraccion: parseFloat(param("fraccion")) || 0
+    });
+    planificado = VGenCache.plan(lista, cacheInfo.budget);
+    cacheInfo.plan = planificado.keep.length + " de " + lista.length + " (" +
+                     mb(planificado.bytes) + " de " + mb(cacheInfo.budget) + ")";
+    for (i = 0; i < planificado.porRed.length; i++) {
+      residencia[planificado.porRed[i].id] = { origen: "por red", ms: 0, bytes: 0 };
+    }
+    VGenCache.ensure(db, planificado.keep, {
+      host: window, XHR: XMLHttpRequest,
+      onPiece: function (id, origen, ms, bytes, detalle) {
+        residencia[id] = { origen: origen, ms: ms, bytes: bytes, detalle: detalle };
+        escribirPie();
+      },
+      onProgress: function (id, loaded, total, parte, partes) {
+        avisar("bajando " + id + (partes > 1 ? " " + (parte + 1) + "/" + partes : "") +
+               " " + mb(loaded) + (total ? " de " + mb(total) : ""), 1500);
+      }
+    }, function (summary) {
+      leerRegistros(planificado.keep, 0, function () {
+        cacheInfo.says = "guardadas " + summary.downloaded + ", leidas " + summary.hits +
+                         (summary.failed.length ? ", fallaron " + summary.failed.join(",") : "");
+        cb();
+      });
+    });
+  });
+}
+
+/* Los bytes se leen una vez y se quedan en memoria: es lo que reproduce. */
+function leerRegistros(lista, index, cb) {
+  var item;
+  if (index >= lista.length) { cb(); return; }
+  item = lista[index];
+  VGenCache.get(db, item.key, function (error, record) {
+    if (!error && record && record.data) {
+      if (!residencia[item.id]) { residencia[item.id] = { origen: "cache", ms: 0 }; }
+      residencia[item.id].record = record;
+      residencia[item.id].bytes = record.bytes || record.data.byteLength;
+    }
+    leerRegistros(lista, index + 1, cb);
+  });
+}
+
+/* De donde sale una pieza entera: blob: desde la cache, o su URL por red. */
+function srcDe(piece) {
+  var r = piece ? residencia[piece.id] : null, blob;
+  if (!piece) { return ""; }
+  if (r && r.record) {
+    if (!r.url) {
+      blob = VGenFeed.concat([r.record.data], piece.mime, HOOKS);
+      r.url = blob ? VGenFeed.objectUrl(blob, HOOKS) : "";
+    }
+    if (r.url) { return r.url; }
+  }
+  return base + piece.file;
+}
+
+function origenDe(piece) {
+  var r = piece ? residencia[piece.id] : null;
+  if (!r) { return "-"; }
+  return r.record ? "cache" : "red";
+}
+
+/* El proveedor del anillo: un rango del registro guardado, o la URL por red. */
+function proveedor(segs, urls) {
+  return function (index, cb) {
+    var r = residencia[segs.id], view;
+    if (r && r.record) {
+      view = VGenCache.part(r.record, index);
+      if (view) { cb(null, view); return; }
+    }
+    VGenFeed.getBytes(urls[index], cb, HOOKS);
+  };
+}
+
+/* --- medicion --- */
+
+function quality(video) {
+  var q;
+  if (video.getVideoPlaybackQuality) {
+    q = video.getVideoPlaybackQuality();
+    return { total: q.totalVideoFrames, dropped: q.droppedVideoFrames };
+  }
+  if (typeof video.webkitDecodedFrameCount === "number") {
+    return { total: video.webkitDecodedFrameCount,
+             dropped: video.webkitDroppedFrameCount || 0 };
+  }
+  return null;
+}
+
+function resta(after, baseTotal, baseDropped) {
+  var out = { total: 0, dropped: 0 };
+  if (!after) { return out; }
+  out.total = after.total - baseTotal;
+  out.dropped = after.dropped - baseDropped;
+  if (out.total < 0 || out.dropped < 0) { out.total = after.total; out.dropped = after.dropped; }
+  if (out.dropped < 0) { out.dropped = 0; }
+  if (out.total > 0 && out.dropped > out.total) { out.dropped = out.total; }
+  return out;
+}
+
+/* --- el loop --- */
+
+function modoPosible() {
+  var pedido = param("modo");
+  if (pedido === "mse" || pedido === "blob" || pedido === "loop") { return pedido; }
+  if (papeles.segs && papeles.chunks > 0 && window.MediaSource &&
+      VGenFeed.mseSupport(papeles.mse, HOOKS) === "si") { return "mse"; }
+  return "blob";
+}
+
+function stopLoop() {
+  if (loop.handle && loop.handle.abort) { loop.handle.abort(); }
+  loop.handle = null;
+}
+
+/* Arranca el loop en el modo dado. No pausa nada por si mismo: el unico pause
+ * del <video> de abajo es el del 0. */
+function startLoop(modo) {
+  var video = byId("video"), before, urls;
+  if (!papeles.loop) { loop.error = "no hay loop reproducible en el guion"; return; }
+  stopLoop();
+  loop.modo = modo;
+  loop.id = papeles.loop.id;
+  loop.started = false; loop.t0 = ahora(); loop.firstMs = -1;
+  loop.error = ""; loop.warn = ""; loop.endedAt = 0;
+  loop.played = 0; loop.lastTime = 0; loop.wall0 = 0;
+  loop.arranques++;
+  before = quality(video);
+  loop.baseTotal = before ? before.total : 0;
+  loop.baseDropped = before ? before.dropped : 0;
+  estado = "loop";
+  video.muted = true;
+  video.loop = (modo === "loop");
+  if (modo === "mse") {
+    urls = urlsDe(papeles.segs, papeles.chunks, papeles.mse);
+    loop.handle = VGenFeed.ring(video, papeles.mse, papeles.chunks,
+                                proveedor(papeles.segs, urls), {
+      host: window, XHR: XMLHttpRequest,
+      onLap: function (n) { loop.vueltas = n; },
+      onWarn: function (msg) { loop.warn = msg; },
+      onError: function (msg) { loop.error = msg; }
+    });
+    if (!loop.handle) {
+      startLoop("blob");
+      loop.warn = "sin MSE: bucle por blob";
+    }
+    return;
+  }
+  video.src = srcDe(papeles.loop);
+  video.load();
+  video.play();
+}
+
+/* La costura del bucle por blob: al `ended` se vuelve a 0 y se mide cuanto
+ * tarda en avanzar de nuevo. Con `loop` nativo el navegador lo hace solo y
+ * se cuentan las vueltas por `seeking`; con MSE no hay ended. */
+function onVideoEnded() {
+  var video = byId("video");
+  if (estado === "publicidad") { terminaPublicidad(); return; }
+  if (estado !== "loop" || loop.modo !== "blob") { return; }
+  loop.endedAt = ahora();
+  video.currentTime = 0;
+  video.play();
+}
+
+function onVideoWaiting() {
+  if (estado === "loop" && loop.started) { loop.atascos++; }
+}
+
+function onVideoSeeking() {
+  if (estado === "loop" && loop.modo === "loop" && loop.started) { loop.vueltas++; }
+}
+
+function onVideoError() {
+  if (estado === "loop") { loop.error = "error de carga/decodificacion"; }
+  if (estado === "publicidad") { publicidad.error = "error de carga/decodificacion"; terminaPublicidad(); }
+}
+
+function tickLoop(now) {
+  var video = byId("video"), ct = video.currentTime, gap;
+  if (estado !== "loop") { return; }
+  if (!loop.started) {
+    if (ct > 0) {
+      loop.started = true;
+      loop.firstMs = now - loop.t0;
+      loop.wall0 = now;
+      loop.lastTime = ct;
+      if (publicidad.esperandoVuelta) {
+        publicidad.vueltaMs = now - publicidad.t1;
+        publicidad.esperandoVuelta = false;
+      }
+    } else if (now - loop.t0 > ARRANQUE_LIMITE_MS && !loop.error) {
+      loop.error = "no arranco en 15 s" + (video.paused ? " (el aparato pide un gesto)" : "");
+    }
+    return;
+  }
+  if (loop.endedAt && ct > 0 && ct < loop.lastTime) {
+    gap = now - loop.endedAt;
+    loop.costuras++;
+    loop.vueltas++;
+    loop.gapUltimo = gap;
+    if (gap > loop.gapMax) { loop.gapMax = gap; }
+    loop.endedAt = 0;
+  }
+  if (ct >= loop.lastTime) { loop.played += ct - loop.lastTime; } else { loop.played += ct; }
+  if (ct === loop.lastTime && !video.paused && !video.ended && !loop.endedAt) { loop.congel++; }
+  loop.lastTime = ct;
+}
+
+/* --- el incentivador: entra encima, suena una vez, sale solo --- */
+
+function startIncentivador() {
+  var node = byId("efecto"), piece = papeles.incentivador;
+  if (!piece) { avisar("no hay incentivador en el guion"); return; }
+  if (incentivador.on) { avisar("el incentivador ya esta sonando"); return; }
+  incentivador.on = true; incentivador.armed = false;
+  incentivador.t0 = ahora(); incentivador.ms = -1; incentivador.error = "";
+  incentivador.veces++;
+  node.className = "";
+  node.loop = false;
+  node.muted = true;
+  node.src = srcDe(piece);
+  node.load();
+  node.play();
+  avisar("incentivador desde " + origenDe(piece));
+}
+
+function stopIncentivador() {
+  var node = byId("efecto"), after;
+  if (!incentivador.on) { return; }
+  if (incentivador.armed) {
+    after = resta(quality(node), incentivador.baseTotal, incentivador.baseDropped);
+    incentivador.total = after.total; incentivador.dropped = after.dropped;
+  } else if (!incentivador.error) {
+    incentivador.error = "no arranco";
+  }
+  node.pause();
+  node.className = "off";
+  incentivador.on = false;
+}
+
+function tickIncentivador(now) {
+  var node = byId("efecto"), before;
+  if (!incentivador.on) { return; }
+  if (!incentivador.armed) {
+    if (node.currentTime > 0) {
+      before = quality(node);
+      incentivador.baseTotal = before ? before.total : 0;
+      incentivador.baseDropped = before ? before.dropped : 0;
+      incentivador.armed = true;
+      incentivador.ms = now - incentivador.t0;
+    } else if (now - incentivador.t0 > ARRANQUE_LIMITE_MS) {
+      incentivador.error = "no arranco en 15 s";
+      stopIncentivador();
+    }
+    return;
+  }
+  if (node.ended) { stopIncentivador(); }
+}
+
+/* --- la publicidad: reemplaza al loop, suena con su audio, y vuelve --- */
+
+function startPublicidad() {
+  var video = byId("video"), piece = papeles.publicidad;
+  if (!piece) { avisar("no hay publicidad en el guion"); return; }
+  if (publicidad.on) { avisar("la publicidad ya esta sonando"); return; }
+  if (estado !== "loop") { avisar("primero el loop (1, 2 o 3)"); return; }
+  publicidad.on = true; publicidad.modoPrevio = loop.modo;
+  publicidad.t0 = ahora(); publicidad.idaMs = -1; publicidad.vueltaMs = -1;
+  publicidad.error = ""; publicidad.veces++;
+  stopLoop();
+  estado = "publicidad";
+  video.loop = false;
+  video.muted = false;
+  video.volume = 1;
+  radioRampa(0.1);
+  video.src = srcDe(piece);
+  video.load();
+  video.play();
+  avisar("publicidad desde " + origenDe(piece) + "; vuelve sola al loop");
+}
+
+function terminaPublicidad() {
+  var video = byId("video");
+  if (!publicidad.on) { return; }
+  publicidad.on = false;
+  publicidad.t1 = ahora();
+  publicidad.esperandoVuelta = true;
+  video.muted = true;
+  radioRampa(1);
+  startLoop(publicidad.modoPrevio || modoPosible());
+}
+
+function tickPublicidad(now) {
+  var video = byId("video");
+  if (estado !== "publicidad") { return; }
+  if (publicidad.idaMs < 0) {
+    if (video.currentTime > 0) { publicidad.idaMs = now - publicidad.t0; }
+    else if (now - publicidad.t0 > ARRANQUE_LIMITE_MS) {
+      publicidad.error = "no arranco en 15 s";
+      terminaPublicidad();
+    }
+  } else if (video.ended) {
+    terminaPublicidad();
+  }
+}
+
+/* --- la radio: <audio> aparte, en bucle, con rampa de volumen --- */
+
+function toggleRadio() {
+  var node = byId("radio");
+  if (radio.on) {
+    node.pause();
+    radio.on = false;
+    avisar("radio apagada");
+    return;
+  }
+  startRadio();
+}
+
+function startRadio() {
+  var node = byId("radio"), piece = papeles.radio;
+  if (!piece) { avisar("no hay radio en el guion"); return; }
+  radio.on = true; radio.pedida = true;
+  radio.t0 = ahora(); radio.arrancoMs = -1; radio.error = "";
+  node.loop = true;
+  node.volume = 1;
+  radio.objetivo = 1;
+  if (node.src !== srcDe(piece) || !node.src) { node.src = srcDe(piece); node.load(); }
+  node.play();
+}
+
+function tickRadio(now) {
+  var node = byId("radio");
+  if (!radio.on) { return; }
+  if (radio.arrancoMs < 0) {
+    if (node.currentTime > 0) { radio.arrancoMs = now - radio.t0; }
+    else if (now - radio.t0 > 3000 && node.paused && !radio.error) {
+      radio.error = "el aparato pide un gesto (6 la prende)";
+    }
+  }
+}
+
+function radioRampa(objetivo) {
+  var node = byId("radio");
+  radio.objetivo = objetivo;
+  if (!radio.on) { return; }
+  if (radio.rampa) { return; }
+  radio.rampa = window.setInterval(function () {
+    var v = node.volume, paso = 0.05;
+    if (Math.abs(v - radio.objetivo) <= paso) {
+      node.volume = radio.objetivo;
+      window.clearInterval(radio.rampa);
+      radio.rampa = 0;
+      return;
+    }
+    node.volume = v < radio.objetivo ? v + paso : v - paso;
+  }, 50);
+}
+
+/* --- la capa: UN canvas encima, contenido por papel, lee currentTime --- */
+
+function capaFuenteFamily() {
+  return capaFuente.name === "hobo" ? "\"Hobo\", monospace" : "monospace";
+}
+
+function anchoDe(texto) {
+  var ctx;
+  if (!capaRegla) {
+    capaRegla = document.createElement("canvas");
+    capaRegla.width = 8;
+    capaRegla.height = 8;
+  }
+  ctx = capaRegla.getContext ? capaRegla.getContext("2d") : null;
+  if (!ctx) { return 0; }
+  ctx.font = "40px \"Hobo\", monospace";
+  return ctx.measureText(texto).width;
+}
+
+/* H-16: la fuente llego cuando la M y la i miden distinto. */
+function esperarHobo() {
+  var t0 = ahora();
+  function mirar() {
+    var ancha = anchoDe("MMMMM");
+    var angosta = anchoDe("iiiii");
+    var pasado = ahora() - t0;
+    capaFuente.timer = 0;
+    if (ancha > 0 && angosta > 0 && ancha !== angosta) {
+      capaFuente.name = "hobo"; capaFuente.ms = pasado; return;
+    }
+    if (pasado >= 3000) { capaFuente.name = "fallback"; capaFuente.ms = pasado; return; }
+    capaFuente.timer = window.setTimeout(mirar, 150);
+  }
+  mirar();
+}
+
+function capaContext() {
+  var node = byId("capa");
+  return node.getContext ? node.getContext("2d") : null;
+}
+
+/* Lo que dibuja depende del papel que suena, pero el canvas es el mismo: al
+ * cambiar de pieza cambia lo que se dibuja, no el canvas (PLAN 2.7). El numero
+ * sale del reloj del video, no de un contador propio: una pintada tardia
+ * muestra lo correcto, un poco despues. */
+function paintCapa(ctx, x, y, w, h) {
+  var video = byId("video"), efecto = byId("efecto");
+  var ct = incentivador.on ? (efecto.currentTime || 0) : (video.currentTime || 0);
+  var cx = x + w * 0.74, cy = y + h * 0.5, r = h * 0.36;
+  var a = (ct - Math.floor(ct)) * Math.PI * 2;
+  var numero = incentivador.on ? Math.floor(ct * 7) % 37 : Math.floor(ct) % 100;
+  var titulo = incentivador.on ? "RULETA" : (estado === "publicidad" ? "PUBLICIDAD" : "vgen");
+  ctx.clearRect(x, y, w, h);
+  ctx.fillStyle = "rgba(16,16,20,0.55)";
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = incentivador.on ? "#ff9d6b" : "#ffd479";
+  ctx.lineWidth = Math.max(1, h * 0.03);
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  ctx.font = "bold " + Math.round(h * 0.5) + "px " + capaFuenteFamily();
+  ctx.fillText(String(numero), x + w * 0.06, y + h * 0.42);
+  ctx.font = Math.round(h * 0.16) + "px " + capaFuenteFamily();
+  ctx.fillText(titulo, x + w * 0.06, y + h * 0.82);
+}
+
+function capaTick() {
+  var ctx;
+  capa.timer = 0;
+  if (capa.load !== "rect") { return; }
+  ctx = capaContext();
+  if (ctx) {
+    capa.n++; capa.paints++;
+    paintCapa(ctx, Math.round(capa.w * 0.04), Math.round(capa.h * 0.06),
+              Math.round(capa.w * 0.26), Math.round(capa.h * 0.3));
+  }
+  capa.timer = window.setTimeout(capaTick, Math.round(1000 / CAPA_FPS));
+}
+
+function setCapa(load) {
+  var node = byId("capa"), ctx;
+  if (capa.timer) { window.clearTimeout(capa.timer); capa.timer = 0; }
+  capa.load = load;
+  node.className = load === "none" ? "off" : "";
+  if (load === "none") { return; }
+  ctx = capaContext();
+  if (ctx) { ctx.clearRect(0, 0, capa.w, capa.h); }
+  capaTick();
+}
+
+function toggleCapa() {
+  if (capa.load === "rect") { setCapa("none"); avisar("capa apagada"); return; }
+  setCapa("rect");
+  avisar("capa encendida (" + capa.w + "x" + capa.h + ", fuente " + capaFuente.name + ")");
+}
+
+/* --- parar todo (0) --- */
+
+function stopAll() {
+  var video = byId("video");
+  stopLoop();
+  estado = "nada";
+  publicidad.on = false; publicidad.esperandoVuelta = false;
+  video.pause();
+  video.muted = true;
+  stopIncentivador();
+  byId("radio").pause();
+  radio.on = false;
+  if (radio.rampa) { window.clearInterval(radio.rampa); radio.rampa = 0; }
+  setCapa("none");
+  avisar("todo parado - 1 vuelve a arrancar el loop");
+}
+
+/* --- el zocalo y el reporte --- */
+
+function redDice() {
+  if (typeof navigator.onLine !== "boolean") { return "?"; }
+  return navigator.onLine ? "si" : "no";
+}
+
+function segundos(ms) { return Math.round(ms / 1000); }
+
+function caidosLoop() {
+  var q = resta(quality(byId("video")), loop.baseTotal, loop.baseDropped);
+  loop.total = q.total; loop.dropped = q.dropped;
+  return q;
+}
+
+function lineaLoop() {
+  var q = caidosLoop();
+  if (estado === "nada") { return "loop parado"; }
+  if (estado === "publicidad") { return "publicidad (" + origenDe(papeles.publicidad) + ")"; }
+  return "loop " + loop.id + " por " + loop.modo + " (" + (loop.modo === "mse" ? origenDe(papeles.segs) : origenDe(papeles.loop)) + ")" +
+         (loop.started ? " " + loop.firstMs + "ms" : (loop.error ? " ERR" : " arrancando")) +
+         " · vueltas " + loop.vueltas +
+         (loop.modo === "blob" ? " · costura " + (loop.gapUltimo < 0 ? "-" : loop.gapUltimo + "ms") : "") +
+         " · atascos " + loop.atascos +
+         (q.total ? " · caidos " + q.dropped + "/" + q.total : "");
+}
+
+function escribirPie() {
+  var c = conteoResidencia();
+  text(byId("pie"),
+       lineaLoop() +
+       " · residente " + c.n + "/" + c.total + " (" + mb(c.bytes) + ")" +
+       " · red " + redDice() +
+       " · radio " + (radio.on ? (radio.arrancoMs >= 0 ? "si" : (radio.error ? "gesto" : "...")) : "no") +
+       " · capa " + (capa.load === "rect" ? "si" : "no") +
+       " · " + segundos(ahora() - abierta) + "s" +
+       " · 8 teclas · 9 reporte · 0 corta" +
+       " · " + ultimaTecla);
+}
+
+function environment() {
+  var video = byId("video"), lines = [];
+  var url = window.URL || window.webkitURL;
+  lines.push("ua\t" + navigator.userAgent);
+  lines.push("panel\t" + screen.width + "x" + screen.height +
+             "\tsuperficie " + window.innerWidth + "x" + window.innerHeight +
+             "\tcapa " + capa.w + "x" + capa.h + "\tfuente " + capaFuente.name);
+  lines.push("mse\t" + (window.MediaSource ? "si" : "no") +
+             "\tmse.loop\t" + (papeles.mse ? VGenFeed.mseSupport(papeles.mse, HOOKS) : "-") +
+             "\tblob\t" + ((window.Blob && url && url.createObjectURL) ? "si" : "no") +
+             "\tindexeddb\t" + (window.indexedDB ? "si" : "no") +
+             "\tquality\t" + (video.getVideoPlaybackQuality ? "si" : "no"));
+  lines.push("cache\t" + cacheInfo.says + "\tcuota " + mb(cacheInfo.quota) +
+             "\tpresupuesto " + mb(cacheInfo.budget) + "\tplan " + cacheInfo.plan +
+             "\tred " + redDice());
+  lines.push("abierta hace\t" + segundos(ahora() - abierta) + " s");
+  return lines;
+}
+
+function lineaResidencia(id) {
+  var r = residencia[id];
+  if (!r) { return id + "\t-"; }
+  return id + "\t" + r.origen + (r.record ? " (en memoria)" : "") + "\t" + (r.ms || 0) + " ms\t" +
+         (r.bytes || 0) + " B" + (r.detalle ? "\t" + r.detalle : "");
+}
+
+function writeReport() {
+  var lines = ["# vgen producto - reporte de aparato (prototipo H-8a)"];
+  var env = environment(), i, q;
+  for (i = 0; i < env.length; i++) { lines.push(env[i]); }
+  lines.push("# papel\tpieza\torigen\tms\tbytes");
+  for (i = 0; i < guion.length; i++) {
+    lines.push(guion[i].rol + "\t" + lineaResidencia(guion[i].id));
+    if (guion[i].rol === "loop" && guion[i].segmentos && papeles.loop &&
+        papeles.loop.id === guion[i].id) {
+      lines.push("loop-segs\t" + lineaResidencia(guion[i].segmentos));
+    }
+  }
+  lines.push("# medicion");
+  q = caidosLoop();
+  lines.push("loop\t" + (loop.id || "-") + "\tmodo " + (loop.modo || "-") +
+             "\tarranco " + loop.firstMs + " ms\tvueltas " + loop.vueltas +
+             "\tcosturas " + loop.costuras + " (max " + loop.gapMax + " ms)" +
+             "\tatascos " + loop.atascos + "\tcongel " + loop.congel +
+             "\tcaidos " + q.dropped + "/" + q.total +
+             "\tderiva " + (loop.started ? Math.round(((ahora() - loop.wall0) / 1000 - loop.played) * 1000) : 0) + " ms" +
+             "\tarranques " + loop.arranques +
+             (loop.warn ? "\t" + loop.warn : "") + (loop.error ? "\tERR " + loop.error : ""));
+  lines.push("incentivador\t" + (papeles.incentivador ? papeles.incentivador.id : "-") +
+             "\tveces " + incentivador.veces + "\tarranco " + incentivador.ms + " ms" +
+             "\tcaidos " + incentivador.dropped + "/" + incentivador.total +
+             (incentivador.error ? "\tERR " + incentivador.error : ""));
+  lines.push("publicidad\t" + (papeles.publicidad ? papeles.publicidad.id : "-") +
+             "\tveces " + publicidad.veces + "\tida " + publicidad.idaMs + " ms" +
+             "\tvuelta " + publicidad.vueltaMs + " ms" +
+             (publicidad.error ? "\tERR " + publicidad.error : ""));
+  lines.push("radio\t" + (papeles.radio ? papeles.radio.id : "-") +
+             "\t" + (radio.on ? "prendida" : "apagada") + "\tarranco " + radio.arrancoMs + " ms" +
+             "\tvolumen " + (Math.round(byId("radio").volume * 100) / 100) +
+             (radio.error ? "\t" + radio.error : ""));
+  lines.push("capa\t" + (capa.load === "rect" ? "encendida" : "apagada") +
+             "\tpintadas " + capa.paints + "\t" + capa.w + "x" + capa.h +
+             "\tfuente " + capaFuente.name + (capaFuente.ms ? " (" + capaFuente.ms + " ms)" : ""));
+  lines.push("# " + ultimaTecla);
+  reportLines = lines;
+}
+
+function paintReport() {
+  var colA = byId("colA"), colB = byId("colB"), caja = byId("reportCols");
+  var raiz = parseFloat(document.documentElement.style.fontSize) || 16;
+  var ancho = caja.offsetWidth > 0 ? caja.offsetWidth : 0;
+  var cien, cpl, filas, total, suma, corte, i;
+  for (cien = 140; cien >= 24; cien -= 6) {
+    colA.style.fontSize = (cien / 100) + "em";
+    colB.style.fontSize = (cien / 100) + "em";
+    cpl = Math.max(16, Math.floor((ancho / 2 - 8) / (raiz * cien / 100 * 0.6)));
+    filas = []; total = 0;
+    for (i = 0; i < reportLines.length; i++) {
+      filas.push(Math.max(1, Math.ceil(reportLines[i].length / cpl)));
+      total += filas[i];
+    }
+    suma = 0; corte = reportLines.length;
+    for (i = 0; i < reportLines.length; i++) {
+      suma += filas[i];
+      if (suma * 2 >= total) { corte = i + 1; break; }
+    }
+    text(colA, reportLines.slice(0, corte).join("\n"));
+    text(colB, reportLines.slice(corte).join("\n"));
+    if (colA.scrollHeight <= colA.clientHeight &&
+        colB.scrollHeight <= colB.clientHeight) { return; }
+  }
+}
+
+function toggleReport() {
+  var full = byId("full");
+  if (full.className === "on") { full.className = ""; return; }
+  writeReport();
+  full.className = "on";
+  paintReport();
+}
+
+function toggleLeyenda() {
+  var node = byId("leyenda");
+  node.className = node.className === "on" ? "" : "on";
+}
+
+/* --- el reloj de la pagina --- */
+
+function tick() {
+  var now = ahora();
+  tickTimer = 0;
+  tickLoop(now);
+  tickPublicidad(now);
+  tickIncentivador(now);
+  tickRadio(now);
+  tickTimer = window.setTimeout(tick, TICK_MS);
+}
+
+function pie() {
+  pieTimer = 0;
+  escribirPie();
+  if (byId("full").className === "on") { writeReport(); paintReport(); }
+  pieTimer = window.setTimeout(pie, PIE_MS);
+}
+
+/* --- el mando: una cifra, una accion --- */
+
+var TECLAS = [
+  { code: "1", label: "loop por MSE", detail: "el anillo: segmentos desde la cache en modo sequence (el bucle del producto)",
+    run: function () { startLoop("mse"); avisar("loop por MSE (anillo)"); } },
+  { code: "2", label: "loop por blob", detail: "la pieza entera desde memoria; al terminar vuelve a 0 y mide la costura",
+    run: function () { startLoop("blob"); avisar("loop por blob: (costura medida)"); } },
+  { code: "3", label: "loop nativo", detail: "la pieza entera con loop del navegador (refutado en la caja; para comparar)",
+    run: function () { startLoop("loop"); avisar("loop nativo del navegador"); } },
+  { code: "4", label: "incentivador", detail: "entra encima con alfa, suena una vez y sale solo",
+    run: startIncentivador },
+  { code: "5", label: "publicidad", detail: "reemplaza al loop con su audio, la radio baja, y vuelve sola",
+    run: startPublicidad },
+  { code: "6", label: "radio", detail: "prende o apaga la ambiente (<audio> aparte)",
+    run: toggleRadio },
+  { code: "7", label: "capa", detail: "prende o apaga los numeros encima (15 fps, lee el reloj del video)",
+    run: toggleCapa },
+  { code: "8", label: "teclas", detail: "muestra o esconde esta leyenda",
+    run: toggleLeyenda },
+  { code: "9", label: "reporte", detail: "a pantalla completa, en dos columnas, para la foto; 9 vuelve",
+    run: toggleReport },
+  { code: "0", label: "cortar", detail: "para todo",
+    run: stopAll }
+];
+
+function renderKeys() {
+  var box = byId("teclas"), i, item, row, tag, name, detail;
+  while (box.firstChild) { box.removeChild(box.firstChild); }
+  for (i = 0; i < TECLAS.length; i++) {
+    item = TECLAS[i];
+    row = document.createElement("div");
+    row.className = "op";
+    tag = document.createElement("span");
+    tag.className = "n";
+    text(tag, item.code);
+    row.appendChild(tag);
+    name = document.createElement("span");
+    text(name, item.label);
+    row.appendChild(name);
+    detail = document.createElement("div");
+    detail.className = "d";
+    text(detail, item.detail);
+    row.appendChild(detail);
+    row.onclick = (function (action) {
+      return function () { if (action.run) { action.run(); } };
+    })(item);
+    box.appendChild(row);
+  }
+}
+
+/* --- arranque: guion + manifiestos -> residencia -> loop + radio --- */
+
+function arrancar() {
+  var modo;
+  elegirPapeles();
+  if (!papeles.loop) {
+    avisar("ningun loop del guion es reproducible en este aparato", 10000);
+    escribirPie();
+    return;
+  }
+  asegurarResidencia(function () {
+    modo = modoPosible();
+    startLoop(modo);
+    if (param("radio") !== "no") { startRadio(); }
+    if (param("capa") === "si") { setCapa("rect"); }
+    avisar("loop " + papeles.loop.id + " por " + loop.modo + " · 8 muestra las teclas", 6000);
+    escribirPie();
+  });
+}
+
+function cargar() {
+  get(base + "MANIFEST.tsv", function (body) {
+    pieces = parseManifest(body);
+    get(base + "MANIFEST-v1.tsv", function (more) {
+      var extra = parseManifest(more), i;
+      for (i = 0; i < extra.length; i++) {
+        if (!findPiece(extra[i].id)) { pieces.push(extra[i]); }
+      }
+      cargarGuion();
+    }, function () { cargarGuion(); });
+  }, function (why) {
+    avisar("no se pudo leer MANIFEST.tsv: " + why, 10000);
+  });
+}
+
+function cargarGuion() {
+  get(base + "GUION.tsv", function (body) {
+    guion = parseGuion(body);
+    if (!guion.length) { avisar("el guion esta vacio", 10000); return; }
+    arrancar();
+  }, function (why) {
+    avisar("no se pudo leer GUION.tsv: " + why, 10000);
+  });
+}
+
+function start() {
+  var video = byId("video");
+  layout();
+  base = param("base");
+  if (base && base.charAt(base.length - 1) !== "/") { base += "/"; }
+  renderKeys();
+  esperarHobo();
+  if (window.ASCLKeypad) {
+    ASCLKeypad.create({
+      delay: param("delay") ? parseInt(param("delay"), 10) : 900,
+      actions: TECLAS,
+      onBuffer: function (buffer) { text(byId("buffer"), buffer ? buffer + "_" : ""); },
+      onKey: function (linea, n) { ultimaTecla = "tecla " + n + ": " + linea; }
+    });
+  }
+  /* Un solo juego de oyentes para toda la vida de la pagina: lo que cada
+   * evento significa depende del estado, no de quien lo registro. */
+  video.addEventListener("ended", onVideoEnded, false);
+  video.addEventListener("waiting", onVideoWaiting, false);
+  video.addEventListener("seeking", onVideoSeeking, false);
+  video.addEventListener("error", onVideoError, false);
+  escribirPie();
+  tick();
+  pie();
+  VGenCache.open(HOOKS, function (error, opened) {
+    db = error ? null : opened;
+    cacheInfo.says = error ? error : "abierta";
+    cargar();
+  });
+}
+
+window.onresize = layout;
+start();
+</script>
+</body>
+</html>
