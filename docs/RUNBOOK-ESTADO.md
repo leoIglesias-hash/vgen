@@ -15,7 +15,7 @@ Reglas de uso:
 4. Toda decisión que desvíe del runbook se anota en la bitácora de abajo con fecha y
    motivo. El runbook no se edita en silencio.
 
-## Próxima acción (actualizado 2026-09-01 — el alcance es un FORMATO PROPIO)
+## Próxima acción (actualizado 2026-09-04 noche — el alcance es un FORMATO PROPIO)
 
 > **Leer primero [`VISION-Y-OBJETIVOS.md`](VISION-Y-OBJETIVOS.md).** Es el norte
 > del proyecto y lo que evita que una sesión post-compact se desvíe. Después,
@@ -166,6 +166,45 @@ nada.
    el pack**— y **H-20** —medir **a pantalla entera** (teclas `70`/`73`) y el
    **reporte en dos columnas** con el `88` para volver, porque la foto cortó en
    la novena fila y en una TV lo que no entra no existe.
+10. **Noche del 2026-09-04: tres fotos más, y una regla que se cayó.**
+    **H-18b CERRADA** (dos planos se sostienen: 2/154 y 1/141) y **H-20
+    CERRADA** (la superficie 4K no le cuesta al `<video>`; la API de fullscreen
+    no se concedió ni hizo falta). **🔴 OJO al leer material viejo:** por la
+    mañana se escribió la regla «el presupuesto de composición es DOS planos, no
+    tres» y **quedó SIN EFECTO esa misma noche** — el contador repite 17/155 con
+    los tres planos, pero el operador miró la pantalla y firmó *«todo junto…
+    se ven perfecto»*, y el contador de la caja está desacreditado (`quality
+    no`, E5). **Los tres planos están habilitados.** Sobre ese pedido salió
+    **H-21** (tecla `71`: los dos planos en bucle, enteros, sin cortes).
+11. **La red, redefinida por el operador (E16):** «arrancar sin red» **se
+    descarta** —la app que hospeda al WebView pide red para sus validaciones— y
+    cortarla en el medio no prueba residencia. La prueba que discrimina es
+    **cortar la red con la página ya abierta y recién ahí `85`**; la cabecera y
+    las filas `cache:*` declaran **`red si|no`** para que la foto lo pruebe sola.
+12. **H-22 CERRADA y aparece una SEGUNDA CLASE de aparato (E17).** En el
+    WebView de un Smart TV no entraba ningún número: se preguntaba solo por
+    `keyCode` y hay navegadores que mandan **`keyCode 0`** poblando únicamente
+    `key`. Arreglado (cuatro caminos, `keypress` como plan B, el campo fuera del
+    foco) **y con una línea de diagnóstico permanente** que dice qué mandó el
+    aparato. El reporte que llegó vale por sí mismo: **Noblex / Android 11 /
+    Chrome 142, con `quality si`, `rvfc si` y cuota 2.637 MB**. Es **el aparato
+    que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
+    clase principal.**
+
+> ## ▶ PRÓXIMA ACCIÓN: **H-6**
+>
+> La cola del 2026-09-04 está **terminada** y nada de lo que sigue depende de un
+> aparato hasta el final. **H-6 = la matriz por bytes a igual look**, con la
+> fluidez como *gate* (ya está saturada) y no como objetivo: VP9 base, **fps
+> variable por segmento**, zonas estáticas, piso H.264 relajado. De ahí sale la
+> **emisión v1**, que suma la pista de audio del máster y pone a prueba S13
+> (pieza con audio muxeado sin perder fluidez) y S14 (`<audio>` + `<video>` sin
+> deriva). Después: **H-7** (spec `SPEC-VGEN.md`, con **H-15** adentro) y
+> **H-8** (muxer ES5 + player mínimo).
+>
+> **Lo que se le pidió al operador y no bloquea a H-6:** en el **Smart TV**,
+> `1` y `95` (arbitra el 11 % con un contador confiable); en la **caja**, `85`
+> con la red cortada y `83` sola.
 
 
 ### Lo que hay que traer de la próxima visita (dos puntos, uno opcional, y el Smart TV)

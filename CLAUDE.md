@@ -34,6 +34,19 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
+> ## ▶ Próxima acción: **H-6** — la matriz por bytes a igual look
+>
+> La cola del 2026-09-04 está **terminada** y nada de lo que sigue depende de un
+> aparato hasta el final. Detalle, y lo que se le pidió al operador sin que
+> bloquee nada, en [`RUNBOOK-ESTADO.md`](docs/RUNBOOK-ESTADO.md) §Próxima acción.
+>
+> **🔴 Al leer material escrito la mañana del 2026-09-04:** la regla «el
+> presupuesto de composición es DOS planos, no tres» **fue RETIRADA esa misma
+> noche**. **Los tres planos están habilitados** (video base + pieza alfa +
+> canvas): el contador de la caja está desacreditado y el ojo del operador firmó
+> que se ven perfecto. REGISTRO, entrada «el contador dice 11 % y el ojo dice
+> perfecto».
+
 ## Modelo de trabajo (acordado con el operador; heredado sin cambios)
 
 - **Esta máquina no tiene Python ni Node, a propósito.** Toda la regresión se
