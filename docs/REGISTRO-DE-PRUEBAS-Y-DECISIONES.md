@@ -5364,3 +5364,76 @@ la tabla de PLAN-DE-MEDICION §5 con el resto de las columnas. Si no anda, **la
 línea de diagnóstico va a decir cuál de las dos fallas es**, y esa foto vale más
 que cualquier hipótesis nueva.
 
+
+---
+
+## 2026-09-04 (noche) — H-22 CERRADA en el Smart TV, y aparece un SEGUNDO aparato que sí sabe contar
+
+Foto del reporte en el Smart TV, con el arreglo del mando puesto. Transcripción
+**textual**:
+
+```
+reporte - 88 para volver
+# pack v0 - reporte de aparato
+ua  Mozilla/5.0 (Linux; Android 11; NoblexTV Build/RTO9.230812.001; wv)
+AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/142.0.7444.171
+Mobile Safari/537.36
+panel   962x541 dpr 1.3312500715255737   superficie 3840x2160
+capa    421x236 k 0.251 fuente hobo (155 ms)
+mse si  changeType si  blob  si
+mse.h264   si  mse.vp9 si
+rvfc    si  indexeddb si  quality si
+cache   si  guardadas 0 0 B cuota 0/2637 MB   red si
+hls maybe  dash  no
+# atascos = waiting despues de arrancar; congel = muestras de 100 ms sin avance;
+oculto = muestras con la pagina oculta (el navegador pausa el video mudo)
+# id    dice    arranco 1er_ms  caidos total  deriva_ms  atascos congel  cambio_ms  nota
+v0-vp9-alpha  probably  si 601 0 156 0  0  0  -1  papelitos sobre transparencia
+total: el efecto no existe abajo
+```
+
+Y el operador, textual: *«Este es el reporte en el smart tv, anda aun mejor asi
+que pasa perfecto»*.
+
+### H-22: CERRADA
+
+**Los números entran.** El arreglo era el correcto y la causa era la que el
+navegador de esta sesión ya había confesado: se preguntaba por `keyCode` y el
+dígito venía por otro lado. La línea de diagnóstico queda igual, porque el
+próximo aparato puede fallar por el otro motivo.
+
+### Este aparato NO es la caja: es otra clase, y es la que sabe contar
+
+| | TV box (clase principal) | Smart TV Noblex |
+|---|---|---|
+| Sistema | Android 9 | **Android 11** |
+| Motor | **Chromium 70** | **Chrome 142** |
+| `rvfc` | ✗ | **✓** |
+| `quality` | **✗** (`webkitDroppedFrameCount`) | **✓** (`getVideoPlaybackQuality`) |
+| Cuota | 225 MB | **2.637 MB** |
+| Panel / superficie | 1280×720 / 3840×2160 | 962×541 dpr 1,33 / 3840×2160 |
+| VP9 + alfa | 1/155 | **0/156, deriva 0, arranque 601 ms** |
+
+**Tres cosas que cambian el mapa:**
+
+1. **`quality si` — acá el contador es de verdad.** Es exactamente el aparato
+   que pedía la anotación de E15: la duda de si el 11 % de los tres planos era
+   un costo real o un artefacto de `webkitDroppedFrameCount` **se contesta acá**,
+   y cuesta apretar `70`.
+2. **`rvfc si` — hay sincronía de cuadro exacta disponible.** En la caja no
+   existe y la capa se sincroniza leyendo `currentTime`. Es una mejora
+   *opcional* por aparato, nunca un requisito: el piso sigue siendo el que no lo
+   tiene.
+3. **La cuota es 12× la de la caja.** La residencia, que en la caja es el
+   problema ajustado, acá no es problema.
+
+**Lo que NO cambia: la caja sigue siendo la clase principal.** El operador la
+consagró y el formato se diseña contra el piso, no contra el techo. Este aparato
+**enriquece y arbitra**; no reemplaza. Que `hls maybe` / `dash no` se repitan en
+los dos refuerza que el camino D queda afuera por razones que no son de motor.
+
+### Lo único medido acá, por ahora
+
+`v0-vp9-alpha` **0/156 caídos, deriva 0 ms, arranque 601 ms**, con la nota nueva
+de la pieza. VP9 con alfa reproduce perfecto también en Chrome 142.
+

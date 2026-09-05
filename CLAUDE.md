@@ -242,6 +242,16 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
      llegan a la página» (no se arregla desde acá) de «llegan por otro campo»
      (sí), y hasta hoy no se podían distinguir sin viajar.
 
+  **H-22 CERRADA con la foto del Smart TV** (*«anda aun mejor asi que pasa
+  perfecto»*), y ahí aparece algo grande: **una SEGUNDA CLASE de aparato, que
+  sí sabe contar**. Noblex, Android 11, **Chrome 142**: `quality si`, `rvfc si`,
+  cuota **2.637 MB** (12× la caja), `v0-vp9-alpha` **0/156 con deriva 0**. Es
+  **el aparato que puede arbitrar E15** —si el 11 % de los tres planos era costo
+  real o un artefacto del `webkitDroppedFrameCount` roto de la caja— apretando
+  `70`. Y `rvfc` habilita sincronía de cuadro exacta, **como mejora opcional por
+  aparato, nunca como requisito**. **La caja sigue siendo la clase principal:**
+  el formato se diseña contra el piso, no contra el techo.
+
   **Queda UNA SOLA VISITA a la caja** (qué traer: `RUNBOOK-ESTADO.md`): `85` con
   la red cortada, `83` sola, y `71` como opcional. Después
   siguen **H-6** (matriz por bytes a igual look),
