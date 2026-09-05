@@ -95,6 +95,7 @@
 <video id="video" muted playsinline></video>
 <canvas id="capa" class="off"></canvas>
 <video id="efecto" class="off" muted playsinline></video>
+<audio id="radio"></audio>
 <div id="side">
   <table>
     <thead><tr><th>pieza</th><th>ok</th><th>caidos/total</th><th>1er</th>
@@ -1159,7 +1160,7 @@ function packageSteps() {
 function everything() {
   return pieceSteps(withRole("base").concat(withRole("alpha"), withRole("stream")))
     .concat(packageSteps(), capaAll(), cacheBatch(), [stepDosVideos()],
-            enteraSteps());
+            enteraSteps(), hayV1() ? v1Steps() : []);
 }
 
 /* H-16: lo que TODAVIA no dijo la caja. La prueba general dejo de repetir lo
@@ -1167,8 +1168,141 @@ function everything() {
  * persiste-: eso ya se sabe y solo tapaba pantalla. Cuando una pregunta nueva
  * entra (H-18, dos <video> a la vez), se suma aca; cuando la caja la consagra,
  * se saca y pasa al manual. */
+/* --- H-6: el pack v1 - las piezas con AUDIO, la radio aparte y VP9 por MSE --- */
+
+/* v1 se anexa al manifiesto de v0 si esta publicado (MANIFEST-v1.tsv); si no,
+ * estas teclas dicen que falta y nada mas cambia. Las piezas v1 llevan la
+ * pista del master muxeada (S13); v1-ambiente es esa pista suelta para <audio>
+ * (S14); dash-vp9 es v1-vp9 segmentado solo video, por remux (S11). */
+var VP9_MSE_MIME = 'video/webm; codecs="vp9"';
+
+function hayV1() { return findPiece("v1-vp9") ? true : false; }
+
+/* S13: la pieza con audio adentro se mide como cualquier otra, pero CON SONIDO.
+ * El <video> de la pagina esta mudo por defecto (si no, cada corrida sonaria);
+ * aca se destapa solo mientras dura la medicion. Si el WebView exige un gesto
+ * para sonar, play() no arranca y la fila dice "no arranco": eso tambien es
+ * un dato. */
+function stepConAudio(pieceId) {
+  return { id: pieceId, go: function (done) {
+    var piece = findPiece(pieceId), video = byId("video"), row;
+    if (!piece) {
+      piece = addExtra(fake(pieceId, "v1", "", "", ""));
+      row = blank(piece);
+      row.error = "no esta " + pieceId + ": falta MANIFEST-v1.tsv";
+      finishRow(pieceId, done)(row);
+      return;
+    }
+    video.muted = false;
+    video.volume = 1;
+    measure(piece, base + piece.file, function (r) {
+      video.muted = true;
+      finishRow(pieceId, done)(r);
+    });
+  } };
+}
+
+/* S14: la radio (<audio> con el mp3 del master, en bucle) y un video MUDO en
+ * bucle, a la vez. Se mide la deriva de cada uno contra el reloj de pared y la
+ * diferencia entre las dos: si los dos decodificadores corren a la misma
+ * velocidad, la deriva A/V queda en pocos ms aunque cada uno derive solo. */
+function stepRadio() {
+  var id = "radio:mp3+vp9";
+  return { id: id, go: function (done) {
+    var radio = byId("radio"), src = findPiece("v0-vp9"), amb = findPiece("v1-ambiente");
+    var piece, row, timer, t0, wallA = 0, lastA = 0, playedA = 0, startedA = false;
+    if (!amb || !src) {
+      piece = addExtra(fake(id, "radio", "", "", ""));
+      row = blank(piece);
+      row.error = !amb ? "no esta v1-ambiente: falta MANIFEST-v1.tsv" : "no esta v0-vp9";
+      finishRow(id, done)(row);
+      return;
+    }
+    piece = addExtra(fake(id, "radio", amb.mime, amb.file,
+                          "<audio> mp3 en bucle + VP9 mudo en bucle"));
+    radio.loop = true;
+    radio.src = base + amb.file;
+    radio.load();
+    radio.play();
+    t0 = new Date().getTime();
+    timer = window.setInterval(function () {
+      var ct = radio.currentTime, now = new Date().getTime();
+      if (!startedA) {
+        if (ct > 0) { startedA = true; wallA = now; lastA = ct; }
+        return;
+      }
+      if (ct >= lastA) { playedA += ct - lastA; } else { playedA += ct; }
+      lastA = ct;
+    }, 100);
+    measure(piece, base + src.file, function (r) {
+      var derivaA = 0;
+      window.clearInterval(timer);
+      if (startedA) {
+        derivaA = Math.round(((new Date().getTime() - wallA) / 1000 - playedA) * 1000);
+      }
+      piece.note = (startedA ? "radio arranco en " + (wallA - t0) + " ms"
+                             : "radio NO arranco") +
+                   "; deriva radio " + derivaA + " ms; deriva A/V " +
+                   Math.abs(derivaA - r.driftMs) + " ms" +
+                   (radio.error ? "; error de audio" : "");
+      radio.pause();
+      finishRow(id, done)(r);
+    }, { loop: true });
+  } };
+}
+
+/* S11: VP9 por MSE. Los segmentos WebM que dejo el remux de v1-vp9, en orden. */
+function dashVp9Urls() {
+  var piece = findPiece("v1-dash-vp9"), found, n, i, s, urls;
+  if (!piece) { return null; }
+  found = /(\d+) segmentos/.exec(piece.note);
+  n = found ? parseInt(found[1], 10) : 0;
+  urls = [base + "dash-vp9/init.webm"];
+  for (i = 1; i <= n; i++) {
+    s = "0000" + i;
+    urls.push(base + "dash-vp9/chunk-" + s.slice(s.length - 5) + ".webm");
+  }
+  return urls;
+}
+
+function stepMseVp9() {
+  var id = "mse:vp9";
+  return { id: id, go: function (done) {
+    var urls = dashVp9Urls(), piece, row;
+    if (!urls) {
+      piece = addExtra(fake(id, "paquete", "", "", ""));
+      row = blank(piece);
+      row.error = "no esta v1-dash-vp9: falta MANIFEST-v1.tsv";
+      finishRow(id, done)(row);
+      return;
+    }
+    piece = addExtra(fake(id, "paquete", VP9_MSE_MIME, "dash-vp9/*",
+                          "WebM segmentado por SourceBuffer, " +
+                          (urls.length - 1) + " segmentos"));
+    if (VGenFeed.mseSupport(VP9_MSE_MIME) !== "si") {
+      row = blank(piece); row.says = VGenFeed.mseSupport(VP9_MSE_MIME);
+      row.error = "sin MSE para " + VP9_MSE_MIME;
+      finishRow(id, done)(row);
+      return;
+    }
+    measure(piece, "", finishRow(id, done), { feed: function (video, r) {
+      feeding = VGenFeed.feedMse(video, VP9_MSE_MIME, urls, {
+        mode: "segments",
+        onWarn: function (why) { piece.note += "; " + why; },
+        onError: function (why) { r.error = why; }
+      });
+      if (!feeding) { r.error = "sin MediaSource"; }
+    } });
+  } };
+}
+
+function conAudioSteps() { return [stepConAudio("v1-vp9"), stepConAudio("v1-h264")]; }
+
+function v1Steps() { return conAudioSteps().concat([stepRadio(), stepMseVp9()]); }
+
 function pendingSteps() {
-  return techoSteps().concat([stepDosVideos()], enteraSteps());
+  return techoSteps().concat([stepDosVideos()], enteraSteps(),
+                             hayV1() ? v1Steps() : []);
 }
 
 /* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
@@ -1179,6 +1313,8 @@ function stopAll() {
   pararBucle();
   stopFeeding();
   video.pause();
+  video.muted = true;          /* H-6: si una pieza v1 lo destapo */
+  byId("radio").pause();
   video.loop = false;
   setCapa("none");
   stopEfecto();
@@ -1901,6 +2037,20 @@ var TECLAS = [
   { code: "71", label: "dos a ojo", tier: "now",
     detail: "H-21: los dos encima, enteros y en BUCLE, sin cortes - para mirarlo, no para medirlo",
     run: toggleBucle },
+  /* H-6: el pack v1. Con audio adentro (S13), la radio aparte (S14) y VP9 por
+   * MSE (S11). Si v1 no esta publicado, las filas lo dicen. */
+  { code: "72", label: "v1 con audio", tier: "now",
+    detail: "H-6/S13: VP9+Opus y H.264+AAC, CON SONIDO, desde el pack v1",
+    run: function () { runSteps(conAudioSteps(), 0); } },
+  { code: "74", label: "radio + video", tier: "now",
+    detail: "H-6/S14: <audio> con el mp3 del master en bucle y VP9 mudo en bucle; mide la deriva A/V",
+    run: function () { runSteps([stepRadio()], 0); } },
+  { code: "75", label: "MSE vp9", tier: "now",
+    detail: "H-6/S11: los segmentos WebM de v1-vp9 por SourceBuffer",
+    run: function () { runSteps([stepMseVp9()], 0); } },
+  { code: "76", label: "lote v1", tier: "now",
+    detail: "las tres de arriba, seguidas",
+    run: function () { runSteps(v1Steps(), 0); } },
   { code: "73", label: "entera a ojo", tier: "tool",
     detail: "prende y apaga la pantalla entera, sin medir",
     run: toggleEntera },
@@ -2038,6 +2188,16 @@ function start() {
     pieces = parseManifest(body);
     say("listo - " + pieces.length + " piezas");
     draw();
+    /* H-6: el pack v1 (con audio) se anexa si esta publicado. Si no esta, no
+     * pasa nada: las teclas v1 lo dicen en su fila. */
+    get(base + "MANIFEST-v1.tsv", function (more) {
+      var extra = parseManifest(more), i;
+      for (i = 0; i < extra.length; i++) {
+        if (!findPiece(extra[i].id)) { pieces.push(extra[i]); }
+      }
+      say("listo - " + pieces.length + " piezas (v1 anexado)");
+      draw();
+    }, function () {});
   }, function (why) {
     say("no se pudo leer MANIFEST.tsv: " + why);
   });

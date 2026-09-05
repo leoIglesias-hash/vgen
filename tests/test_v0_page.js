@@ -139,11 +139,25 @@ function FakeXHR() {
   this.responseText = "";
 }
 FakeXHR.prototype.open = function (method, url) { this.url = url; };
+/* H-6: el pack v1 se sirve aparte (MANIFEST-v1.tsv) y la pagina lo anexa. */
+var MANIFEST_V1 = [
+  "# pack v1 - ASCILINE-hybrid - docs/EMISION-V1.md",
+  "# id\trole\tmime\tfile\tbytes\tsha256\tnote",
+  ["v1-vp9", "v1", 'video/webm; codecs="vp9, opus"',
+   "v1-vp9.webm", "3000000", "11", "VP9 + Opus"].join("\t"),
+  ["v1-h264", "v1", 'video/mp4; codecs="avc1.42E01F, mp4a.40.2"',
+   "v1-h264.mp4", "6000000", "22", "H.264 + AAC"].join("\t"),
+  ["v1-ambiente", "radio", "audio/mpeg",
+   "v1-ambiente.mp3", "180857", "33", "la pista del master"].join("\t"),
+  ["v1-dash-vp9", "stream-v1", 'video/webm; codecs="vp9"',
+   "dash-vp9/manifest.mpd", "3100000", "44", "solo video; 16 segmentos"].join("\t")
+].join("\n") + "\n";
+
 FakeXHR.prototype.send = function () {
   requested.push(this.url);
   this.readyState = 4;
   this.status = 200;
-  this.responseText = MANIFEST;
+  this.responseText = /MANIFEST-v1/.test(this.url) ? MANIFEST_V1 : MANIFEST;
   if (this.onreadystatechange) { this.onreadystatechange(); }
 };
 
@@ -165,6 +179,8 @@ var windowStub = {
   location: { search: "" },
   setTimeout: function () { return 0; },
   clearTimeout: function () {},
+  setInterval: function () { return 0; },
+  clearInterval: function () {},
   indexedDB: {},
   URL: null,
   MediaSource: null,
@@ -189,12 +205,14 @@ var run = new Function("window", "document", "navigator", "screen",
 run(windowStub, documentStub, navigatorStub, screenStub, FakeXHR, VGenFeed,
     VGenCache);
 
-assert.strictEqual(requested.length, 1, "la pagina pide el manifiesto una vez");
+assert.strictEqual(requested.length, 2,
+  "la pagina pide el manifiesto de v0 y despues el de v1");
 assert(/MANIFEST\.tsv$/.test(requested[0]), "pide MANIFEST.tsv");
+assert(/MANIFEST-v1\.tsv$/.test(requested[1]), "y anexa MANIFEST-v1.tsv (H-6)");
 
 var filas = byId("filas");
-assert.strictEqual(filas.childNodes.length, 7,
-  "una fila por pieza del pack: 3 progresivas + alfa + 3 empaquetados");
+assert.strictEqual(filas.childNodes.length, 11,
+  "una fila por pieza: 3 progresivas + alfa + 3 empaquetados + 4 de v1");
 assert.strictEqual(filas.childNodes[0].childNodes.length, 6,
   "seis columnas: pieza, ok, caidos/total, 1er, congel, cambio");
 
@@ -224,7 +242,7 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 32);
+assert.strictEqual(codigos.length, 36);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
@@ -316,8 +334,8 @@ var ahora = registered.actions.filter(function (item) {
   return item.tier === "now";
 }).map(function (item) { return item.code; }).sort();
 assert.deepStrictEqual(ahora,
-  ["1", "70", "71", "84", "85", "87"],
-  "lo pendiente: la cache, los dos videos, la pantalla entera, el bucle a ojo y el 1");
+  ["1", "70", "71", "72", "74", "75", "76", "84", "85", "87"],
+  "lo pendiente: la cache, los dos videos, la pantalla entera, el bucle a ojo, el pack v1 y el 1");
 
 function emDe(sel) {
   var m = page.match(new RegExp("#teclas \\." + sel +
@@ -351,8 +369,8 @@ assert(/px\(byId\("side"\), sideX, midTop, w - sideX - 12, midH\)/.test(inline[1
 var visibles = byId("teclas").childNodes.length;
 assert(visibles >= 10,
   "tienen que quedar al menos 10 teclas a la vista, y hay " + visibles);
-assert.strictEqual(visibles, 14,
-  "hoy son 14: las 6 de ahora y las 8 herramientas");
+assert.strictEqual(visibles, 18,
+  "hoy son 18: las 10 de ahora y las 8 herramientas");
 var ocultas = registered.actions.filter(function (item) {
   return item.tier === "done";
 }).length;
@@ -833,4 +851,61 @@ assert(/tecla 1: keydown/.test(textoDe(byId("env"))) &&
        /key=7/.test(textoDe(byId("env"))),
   "y despues trae los campos crudos: " + textoDe(byId("env")));
 
-console.log("v0 page tests (H-18b + H-20 + H-21 + red + H-22): OK");
+/* --- H-6: el pack v1 - audio muxeado (S13), la radio aparte (S14), VP9 por MSE (S11) --- */
+
+/* v0 era mudo. v1 trae la pista del master adentro de cada pieza y suelta como
+ * radio; la pagina lo anexa al manifiesto de v0 y lo mide con tres teclas. Si
+ * v1 no esta publicado, la fila lo dice: nunca un cero enganoso. */
+assert(page.indexOf('<audio id="radio">') >= 0,
+  "la radio suena en un <audio> propio: <video> sigue siendo uno solo por pieza");
+assert(/get\(base \+ "MANIFEST-v1\.tsv"/.test(inline[1]),
+  "el pack v1 se anexa desde su propio manifiesto");
+assert(/if \(!findPiece\(extra\[i\]\.id\)\) \{ pieces\.push\(extra\[i\]\); \}/.test(inline[1]),
+  "y no duplica una pieza que ya estaba");
+["function stepConAudio", "function stepRadio", "function stepMseVp9",
+ "function dashVp9Urls", "function v1Steps", "function hayV1"]
+  .forEach(function (name) {
+    assert(inline[1].indexOf(name) >= 0, "falta " + name);
+  });
+assert(/enteraSteps\(\),\n\s+hayV1\(\) \? v1Steps\(\) : \[\]\);\n\}/.test(inline[1]),
+  "el 1 corre v1 solo si esta publicado");
+assert(/video\.muted = false;\n    video\.volume = 1;/.test(inline[1]),
+  "S13 se mide CON SONIDO: el video se destapa para la pieza con audio");
+assert(/measure\(piece, base \+ piece\.file, function \(r\) \{\n      video\.muted = true;/.test(inline[1]),
+  "y se vuelve a tapar al terminar");
+assert(/video\.muted = true;[^\n]*\n  byId\("radio"\)\.pause\(\);/.test(inline[1]),
+  "el 0 tapa el video y calla la radio");
+assert(/deriva A\/V/.test(inline[1]),
+  "S14 informa la deriva entre la radio y el video");
+assert(/\/\(\\d\+\) segmentos\//.test(inline[1]),
+  "S11 saca la cantidad de segmentos de la nota del manifiesto");
+assert(/mode: "segments"/.test(inline[1]));
+
+assert(/v1 con audio/.test(action("72").label));
+assert(/S13/.test(action("72").detail));
+assert(/radio \+ video/.test(action("74").label));
+assert(/S14/.test(action("74").detail));
+assert(/MSE vp9/.test(action("75").label));
+assert(/S11/.test(action("75").detail));
+assert(/lote v1/.test(action("76").label));
+
+/* Y anda con el stub: el 72 destapa el video y le pone la pieza v1; el 0 lo
+ * vuelve a tapar y calla la radio. */
+action("72").run();
+assert(/v1-vp9\.webm$/.test(byId("video").src),
+  "el 72 arranca por la pieza VP9 con audio: " + byId("video").src);
+assert.strictEqual(byId("video").muted, false, "y con sonido");
+action("0").run();
+assert.strictEqual(byId("video").muted, true, "el 0 lo tapa");
+assert.strictEqual(byId("radio").paused, true, "y la radio queda callada");
+action("74").run();
+assert(/v1-ambiente\.mp3$/.test(byId("radio").src),
+  "el 74 pone el mp3 del master en la radio: " + byId("radio").src);
+assert.strictEqual(byId("radio").paused, false, "y la hace sonar");
+assert.strictEqual(byId("radio").loop, true, "en bucle");
+assert(/v0-vp9\.webm$/.test(byId("video").src),
+  "con el VP9 mudo abajo (el de v0, que no trae audio)");
+action("0").run();
+assert.strictEqual(byId("radio").paused, true);
+
+console.log("v0 page tests (H-18b + H-20 + H-21 + red + H-22 + H-6 v1): OK");

@@ -1,0 +1,137 @@
+name: emitir-v1
+
+# H-6: emite el PACK V1 (tools/emit_v1.py) = la receta que dejo la matriz +
+# la pista de audio del master, muxeada en cada pieza (S13) y suelta como
+# radio (S14), mas el WebM segmentado de VP9 por remux (S11).
+#
+# Los defaults de la receta son los ELEGIDOS en la matriz (docs/EMISION-V1.md
+# tiene la fila de cada valor). Sin tocar nada, emite el v1 vigente.
+#
+# Determinismo: los encoders de audio no tienen `cpu-independent`. Con
+# `dos_pasadas` (por defecto) se emite DOS VECES en la misma corrida y se
+# compara byte a byte; los SHA-256 completos quedan en el resumen para
+# comparar contra otra corrida en otra CPU, como en H-14.
+
+on:
+  workflow_dispatch:
+    inputs:
+      master_url:
+        description: "URL del master .asclv (pineado por contenido, con audio)"
+        default: "https://iargen.com/player/outputs/clip.dcd6afb66907.asclv"
+        required: true
+      master_sha256:
+        description: "SHA-256 esperado del master"
+        default: "dcd6afb669078a5b0d1bf4e4d42cdd2d8497ea70908a3e283183fe7d2431632a"
+        required: true
+      receta:
+        description: "Argumentos de tools/emit_v1.py (vacio = v0 con audio)"
+        default: ""
+      frames:
+        description: "Cortar en N cuadros (vacio = el clip entero)"
+        default: ""
+      dos_pasadas:
+        description: "Emitir dos veces y comparar byte a byte"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  emitir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Dependencias
+        run: python -m pip install -r backend/requirements.txt
+      - name: ffmpeg (libx264 + libvpx-vp9 + libopus + aac)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -encoders | grep -E "libx264|libvpx-vp9|libopus|^ A.*aac "
+      - name: Maquina y builds
+        run: |
+          {
+            echo "## Maquina"
+            echo '```'
+            nproc
+            lscpu | grep -E "Model name" | cut -c1-200
+            ffmpeg -hide_banner -version | head -1
+            dpkg -l | grep -iE "libx264|libvpx|libopus" | awk '{print $2, $3}' || true
+            echo '```'
+          } | tee maquina.txt | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Bajar y verificar el master
+        run: |
+          mkdir -p work outputs
+          curl -fsSL "${{ inputs.master_url }}" -o work/master.asclv
+          echo "${{ inputs.master_sha256 }}  work/master.asclv" | sha256sum -c -
+      - name: Emitir el pack v1
+        run: |
+          if [ -n "${{ inputs.frames }}" ]; then
+            FRAMES="--frames ${{ inputs.frames }}"
+          else
+            FRAMES=""
+          fi
+          /usr/bin/time -v -o time.txt python tools/emit_v1.py \
+            work/master.asclv --out outputs/v1 $FRAMES ${{ inputs.receta }} | tee emision.txt
+          grep -E "Maximum resident|Elapsed" time.txt
+          rm -rf outputs/v1/work
+          ls -l outputs/v1 outputs/v1/dash-vp9 | head -40
+      - name: Segunda pasada y comparacion
+        if: ${{ inputs.dos_pasadas }}
+        run: |
+          if [ -n "${{ inputs.frames }}" ]; then
+            FRAMES="--frames ${{ inputs.frames }}"
+          else
+            FRAMES=""
+          fi
+          python tools/emit_v1.py work/master.asclv --out outputs/v1-bis $FRAMES ${{ inputs.receta }} > /dev/null
+          rm -rf outputs/v1-bis/work
+          {
+            echo "## Determinismo (dos pasadas, misma maquina)"
+            echo ""
+            echo '```'
+            for F in v1-vp9.webm v1-h264.mp4 v1-ambiente.mp3; do
+              if cmp -s outputs/v1/$F outputs/v1-bis/$F; then
+                echo "$F  IDENTICA  $(stat -c %s outputs/v1/$F) B"
+              else
+                echo "$F  DISTINTA  $(cmp -l outputs/v1/$F outputs/v1-bis/$F | wc -l) bytes distintos"
+              fi
+            done
+            echo '```'
+          } | tee comparacion.txt | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Resumen
+        run: |
+          {
+            echo "## Pack v1 emitido"
+            echo ""
+            echo "Master: \`${{ inputs.master_sha256 }}\`  receta: \`${{ inputs.receta }}\`  frames: '${{ inputs.frames }}'"
+            echo ""
+            echo '```'
+            cat outputs/v1/MANIFEST-v1.tsv
+            echo '```'
+            echo ""
+            echo "SHA-256 completos (para comparar contra otra corrida):"
+            echo '```'
+            sha256sum outputs/v1/*.webm outputs/v1/*.mp4 outputs/v1/*.mp3
+            echo '```'
+            grep -E "Maximum resident|Elapsed" time.txt || true
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar el pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: pack-v1
+          path: |
+            outputs/v1/
+            emision.txt
+            time.txt
+            maquina.txt
+            comparacion.txt
+          retention-days: 30
