@@ -89,7 +89,7 @@ assert.strictEqual(api.target("https://otro/lado/"), "https://otro/lado/",
 assert.strictEqual(api.target("   "), "", "vacio no navega");
 
 /* La leyenda se dibuja: 8 destinos mas la opcion de escribir. */
-assert.strictEqual(byId("ops").childNodes.length, 9);
+assert.strictEqual(byId("ops").childNodes.length, 10);
 
 /* W-26: la raiz forzada a Canvas2D tiene tecla propia. Es un destino con
  * pregunta y sin ruta, asi que `target` no le puede pegar una barra final: si

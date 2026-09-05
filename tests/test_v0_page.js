@@ -247,7 +247,7 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 36);
+assert.strictEqual(codigos.length, 37);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
@@ -339,7 +339,7 @@ var ahora = registered.actions.filter(function (item) {
   return item.tier === "now";
 }).map(function (item) { return item.code; }).sort();
 assert.deepStrictEqual(ahora,
-  ["1", "70", "71", "72", "74", "75", "76", "84", "85", "87"],
+  ["1", "70", "71", "72", "74", "75", "76", "77", "84", "85", "87"],
   "lo pendiente: la cache, los dos videos, la pantalla entera, el bucle a ojo, el pack v1 y el 1");
 
 function emDe(sel) {
@@ -374,7 +374,7 @@ assert(/px\(byId\("side"\), sideX, midTop, w - sideX - 12, midH\)/.test(inline[1
 var visibles = byId("teclas").childNodes.length;
 assert(visibles >= 10,
   "tienen que quedar al menos 10 teclas a la vista, y hay " + visibles);
-assert.strictEqual(visibles, 18,
+assert.strictEqual(visibles, 19,
   "hoy son 18: las 10 de ahora y las 8 herramientas");
 var ocultas = registered.actions.filter(function (item) {
   return item.tier === "done";

@@ -18,12 +18,13 @@ abajo a la izquierda lo que se va tecleando (`8_`, `83_`) y ejecuta cuando pasan
 900 ms sin otra tecla, así que **una tecla de una cifra tarda un momento en
 salir**: es normal, está esperando a ver si viene la segunda.
 
-## Lo que se ve en pantalla (18 teclas)
+## Lo que se ve en pantalla (19 teclas)
 
 **Lo que hay que probar**
 
 | tecla | qué hace |
 |---|---|
+| `77` | **el producto** (H-8a): salta a `producto.html`, la forma del producto entera — loop en bucle desde la caché, publicidad, incentivador, radio y capa. Sus teclas son de **una cifra** y están en la sección de abajo. Se vuelve con Volver (historial) |
 | `84` | caché: baja y guarda Baseline + VP9, las reproduce desde ahí y mide el techo en tandas de 5 MB |
 | `85` | **desde caché**: la tecla de después de apagar y prender. ¿Siguen ahí? ¿Arranca sin red? |
 | `87` | **dos videos a la vez** (H-18b): el loop VP9 abajo y los **papelitos con alfa encima, exactamente del mismo tamaño**. Si el aparato compone, se ve un solo video con papelitos. La fila trae los cuadros caídos de los dos |
@@ -114,6 +115,37 @@ dice `fuente hobo` o `fuente fallback` con cuántos milisegundos tardó. Si dice
 `fallback`, lo que se ve está dibujado en monospace y la medición no está
 mintiendo sobre eso.
 
+## El producto (`producto.html`, H-8a — 2026-09-05)
+
+No es una página de pruebas: es **la forma del producto** (PLAN §2.7), para
+mirarla entera y traer la foto. Al abrir, baja **una vez** las piezas del
+guion a IndexedDB (con progreso arriba a la izquierda) y arranca sola: el loop
+en bucle por **MSE desde la caché**, mudo, con la radio aparte. Todas las
+teclas son de **una cifra** y disparan al instante. El zócalo de abajo dice
+qué suena, de dónde salió (`cache` / `red`), vueltas, atascos, caídos,
+cuántas piezas están residentes, `red si|no` y el tiempo prendido.
+
+| tecla | qué hace |
+|---|---|
+| `1` | **loop por MSE** — el anillo: los segmentos desde la caché en modo `sequence`, sin fin. **Es el bucle del producto.** Mirar `vueltas` subir con `atascos 0` |
+| `2` | **loop por blob** — la pieza entera desde memoria; al terminar vuelve a 0 y **mide la costura** (ms). Es la caída si no hay MSE |
+| `3` | **loop nativo** — `loop` del navegador (ya refutado en la caja); para comparar |
+| `4` | **incentivador** — los papelitos con alfa entran **encima**, suenan una vez y salen solos. Se mide el arranque desde la caché |
+| `5` | **publicidad** — reemplaza al loop **con su propio audio**, la radio baja con una rampa, y **vuelve sola** al loop. Se miden `ida` y `vuelta` |
+| `6` | **radio** — prende o apaga la ambiente (`<audio>` aparte, en bucle). Si el aparato pide un gesto, el reporte lo dice |
+| `7` | **capa** — los números encima, 15 fps, leyendo el reloj del video; cambian con el papel (`RULETA` durante el incentivador) |
+| `8` | **teclas** — muestra o esconde la leyenda |
+| `9` | **reporte** — a pantalla completa, dos columnas, para la foto; `9` vuelve |
+| `0` | **cortar** — para todo; `1` vuelve a arrancar |
+
+**Parámetros:** `?modo=mse|blob|loop` fuerza el bucle; `?radio=no` no la
+prende sola; `?capa=si` la prende al abrir; `?tope=<MB>` y `?fraccion=<0..1>`
+ajustan el presupuesto de residencia (SPEC §5.2); `?base=` como en `v0/`.
+
+**Lo que hay que traer de la foto** (SPEC-VGEN §12): `1` durante ≥ 10 min y
+`9`; después `5`, esperar que vuelva, `9`; `4`, `9`; y la segunda apertura
+(`leidas N, guardadas 0`) con la red cortada y la página ya abierta.
+
 ## El lanzador (`ir.html`)
 
 Es un archivo suelto que vive en **otro servidor**, no en el bucket del player.
@@ -127,6 +159,7 @@ Sus teclas:
 | `4` | `player/1280-12/` |
 | `5` | `player/1920-10/` |
 | `6` | **`player/?renderer=canvas2d`** — la raíz **sin WebGL**. Es el escape de W-26: la raíz elige WebGL en los primeros 240 ms y en la caja esa GPU no presenta (pantallazo blanco) |
+| `7` | **`player/v0/producto.html`** — **el producto** (H-8a): loop + publicidad + incentivador + radio, desde la caché. Una cifra, dispara al instante |
 | `90` | `player/v0/` con retardo de tecla de 1600 ms |
 | `91` | `player/v0/` con retardo de tecla de 400 ms |
 | `0` | foco en el campo para escribir un destino a mano |

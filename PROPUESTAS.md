@@ -176,6 +176,27 @@ tome.
 - **Qué la refutaría:** que la elección automática elija un crf que el
   operador rechace a ojo dos veces seguidas.
 
+### P-008 · El encoder fuera del CI: bundle portátil, con el CI como árbitro · 🟡 propuesta · 2026-09-05 · operador
+
+- **Problema:** cada emisión pasa por GitHub Actions (1–2 min + bajar el
+  artifact) y la máquina del operador no tiene Python ni Node a propósito.
+  El operador pidió «más rápido y sin instalar».
+- **Idea:** una carpeta portátil (Python embebido + numpy + ffmpeg estático +
+  `emitir.ps1`) que corre **el mismo** `tools/emit_v1.py` sin instalar nada,
+  publicada como artifact por un workflow. Evaluación completa en
+  [`docs/ENCODER-PORTATIL.md`](docs/ENCODER-PORTATIL.md).
+- **Qué compra:** emisión local en ~1 min, sin esperar al runner. **Qué
+  cuesta:** armar el bundle (~1 sesión) y **verificar** que el ffmpeg de
+  Windows emita los mismos SHA-256 que el CI para la receta vigente.
+- **Cómo se mide:** SHA-256 del pack local contra el del workflow, para la
+  misma receta; si difieren, manda el CI.
+- **Qué la refutaría:** que el ffmpeg de Windows no pueda dar los mismos
+  bytes con ninguna versión pinneable → el CI sigue siendo el único emisor
+  y la propuesta se cierra como ⚪.
+- **Nota:** los minutos de Actions son gratis desde que el repo es público
+  (2026-09-05); la ganancia es de latencia, no de costo. Recomendación:
+  **después de H-8**, cuando la receta esté firmada.
+
 ---
 
 ## Adoptadas

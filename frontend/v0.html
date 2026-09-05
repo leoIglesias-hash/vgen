@@ -2051,6 +2051,13 @@ var TECLAS = [
   { code: "76", label: "lote v1", tier: "now",
     detail: "las tres de arriba, seguidas",
     run: function () { runSteps(v1Steps(), 0); } },
+  /* H-8a: el producto entero, en su propia pagina (producto.html): loop en
+   * bucle por MSE desde la cache, publicidad, incentivador, radio y capa. Va
+   * como tecla porque escribir la direccion con el control remoto no es
+   * razonable; se vuelve con el historial (94 alla no existe: 0 y Volver). */
+  { code: "77", label: "producto", tier: "now",
+    detail: "H-8a: la forma del producto entera, en su pagina; el 8 alla muestra las teclas",
+    run: function () { window.location.href = "producto.html" + window.location.search; } },
   { code: "73", label: "entera a ojo", tier: "tool",
     detail: "prende y apaga la pantalla entera, sin medir",
     run: toggleEntera },
