@@ -226,7 +226,10 @@ nada.
 > H-24: efecto armado); radio pide gesto (declarado; propuesta: la primera
 > tecla lo es). v1: VP9 *«joya»*, H.264 *«un poco más lento pero corre»*.
 > **H-23 quedó sin prender** (`77` + `4` no alcanza: es `7` dos veces DENTRO
-> del producto, después `4`) — sigue pendiente. `5` (publicidad) sin probar.
+> del producto, después `4`). Después, con `7` dos veces: **«se ve, se traba
+> un poco»** → H-23b (`0651523`): giro a 2 s, ritmo real de la capa en el
+> reporte, tick por reloj absoluto; **falta la foto con `9`** para separar
+> dibujo de reloj. `5` (publicidad) sin probar.
 >
 > **Lo que el operador hace mañana, en la caja y en el Smart TV:** desde el
 > lanzador `7` (o `77` desde `v0/`); dejar el `1` ≥ 10 min y `9` para la foto;

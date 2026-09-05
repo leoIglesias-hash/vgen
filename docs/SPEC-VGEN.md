@@ -245,7 +245,11 @@ vez**, al primer uso; si no llega, se dibuja un emblema en un canvas aparte y
 se gira ese (el reporte dice cuál). Se limpia solo el cuadrado de su
 diagonal, nunca el canvas entero. Cada pintada se cronometra por carga
 (`numeros`, `numeros+imagen`: media, máximo, cantidad) para que la foto diga
-cuánto cuesta la imagen y no solo si se ve.
+cuánto cuesta la imagen y no solo si se ve. El tick de la capa se agenda por
+**reloj absoluto** (el costo de la pintada no estira el periodo) y el reporte
+trae el **ritmo real** (`N/s`, `gap max`, `tardias`). Vuelta cada 2 s
+(`?giro=`). En la caja (2026-09-05, sin foto todavía): *«se ve, se traba un
+poco»*.
 
 ### 6.7 Vigilancia
 - `play()` **reintentado cada 2 s** mientras el video esté en pausa sin haberla

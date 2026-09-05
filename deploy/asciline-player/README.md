@@ -533,3 +533,16 @@ página. Todo sale del repo en `9aa9f37` (CI verde).
 
 **El Worker no se tocó.** Verificación: las 2 keys bajadas con cache-buster y
 comparadas por SHA-256 contra el árbol; token quemado y 403 comprobado.
+
+## 2026-09-05 — H-23b: giro más rápido y ritmo de la capa (1 key regenerada)
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/producto.html` | 51.026 | `0c9fbe656f7ab0842478519a1f6b62a3` |
+
+**Qué es:** la imagen gira una vuelta cada 2 s (`?giro=4` vuelve a la lenta),
+la línea `capa` del reporte suma `ritmo N/s (pide 15)`, `gap max` y
+`tardias`, el tick de la capa se agenda por reloj absoluto, y el aviso de
+llegada dice «7 dos veces: la imagen girando». Sale del repo en `0651523`
+(CI verde). **El Worker no se tocó.** Verificación: SHA-256 contra el árbol,
+token quemado y 403 comprobado.

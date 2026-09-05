@@ -5877,3 +5877,31 @@ en H-20.
    `arranco`: la hipótesis es bajar de ~650 a ≤ 150 ms.
 2. **Radio con la primera tecla:** si la radio pidió gesto, cualquier tecla
    reintenta `play()` (el `keydown` es gesto en Chromium). Sin cambio de spec.
+
+### Más tarde, con `7` dos veces: la imagen SE VE, y se traba (H-23b)
+
+Operador: *«ahí presionando el 7 pude ver la imagen girando, pero se traba un
+poco, evidentemente le cuesta… podrías ponerla un poco más rápido a ver si
+notamos alguna diferencia»*. Todavía sin foto con `9`, así que no se sabe si
+lo que traba es el **dibujo** (la pintada tarda) o el **reloj** (el tick de
+15 fps llega tarde porque la CPU está con los dos videos). Se hicieron tres
+cosas en `producto.html` (`0651523`, H-23b), publicadas en `v0/`:
+
+- **Giro más rápido:** una vuelta cada **2 s** (`giroSegundos()`; `?giro=4`
+  vuelve a la lenta) — lo que pidió el operador para comparar.
+- **El reporte dice el ritmo real de la capa:** `ritmo N/s (pide 15)`, `gap
+  max` (el hueco más largo entre dos ticks) y `tardias` (ticks que llegaron
+  más de dos periodos tarde). Con eso la próxima foto separa las dos causas:
+  pintada ≥ 10 ms = le cuesta dibujar; ritmo < 15 con pintada chica = el
+  reloj no llega.
+- **Tick por reloj absoluto:** antes el próximo tick se agendaba «periodo
+  después de pintar», así que el costo de la pintada se sumaba al periodo; en
+  la PC el ritmo era **13,2/s** con la misma carga y pasó a **15/s** (gap max
+  74 ms, tardías 0, pintada 0,33 ms med / 2,6 max a 399×224).
+
+**Qué trae la próxima foto:** `7` `7`, `4`, `9`: la línea `capa` con `ritmo`,
+`gap max`, `tardias` y `numeros+imagen … ms`, y el ojo comparando el giro de
+2 s con `?giro=4`. Si el ritmo llega a 15 y la pintada es chica pero el ojo
+sigue viendo que traba, el sospechoso pasa a ser el compositor (la capa de
+1280×720 sobre la superficie 4K encima de dos videos), y ahí las salidas son
+las ya anotadas: la imagen como tercer video, o sprites pre-rotados.
