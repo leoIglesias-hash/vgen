@@ -143,6 +143,7 @@ var publicidad = { on: false, t0: 0, idaMs: -1, vueltaMs: -1, veces: 0, error: "
 var radio = { on: false, t0: 0, arrancoMs: -1, error: "", rampa: 0, objetivo: 1,
               pedida: false };
 var capa = { load: "none", paints: 0, n: 0, timer: 0, w: 0, h: 0, k: 1,
+             on0: 0, paints0: 0, ultimo: 0, gapMax: 0, tardias: 0, proximo: 0,
              stat: { rect: { n: 0, ms: 0, max: 0 }, imagen: { n: 0, ms: 0, max: 0 } } };
 /* H-23: la imagen que gira encima (el logo, 210x150 con alfa), pedida una vez */
 var logo = { node: null, estado: "sin pedir", detalle: "", fuente: "-", w: 0, h: 0, ms: 0, t0: 0 };
@@ -903,6 +904,13 @@ function logoFallback(motivo) {
  * del cuadro, sin tocar el rectangulo de los numeros: se limpia solo el
  * cuadrado que cubre su diagonal. Un save/translate/rotate/drawImage/restore
  * por pintada: es exactamente el costo que se quiere medir. */
+/* Segundos por vuelta: ?giro=4 para la lenta; 2 por defecto (operador,
+ * 2026-09-05: "ponela un poco mas rapido a ver si notamos diferencia"). */
+function giroSegundos() {
+  var s = parseFloat(param("giro"));
+  return (s > 0) ? s : 2;
+}
+
 function paintLogo(ctx) {
   var video = byId("video"), efecto = byId("efecto");
   var ct = incentivador.on ? (efecto.currentTime || 0) : (video.currentTime || 0);
@@ -914,7 +922,7 @@ function paintLogo(ctx) {
   if (!logo.node) { return; }
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.rotate(ct * Math.PI / 2);
+  ctx.rotate(ct * Math.PI * 2 / giroSegundos());
   ctx.drawImage(logo.node, -Math.round(dw / 2), -Math.round(dh / 2), dw, dh);
   ctx.restore();
 }
@@ -926,10 +934,18 @@ function contarPintada(load, dt) {
   if (dt > s.max) { s.max = dt; }
 }
 
+/* El ritmo real: cada tick mide cuanto tardo en llegar desde el anterior.
+ * Un gap > 2 periodos es un tick tardio (el timer se atraso: CPU ocupada). */
 function capaTick() {
-  var ctx, t0;
+  var ctx, t0, t = ahora(), gap;
   capa.timer = 0;
   if (capa.load === "none") { return; }
+  if (capa.ultimo) {
+    gap = t - capa.ultimo;
+    if (gap > capa.gapMax) { capa.gapMax = gap; }
+    if (gap > 2000 / CAPA_FPS) { capa.tardias++; }
+  }
+  capa.ultimo = t;
   ctx = capaContext();
   if (ctx) {
     t0 = reloj();
@@ -939,7 +955,12 @@ function capaTick() {
     if (capa.load === "imagen") { paintLogo(ctx); }
     contarPintada(capa.load, reloj() - t0);
   }
-  capa.timer = window.setTimeout(capaTick, Math.round(1000 / CAPA_FPS));
+  /* El proximo tick se agenda por reloj absoluto (no "periodo despues de
+   * pintar"): asi el costo de la pintada no se suma al periodo y el ritmo
+   * queda en 15/s mientras la CPU llegue. */
+  capa.proximo = (capa.proximo || t) + 1000 / CAPA_FPS;
+  if (capa.proximo < t) { capa.proximo = t; }
+  capa.timer = window.setTimeout(capaTick, Math.max(0, Math.round(capa.proximo - ahora())));
 }
 
 function setCapa(load) {
@@ -948,6 +969,7 @@ function setCapa(load) {
   capa.load = load;
   node.className = load === "none" ? "off" : "";
   if (load === "none") { return; }
+  capa.on0 = ahora(); capa.paints0 = capa.paints; capa.ultimo = 0; capa.proximo = 0;
   if (load === "imagen") { pedirLogo(); }
   ctx = capaContext();
   if (ctx) { ctx.clearRect(0, 0, capa.w, capa.h); }
@@ -960,6 +982,12 @@ function capaNombre() {
 
 function capaCorto() {
   return capa.load === "imagen" ? "num+img" : (capa.load === "rect" ? "num" : "no");
+}
+
+function capaRitmo() {
+  var seg = (ahora() - capa.on0) / 1000;
+  if (capa.load === "none" || seg < 1) { return "-"; }
+  return (Math.round((capa.paints - capa.paints0) / seg * 10) / 10) + "/s (pide " + CAPA_FPS + ")";
 }
 
 function pintadaMedia(s) {
@@ -1106,11 +1134,12 @@ function writeReport() {
   lines.push("capa\t" + capaNombre() +
              "\tpintadas " + capa.paints + "\t" + capa.w + "x" + capa.h +
              "\tfuente " + capaFuente.name + (capaFuente.ms ? " (" + capaFuente.ms + " ms)" : "") +
+             "\tritmo " + capaRitmo() + "\tgap max " + capa.gapMax + " ms\ttardias " + capa.tardias +
              "\tnumeros " + pintadaMedia(capa.stat.rect) +
              "\tnumeros+imagen " + pintadaMedia(capa.stat.imagen));
   lines.push("imagen\t" + logo.estado + (logo.detalle ? " (" + logo.detalle + ")" : "") +
              "\t" + logo.fuente + "\t" + logo.w + "x" + logo.h +
-             "\tllego " + logo.ms + " ms\tgira 1 vuelta / 4 s del reloj del video");
+             "\tllego " + logo.ms + " ms\tgira 1 vuelta / " + giroSegundos() + " s del reloj del video");
   lines.push("# " + ultimaTecla);
   reportLines = lines;
 }
