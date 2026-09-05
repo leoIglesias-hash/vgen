@@ -5568,3 +5568,7 @@ y el archivo lo mantiene el equipo. README suma «Cómo colaborar».
 **Pendiente de la caja y del Smart TV:** `76` (o `72`, `74`, `75` sueltas)
 y `95` para la foto; el ojo sobre `v1-vp9` (crf 38) y `v1-h264` (High con B).
 Con esa foto cierra H-6 y sigue **H-7** (la spec, con H-15 adentro).
+
+### 2026-09-05 (cierre) — el repo se llama `vgen` y es público de solo lectura
+
+Renombrado por API (`leoIglesias-hash/ASCILINE-hybrid` → **`leoIglesias-hash/vgen`**; GitHub redirige el nombre viejo; la carpeta local conserva `ASCILINE-hybrid`). Antes de publicarlo se le presentó al operador el choque con **PUB-001** (README §Licencia: «no debe hacerse un release público hasta resolver procedencia…») y lo que quedaría expuesto: `frontend/HoboStd.ttf` (fuente comercial) y la rama `assets` con el clip fuente del cliente. **Eligió «sacar assets y la fuente, y publicar»**: la rama `assets` se borró del remoto (queda local; `encode` no corre en CI hasta que tenga otra fuente), la fuente salió del árbol (`git rm --cached` + `.gitignore`; sigue en la historia y servida desde Cloudflare) y el test la verifica solo si hay copia local. Público con **Issues sí, wiki y projects no, sin LICENSE** (= mirar, no reutilizar). Verificado anónimo: API 200, `raw/main/PROPUESTAS.md` 200, una sola rama `main`.
