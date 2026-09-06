@@ -34,15 +34,19 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-> ## ▶ Próxima acción: **decisión del operador sobre H-25 (la imagen girando como tercer video)**; luego H-24, radio con la primera tecla y la firma de la spec
+> ## ▶ Próxima acción: **H-24 (incentivador armado en pausa)** → radio con la primera tecla → firma de la spec (H-7) → H-8
 >
-> **2026-09-06 — H-23 CERRADA COMO REFUTACIÓN:** con `reloj raf` la caja la
-> vio *«un poco más trabada todavía… es algo de la capacidad del TV box»*.
-> Descartada la cadencia, lo que cuesta es presentar el canvas de 1280×720 a
-> 15/s encima de dos videos en esa GPU. **Regla propuesta para la spec: en la
-> caja, lo que se mueve es video** (la capa queda para lo que cambia poco).
-> **H-25 propuesta:** el logo girando como tercer `<video>` VP9+alfa de 2 s en
-> bucle, con caídos en el reporte. Detalle: REGISTRO 2026-09-06.
+> **2026-09-06 — H-23 APARCADA:** con `reloj raf` la caja la vio *«un poco
+> más trabada todavía… es algo de la capacidad del TV box»*. Lo que cuesta
+> es presentar el canvas a 15/s encima de dos videos en esa GPU.
+> **🔴 NO se reemplaza por un tercer video** (H-25 RECHAZADA por el
+> operador): el tercer elemento es **interactivo** —la ruleta— y un video es
+> contenido cerrado, no responde. **Regla: la interacción vive en la capa;
+> nunca se reemplaza por una pieza de video.** Los videos (loop, publicidad,
+> incentivador) son contenido; la capa es donde el aparato responde. Se
+> retoma cuando el operador lo pida (ideas anotadas en REGISTRO 2026-09-06,
+> sin tarea). Decisión: **«trabajemos en otras cosas»** → H-24 → radio →
+> H-7 → H-8 → P-008.
 >
 > **Turno nocturno del 2026-09-05:** **H-8a EJECUTADA hasta la pantalla** —
 > `frontend/producto.html`, la forma del producto entera desde la caché del
@@ -64,8 +68,8 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 > 1,67 ms (barata) pero **206 ticks tardíos, gap 562 ms**, y la capa cuesta
 > caídos (loop 1,5 %, incentivador 7,5 %). → **H-23c publicada: la capa en el
 > vsync** (`requestAnimationFrame` 1 de 4; `?cada=2`, `?capak=0.5`,
-> `?reloj=timeout`). **Con `reloj raf` siguió trabada (2026-09-06) → H-25:
-> la imagen pasa a ser un tercer video.**
+> `?reloj=timeout`). **Con `reloj raf` siguió trabada (2026-09-06) → H-23
+> aparcada; NO se reemplaza por video (la ruleta es interacción).**
 > **H-7 es BORRADOR 0.1** ([`docs/SPEC-VGEN.md`](docs/SPEC-VGEN.md)): describe
 > lo que el prototipo ejecuta, marca ⏳ lo no reproducido y pide la firma del
 > operador con la lista de §12. **El encoder quedó evaluado, no hecho**

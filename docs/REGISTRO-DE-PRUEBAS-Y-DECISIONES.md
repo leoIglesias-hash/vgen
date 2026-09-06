@@ -5978,35 +5978,54 @@ en pie el sospechoso que anotó la foto 4: **presentar un canvas de 1280×720
 quince veces por segundo encima de dos videos** en esa GPU (la misma que no
 presenta WebGL — DIAG-002) es lo que cuesta, no dibujar (1,67 ms) ni el
 reloj. Tres perillas más (`cada`, `capak`, `reloj`) no lo movieron a ojo.
-**No se insiste con el canvas: H-23 cierra refutada** — en la clase
-principal, la capa no puede llevar movimiento continuo.
+**No se insiste hoy: H-23 queda aparcada** — en la clase principal, una imagen
+girando en forma continua sobre toda la capa no se ve suave. Ojo: eso no
+vuelve inútil a la capa; lo que sigue abajo dice por qué la capa es
+insustituible.
 
-**Lo que sí sabe la caja (evidencia previa, no suposición):** el hardware
-compone planos de video sin costo — dos videos «se ven perfecto» (H-18b), la
-pantalla entera y el 4K no le cuestan al `<video>` (H-20, que retiró «dos
-planos, no tres»), y el alfa compone (H-10). Por eso la conclusión no es
-«la caja no puede girar una imagen» sino **«en la caja, lo que se mueve es
-video»**: la misma imagen girando, emitida offline como un clip VP9+alfa en
-bucle de 2 s, la reproduce el decodificador, no la CPU.
+**Se propuso y el operador la RECHAZÓ (mismo día): «H-25, la imagen girando
+como tercer video».** La propuesta decía que, como la caja compone planos de
+video sin costo (H-18b, H-20, H-10), el logo girando podía emitirse como un
+clip VP9+alfa en bucle y una regla «lo que se mueve es video» iría a la spec.
+Operador: *«H-25 no estoy de acuerdo. No necesitamos un tercer video, no
+queremos eso. Recordá que necesitamos cierta **interacción** en el tercer
+elemento: por eso elegimos una imagen girando, con la idea de **ruleta**.
+Teniendo en cuenta eso, trabajemos en otras cosas. Eso limpialo y dale
+claridad para no equivocarnos otra vez»*. La propuesta y la regla quedan
+**retiradas**; no se vuelven a proponer.
 
-**Regla para la spec (propuesta, pendiente de la firma del operador — §6.6):**
-la capa canvas queda para lo que **cambia poco** (números, texto, un estado
-que se pinta cuando cambia y no por reloj); todo movimiento continuo
-(giros, transiciones, partículas, logos animados) **es una pieza de video**
-con alfa, generada por el encoder. El aparato nunca anima: ejecuta. Es la
-tesis del proyecto aplicada a la intervención.
+**La claridad, para no equivocarse otra vez — qué es cada plano y por qué:**
 
-**Propuesta H-25 — la imagen girando como tercer video:** el workflow
-`encode` emite `v0-logo-alpha` (logo.png rotando una vuelta cada 2 s, VP9 +
-alfa, bucle, ~1 s de GOP; se espera < 300 KB) y `producto.html` la muestra
-por una tecla como tercer `<video>` encima del incentivador, con la capa de
-números prendida y el reporte contando sus caídos. La foto responde con
-números lo que hoy se sabe a ojo: si el loop vuelve a ~0,2 % y el
-incentivador queda dentro del gate del 3 % con el logo girando, la regla se
-consagra. Si la caja no compone tres planos con alfa, se sabe con la misma
-foto y el logo pasa **adentro** del incentivador (se hornea en el clip).
+- **Los videos son contenido cerrado:** loop, publicidad, incentivador. Se
+  emiten offline, el aparato los ejecuta, y **no responden a nada**. Por eso
+  H-18b/H-20 pudieron decir «un efecto puede SER video»: un efecto no
+  interactúa.
+- **La capa (canvas) es donde el aparato responde.** El tercer elemento de
+  la intervención es **interactivo** — la ruleta: gira, frena donde diga el
+  dato o el gesto, muestra un resultado. Una pieza de video **no puede ser
+  eso**, porque está decidida antes de llegar. Por eso se eligió una
+  **imagen girando en la capa** y no un clip, y por eso un tercer video no
+  reemplaza a la imagen: **resolvería el giro y perdería la interacción, que
+  es lo que se necesita.**
+- **Regla (a la spec §6.6, a la firma del operador):** *la interacción vive
+  en la capa; nunca se reemplaza por una pieza de video.* Un video se agrega
+  solo cuando lo que se quiere es contenido, no respuesta.
 
-**Cómo seguir (orden propuesto):** H-25 → H-24 (incentivador armado en
-pausa: 627/737 ms → un `play()`) + radio con la primera tecla → firma de la
-spec (H-7) con la regla nueva → H-8 (muxer + archivo único) → P-008 (encoder
-portátil).
+**Lo que H-23 deja establecido en la caja:** una imagen girando en forma
+**continua** a 15/s sobre toda la capa, encima de dos videos, **no se ve
+suave** en la clase principal; dibujarla es barato (1,67 ms), el reloj ya no
+es el culpable (vsync), lo que cuesta es presentar el canvas. **Queda
+aparcado, no resuelto.** Ideas anotadas para cuando se retome (sin tarea,
+por decisión del operador de trabajar en otras cosas): (a) achicar **lo que
+se presenta** — un canvas del tamaño de la imagen y no del panel, o
+`?capak=` más bajo con la foto que lo mida; (b) sprites pre-rotados;
+(c) medir la misma prueba en el **Smart TV** (Chrome 142, GPU que sí
+presenta), que puede ser la clase donde la ruleta corre como está; (d) una
+ruleta cuyo movimiento no sea continuo (frena por pasos, se pinta cuando
+cambia). Nada de esto se implementa ahora.
+
+**Cómo se sigue (acordado con el operador el 2026-09-06: «trabajemos en
+otras cosas»):** H-24 (incentivador armado en pausa: 627/737 ms → un
+`play()`) → radio con la primera tecla → firma de la spec H-7 (con la regla
+de la interacción en §6.6) → H-8 (muxer + archivo único) → P-008 (encoder
+portátil, decisión del operador). H-23 se retoma cuando el operador lo pida.

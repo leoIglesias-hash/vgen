@@ -251,8 +251,19 @@ trae el **ritmo real** (`N/s`, `gap max`, `tardias`). Vuelta cada 2 s
 (`?giro=`). **La capa se pinta en el vsync** (`requestAnimationFrame`, una de
 cada 4 señales; cae al timer si no hay): en la caja el timer dio pintadas de
 1,67 ms pero 206 ticks tardíos y `gap max` 562 ms, y el ojo lo vio como
-«se traba al girar, de eso no hay duda» (foto 4 del 2026-09-05). ⏳ la foto
-con `reloj raf`.
+«se traba al girar, de eso no hay duda» (foto 4 del 2026-09-05). Con el
+vsync la caja la vio igual (2026-09-06): **el movimiento continuo de una
+imagen sobre toda la capa no se ve suave en la clase principal** — lo que
+cuesta es presentar el canvas, no dibujarlo. ⏳ sin resolver (aparcado por
+el operador).
+
+**Principio de la intervención (decisión del operador, 2026-09-06):** los
+videos (loop, publicidad, incentivador) son **contenido cerrado**: se emiten
+offline y no responden a nada. **La capa es donde el aparato responde**: el
+tercer elemento es interactivo (la ruleta gira y frena donde diga el dato o
+el gesto), y por eso es una imagen en la capa y no un clip. **La interacción
+vive en la capa; nunca se reemplaza por una pieza de video.** Un video se
+suma solo cuando lo que se quiere es contenido, no respuesta.
 
 ### 6.7 Vigilancia
 - `play()` **reintentado cada 2 s** mientras el video esté en pausa sin haberla
@@ -310,7 +321,7 @@ paquete lo emite Python en CI).
 | Bucle por MSE `sequence`, `loop` nativo refutado | H-13 (REGISTRO «H-13: reporte de la caja»), S12 |
 | Blob concatenado = archivo | S10 |
 | Capa encima, lee `currentTime` | H-11 (0/155 caídos) |
-| Imagen girando por `drawImage` sobre el alfa, medida por pintada | H-23 (PC: 0,20 ms med / 2,2 max a 1280×720; ⏳ la caja) |
+| Imagen girando por `drawImage` sobre el alfa, medida por pintada | H-23 (PC: 0,20 ms med / 2,2 max; caja: pintada 1,67 ms pero se ve trabada → aparcada; **no se reemplaza por video: la ruleta es interacción**) |
 | Efecto = video con alfa, mismo rectángulo | H-18b (2/154, 1/141) |
 | Tres planos | H-20 + ojo del operador («se ven perfecto») |
 | Persistencia y techo de residencia | H-12, H-12b (50 MB en tandas) |

@@ -191,19 +191,20 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **decisión del operador sobre H-25 (la imagen girando como tercer video)**; luego H-24, radio con la primera tecla, firma de la spec
+> ## ▶ PRÓXIMA ACCIÓN: **H-24 (incentivador armado en pausa)** → radio con la primera tecla → firma de la spec (H-7) → H-8
 >
-> **2026-09-06 — H-23 CERRADA COMO REFUTACIÓN:** con `reloj raf` el operador
-> la vio *«un poco más trabada todavía»*, sin solución a la vista —
-> *«es algo de la capacidad del TV box»*. Con la cadencia descartada, lo que
-> cuesta es **presentar el canvas de 1280×720 a 15/s encima de dos videos**
-> en esa GPU. Conclusión y propuesta (REGISTRO 2026-09-06): **en la caja, lo
-> que se mueve es video** — la capa canvas queda para lo que cambia poco; el
-> movimiento continuo se emite como pieza VP9+alfa. **H-25 propuesta:** el
-> mismo logo girando como tercer `<video>` (clip de 2 s en bucle desde el
-> workflow `encode`), tecla y caídos en el reporte; la foto dice si tres
-> planos con alfa se sostienen. Orden propuesto: H-25 → H-24 + radio → H-7
-> (firma con la regla nueva) → H-8 → P-008.
+> **2026-09-06 — H-23 APARCADA (refutada en la caja, sin reemplazo):** con
+> `reloj raf` el operador la vio *«un poco más trabada todavía… es algo de la
+> capacidad del TV box»*. Descartada la cadencia, lo que cuesta es presentar
+> el canvas de 1280×720 a 15/s encima de dos videos en esa GPU.
+> **🔴 NO se reemplaza por un tercer video** (propuesta H-25, RECHAZADA por el
+> operador): el tercer elemento es **interactivo** —la ruleta— y un video es
+> contenido cerrado, no responde. **Regla:** *la interacción vive en la capa;
+> nunca se reemplaza por una pieza de video* (va a la spec §6.6 con la
+> firma). Ideas para cuando se retome, sin tarea: canvas del tamaño de la
+> imagen, sprites, medirla en el Smart TV, ruleta por pasos. Decisión del
+> operador: **«trabajemos en otras cosas»** → H-24 → radio → H-7 → H-8 →
+> P-008. Detalle: REGISTRO 2026-09-06.
 >
 > **Turno nocturno del 2026-09-05** (REGISTRO, entrada «turno nocturno»):
 > **H-8a EJECUTADA hasta la pantalla** — `producto.html`, la forma del
@@ -246,8 +247,9 @@ nada.
 > subida del canvas no. **H-23c (`6e9ba5e`, publicada): la capa en el vsync**
 > (`requestAnimationFrame`, 1 de 4; `?cada=2`, `?capak=0.5`,
 > `?reloj=timeout`). **Veredicto del 2026-09-06 con `reloj raf`: «se traba
-> un poco más todavía» → H-23 refutada** (ver el encabezado). `5`
-> (publicidad): el operador dice *«probé todo»*, sin reporte propio.
+> un poco más todavía» → H-23 aparcada, sin tercer video** (ver el
+> encabezado). `5` (publicidad): el operador dice *«probé todo»*, sin
+> reporte propio.
 >
 > **Lo que el operador hace mañana, en la caja y en el Smart TV:** desde el
 > lanzador `7` (o `77` desde `v0/`); dejar el `1` ≥ 10 min y `9` para la foto;
