@@ -15,8 +15,8 @@ on:
         default: "3.11.9"
         required: true
       ffmpeg_url:
-        description: "ffmpeg estatico de Windows (zip con libx264, libvpx-vp9, libopus, aac)"
-        default: "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-7.1.1-essentials_build.zip"
+        description: "ffmpeg estatico de Windows (zip con libx264, libvpx-vp9, libopus, aac); alternativa pinneada: BtbN/FFmpeg-Builds releases/download/autobuild-<fecha>/ffmpeg-n<ver>-win64-gpl-<ver>.zip"
+        default: "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-essentials_build.zip"
         required: true
       master_url:
         description: "URL del master .asclv (pineado por contenido, con audio)"
