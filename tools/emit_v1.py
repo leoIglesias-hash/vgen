@@ -147,7 +147,7 @@ def build_dash_command(ffmpeg, source_path, out_dir):
             "-seg_duration", "1", "-use_template", "1", "-use_timeline", "1",
             "-init_seg_name", "init.webm",
             "-media_seg_name", "chunk-$Number%05d$.webm",
-            os.path.join(out_dir, "manifest.mpd")]
+            emit_pieces.posix_path(os.path.join(out_dir, "manifest.mpd"))]
 
 
 def manifest_lines(rows, master_sha, width, height, fps, frames, receta):

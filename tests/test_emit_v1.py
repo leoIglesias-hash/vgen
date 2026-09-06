@@ -102,6 +102,20 @@ class BuildCommandTest(unittest.TestCase):
         self.assertEqual(command[command.index("-init_seg_name") + 1], "init.webm")
         self.assertTrue(command[-1].endswith("manifest.mpd"))
 
+    def test_el_manifest_va_con_barras_aunque_la_carpeta_venga_de_windows(self):
+        """P-008: en Windows el muxer dash de ffmpeg no encuentra la carpeta si
+        el path lleva '\\' y deja los segmentos en el directorio actual (la
+        corrida 34012297378 del workflow `portable`: manifest solo, -1
+        segmentos). El path del playlist va siempre con '/'."""
+        command = emit_v1.build_dash_command("ffmpeg", "v1-vp9.webm", "gate\\v1\\dash-vp9")
+        self.assertEqual(command[-1], "gate/v1/dash-vp9/manifest.mpd")
+        stream = emit_pieces.STREAMS[0]
+        command = emit_pieces.build_segment_command("ffmpeg", stream, "x.mp4", "out\\hls")
+        self.assertNotIn("\\", command[-1])
+        self.assertTrue(command[-1].startswith("out/hls/"))
+        if stream["segment_name"]:
+            self.assertNotIn("\\", command[command.index("-hls_segment_filename") + 1])
+
 
 class ManifestTest(unittest.TestCase):
 

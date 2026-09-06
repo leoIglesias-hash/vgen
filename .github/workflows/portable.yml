@@ -110,10 +110,13 @@ jobs:
           & powershell.exe @pa 2>&1 | Tee-Object -FilePath emision-windows.txt
           if ($LASTEXITCODE -ne 0) { throw "emitir.ps1 fallo con $LASTEXITCODE" }
           "segundos`t$([int]((Get-Date) - $t0).TotalSeconds)" | Set-Content tiempo-windows.tsv
-          Get-ChildItem gate\v1 -File | Where-Object { $_.Extension -in ".webm", ".mp4", ".mp3" } | Sort-Object Name | ForEach-Object {
+          $rows = Get-ChildItem gate\v1 -File | Where-Object { $_.Extension -in ".webm", ".mp4", ".mp3" } | Sort-Object Name | ForEach-Object {
             "{0}`t{1}`t{2}" -f $_.Name, $_.Length, (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
-          } | Set-Content gate-windows.tsv
+          }
+          [IO.File]::WriteAllText("$PWD\gate-windows.tsv", (($rows -join "`n") + "`n"))
           Get-Content gate-windows.tsv
+          "dash-vp9: $((Get-ChildItem gate\v1\dash-vp9 -File).Count) archivos, $((Get-ChildItem gate\v1\dash-vp9 -File | Measure-Object Length -Sum).Sum) B" | Tee-Object -FilePath dash-windows.txt
+          Get-ChildItem gate\v1\dash-vp9 -File | Sort-Object Name | Select-Object -First 3 -ExpandProperty Name
 
       - name: Empaquetar
         shell: pwsh
@@ -148,9 +151,11 @@ jobs:
             gate-windows.tsv
             tiempo-windows.tsv
             emision-windows.txt
+            dash-windows.txt
             bundle-sha256.tsv
             vgen-portable/VERSIONES.tsv
             gate/v1/MANIFEST-v1.tsv
+            gate/v1/*.ffmpeg.log
           retention-days: 90
 
   linux:
@@ -217,7 +222,19 @@ jobs:
           path: l
       - name: Pieza por pieza
         run: |
+          # Los archivos de Windows pueden traer CRLF: se limpian antes de comparar.
+          for F in w/gate-windows.tsv w/tiempo-windows.tsv w/dash-windows.txt; do
+            [ -f "$F" ] && tr -d '\r' < "$F" > "$F.lf" && mv "$F.lf" "$F"
+          done
           DISTINTAS=0
+          TABLA=""
+          while IFS=$'\t' read -r NAME WBYTES WSHA; do
+            [ -z "$NAME" ] && continue
+            LINE=$(grep -P "^${NAME}\t" l/gate-linux.tsv || true)
+            LBYTES=$(echo "$LINE" | cut -f2); LSHA=$(echo "$LINE" | cut -f3)
+            if [ -n "$LSHA" ] && [ "$WSHA" = "$LSHA" ]; then V="IDENTICA"; else V="**DISTINTA**"; DISTINTAS=$((DISTINTAS+1)); fi
+            TABLA="$TABLA| $NAME | $WBYTES B \`${WSHA:0:12}\` | $LBYTES B \`${LSHA:0:12}\` | $V |"$'\n'
+          done < w/gate-windows.tsv
           {
             echo "## Gate P-008: el bundle de Windows contra Linux (misma receta, mismo master)"
             echo ""
@@ -225,17 +242,12 @@ jobs:
             echo ""
             echo "| pieza | Windows (bundle) | Linux (CI) | veredicto |"
             echo "|---|---|---|---|"
-            while IFS=$'\t' read -r NAME WBYTES WSHA; do
-              LINE=$(grep -P "^${NAME}\t" l/gate-linux.tsv || true)
-              LBYTES=$(echo "$LINE" | cut -f2); LSHA=$(echo "$LINE" | cut -f3)
-              if [ "$WSHA" = "$LSHA" ]; then V="IDENTICA"; else V="**DISTINTA**"; DISTINTAS=$((DISTINTAS+1)); fi
-              echo "| $NAME | $WBYTES B \`${WSHA:0:12}\` | $LBYTES B \`${LSHA:0:12}\` | $V |"
-            done < w/gate-windows.tsv
+            printf '%s' "$TABLA"
             echo ""
-            echo "Tiempos: Windows $(cut -f2 w/tiempo-windows.tsv) s, Linux $(cut -f2 l/tiempo-linux.tsv) s."
+            echo "Tiempos: Windows $(cut -f2 w/tiempo-windows.tsv) s, Linux $(cut -f2 l/tiempo-linux.tsv) s. Windows $(cat w/dash-windows.txt 2>/dev/null)."
             echo ""
             echo '```'
-            echo "Windows: $(grep '^ffmpeg' w/vgen-portable/VERSIONES.tsv 2>/dev/null || grep -h ffmpeg w/VERSIONES.tsv)"
+            echo "Windows: $(grep '^ffmpeg' w/vgen-portable/VERSIONES.tsv 2>/dev/null | cut -f2)"
             echo "Linux:   $(cat l/ffmpeg-linux.txt)"
             echo '```'
             if [ "$DISTINTAS" -eq 0 ]; then

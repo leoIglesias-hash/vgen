@@ -227,6 +227,13 @@ def stream_by_id(stream_id):
     raise KeyError(stream_id)
 
 
+def posix_path(path):
+    """Los muxers hls/dash de ffmpeg ubican la carpeta del playlist buscando
+    '/': con '\\' (Windows, P-008) escriben init y segmentos en el directorio
+    actual y el playlist queda solo. Barras siempre; en Linux no cambia nada."""
+    return path.replace("\\", "/")
+
+
 def build_segment_command(ffmpeg, stream, source_path, out_dir):
     """Remux de una pieza ya codificada a un empaquetado segmentado. `-c copy`
     es lo que hace que esto NO sea una segunda codificacion: los mismos bytes de
@@ -234,8 +241,8 @@ def build_segment_command(ffmpeg, stream, source_path, out_dir):
     command = [ffmpeg, "-y", "-nostdin", "-i", source_path] + list(SEGMENT_ARGS)
     if stream["segment_name"]:
         command += ["-hls_segment_filename",
-                    os.path.join(out_dir, stream["segment_name"])]
-    return command + list(stream["args"]) + [os.path.join(out_dir, stream["playlist"])]
+                    posix_path(os.path.join(out_dir, stream["segment_name"]))]
+    return command + list(stream["args"]) + [posix_path(os.path.join(out_dir, stream["playlist"]))]
 
 
 def directory_bytes(directory):
