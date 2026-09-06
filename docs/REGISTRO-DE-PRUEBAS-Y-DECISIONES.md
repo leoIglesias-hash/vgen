@@ -5965,3 +5965,48 @@ del producto se dimensiona por lo que dibuja, no por el panel.
 
 **Publicado en `v0/`** (copia de deploy en `bb8b8fd`): `producto.html` 52.491 B,
 SHA-256 igual al árbol, token quemado y 403 comprobado.
+
+### 2026-09-06 — veredicto de la caja con `reloj raf`: «se traba un poco más todavía» → H-23 CERRADA COMO REFUTACIÓN
+
+Operador, sin foto: *«probé todo, se traba un poco más todavía la imagen
+igual, pero no tenemos solución a eso me parece. Es algo directamente de la
+capacidad de los TV box. ¿Cómo seguimos?»*.
+
+**Lectura:** con el vsync la cadencia ya no puede ser el culpable (la pintada
+cae siempre en una señal del panel), y el ojo la vio **igual o peor**. Queda
+en pie el sospechoso que anotó la foto 4: **presentar un canvas de 1280×720
+quince veces por segundo encima de dos videos** en esa GPU (la misma que no
+presenta WebGL — DIAG-002) es lo que cuesta, no dibujar (1,67 ms) ni el
+reloj. Tres perillas más (`cada`, `capak`, `reloj`) no lo movieron a ojo.
+**No se insiste con el canvas: H-23 cierra refutada** — en la clase
+principal, la capa no puede llevar movimiento continuo.
+
+**Lo que sí sabe la caja (evidencia previa, no suposición):** el hardware
+compone planos de video sin costo — dos videos «se ven perfecto» (H-18b), la
+pantalla entera y el 4K no le cuestan al `<video>` (H-20, que retiró «dos
+planos, no tres»), y el alfa compone (H-10). Por eso la conclusión no es
+«la caja no puede girar una imagen» sino **«en la caja, lo que se mueve es
+video»**: la misma imagen girando, emitida offline como un clip VP9+alfa en
+bucle de 2 s, la reproduce el decodificador, no la CPU.
+
+**Regla para la spec (propuesta, pendiente de la firma del operador — §6.6):**
+la capa canvas queda para lo que **cambia poco** (números, texto, un estado
+que se pinta cuando cambia y no por reloj); todo movimiento continuo
+(giros, transiciones, partículas, logos animados) **es una pieza de video**
+con alfa, generada por el encoder. El aparato nunca anima: ejecuta. Es la
+tesis del proyecto aplicada a la intervención.
+
+**Propuesta H-25 — la imagen girando como tercer video:** el workflow
+`encode` emite `v0-logo-alpha` (logo.png rotando una vuelta cada 2 s, VP9 +
+alfa, bucle, ~1 s de GOP; se espera < 300 KB) y `producto.html` la muestra
+por una tecla como tercer `<video>` encima del incentivador, con la capa de
+números prendida y el reporte contando sus caídos. La foto responde con
+números lo que hoy se sabe a ojo: si el loop vuelve a ~0,2 % y el
+incentivador queda dentro del gate del 3 % con el logo girando, la regla se
+consagra. Si la caja no compone tres planos con alfa, se sabe con la misma
+foto y el logo pasa **adentro** del incentivador (se hornea en el clip).
+
+**Cómo seguir (orden propuesto):** H-25 → H-24 (incentivador armado en
+pausa: 627/737 ms → un `play()`) + radio con la primera tecla → firma de la
+spec (H-7) con la regla nueva → H-8 (muxer + archivo único) → P-008 (encoder
+portátil).

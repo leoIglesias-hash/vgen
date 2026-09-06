@@ -191,7 +191,19 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **la foto de la imagen girando con `reloj raf`** (`7` `7`, `4`, `9`), `5` publicidad, y la firma de la spec
+> ## ▶ PRÓXIMA ACCIÓN: **decisión del operador sobre H-25 (la imagen girando como tercer video)**; luego H-24, radio con la primera tecla, firma de la spec
+>
+> **2026-09-06 — H-23 CERRADA COMO REFUTACIÓN:** con `reloj raf` el operador
+> la vio *«un poco más trabada todavía»*, sin solución a la vista —
+> *«es algo de la capacidad del TV box»*. Con la cadencia descartada, lo que
+> cuesta es **presentar el canvas de 1280×720 a 15/s encima de dos videos**
+> en esa GPU. Conclusión y propuesta (REGISTRO 2026-09-06): **en la caja, lo
+> que se mueve es video** — la capa canvas queda para lo que cambia poco; el
+> movimiento continuo se emite como pieza VP9+alfa. **H-25 propuesta:** el
+> mismo logo girando como tercer `<video>` (clip de 2 s en bucle desde el
+> workflow `encode`), tecla y caídos en el reporte; la foto dice si tres
+> planos con alfa se sostienen. Orden propuesto: H-25 → H-24 + radio → H-7
+> (firma con la regla nueva) → H-8 → P-008.
 >
 > **Turno nocturno del 2026-09-05** (REGISTRO, entrada «turno nocturno»):
 > **H-8a EJECUTADA hasta la pantalla** — `producto.html`, la forma del
@@ -233,8 +245,9 @@ nada.
 > **17/227** con la capa prendida → dibujar es barato, la cadencia y la
 > subida del canvas no. **H-23c (`6e9ba5e`, publicada): la capa en el vsync**
 > (`requestAnimationFrame`, 1 de 4; `?cada=2`, `?capak=0.5`,
-> `?reloj=timeout`). **Falta la foto** con `reloj raf` y el ojo. `5`
-> (publicidad) sin probar.
+> `?reloj=timeout`). **Veredicto del 2026-09-06 con `reloj raf`: «se traba
+> un poco más todavía» → H-23 refutada** (ver el encabezado). `5`
+> (publicidad): el operador dice *«probé todo»*, sin reporte propio.
 >
 > **Lo que el operador hace mañana, en la caja y en el Smart TV:** desde el
 > lanzador `7` (o `77` desde `v0/`); dejar el `1` ≥ 10 min y `9` para la foto;
