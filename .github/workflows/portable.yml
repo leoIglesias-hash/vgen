@@ -1,0 +1,254 @@
+name: portable
+
+# P-008: arma `vgen-portable/` (Python embebido + numpy/Pillow/OpenCV + ffmpeg
+# estatico de Windows + el mismo backend/ y tools/ del repo) y lo publica como
+# artifact. En la MISMA corrida emite el pack v1 con el bundle en un runner de
+# Windows y con Linux (como emitir-v1), y compara los SHA-256 pieza por pieza:
+# el CI es el arbitro de bytes (docs/ENCODER-PORTATIL.md S4). Si difieren, el
+# job `comparar` falla y el bundle queda publicado igual, marcado.
+
+on:
+  workflow_dispatch:
+    inputs:
+      python_version:
+        description: "Python embebido (zip oficial, amd64)"
+        default: "3.11.9"
+        required: true
+      ffmpeg_url:
+        description: "ffmpeg estatico de Windows (zip con libx264, libvpx-vp9, libopus, aac)"
+        default: "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-7.1.1-essentials_build.zip"
+        required: true
+      master_url:
+        description: "URL del master .asclv (pineado por contenido, con audio)"
+        default: "https://iargen.com/player/outputs/clip.dcd6afb66907.asclv"
+        required: true
+      master_sha256:
+        description: "SHA-256 esperado del master"
+        default: "dcd6afb669078a5b0d1bf4e4d42cdd2d8497ea70908a3e283183fe7d2431632a"
+        required: true
+      receta:
+        description: "Receta de tools/emit_v1.py para el gate (la v1 vigente)"
+        default: "--vp9-crf 38 --h264-profile high --h264-crf 23 --h264-bframes 3 --h264-refs 4"
+      frames:
+        description: "Cortar el gate en N cuadros (vacio = el clip entero)"
+        default: ""
+      gate:
+        description: "Emitir con el bundle (Windows) y con Linux, y comparar"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  armar:
+    name: armar el bundle y emitir en Windows
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Python embebido + numpy, Pillow, OpenCV (sin instalar nada en el sistema)
+        shell: pwsh
+        run: |
+          function Chk($m) { if ($LASTEXITCODE -ne 0) { throw $m } }
+          $v = "${{ inputs.python_version }}"
+          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/$v/python-$v-embed-amd64.zip" -OutFile py.zip
+          Expand-Archive py.zip -DestinationPath src\python
+          $pth = Get-ChildItem src\python\python*._pth | Select-Object -First 1
+          (Get-Content $pth) -replace '^#\s*import site', 'import site' | Set-Content $pth
+          Invoke-WebRequest -Uri https://bootstrap.pypa.io/get-pip.py -OutFile get-pip.py
+          src\python\python.exe get-pip.py --no-warn-script-location
+          Chk "get-pip fallo"
+          src\python\python.exe -m pip install --no-warn-script-location --only-binary=:all: numpy Pillow opencv-python-headless
+          Chk "pip install (numpy/Pillow/OpenCV) fallo"
+          src\python\python.exe -m pip install --no-warn-script-location --only-binary=:all: zopfli
+          if ($LASTEXITCODE -ne 0) { Write-Host "zopfli: sin wheel para esta version; el master cae a zlib (solo afecta a la mitad A)" }
+          src\python\python.exe -c "import numpy, PIL, cv2; print('numpy', numpy.__version__, 'Pillow', PIL.__version__, 'cv2', cv2.__version__)"
+          Chk "el Python embebido no importa numpy/Pillow/cv2"
+          src\python\python.exe -c "import zopfli.zlib; print('zopfli si')"
+          if ($LASTEXITCODE -ne 0) { Write-Host "zopfli no" }
+          $global:LASTEXITCODE = 0
+
+      - name: ffmpeg estatico de Windows
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "${{ inputs.ffmpeg_url }}" -OutFile ff.zip
+          Expand-Archive ff.zip -DestinationPath src\ffmpeg
+          $ff = (Get-ChildItem -Recurse src\ffmpeg -Filter ffmpeg.exe | Select-Object -First 1).FullName
+          & $ff -hide_banner -version | Select-Object -First 1
+          $enc = (& $ff -hide_banner -encoders) -join "`n"
+          foreach ($need in @("libx264", "libvpx-vp9", "libopus", " aac ")) {
+            if ($enc -notmatch [regex]::Escape($need)) { throw "ffmpeg sin encoder $need" }
+          }
+          Write-Host "encoders: libx264, libvpx-vp9, libopus, aac  OK"
+
+      - name: Armar vgen-portable/
+        shell: pwsh
+        run: |
+          $ff = (Get-ChildItem -Recurse src\ffmpeg -Filter ffmpeg.exe | Select-Object -First 1).FullName
+          $pyv = & src\python\python.exe -c "import sys; print('%d.%d.%d' % sys.version_info[:3])"
+          $ffv = (& $ff -hide_banner -version | Select-Object -First 1)
+          $fecha = Get-Date -Format yyyy-MM-dd
+          src\python\python.exe tools/portable/armar.py --python src\python --ffmpeg src\ffmpeg --out vgen-portable `
+            --commit $env:GITHUB_SHA --fecha $fecha --python-version $pyv --ffmpeg-version "$ffv"
+          if ($LASTEXITCODE -ne 0) { throw "armar.py fallo" }
+          Get-Content vgen-portable\VERSIONES.tsv
+          cmd /c "vgen-portable\py.cmd -c ""import numpy, cv2; print('py.cmd OK')"""
+          if ($LASTEXITCODE -ne 0) { throw "py.cmd fallo" }
+
+      - name: Gate - emitir con el bundle (Windows PowerShell 5.1, como en la maquina del operador)
+        if: ${{ inputs.gate }}
+        shell: pwsh
+        run: |
+          $pa = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "vgen-portable\emitir.ps1",
+                  "-Master", "${{ inputs.master_url }}", "-Sha256", "${{ inputs.master_sha256 }}",
+                  "-Out", "gate\v1", "-Receta", "${{ inputs.receta }}")
+          if ("${{ inputs.frames }}" -ne "") { $pa += @("-Frames", "${{ inputs.frames }}") }
+          $t0 = Get-Date
+          & powershell.exe @pa 2>&1 | Tee-Object -FilePath emision-windows.txt
+          if ($LASTEXITCODE -ne 0) { throw "emitir.ps1 fallo con $LASTEXITCODE" }
+          "segundos`t$([int]((Get-Date) - $t0).TotalSeconds)" | Set-Content tiempo-windows.tsv
+          Get-ChildItem gate\v1 -File | Where-Object { $_.Extension -in ".webm", ".mp4", ".mp3" } | Sort-Object Name | ForEach-Object {
+            "{0}`t{1}`t{2}" -f $_.Name, $_.Length, (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
+          } | Set-Content gate-windows.tsv
+          Get-Content gate-windows.tsv
+
+      - name: Empaquetar
+        shell: pwsh
+        run: |
+          7z a -tzip -mx=3 vgen-portable.zip vgen-portable | Select-Object -Last 3
+          if ($LASTEXITCODE -ne 0) { throw "7z fallo" }
+          $z = Get-Item vgen-portable.zip
+          "{0}`t{1}" -f $z.Length, (Get-FileHash -Algorithm SHA256 $z.FullName).Hash.ToLower() | Set-Content bundle-sha256.tsv
+          & {
+            echo "## vgen-portable"
+            echo ""
+            echo '```'
+            Get-Content vgen-portable\VERSIONES.tsv
+            echo ("zip`t{0} B`tsha256 {1}" -f $z.Length, (Get-FileHash -Algorithm SHA256 $z.FullName).Hash.ToLower())
+            echo '```'
+          } | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+
+      - name: Publicar el bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: vgen-portable
+          path: vgen-portable.zip
+          compression-level: 0
+          retention-days: 90
+
+      - name: Publicar el gate de Windows
+        if: ${{ inputs.gate }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-windows
+          path: |
+            gate-windows.tsv
+            tiempo-windows.tsv
+            emision-windows.txt
+            bundle-sha256.tsv
+            vgen-portable/VERSIONES.tsv
+            gate/v1/MANIFEST-v1.tsv
+          retention-days: 90
+
+  linux:
+    name: emitir en Linux (como emitir-v1)
+    if: ${{ inputs.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Dependencias
+        run: python -m pip install -r backend/requirements.txt
+      - name: ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -version | head -1
+      - name: Bajar y verificar el master
+        run: |
+          mkdir -p work
+          curl -fsSL "${{ inputs.master_url }}" -o work/master.asclv
+          echo "${{ inputs.master_sha256 }}  work/master.asclv" | sha256sum -c -
+      - name: Emitir
+        run: |
+          if [ -n "${{ inputs.frames }}" ]; then FRAMES="--frames ${{ inputs.frames }}"; else FRAMES=""; fi
+          T0=$(date +%s)
+          python tools/emit_v1.py work/master.asclv --out gate/v1 $FRAMES ${{ inputs.receta }} | tee emision-linux.txt
+          printf 'segundos\t%d\n' $(( $(date +%s) - T0 )) > tiempo-linux.tsv
+          rm -rf gate/v1/work
+          ( cd gate/v1 && for F in $(ls *.webm *.mp4 *.mp3 | sort); do
+              printf '%s\t%d\t%s\n' "$F" "$(stat -c %s "$F")" "$(sha256sum "$F" | cut -c1-64)"
+            done ) > gate-linux.tsv
+          ffmpeg -hide_banner -version | head -1 > ffmpeg-linux.txt
+          cat gate-linux.tsv
+      - name: Publicar el gate de Linux
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-linux
+          path: |
+            gate-linux.tsv
+            tiempo-linux.tsv
+            emision-linux.txt
+            ffmpeg-linux.txt
+          retention-days: 90
+
+  comparar:
+    name: comparar Windows vs Linux (el CI manda)
+    if: ${{ inputs.gate }}
+    needs: [armar, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gate-windows
+          path: w
+      - uses: actions/download-artifact@v4
+        with:
+          name: gate-linux
+          path: l
+      - name: Pieza por pieza
+        run: |
+          DISTINTAS=0
+          {
+            echo "## Gate P-008: el bundle de Windows contra Linux (misma receta, mismo master)"
+            echo ""
+            echo "Receta: \`${{ inputs.receta }}\`  frames: '${{ inputs.frames }}'"
+            echo ""
+            echo "| pieza | Windows (bundle) | Linux (CI) | veredicto |"
+            echo "|---|---|---|---|"
+            while IFS=$'\t' read -r NAME WBYTES WSHA; do
+              LINE=$(grep -P "^${NAME}\t" l/gate-linux.tsv || true)
+              LBYTES=$(echo "$LINE" | cut -f2); LSHA=$(echo "$LINE" | cut -f3)
+              if [ "$WSHA" = "$LSHA" ]; then V="IDENTICA"; else V="**DISTINTA**"; DISTINTAS=$((DISTINTAS+1)); fi
+              echo "| $NAME | $WBYTES B \`${WSHA:0:12}\` | $LBYTES B \`${LSHA:0:12}\` | $V |"
+            done < w/gate-windows.tsv
+            echo ""
+            echo "Tiempos: Windows $(cut -f2 w/tiempo-windows.tsv) s, Linux $(cut -f2 l/tiempo-linux.tsv) s."
+            echo ""
+            echo '```'
+            echo "Windows: $(grep '^ffmpeg' w/vgen-portable/VERSIONES.tsv 2>/dev/null || grep -h ffmpeg w/VERSIONES.tsv)"
+            echo "Linux:   $(cat l/ffmpeg-linux.txt)"
+            echo '```'
+            if [ "$DISTINTAS" -eq 0 ]; then
+              echo "**Las piezas son byte-identicas: el bundle emite lo mismo que el CI para esta receta.**"
+            else
+              echo "**$DISTINTAS pieza(s) distinta(s): manda el CI. El bundle sirve para probar, no para publicar, hasta pinnear el mismo libvpx/x264 (ENCODER-PORTATIL S4).**"
+            fi
+          } | tee comparacion.md | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$DISTINTAS" -eq 0
+      - name: Publicar la comparacion
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-comparacion
+          path: comparacion.md
+          retention-days: 90

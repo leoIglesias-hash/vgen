@@ -176,7 +176,7 @@ tome.
 - **Qué la refutaría:** que la elección automática elija un crf que el
   operador rechace a ojo dos veces seguidas.
 
-### P-008 · El encoder fuera del CI: bundle portátil, con el CI como árbitro · 🟡 propuesta · 2026-09-05 · operador
+### P-008 · El encoder fuera del CI: bundle portátil, con el CI como árbitro · 🔵 en ejecución (2026-09-06, por decisión del operador: antes de H-8) · 2026-09-05 · operador
 
 - **Problema:** cada emisión pasa por GitHub Actions (1–2 min + bajar el
   artifact) y la máquina del operador no tiene Python ni Node a propósito.
@@ -196,6 +196,13 @@ tome.
 - **Nota:** los minutos de Actions son gratis desde que el repo es público
   (2026-09-05); la ganancia es de latencia, no de costo. Recomendación:
   **después de H-8**, cuando la receta esté firmada.
+- **Ejecución (2026-09-06):** el operador decidió *«mejor vamos directo al
+  P-008»*. Hecho: `tools/portable/` (`armar.py`, `emitir.ps1`, `emitir.cmd`,
+  `py.cmd`, `LEEME.md`), workflow **`portable`** (arma el bundle en un runner
+  de Windows, lo publica como artifact `vgen-portable`, y en la misma corrida
+  emite el pack v1 con el bundle y con Linux y compara los SHA-256: job
+  `comparar`), test `tests/test_portable_bundle.py`. Detalle y el resultado
+  del gate: [`docs/ENCODER-PORTATIL.md`](docs/ENCODER-PORTATIL.md) §6.
 
 ---
 

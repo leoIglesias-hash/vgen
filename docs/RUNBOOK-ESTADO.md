@@ -191,7 +191,18 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **H-24 (incentivador armado en pausa)** → radio con la primera tecla → firma de la spec (H-7) → H-8
+> ## ▶ PRÓXIMA ACCIÓN: **P-008 en ejecución (el encoder portátil): esperar el gate del workflow `portable`**; después, más ideas con el operador; H-24 / radio / H-7 / H-8 siguen en la cola
+>
+> **2026-09-06 — P-008 EJECUTADA hasta el CI** (operador: *«mejor vamos
+> directo al P-008 mientras vamos a tratar de pensar más ideas»*):
+> `tools/portable/` (`armar.py`, `emitir.ps1`, `emitir.cmd`, `py.cmd`,
+> `LEEME.md`), workflow **`portable`** (arma `vgen-portable/` en Windows =
+> Python embebido + numpy/Pillow/OpenCV + ffmpeg estático + el mismo
+> `backend/`+`tools/`; artifact de 90 días; **gate**: emite el pack v1 con el
+> bundle bajo PowerShell 5.1 y con Linux, y compara SHA-256 pieza por pieza —
+> el CI manda), `tests/test_portable_bundle.py` (los pines son uno).
+> Detalle: [`ENCODER-PORTATIL.md`](ENCODER-PORTATIL.md) §6. ⏳ el resultado
+> del gate (§7) y CI verde.
 >
 > **2026-09-06 — H-23 APARCADA (refutada en la caja, sin reemplazo):** con
 > `reloj raf` el operador la vio *«un poco más trabada todavía… es algo de la

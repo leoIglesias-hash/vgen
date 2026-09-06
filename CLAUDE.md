@@ -34,7 +34,15 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-> ## ▶ Próxima acción: **H-24 (incentivador armado en pausa)** → radio con la primera tecla → firma de la spec (H-7) → H-8
+> ## ▶ Próxima acción: **P-008 (encoder portátil) en ejecución: leer el gate del workflow `portable`**; después, más ideas con el operador; H-24 / radio / H-7 / H-8 en la cola
+>
+> **2026-09-06 (tarde) — P-008 EJECUTADA hasta el CI** (operador: *«mejor
+> vamos directo al P-008»*): `tools/portable/` + workflow **`portable`**
+> (arma `vgen-portable/` en Windows: Python embebido + ffmpeg estático + el
+> mismo `backend/`/`tools/`, artifact 90 días; **gate** = emite el pack v1
+> con el bundle bajo PowerShell 5.1 y con Linux y compara SHA-256, el CI
+> manda) + `tests/test_portable_bundle.py`. Nada se instala en la máquina.
+> Detalle: [`docs/ENCODER-PORTATIL.md`](docs/ENCODER-PORTATIL.md) §6-7.
 >
 > **2026-09-06 — H-23 APARCADA:** con `reloj raf` la caja la vio *«un poco
 > más trabada todavía… es algo de la capacidad del TV box»*. Lo que cuesta

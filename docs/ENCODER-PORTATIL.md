@@ -95,3 +95,29 @@ workflow (`dos_pasadas=false`), ya existe.
    cambio de receta.
 
 Anotado como **P-008** en [`../PROPUESTAS.md`](../PROPUESTAS.md).
+
+## 6. Ejecución (2026-09-06) — O2, antes de H-8, por decisión del operador
+
+Operador: *«mejor vamos directo al P-008 mientras vamos a tratar de pensar
+más ideas»*. De las tres preguntas de §5: (1) **O2 ahora**, no después de
+H-8; (2) sin respuesta explícita → se ejecuta con la recomendación: **el CI
+manda**, y el workflow lo hace cumplir comparando; (3) sin cambio:
+`emitir-v1` sigue con `dos_pasadas=true` por defecto.
+
+**Qué hay:**
+
+| Pieza | Qué hace |
+|---|---|
+| `tools/portable/armar.py` | arma `vgen-portable/`: copia el Python embebido y el ffmpeg ya descomprimidos, **solo los `.py`** de `backend/` y `tools/` (+ `requirements.txt`), los scripts del bundle, `VERSIONES.tsv` (commit, fecha, Python, ffmpeg, receta v1, master pineado) y `MANIFEST-portable.tsv` (ruta, bytes, SHA-256 de cada archivo, ordenado). No baja nada. |
+| `tools/portable/emitir.ps1` + `emitir.cmd` | la emisión v1 en Windows PowerShell 5.1: baja el master pineado una sola vez y lo verifica por SHA-256, suma `ffmpeg\bin` al PATH **de ese proceso**, corre el mismo `repo/tools/emit_v1.py` con la receta v1 (`-Receta`, `-Frames`, `-Out`, `-Master`/`-Sha256`/`-SinVerificar`), borra `work/` e imprime el SHA-256 de cada pieza. Sin argumentos = el pack v1 vigente en `outputs\v1`. |
+| `tools/portable/py.cmd` | el intérprete embebido con el ffmpeg del bundle en el PATH del proceso: cualquier script del repo (la mitad A incluida). |
+| `.github/workflows/portable.yml` | job **`armar`** (windows-latest): baja el zip oficial `python-<v>-embed-amd64`, habilita `import site`, `get-pip`, `pip install --only-binary` numpy/Pillow/OpenCV (+ zopfli si hay wheel), baja el ffmpeg estático (`ffmpeg_url`, por defecto gyan.dev 7.1.1 essentials) y **verifica que traiga libx264, libvpx-vp9, libopus y aac**, corre `armar.py` con el Python del bundle, prueba `py.cmd`, y con `gate=true` **emite con `emitir.ps1` bajo `powershell.exe` 5.1** (lo mismo que en la máquina del operador); zip con 7z → artifact **`vgen-portable`** (90 días) + `gate-windows`. Job **`linux`**: la misma receta como `emitir-v1` → `gate-linux`. Job **`comparar`**: tabla pieza por pieza IDENTICA/DISTINTA en el resumen; **falla si alguna difiere** (el bundle queda publicado igual, marcado «sirve para probar, no para publicar»). |
+| `tests/test_portable_bundle.py` | arma un bundle con Python/ffmpeg falsos y verifica la carpeta, el manifest (SHA real de `emit_v1.py`), `VERSIONES.tsv`, y que **la receta v1 y el master pineado sean UNO** en `armar.py`, `emitir.ps1`, el workflow y `EMISION-V1.md`. Entra por `unittest discover` en `run_all.py`. |
+
+**Lo que no cambia:** ni un byte de `backend/` ni de `tools/*.py`; el bundle
+corre el mismo código. La regla de la máquina se mantiene: nada se instala,
+nada toca PATH ni registro.
+
+**Gate (el CI manda):** ⏳ la primera corrida del workflow `portable` dice si
+el ffmpeg de Windows emite las mismas piezas que el de Ubuntu. Resultado en
+§7 cuando esté.

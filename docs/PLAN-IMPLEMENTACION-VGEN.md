@@ -306,7 +306,7 @@ Ni por analogía, ni por «es lo normal», ni por `canPlayType`.
 
 ## 4. Fases y tareas
 
-Orden (actualizado 2026-09-04, noche; ~~W-26b~~ cerrada en la caja esa misma noche): ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ ~~H-18~~ ~~H-18b~~ ~~H-20~~ ~~H-6~~ (ejecutada 2026-09-05, falta la foto) → ~~H-8a~~ (se sostiene en la caja, 2026-09-05) → ~~H-23~~ (aparcada 2026-09-06, sin reemplazo) → **H-24** (incentivador armado en pausa) → radio con la primera tecla → **H-7** (borrador 0.1 escrito; **firma pendiente**) → **H-8** (muxer + archivo único) → P-008 (encoder portátil, decisión del operador); lo que falte de **H-10** corre aparte.
+Orden (actualizado 2026-09-04, noche; ~~W-26b~~ cerrada en la caja esa misma noche): ~~H-14b~~ ~~H-12b~~ ~~H-16~~ ~~W-26b~~ ~~H-18~~ ~~H-18b~~ ~~H-20~~ ~~H-6~~ (ejecutada 2026-09-05, falta la foto) → ~~H-8a~~ (se sostiene en la caja, 2026-09-05) → ~~H-23~~ (aparcada 2026-09-06, sin reemplazo) → **P-008** (encoder portátil, **en ejecución 2026-09-06** por decisión del operador) → **H-24** (incentivador armado en pausa) → radio con la primera tecla → **H-7** (borrador 0.1 escrito; **firma pendiente**) → **H-8** (muxer + archivo único); lo que falte de **H-10** corre aparte.
 H-13, H-11 y H-12 están cerradas con la caja; H-14b cerrada el 2026-09-04. Cuerpos ejecutables (archivo, acción, cierre)
 en [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md) §2.
 

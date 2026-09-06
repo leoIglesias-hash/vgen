@@ -6029,3 +6029,30 @@ otras cosas»):** H-24 (incentivador armado en pausa: 627/737 ms → un
 `play()`) → radio con la primera tecla → firma de la spec H-7 (con la regla
 de la interacción en §6.6) → H-8 (muxer + archivo único) → P-008 (encoder
 portátil, decisión del operador). H-23 se retoma cuando el operador lo pida.
+
+### 2026-09-06 (tarde) — P-008: el encoder portátil, ejecutado hasta el CI
+
+Operador: *«mejor vamos directo al P-008 mientras vamos a tratar de pensar
+más ideas además de las que propusiste. Siempre hacer lo necesario con
+GitHub para mantener actualizado el proyecto de vgen»*. Cambia el orden:
+P-008 antes de H-24/H-7/H-8 (§5 de ENCODER-PORTATIL, pregunta 1 respondida:
+**ahora**). Preguntas 2 y 3 sin respuesta explícita → se ejecuta con la
+recomendación (el CI manda; `dos_pasadas` queda como está).
+
+**Qué se hizo** (un commit, `P-008`): `tools/portable/armar.py` (arma la
+carpeta con el mismo `backend/`+`tools/` del CI, manifest con SHA-256 de
+cada archivo), `emitir.ps1`/`emitir.cmd` (la emisión v1 en Windows
+PowerShell 5.1: baja el master pineado, lo verifica, corre `emit_v1.py` con
+el ffmpeg del bundle en el PATH del proceso, imprime el SHA-256 de cada
+pieza), `py.cmd` (el intérprete embebido para cualquier script), `LEEME.md`;
+workflow `portable` (arma en Windows, publica el artifact `vgen-portable`, y
+**en la misma corrida emite con el bundle y con Linux y compara**: el job
+`comparar` falla si una pieza difiere); `tests/test_portable_bundle.py`
+(cruza la receta v1 y el master pineado entre `armar.py`, `emitir.ps1`, el
+workflow y `EMISION-V1.md`). Ni un byte de `backend/` ni de `tools/*.py`
+cambió. En esta máquina se verificó solo lo que no requiere Python:
+`emitir.ps1` parsea en 5.1 y `emitir.cmd` sin bundle termina con código
+distinto de cero y el mensaje «falta …\python\python.exe».
+
+**Qué decide el gate:** ⏳ la primera corrida de `portable` (resultado abajo
+cuando esté).
