@@ -176,7 +176,7 @@ tome.
 - **Qué la refutaría:** que la elección automática elija un crf que el
   operador rechace a ojo dos veces seguidas.
 
-### P-008 · El encoder fuera del CI: bundle portátil, con el CI como árbitro · 🔵 en ejecución (2026-09-06, por decisión del operador: antes de H-8) · 2026-09-05 · operador
+### P-008 · El encoder fuera del CI: bundle portátil, con el CI como árbitro · 🔵 en estudio: ejecutada y medida el 2026-09-06, decisión A/B del operador pendiente · 2026-09-05 · operador
 
 - **Problema:** cada emisión pasa por GitHub Actions (1–2 min + bajar el
   artifact) y la máquina del operador no tiene Python ni Node a propósito.
@@ -202,7 +202,14 @@ tome.
   de Windows, lo publica como artifact `vgen-portable`, y en la misma corrida
   emite el pack v1 con el bundle y con Linux y compara los SHA-256: job
   `comparar`), test `tests/test_portable_bundle.py`. Detalle y el resultado
-  del gate: [`docs/ENCODER-PORTATIL.md`](docs/ENCODER-PORTATIL.md) §6.
+  del gate: [`docs/ENCODER-PORTATIL.md`](docs/ENCODER-PORTATIL.md) §6-7.
+- **Medido (2026-09-06, §7):** el bundle emite de punta a punta en Windows
+  (106 s vs 68 en el runner); mp3 idéntico; **VP9 y H.264 distintos** del
+  ffmpeg de Ubuntu (otro binario); el bundle repite sus bytes entre dos
+  runners de Windows, y el CI de Linux **no** repite el VP9 entre corridas
+  (Opus). La refutación de arriba no aplica tal cual: no hace falta que
+  Windows iguale a Ubuntu si el CI corre el bundle (**B**). Decide el
+  operador.
 
 ---
 

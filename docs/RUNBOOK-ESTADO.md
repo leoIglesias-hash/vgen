@@ -191,7 +191,7 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **P-008 en ejecución (el encoder portátil): esperar el gate del workflow `portable`**; después, más ideas con el operador; H-24 / radio / H-7 / H-8 siguen en la cola
+> ## ▶ PRÓXIMA ACCIÓN: **el operador decide P-008 A/B (¿quién manda los bytes: el CI de Linux o el bundle?) y baja `vgen-portable`**; después, más ideas con el operador; H-24 / radio / H-7 / H-8 en la cola
 >
 > **2026-09-06 — P-008 EJECUTADA hasta el CI** (operador: *«mejor vamos
 > directo al P-008 mientras vamos a tratar de pensar más ideas»*):
@@ -201,8 +201,14 @@ nada.
 > `backend/`+`tools/`; artifact de 90 días; **gate**: emite el pack v1 con el
 > bundle bajo PowerShell 5.1 y con Linux, y compara SHA-256 pieza por pieza —
 > el CI manda), `tests/test_portable_bundle.py` (los pines son uno).
-> Detalle: [`ENCODER-PORTATIL.md`](ENCODER-PORTATIL.md) §6. ⏳ el resultado
-> del gate (§7) y CI verde.
+> Detalle: [`ENCODER-PORTATIL.md`](ENCODER-PORTATIL.md) §6. **Gate leído
+> (§7, tres corridas):** el bundle emite de punta a punta en Windows 5.1
+> (106 s; DASH 16 segmentos tras arreglar el path con barras), mp3 idéntico,
+> **VP9/H.264 distintos** del Ubuntu (otro ffmpeg); **el bundle es
+> determinista consigo mismo** y **el CI de Linux no repite el VP9 entre
+> corridas** (Opus). Recomendación: **B** (el bundle manda, el CI lo corre en
+> Windows); rige A hasta que el operador decida. Artifact `vgen-portable`
+> (190,8 MB) en la corrida 34012545002.
 >
 > **2026-09-06 — H-23 APARCADA (refutada en la caja, sin reemplazo):** con
 > `reloj raf` el operador la vio *«un poco más trabada todavía… es algo de la

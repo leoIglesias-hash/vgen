@@ -118,6 +118,61 @@ manda**, y el workflow lo hace cumplir comparando; (3) sin cambio:
 corre el mismo código. La regla de la máquina se mantiene: nada se instala,
 nada toca PATH ni registro.
 
-**Gate (el CI manda):** ⏳ la primera corrida del workflow `portable` dice si
-el ffmpeg de Windows emite las mismas piezas que el de Ubuntu. Resultado en
-§7 cuando esté.
+**Gate (el CI manda):** tres corridas el mismo día; el resultado está en §7.
+
+## 7. El gate, leído (2026-09-06, corridas 34012175765 → 34012297378 → 34012545002)
+
+| Corrida | Qué pasó |
+|---|---|
+| **34012175765** (`c7a7088`) | Python embebido OK (numpy 2.4.6, Pillow 12.3.0, OpenCV 5.0.0, zopfli 0.4.3 con wheel). **404 en el ffmpeg**: el `7.1.1-essentials` que se supuso no existe en gyan.dev (el sitio publica `packages/ffmpeg-8.1.2-essentials_build.zip`; BtbN tiene tags `autobuild-<fecha>` pinneables como alternativa). Linux emitió bien. |
+| **34012297378** (`5b3a3d2`) | Con **ffmpeg 8.1.2** el bundle se armó (zip **190,8 MB**), `emitir.ps1` corrió bajo `powershell.exe` 5.1 y emitió las tres piezas en **105 s** (Linux 69 s). Dos defectos encontrados por la corrida: (a) **el DASH quedó vacío en Windows** (`manifest.mpd` solo, «-1 segmentos»): el muxer `dash`/`hls` de ffmpeg ubica la carpeta del playlist buscando `/`, y con `\` deja init y segmentos en el directorio actual → `posix_path()` en `emit_pieces.py`/`emit_v1.py` (barras siempre; en Linux no cambia un byte); (b) el job `comparar` marcó DISTINTA hasta el mp3 idéntico (CRLF en los `.tsv` de Windows) y aun así pasó (el contador vivía en un subshell) → limpieza de `\r` y contador fuera del pipe. |
+| **34012545002** (`aaff2a2`) | **DASH arreglado:** 18 archivos (manifest + init + **16 segmentos**), **2.831.164 B, el mismo total que Linux**. Windows 106 s, Linux 68 s. Tabla del gate: |
+
+| pieza | Windows (bundle, ffmpeg 8.1.2 gyan) | Linux (CI, ffmpeg 6.1.1 Ubuntu) | veredicto |
+|---|---|---|---|
+| `v1-ambiente.mp3` | 183.353 B `c886263508da` | 183.353 B `c886263508da` | **IDÉNTICA** (es la pista del máster tal cual) |
+| `v1-h264.mp4` | 5.254.451 B `175722d34d0f` | 5.254.272 B `7992b0cc75a2` | DISTINTA (+179 B) |
+| `v1-vp9.webm` | 2.941.178 B `4b0714ed21ca` | 2.941.449 B `8adf852aa70a` | DISTINTA (−271 B) |
+
+**Lo que dicen los números, con cuidado:**
+
+1. **El bundle funciona de punta a punta** en Windows sin instalar nada: baja
+   y verifica el máster, emite VP9+Opus, H.264+AAC, la radio y el DASH, e
+   imprime los SHA. Es lo que el operador pidió («más rápido y sin
+   instalar»); *más rápido* no es (106 s contra 68 del runner: el costo es
+   ffmpeg, como decía §3), pero **no espera cola ni baja artifact**.
+2. **Windows no emite los mismos bytes que Ubuntu** para VP9 y H.264, como
+   se advirtió en §2.3: otro binario (x264/libvpx de otra versión y otro
+   compilador). No es un defecto del bundle; es lo que se iba a medir.
+3. **El bundle es determinista consigo mismo:** las corridas 2 y 3, en dos
+   runners de Windows distintos, dieron **el mismo `4b0714ed21ca`** para VP9
+   y **el mismo `175722d34d0f`** para H.264.
+4. **El CI de Linux, en cambio, NO repitió el VP9 entre corridas:** run 2
+   `86014f175105`, run 3 `8adf852aa70a` (mismos bytes, distinta huella). Es
+   el Opus (punto flotante, sin `cpu-independent`) en CPUs de runner
+   distintas — lo mismo que `emitir-v1` mide con sus dos pasadas. O sea: el
+   «CI manda» de la pregunta 2 de §5 ya no era una huella fija para VP9+Opus.
+
+**Lo que decide el operador (pregunta 2 de §5, ahora con evidencia):**
+
+- **A — el CI manda (la recomendación original):** el bundle sirve para
+  *ver* un pack en un minuto; lo que se publica y se pinea por contenido sale
+  de `emitir-v1`. Costo: dos huellas por receta (local y CI), y la del CI
+  cambia con el Opus según el runner.
+- **B — el bundle manda:** el emisor del producto es el bundle, y **el CI
+  corre el mismo bundle en un runner de Windows** (`portable` ya lo hace)
+  para reproducir la huella: un solo binario, una sola huella, y la
+  reproducibilidad se demuestra como en H-14b (dos runners, mismos bytes —
+  ya ocurrió en las corridas 2 y 3). Costo: el emisor de referencia pasa a
+  ser Windows + gyan 8.1.2 pinneado por URL, y cada cambio de ffmpeg es un
+  cambio de huella declarado.
+
+La recomendación cambia con el punto 4: **B**, porque es la única de las dos
+donde el archivo que el operador emite en su máquina y el que el CI
+reproduce son **el mismo**, que es la definición de árbitro que pide la
+regla 5. Hasta que el operador decida, rige A.
+
+**Cómo se baja:** Actions → `portable` → la corrida → artifact
+**`vgen-portable`** (zip 190.785.339 B, SHA-256
+`3bc08fe48462814c458c03452af99b314691bdd68d2ab9fe7c38d1282ac4de7d`, 90
+días); descomprimir en cualquier carpeta y `emitir.cmd`. Nada más.

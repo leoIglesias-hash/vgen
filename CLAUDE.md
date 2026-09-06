@@ -34,7 +34,7 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-> ## ▶ Próxima acción: **P-008 (encoder portátil) en ejecución: leer el gate del workflow `portable`**; después, más ideas con el operador; H-24 / radio / H-7 / H-8 en la cola
+> ## ▶ Próxima acción: **el operador decide P-008 A/B (¿quién manda los bytes: el CI de Linux o el bundle?) y baja `vgen-portable`**; después, más ideas con el operador; H-24 / radio / H-7 / H-8 en la cola
 >
 > **2026-09-06 (tarde) — P-008 EJECUTADA hasta el CI** (operador: *«mejor
 > vamos directo al P-008»*): `tools/portable/` + workflow **`portable`**
@@ -42,6 +42,10 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 > mismo `backend/`/`tools/`, artifact 90 días; **gate** = emite el pack v1
 > con el bundle bajo PowerShell 5.1 y con Linux y compara SHA-256, el CI
 > manda) + `tests/test_portable_bundle.py`. Nada se instala en la máquina.
+> **Gate leído (§7):** funciona de punta a punta (106 s), mp3 idéntico,
+> **VP9/H.264 distintos** del Ubuntu; el bundle es determinista consigo
+> mismo y el CI de Linux no repite el VP9 (Opus) → recomendación **B**: el
+> bundle manda y el CI lo corre en Windows; rige A hasta la decisión.
 > Detalle: [`docs/ENCODER-PORTATIL.md`](docs/ENCODER-PORTATIL.md) §6-7.
 >
 > **2026-09-06 — H-23 APARCADA:** con `reloj raf` la caja la vio *«un poco

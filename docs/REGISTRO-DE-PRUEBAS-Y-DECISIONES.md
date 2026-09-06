@@ -6054,5 +6054,23 @@ cambió. En esta máquina se verificó solo lo que no requiere Python:
 `emitir.ps1` parsea en 5.1 y `emitir.cmd` sin bundle termina con código
 distinto de cero y el mensaje «falta …\python\python.exe».
 
-**Qué decide el gate:** ⏳ la primera corrida de `portable` (resultado abajo
-cuando esté).
+**Qué decidió el gate (tres corridas, misma tarde):** la primera cayó en el
+ffmpeg (404: la versión 7.1.1 de gyan no existe; se pineó **8.1.2**). La
+segunda armó el bundle (zip 190,8 MB) y emitió bajo PowerShell 5.1 en 105 s,
+y encontró dos defectos: **el DASH quedó vacío en Windows** (el muxer de
+ffmpeg busca `/` para ubicar la carpeta del playlist y con `\` deja los
+segmentos en el directorio actual → `posix_path()` en `emit_pieces.py` y
+`emit_v1.py`, barras siempre, cero bytes cambiados en Linux) y el job
+`comparar` que marcaba DISTINTA hasta lo idéntico por el CRLF y aun así
+pasaba (contador en subshell). La tercera (`aaff2a2`, regression verde):
+**DASH 16 segmentos, 2.831.164 B = el mismo total que Linux**; mp3
+**idéntico**; **VP9 y H.264 distintos** entre el ffmpeg 8.1.2 de Windows y
+el 6.1.1 de Ubuntu (+179 B / −271 B), como advertía ENCODER-PORTATIL §2.3.
+Dos hallazgos que cambian la pregunta 2 de §5: **el bundle es determinista
+consigo mismo** (dos runners de Windows, mismos SHA `4b0714ed21ca` /
+`175722d34d0f`) y **el CI de Linux no repitió el VP9 entre corridas**
+(`86014f175105` → `8adf852aa70a`: el Opus según la CPU del runner).
+Recomendación nueva: **B, el bundle manda y el CI corre el bundle en
+Windows para reproducir la huella**; hasta que el operador decida, rige A
+(el CI manda). Tabla y detalle: ENCODER-PORTATIL §7. Artifact
+`vgen-portable` en la corrida 34012545002 (SHA-256 `3bc08fe4…4de7d`).
