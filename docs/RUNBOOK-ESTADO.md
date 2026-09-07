@@ -191,7 +191,7 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **DEBATE ABIERTO — calidad de imagen en 1280 con el front liviano** (operador, 2026-09-07): leer [`DISENO-CALIDAD-VGEN.md`](DISENO-CALIDAD-VGEN.md), el operador contestó 2-4 (**1280@20**, **techo 20 MB por pieza**, §5.1); falta la 1 (look indexado: producto o medio, §5.2) y medir en el orden E-C → E-D → E-A → E-B → E-E → E-F (P-009). **H-24 y la radio en pausa** por pedido del operador. Sigue pendiente del operador: bajar `vgen-portable` de la corrida 34077462713 y comparar el SHA de su `emitir.cmd` (P-008b).
+> ## ▶ PRÓXIMA ACCIÓN: **H-26 — emisión desde la fuente (carril v2)** (decisión del operador 2026-09-07: *«el look fue un medio»*; [`DISENO-CALIDAD-VGEN.md`](DISENO-CALIDAD-VGEN.md) §5.3, fila H-26 del [`RUNBOOK-IMPLEMENTACION.md`](RUNBOOK-IMPLEMENTACION.md)): `emit_v2.py` desde el clip original a **1280@20**, color 709 explícito, VP9 dos pasadas + alt-ref, **techo 20 MB por pieza**, `portable` con dos runners, matriz v2 contra la fuente, publicación en `v0/` con tecla v1/v2 y foto de la caja; v1 (256 colores) queda como plan B. Pendiente chico del operador: dónde vive la fuente para el CI. **H-24 y la radio en pausa.** Sigue pendiente: bajar `vgen-portable` de la corrida 34077462713 y comparar el SHA de `emitir.cmd` (P-008b).
 >
 > **2026-09-06 — P-008 EJECUTADA hasta el CI** (operador: *«mejor vamos
 > directo al P-008 mientras vamos a tratar de pensar más ideas»*):

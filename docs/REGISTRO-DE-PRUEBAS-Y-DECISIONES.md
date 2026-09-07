@@ -6188,3 +6188,19 @@ video** (el ejemplo de la pregunta; ajustable con las primeras filas). La
 pregunta 1 (¿el look indexado es el producto o fue un medio para el player
 JS?) se explicó en el diseño §5.2 con tres caminos (a/b/c) y una prueba de
 una tecla para decidirla a ojo.
+
+**DECISIÓN (mismo día, tarde): (b), el look fue un medio.** Operador:
+*«ahora entiendo el 1, el look fue medio… tengámoslo en cuenta por si se
+pone lenta la reproducción del video luego ya que lo hicimos con el objetivo
+de que se vea fluido reduciendo colores pero no probamos otra cosa»*, y
+después: *«teniendo lo respondido en cuenta ponelo en la agenda inmediata, y
+documentá así hago el compact y seguimos»*. Consecuencias (diseño §5.3): el
+video sale de la fuente por un **carril v2** (1280@20, color 709 explícito,
+VP9 dos pasadas + alt-ref, techo 20 MB por pieza, H.264 piso, radio de la
+fuente, DASH por remux); **E-A desaparece** y DIAG-001/F10 quedan cerradas
+por obsolescencia; **el máster indexado (v1) es el plan B**, documentado y
+publicado, si un aparato no sostiene la fuente a 20 fps; E-E y E-F van sobre
+v2 después. Queda una decisión chica del operador dentro de la tarea: dónde
+vive la fuente para el CI (bucket pineado por contenido como el `.asclv`, o
+solo bundle local). **Agenda inmediata: H-26** (RUNBOOK-IMPLEMENTACION),
+antes de H-24 y la radio, que siguen en pausa.

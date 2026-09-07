@@ -211,5 +211,37 @@ remoto público (`assets` se retiró); la pieza (b) la emite el operador con
 el bundle (`py.cmd` + el ffmpeg del bundle sobre `inputs/TKN-2443…mp4`) o se
 sube a mano a `v0/` con el ritual. Es una prueba de una tecla, no una tarea.
 
-Anotado como **P-009** en [`../PROPUESTAS.md`](../PROPUESTAS.md). Con 2-4
-contestadas, lo único que falta para empezar a medir es la 1.
+### 5.3 DECISIÓN del operador (2026-09-07): (b), el look fue un medio
+
+*«Ahora entiendo el 1, el look fue medio… tengámoslo en cuenta por si se
+pone lenta la reproducción del video luego, ya que lo hicimos con el
+objetivo de que se vea fluido reduciendo colores pero no probamos otra
+cosa».*
+
+Qué cambia en este diseño:
+
+- **El video sale de la fuente**, no del máster indexado: un **carril v2**
+  (`tools/emit_v2.py`) que toma el clip original, lo lleva a **1280@20**
+  con matriz y etiquetas 709 explícitas (E-C) y lo codifica con VP9 de dos
+  pasadas + alt-ref (E-D) bajo el **techo de 20 MB por pieza**; H.264 High
+  + AAC como piso, la pista de audio de la fuente como radio, el DASH por
+  remux. El anillo, la residencia y la capa no cambian.
+- **E-A desaparece** (no hay paleta que arreglar); DIAG-001 y F10 quedan
+  definitivamente cerradas por obsolescencia.
+- **El máster indexado es el plan B, documentado, no borrado:** `emit_v1`
+  y el `.asclv` siguen existiendo; si un aparato no sostiene el video de la
+  fuente a 20 fps, se vuelve al carril v1 (256 colores) para esa clase. La
+  comparación v1/v2 en la caja es parte del cierre de H-26.
+- **E-E (calidad por corte) y E-F (escalera por clase)** se hacen sobre el
+  carril v2, después de que v2 esté de pie.
+- **Dónde vive la fuente para el CI:** la fuente no está en el remoto
+  público (`assets` se retiró el 2026-09-05). Dos opciones, decide el
+  operador: (1) publicarla en el bucket como el máster
+  (`outputs/fuente.<sha12>.mp4`, pineada por contenido; la misma exposición
+  que ya tiene el `.asclv` servido) y el workflow la baja por URL + SHA;
+  (2) solo emisión local con el bundle (`emitir.cmd -Fuente …`), y el CI
+  reproduce a partir de la fuente que el operador suba por el ritual. La
+  tarea arranca por lo que no depende de esto (el emisor y sus tests).
+
+La ejecución es **H-26** (RUNBOOK-IMPLEMENTACION). Anotado como **P-009**
+en [`../PROPUESTAS.md`](../PROPUESTAS.md), adoptada.

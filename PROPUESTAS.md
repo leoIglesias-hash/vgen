@@ -216,7 +216,7 @@ tome.
 
 ---
 
-### P-009 · Calidad de imagen en 1280 con el front liviano: seis palancas del encoder, cero en el aparato · 🔵 en debate · 2026-09-07 · operador + sesión
+### P-009 · Calidad de imagen en 1280 con el front liviano: seis palancas del encoder, cero en el aparato · 🟢 adoptada 2026-09-07 (decisión (b): «el look fue un medio» → carril v2 desde la fuente, H-26; E-E/E-F después) · 2026-09-07 · operador + sesión
 
 - **Problema:** el operador quiere mejor imagen en 1280 sin cargar el front. La cadena de hoy pierde en cinco pasos del encoder (15 fps sobre una fuente de ~24, 1280 sobre 1920, paleta 256 + near-lossless 8, `yuv420p` sin matriz/etiqueta de color, VP9 crf 38 sin alt-ref ni dos pasadas) y solo el escalado del hardware es del aparato.
 - **Idea:** seis palancas, todas offline: E-C color 709 etiquetado; E-D VP9 con alt-ref + lag + dos pasadas; E-A máster sin pérdida (E-24/E-12 existían para achicar un `.asclv` que ya no viaja); E-B cadencia de la fuente y 1920; E-E calidad constante por corte con segmentos alineados a los cortes (el anillo MSE no cambia); E-F escalera por clase elegida una vez y guardada una. Detalle: [`docs/DISENO-CALIDAD-VGEN.md`](docs/DISENO-CALIDAD-VGEN.md).
@@ -224,7 +224,7 @@ tome.
 - **Qué cuesta:** bytes (a medir; tope de residencia 150 MB, pack v1 11 MB) y tiempo de encoder (el bundle P-008 lo paga local); dos gates en la caja (24 fps por `<video>`, cuadros alt-ref).
 - **Cómo se mide:** matriz extendida con la **fuente** como referencia (no el máster), bytes/SSIM/PSNR/segundos por fila, `portable` para el determinismo, foto para el look. Orden: E-C → E-D → E-A → E-B → E-E → E-F.
 - **Qué la refutaría:** que la caja no presente cuadros alt-ref o no sostenga 24 fps; que el máster sin pérdida dispare los bytes sin que el ojo lo note; que el operador quiera otro look (§5 del diseño).
-- **Discusión / estado:** abierta el 2026-09-07; H-24 y la radio en pausa hasta que el operador conteste las cuatro preguntas del §5.
+- **Discusión / estado:** el operador contestó el mismo día: 1280@20, 1280 se mantiene, techo 20 MB por pieza, y **(b): el look indexado fue un medio** para que el player JS fuera fluido; el video sale de la fuente (H-26) y v1 queda como plan B. E-A cae; E-E y E-F se hacen sobre v2.
 
 ## Adoptadas
 
