@@ -162,6 +162,54 @@ medir caídos y bajar un escalón; la caja no mide, elige por clase.
    fijar un techo por pieza (p. ej. 20 MB) para que la matriz tenga un gate
    de bytes además del de look?
 
-Anotado como **P-009** en [`../PROPUESTAS.md`](../PROPUESTAS.md). Nada de
-esto se implementa hasta que el operador conteste §5 y elija por dónde
-medir.
+### 5.1 Respuestas del operador (2026-09-07)
+
+- **1 (look):** pidió que se explique la pregunta; queda abierta (§5.2).
+- **2 (cadencia): «mantengamos manejables los fps, podemos usar menos que
+  24, probemos con 20».** E-B pasa a **1280@20**. Nota: 20 no divide a la
+  fuente (~24): el muestreo tira uno de cada seis cuadros, así que el
+  movimiento tendrá un pequeño tropiezo periódico en vez del salto constante
+  de 15; si el ojo lo nota, el escalón siguiente es 24 (parejo), no 22.
+- **3 (resolución): «no, de momento mantengámonos en 1280 que es lo que los
+  TV box resisten mejor, el resto lo estiramos».** 1920 sale del diseño: E-B
+  es solo cadencia.
+- **4 (techo): «sí, estaría bien un techo».** Se toma el ejemplo de la
+  pregunta: **20 MB por pieza de video de ~15 s** (hoy VP9 2,9 MB y H.264
+  5,3 MB). La matriz marca cualquier fila que lo pase; el operador lo ajusta
+  cuando vea las primeras filas.
+
+### 5.2 La pregunta 1, explicada
+
+Lo que el TV muestra hoy **no es la fuente**: es el máster `.asclv`
+decodificado, y ese máster **cuantiza cada cuadro a 256 colores** elegidos
+por k-means en Oklab (perfil `graphic-hq`, dither apagado, `near-lossless
+8`). Eso da una estética concreta: zonas de color planas, bordes duros,
+degradés en escalones (el huevo), 35 dB contra la fuente. Esa cuantización
+existió porque el player JS solo sabía pintar celdas indexadas; el `<video>`
+por hardware no tiene esa limitación: reproduce los 16 millones de colores de
+la fuente tal cual.
+
+Entonces hay tres caminos, y no son «más o menos calidad» sino **otra
+imagen**:
+
+- **(a) El look es el producto.** Se conserva la cuantización como estética
+  y se mejora todo lo demás (E-A la hace menos dañina, E-C/E-D/E-E la
+  codifican mejor). Es lo que asume este diseño.
+- **(b) El look fue un medio.** Se codifica **la fuente directa** (VP9 del
+  clip original, sin pasar por el `.asclv`): sin banding, sin colores
+  fusionados, fotográfico. Desaparecen E-A, DIAG-001 y F10; el encoder del
+  máster deja de intervenir en el video (sigue sirviendo para lo que sea
+  indexado, p. ej. imágenes de la capa). Cambia la identidad visual.
+- **(c) Intermedio.** Cuantizar con más colores (paletas por región, P-003)
+  o solo donde el ojo no lo note: más caro en el encoder, misma familia
+  estética que (a).
+
+**Cómo se decide sin discutir en abstracto:** con una foto. Dos piezas en
+`v0/` a los mismos bytes —la v1 de hoy (a) y un VP9 de la fuente directa a
+1280@20 (b)— y una tecla que las alterna en la caja. La fuente no está en el
+remoto público (`assets` se retiró); la pieza (b) la emite el operador con
+el bundle (`py.cmd` + el ffmpeg del bundle sobre `inputs/TKN-2443…mp4`) o se
+sube a mano a `v0/` con el ritual. Es una prueba de una tecla, no una tarea.
+
+Anotado como **P-009** en [`../PROPUESTAS.md`](../PROPUESTAS.md). Con 2-4
+contestadas, lo único que falta para empezar a medir es la 1.

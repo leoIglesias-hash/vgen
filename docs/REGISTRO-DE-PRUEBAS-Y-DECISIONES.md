@@ -6177,3 +6177,14 @@ calidad constante por corte con segmentos alineados a los cortes (el anillo
 no cambia), **E-F** escalera por clase elegida una vez. Cuatro preguntas al
 operador (§5) antes de medir nada: si el look indexado sigue siendo el
 producto, 24 fps, 1920, techo de bytes por pieza.
+
+**Respuestas del operador (mismo día):** *«1 no te entendí la pregunta 1,
+explícate. 2 mantengamos manejables los fps, podemos usar menos que 24,
+probemos con 20. 3 no, de momento mantengámonos en 1280 que es lo que los
+TV box resisten mejor, el resto lo estiramos. 4 sí, estaría bien un
+techo»*. Quedan fijados: **1280@20** (E-B es solo cadencia; nota en el
+diseño §5.1 sobre el 20 que no divide a ~24), **techo 20 MB por pieza de
+video** (el ejemplo de la pregunta; ajustable con las primeras filas). La
+pregunta 1 (¿el look indexado es el producto o fue un medio para el player
+JS?) se explicó en el diseño §5.2 con tres caminos (a/b/c) y una prueba de
+una tecla para decidirla a ojo.

@@ -34,7 +34,7 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-> ## ▶ Próxima acción: **DEBATE ABIERTO — calidad de imagen en 1280 con el front liviano** (pedido del operador 2026-09-07): leer [`docs/DISENO-CALIDAD-VGEN.md`](docs/DISENO-CALIDAD-VGEN.md), esperar las respuestas del operador a su §5 (¿el look indexado sigue siendo el producto?, ¿24 fps?, ¿1920?, techo de bytes) y recién ahí medir en el orden E-C → E-D → E-A → E-B → E-E → E-F (P-009). **H-24 y la radio quedan en pausa** por pedido del operador. El operador además baja `vgen-portable` de la corrida 34077462713 y compara el SHA de su `emitir.cmd` con el resumen (P-008b).
+> ## ▶ Próxima acción: **DEBATE ABIERTO — calidad de imagen en 1280 con el front liviano** (pedido del operador 2026-09-07): leer [`docs/DISENO-CALIDAD-VGEN.md`](docs/DISENO-CALIDAD-VGEN.md), el operador ya contestó 2-4 (**1280@20**, **techo 20 MB por pieza**; §5.1) y falta la 1 (¿el look indexado es el producto o fue un medio?, explicada en §5.2 con una prueba de una tecla); recién ahí medir en el orden E-C → E-D → E-A → E-B → E-E → E-F (P-009). **H-24 y la radio quedan en pausa** por pedido del operador. El operador además baja `vgen-portable` de la corrida 34077462713 y compara el SHA de su `emitir.cmd` con el resumen (P-008b).
 >
 > **2026-09-06 (tarde) — P-008 EJECUTADA hasta el CI** (operador: *«mejor
 > vamos directo al P-008»*): `tools/portable/` + workflow **`portable`**
