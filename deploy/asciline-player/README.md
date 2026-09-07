@@ -558,3 +558,33 @@ señales (`?cada=2` → 30 fps; `?capak=0.5` achica el buffer; `?reloj=timeout`
 vuelve al timer). El reporte dice `reloj raf` y los vsync/s. Sale del repo en
 `6e9ba5e` (CI verde). **El Worker no se tocó.** Verificación: SHA-256 contra
 el árbol, token quemado y 403 comprobado.
+
+## 2026-09-06 (noche) — P-008b: v1 re-emitido con el bundle (21 keys regeneradas)
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/MANIFEST-v1.tsv` | 1.079 | `a4591925159038c4f99c1a5e8c89d373` |
+| `v0/v1-vp9.webm` | 2.941.178 | `84c88129f9b1ae103719f49b15fa730a` |
+| `v0/v1-h264.mp4` | 5.254.451 | `506efa77052527054d5241f4d68031b6` |
+| `v0/dash-vp9/manifest.mpd` + `init.webm` + `chunk-00001..16.webm` | 2.831.164 en total | en `MANIFEST.tsv` (`init.webm` quedó igual) |
+
+**Qué es:** las mismas cuatro piezas de v1 (misma receta, mismo máster), pero
+emitidas por **`vgen-portable`** (Python embebido + ffmpeg 8.1.2 de gyan.dev),
+que desde la decisión B del operador (*«el bundle manda»*, 2026-09-06) es el
+emisor de referencia del pack. La corrida `portable` **34077462713** las emitió
+en **dos runners de Windows** (pasada 1 con el bundle recién armado, pasada 2
+con el zip publicado y sin checkout) con las cuatro piezas byte-idénticas, y
+las publicó como artifact `pack-v1`. SHA-256: `v1-vp9` `4b0714ed21ca…`,
+`v1-h264` `175722d34d0f…`, `v1-dash-vp9` `7c89d04d9301…` (en
+`v0/MANIFEST-v1.tsv` y en el REGISTRO). `v1-ambiente.mp3` **no se tocó**: el
+bundle emite la misma pista byte a byte (`c886263508da…`). Las huellas
+anteriores (Ubuntu, `emitir-v1` run 33936096738: `v1-vp9` 2.941.449 B,
+`v1-h264` 5.254.272 B) quedan en la sección del 2026-09-05 como historia.
+
+**Qué ve el aparato:** la residencia (H-15) pinea por `id + sha256[0..12)`, así
+que las claves cambian y el pack se baja otra vez; nada que migrar, nada que
+borrar (el `prune` sigue pendiente, SPEC §5.5).
+
+**El Worker no se tocó.** Verificación: las 21 keys bajadas con cache-buster y
+comparadas por SHA-256 contra `pack-v1`; `v1-ambiente.mp3` servido comparado
+también; token quemado y 403 comprobado (ver abajo el resultado exacto).

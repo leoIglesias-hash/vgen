@@ -4,6 +4,8 @@
 # con index.html regenerada en H-13, H-11 y H-12, y con 54 keys re-emitidas el
 # 2026-09-04 (H-14b: cpu-independent=1 en la receta x264). Las de `v0/` llevan
 # md5 local.
+# 2026-09-06 (P-008b): 21 keys de v1 re-emitidas con el bundle vgen-portable
+# (corrida portable 34077462713): MANIFEST-v1.tsv, v1-vp9.webm, v1-h264.mp4 y dash-vp9/*.
 # Leido con la API de Cloudflare. etag = MD5 (subidas de una sola parte).
 # key	bytes	etag(md5)
 1280-12/cache-refresh.js	5889	32c8be62f2a4107f852c779fec3d1ae6

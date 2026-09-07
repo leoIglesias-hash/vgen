@@ -191,7 +191,7 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **P-008b — poner en pie «el bundle manda» (decisión B del operador, 2026-09-06 noche)**: workflow con dos pasadas en Windows que publica el pack, re-emitir v1 con el bundle y republicar `v0/`, papel (EMISION-V1 §3, SPEC §5, regla 5). Después: más ideas con el operador; H-24 / radio / H-7 / H-8 en la cola
+> ## ▶ PRÓXIMA ACCIÓN: **más ideas con el operador** (P-008b cerrada: el bundle manda y `v0/` sirve las huellas del bundle; el operador baja `vgen-portable` de la corrida 34077462713, corre `emitir.cmd` y compara su SHA con el resumen). Después: H-24 / radio / H-7 / H-8 en la cola
 >
 > **2026-09-06 — P-008 EJECUTADA hasta el CI** (operador: *«mejor vamos
 > directo al P-008 mientras vamos a tratar de pensar más ideas»*):
@@ -209,9 +209,17 @@ nada.
 > corridas** (Opus). **DECIDIDO B por el operador (2026-09-06 noche): «el
 > bundle manda»** — el emisor de referencia es `vgen-portable` (ffmpeg 8.1.2
 > gyan), el CI reproduce con el mismo bundle en Windows, cada cambio de
-> ffmpeg es un cambio de huella declarado. Lo que falta es **P-008b**
-> (RUNBOOK-IMPLEMENTACION; nada implementado aún). Artifact `vgen-portable`
-> (190,8 MB) en la corrida 34012545002.
+> ffmpeg es un cambio de huella declarado. **P-008b CERRADA la misma noche**
+> (`706f21f`→`c642a0c`, CI verde): el workflow `portable` emite v1 con el bundle en
+> **dos runners de Windows** (pasada 2 con el zip publicado, sin checkout),
+> exige bytes idénticos y recién ahí publica `pack-v1`; Linux informativo.
+> Corrida **34077462713**: cuatro piezas idénticas (`v1-vp9` 2.941.178 B
+> `4b0714ed21ca`, `v1-h264` 5.254.451 B `175722d34d0f`, mp3 igual, DASH
+> 2.831.164 B), los mismos SHA de VP9/H.264 que las dos corridas del día
+> anterior. **`v0/` republicada** con esas huellas (21 keys; mp3 sin tocar),
+> SHA verificado, token quemado. Papel: EMISION-V1 §3, SPEC §9, invariante 8,
+> ENCODER-PORTATIL §8. Artifact `vgen-portable` vigente: el de la corrida
+> 34077462713 (166.236.545 B, `75a0c3c8d28a`).
 >
 > **2026-09-06 — H-23 APARCADA (refutada en la caja, sin reemplazo):** con
 > `reloj raf` el operador la vio *«un poco más trabada todavía… es algo de la

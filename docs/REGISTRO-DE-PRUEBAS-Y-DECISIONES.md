@@ -6100,3 +6100,49 @@ tarea **P-008b** (RUNBOOK-IMPLEMENTACION), sin nada implementado todavía:
 3. **Papel:** EMISION-V1 §3 («binario de referencia: vgen-portable, ffmpeg
    8.1.2»), SPEC-VGEN §5 (la huella es la del bundle) y regla 5 del runbook
    (byte-identidad = dos runners de Windows + el SHA del operador).
+
+### 2026-09-06 (noche) — P-008b CERRADA: el bundle manda, en pie
+
+Operador: *«listo, ahora puedes seguir implementando»*. Los tres pasos:
+
+1. **Workflow** (`706f21f`→`c642a0c`, regression verde): `portable` arma y publica el
+   zip **antes** de emitir (el de ayer traía `work\master.asclv` adentro),
+   emite v1 con el bundle en el job `armar` (**pasada 1**) y en un job nuevo
+   `reproducir` en **otro runner de Windows, sin checkout, con el zip
+   publicado** (**pasada 2**: lo que hace el operador en su PC). `comparar`
+   compara las **cuatro filas del `MANIFEST-v1.tsv`** de cada pasada (VP9,
+   H.264, mp3 y el DASH entero), **falla si difieren** y solo si son idénticas
+   publica **`pack-v1`** (piezas + `MANIFEST-v1.tsv` + `PASADAS.tsv` con CPU,
+   segundos y SHA del zip por pasada + `COMPARACION.md`). Linux queda con
+   `continue-on-error` en una columna que no decide. Test nuevo en
+   `test_portable_bundle.py`: dos `windows-latest`, `reproducir` sin checkout
+   y con `needs: armar`, `pack-v1` después del `test "$DISTINTAS" -eq 0`.
+2. **Corrida `34077462713`:** pasada 1 (AMD EPYC 7763, 107 s) y pasada 2
+   (AMD EPYC 7763, misma familia, 117 s) **idénticas en las cuatro piezas**: `v1-vp9`
+   2.941.178 B `4b0714ed21ca3ef18238d7fc0af3ce5e6a61c21bca8b3c0ec9bcca3ac787bc08`; `v1-h264` 5.254.451 B `175722d34d0f143283ec56bdf3e94af01e31355191d385d1b7671f6e4ad04d30`;
+   `v1-ambiente` 183.353 B `c886263508da…` (la del máster); `v1-dash-vp9`
+   2.831.164 B `7c89d04d9301a5416771905f7944b2851e3245b5999d3bfd5964bd6300f8ac3c` (16 segmentos). VP9 y H.264 repiten los SHA de
+   las corridas 34012297378 y 34012545002: **cuatro runners de Windows, un
+   archivo**. Linux (informativo): `v1-vp9` 2.941.449 B `8adf852aa70a…`,
+   `v1-h264` 5.254.272 B `7992b0cc75a2…`. Zip `vgen-portable` 166.236.545 B
+   `75a0c3c8d28a4f78a9d593dea5222b93635496098a23461a13e29d586e2f7344`, verificado igual en las dos pasadas.
+3. **`v0/` republicada con las huellas del bundle** (21 keys:
+   `MANIFEST-v1.tsv`, `v1-vp9.webm`, `v1-h264.mp4` y las 18 de `dash-vp9/`;
+   `v1-ambiente.mp3` no se tocó porque es byte-idéntico): copia previa en
+   `deploy/` (MANIFEST y README **antes** de subir, directiva del operador),
+   subida con `x-sha256`, cada key bajada con cache-buster y comparada por
+   SHA-256 contra `pack-v1`, token quemado y 403 comprobado. La residencia
+   (H-15) pinea por contenido: los aparatos ven claves nuevas y bajan el pack
+   otra vez; nada que migrar.
+
+**Papel:** EMISION-V1 §3 (binario de referencia = `vgen-portable`, ffmpeg
+8.1.2 gyan; los bytes de la tabla son los del bundle; la emisión de Ubuntu
+queda como historia), SPEC-VGEN §9 (quién emite la huella), invariante 8 de
+CLAUDE.md (la prueba de byte-identidad de la emisión = dos runners de
+Windows + el SHA local del operador), ENCODER-PORTATIL §6 y §8, LEEME del
+bundle y cabecera de `emitir.ps1` («el bundle manda»).
+
+**Lo que queda para el operador:** bajar `vgen-portable` de la corrida
+34077462713, correr `emitir.cmd` y comparar los SHA que imprime con los de
+arriba. Si coinciden, su máquina es el quinto runner y el círculo cierra; si
+no, mandar `VERSIONES.tsv` y la salida.

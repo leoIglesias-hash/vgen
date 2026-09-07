@@ -111,7 +111,7 @@ manda**, y el workflow lo hace cumplir comparando; (3) sin cambio:
 | `tools/portable/armar.py` | arma `vgen-portable/`: copia el Python embebido y el ffmpeg ya descomprimidos, **solo los `.py`** de `backend/` y `tools/` (+ `requirements.txt`), los scripts del bundle, `VERSIONES.tsv` (commit, fecha, Python, ffmpeg, receta v1, master pineado) y `MANIFEST-portable.tsv` (ruta, bytes, SHA-256 de cada archivo, ordenado). No baja nada. |
 | `tools/portable/emitir.ps1` + `emitir.cmd` | la emisión v1 en Windows PowerShell 5.1: baja el master pineado una sola vez y lo verifica por SHA-256, suma `ffmpeg\bin` al PATH **de ese proceso**, corre el mismo `repo/tools/emit_v1.py` con la receta v1 (`-Receta`, `-Frames`, `-Out`, `-Master`/`-Sha256`/`-SinVerificar`), borra `work/` e imprime el SHA-256 de cada pieza. Sin argumentos = el pack v1 vigente en `outputs\v1`. |
 | `tools/portable/py.cmd` | el intérprete embebido con el ffmpeg del bundle en el PATH del proceso: cualquier script del repo (la mitad A incluida). |
-| `.github/workflows/portable.yml` | job **`armar`** (windows-latest): baja el zip oficial `python-<v>-embed-amd64`, habilita `import site`, `get-pip`, `pip install --only-binary` numpy/Pillow/OpenCV (+ zopfli si hay wheel), baja el ffmpeg estático (`ffmpeg_url`, por defecto gyan.dev **8.1.2** essentials; la 7.1.1 que se supuso primero no existe en el sitio: 404 en la corrida 34012175765) y **verifica que traiga libx264, libvpx-vp9, libopus y aac**, corre `armar.py` con el Python del bundle, prueba `py.cmd`, y con `gate=true` **emite con `emitir.ps1` bajo `powershell.exe` 5.1** (lo mismo que en la máquina del operador); zip con 7z → artifact **`vgen-portable`** (90 días) + `gate-windows`. Job **`linux`**: la misma receta como `emitir-v1` → `gate-linux`. Job **`comparar`**: tabla pieza por pieza IDENTICA/DISTINTA en el resumen; **falla si alguna difiere** (el bundle queda publicado igual, marcado «sirve para probar, no para publicar»). |
+| `.github/workflows/portable.yml` | job **`armar`** (windows-latest): baja el zip oficial `python-<v>-embed-amd64`, habilita `import site`, `get-pip`, `pip install --only-binary` numpy/Pillow/OpenCV (+ zopfli si hay wheel), baja el ffmpeg estático (`ffmpeg_url`, por defecto gyan.dev **8.1.2** essentials; la 7.1.1 que se supuso primero no existe en el sitio: 404 en la corrida 34012175765) y **verifica que traiga libx264, libvpx-vp9, libopus y aac**, corre `armar.py` con el Python del bundle, prueba `py.cmd`, zip con 7z → artifact **`vgen-portable`** (90 días), y con `gate=true` **emite con `emitir.ps1` bajo `powershell.exe` 5.1** (lo mismo que en la máquina del operador) = **pasada 1** → `pasada-1-windows`. **Desde P-008b (§8):** job **`reproducir`** (otro windows-latest, **sin checkout**): baja el zip publicado, lo verifica, lo descomprime con 7z y emite igual = **pasada 2** → `pasada-2-windows`. Job **`linux`** (`linux=true`, `continue-on-error`): la misma receta como `emitir-v1` → `gate-linux`, **informativo**. Job **`comparar`**: compara las **cuatro** filas del `MANIFEST-v1.tsv` de cada pasada (VP9, H.264, mp3 y el DASH), **falla si las dos pasadas de Windows difieren** y, solo si son idénticas, publica **`pack-v1`** (piezas + `MANIFEST-v1.tsv` + `PASADAS.tsv` con CPU, segundos y SHA del zip de cada pasada + `COMPARACION.md`); Linux va en una columna aparte que no decide nada. |
 | `tests/test_portable_bundle.py` | arma un bundle con Python/ffmpeg falsos y verifica la carpeta, el manifest (SHA real de `emit_v1.py`), `VERSIONES.tsv`, y que **la receta v1 y el master pineado sean UNO** en `armar.py`, `emitir.ps1`, el workflow y `EMISION-V1.md`. Entra por `unittest discover` en `run_all.py`. |
 
 **Lo que no cambia:** ni un byte de `backend/` ni de `tools/*.py`; el bundle
@@ -197,6 +197,37 @@ bundle y se republican en `v0/`, y la spec y EMISION-V1 dicen cuál es el
 binario de referencia.
 
 **Cómo se baja:** Actions → `portable` → la corrida → artifact
-**`vgen-portable`** (zip 190.785.339 B, SHA-256
-`3bc08fe48462814c458c03452af99b314691bdd68d2ab9fe7c38d1282ac4de7d`, 90
-días); descomprimir en cualquier carpeta y `emitir.cmd`. Nada más.
+**`vgen-portable`**; descomprimir en cualquier carpeta y `emitir.cmd`. Nada
+más. El zip vigente es el de §8 (el de la corrida 34012545002,
+`3bc08fe4…4de7d`, traía además `work\master.asclv` adentro porque el gate
+corría antes de empaquetar; desde P-008b el zip se arma antes de emitir).
+
+## 8. P-008b — «el bundle manda», en pie (2026-09-06 noche, corrida 34077462713)
+
+Lo que cambió en el workflow está en la fila de §6. Lo que la corrida probó:
+
+| pieza | pasada 1 (bundle recién armado, AMD EPYC 7763) | pasada 2 (zip publicado, otro runner, AMD EPYC 7763, misma familia) | Linux (ffmpeg 6.1.1, informativo) |
+|---|---|---|---|
+| `v1-vp9` | 2.941.178 B `4b0714ed21ca` | **idéntica** | 2.941.449 B `8adf852aa70a` (otro ffmpeg) |
+| `v1-h264` | 5.254.451 B `175722d34d0f` | **idéntica** | 5.254.272 B `7992b0cc75a2` (otro ffmpeg) |
+| `v1-ambiente` | 183.353 B `c886263508da` | **idéntica** | idéntica (es la pista del máster) |
+| `v1-dash-vp9` | 2.831.164 B `7c89d04d9301` (16 segmentos) | **idéntica** | 2.831.164 B `a61bde6c1a8a` |
+
+Tiempos: pasada 1 107 s, pasada 2 117 s. Zip `vgen-portable`:
+166.236.545 B, SHA-256 `75a0c3c8d28a4f78a9d593dea5222b93635496098a23461a13e29d586e2f7344` (el mismo en las dos pasadas: la 2 lo
+verifica antes de descomprimirlo; ya no lleva `workmaster.asclv` adentro: 166 MB en vez de 191). Las dos pasadas cayeron en la misma familia de CPU (AMD EPYC 7763): la identidad entre CPUs distintas en Windows queda por medir cuando toque un runner Intel; entre Windows y el operador la mide el operador (abajo). VP9 y H.264 dan **los mismos SHA que las
+corridas 34012297378 y 34012545002** del día anterior (`4b0714ed21ca` /
+`175722d34d0f`): cuatro runners de Windows, un archivo.
+
+**Qué significa:** la huella de v1 es la del bundle. Las cuatro piezas de la
+pasada 1 son el artifact `pack-v1` y son lo que se publicó en `v0/` (README
+de `deploy/`, sección 2026-09-06). La regla de byte-identidad para la emisión
+queda así: **dos runners de Windows con el mismo zip → mismos bytes**, y el
+operador cierra el círculo emitiendo local con `emitir.cmd` y comparando su
+SHA con el resumen de la corrida. Linux se conserva como testigo de que «otro
+ffmpeg = otros bytes» y nada más.
+
+**Lo que hay que hacer cuando cambie el ffmpeg del bundle** (`ffmpeg_url`):
+correr `portable`, anotar la fila nueva de `VERSIONES.tsv` en EMISION-V1 §3 y
+en el REGISTRO, y republicar el pack con las huellas nuevas. No hay
+«actualización silenciosa»: la huella cambia y se declara.

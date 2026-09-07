@@ -176,7 +176,7 @@ tome.
 - **Qué la refutaría:** que la elección automática elija un crf que el
   operador rechace a ojo dos veces seguidas.
 
-### P-008 · El encoder fuera del CI: bundle portátil, con el CI como árbitro · 🟢 adoptada 2026-09-06 en su variante B («el bundle manda»; P-008b la pone en pie) · 2026-09-05 · operador
+### P-008 · El encoder fuera del CI: bundle portátil, con el CI como árbitro · 🟢 adoptada 2026-09-06 en su variante B («el bundle manda») y en pie esa misma noche (P-008b: dos runners de Windows + `pack-v1`; `v0/` sirve las huellas del bundle) · 2026-09-05 · operador
 
 - **Problema:** cada emisión pasa por GitHub Actions (1–2 min + bajar el
   artifact) y la máquina del operador no tiene Python ni Node a propósito.

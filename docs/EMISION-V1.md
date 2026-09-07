@@ -115,17 +115,27 @@ feo, el escalón anterior está medido: `vp9-crf35` (80 %) y
 
 | id | rol | MIME | bytes | qué es |
 |---|---|---|---:|---|
-| `v1-vp9` | v1 | `video/webm; codecs="vp9, opus"` | 2.941.449 | VP9 crf 38 + **Opus 64k** (S13). 66,7 % de `v0-vp9` **con audio adentro** |
-| `v1-h264` | v1 | `video/mp4; codecs="avc1.64001F, mp4a.40.2"` | 5.254.272 | H.264 High crf 23, 3 B, ref 4 + **AAC 96k** (S13). 55 % de `v0-h264-baseline` |
+| `v1-vp9` | v1 | `video/webm; codecs="vp9, opus"` | 2.941.178 | VP9 crf 38 + **Opus 64k** (S13). ~67 % de `v0-vp9` **con audio adentro** |
+| `v1-h264` | v1 | `video/mp4; codecs="avc1.64001F, mp4a.40.2"` | 5.254.451 | H.264 High crf 23, 3 B, ref 4 + **AAC 96k** (S13). ~55 % de `v0-h264-baseline` |
 | `v1-ambiente` | radio | `audio/mpeg` | 183.353 | la pista del máster **byte a byte** (no se recodifica), para `<audio>` aparte (S14) |
 | `v1-dash-vp9` | stream-v1 | `video/webm; codecs="vp9"` | 2.831.164 | `v1-vp9` segmentado **solo video** por remux (`-c copy`), init + 16 chunks de 1 s (S11) |
 
-SHA-256 en `v0/MANIFEST-v1.tsv` (publicado) y en el REGISTRO. Emitido por
-el workflow `emitir-v1` (run `33936096738`, 1:12 de reloj): **dos pasadas
-byte-idénticas** en la misma máquina para las tres piezas. Los encoders de
-audio son de punto flotante y no tienen `cpu-independent`: si otra CPU emite
-otros bytes, la residencia lo tiene que saber (P-006 propone el mp3 tal cual
-dentro del mp4).
+SHA-256 en `v0/MANIFEST-v1.tsv` (publicado) y en el REGISTRO.
+
+**Binario de referencia (P-008b, decisión B del operador, 2026-09-06): el
+pack v1 lo emite `vgen-portable`** — Python embebido 3.11.9 + **ffmpeg 8.1.2
+essentials de gyan.dev** (pinneado por URL en el workflow `portable`,
+declarado en `VERSIONES.tsv`) — y el CI **reproduce con el mismo zip en dos
+runners de Windows** (corrida `34077462713`: pasada 1 con el bundle recién
+armado, pasada 2 con el zip publicado y sin checkout, **cuatro piezas
+idénticas**, `pack-v1`). Los bytes de la tabla son ésos. La primera emisión de
+v1 (workflow `emitir-v1`, run `33936096738`, Ubuntu con ffmpeg 6.1.1:
+`v1-vp9` 2.941.449 B, `v1-h264` 5.254.272 B) queda como historia: otro ffmpeg,
+otros bytes (ENCODER-PORTATIL §7-8). Los encoders de audio son de punto
+flotante y no tienen `cpu-independent`: el bundle ya demostró repetirlos en
+cuatro runners de Windows; si un día no, la residencia lo tiene que saber
+(P-006 propone el mp3 tal cual dentro del mp4). **Cada cambio del ffmpeg del
+bundle es un cambio de huella declarado** acá y en el REGISTRO.
 
 ## 4. Cómo se mide (página `v0/`, teclas nuevas)
 

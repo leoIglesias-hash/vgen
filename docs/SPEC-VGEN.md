@@ -304,6 +304,12 @@ En el producto, **teclas de una cifra**, todas instantáneas: `1` anillo MSE,
 - Audio: AAC/Opus son de punto flotante; dos pasadas en la misma máquina son
   idénticas (E19); entre CPUs distintas **⏳** (P-006 propone mp3 tal cual).
 - La huella de una pieza es su `sha256`; la residencia pinea por ella.
+- **Quién emite la huella (P-008b, 2026-09-06): el bundle `vgen-portable`**
+  (ffmpeg 8.1.2 gyan pinneado; `VERSIONES.tsv`). Byte-idéntico = dos runners
+  de Windows con el mismo zip dan los mismos bytes (workflow `portable`,
+  artifact `pack-v1`), y el operador lo repite local con `emitir.cmd`. Otro
+  ffmpeg (el de Ubuntu del CI) da otros bytes y no arbitra. Cambiar el ffmpeg
+  del bundle es cambiar la huella, y se declara (EMISION-V1 §3).
 
 ## 10. Fuera de este borrador (⏳)
 
