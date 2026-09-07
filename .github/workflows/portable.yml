@@ -1,11 +1,17 @@
 name: portable
 
-# P-008: arma `vgen-portable/` (Python embebido + numpy/Pillow/OpenCV + ffmpeg
-# estatico de Windows + el mismo backend/ y tools/ del repo) y lo publica como
-# artifact. En la MISMA corrida emite el pack v1 con el bundle en un runner de
-# Windows y con Linux (como emitir-v1), y compara los SHA-256 pieza por pieza:
-# el CI es el arbitro de bytes (docs/ENCODER-PORTATIL.md S4). Si difieren, el
-# job `comparar` falla y el bundle queda publicado igual, marcado.
+# P-008 / P-008b ("el bundle manda", decision B del operador, 2026-09-06):
+# arma `vgen-portable/` (Python embebido + numpy/Pillow/OpenCV + ffmpeg
+# estatico de Windows + el mismo backend/ y tools/ del repo), lo publica como
+# artifact y, en la MISMA corrida, emite el pack v1 con el bundle en DOS
+# runners de Windows: la pasada 1 con el bundle recien armado (job `armar`) y
+# la pasada 2 con el ZIP publicado, en otra maquina y sin checkout (job
+# `reproducir`), que es exactamente lo que hace el operador en su PC. El job
+# `comparar` exige que las dos pasadas sean byte-identicas pieza por pieza
+# (regla 5 = dos runners de Windows, como H-14b) y recien entonces publica el
+# artifact `pack-v1` (las piezas + MANIFEST-v1.tsv + PASADAS.tsv). Linux
+# emite la misma receta como `emitir-v1`, pero solo informa: otro ffmpeg,
+# otros bytes (docs/ENCODER-PORTATIL.md S7).
 
 on:
   workflow_dispatch:
@@ -27,13 +33,17 @@ on:
         default: "dcd6afb669078a5b0d1bf4e4d42cdd2d8497ea70908a3e283183fe7d2431632a"
         required: true
       receta:
-        description: "Receta de tools/emit_v1.py para el gate (la v1 vigente)"
+        description: "Receta de tools/emit_v1.py (la v1 vigente)"
         default: "--vp9-crf 38 --h264-profile high --h264-crf 23 --h264-bframes 3 --h264-refs 4"
       frames:
-        description: "Cortar el gate en N cuadros (vacio = el clip entero)"
+        description: "Cortar la emision en N cuadros (vacio = el clip entero)"
         default: ""
       gate:
-        description: "Emitir con el bundle (Windows) y con Linux, y comparar"
+        description: "Emitir con el bundle en dos runners de Windows, exigir bytes identicos y publicar pack-v1"
+        type: boolean
+        default: true
+      linux:
+        description: "Emitir tambien en Linux (informativo: otro ffmpeg, otros bytes)"
         type: boolean
         default: true
 
@@ -42,7 +52,7 @@ permissions:
 
 jobs:
   armar:
-    name: armar el bundle y emitir en Windows
+    name: armar el bundle y emitir (pasada 1, Windows)
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -98,26 +108,6 @@ jobs:
           cmd /c "vgen-portable\py.cmd -c ""import numpy, cv2; print('py.cmd OK')"""
           if ($LASTEXITCODE -ne 0) { throw "py.cmd fallo" }
 
-      - name: Gate - emitir con el bundle (Windows PowerShell 5.1, como en la maquina del operador)
-        if: ${{ inputs.gate }}
-        shell: pwsh
-        run: |
-          $pa = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "vgen-portable\emitir.ps1",
-                  "-Master", "${{ inputs.master_url }}", "-Sha256", "${{ inputs.master_sha256 }}",
-                  "-Out", "gate\v1", "-Receta", "${{ inputs.receta }}")
-          if ("${{ inputs.frames }}" -ne "") { $pa += @("-Frames", "${{ inputs.frames }}") }
-          $t0 = Get-Date
-          & powershell.exe @pa 2>&1 | Tee-Object -FilePath emision-windows.txt
-          if ($LASTEXITCODE -ne 0) { throw "emitir.ps1 fallo con $LASTEXITCODE" }
-          "segundos`t$([int]((Get-Date) - $t0).TotalSeconds)" | Set-Content tiempo-windows.tsv
-          $rows = Get-ChildItem gate\v1 -File | Where-Object { $_.Extension -in ".webm", ".mp4", ".mp3" } | Sort-Object Name | ForEach-Object {
-            "{0}`t{1}`t{2}" -f $_.Name, $_.Length, (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
-          }
-          [IO.File]::WriteAllText("$PWD\gate-windows.tsv", (($rows -join "`n") + "`n"))
-          Get-Content gate-windows.tsv
-          "dash-vp9: $((Get-ChildItem gate\v1\dash-vp9 -File).Count) archivos, $((Get-ChildItem gate\v1\dash-vp9 -File | Measure-Object Length -Sum).Sum) B" | Tee-Object -FilePath dash-windows.txt
-          Get-ChildItem gate\v1\dash-vp9 -File | Sort-Object Name | Select-Object -First 3 -ExpandProperty Name
-
       - name: Empaquetar
         shell: pwsh
         run: |
@@ -142,27 +132,113 @@ jobs:
           compression-level: 0
           retention-days: 90
 
-      - name: Publicar el gate de Windows
+      - name: Pasada 1 - emitir con el bundle recien armado (Windows PowerShell 5.1, como en la maquina del operador)
+        if: ${{ inputs.gate }}
+        shell: pwsh
+        run: |
+          # El mismo bloque que la pasada 2 (job `reproducir`): si se toca uno, se toca el otro.
+          $pa = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "vgen-portable\emitir.ps1",
+                  "-Master", "${{ inputs.master_url }}", "-Sha256", "${{ inputs.master_sha256 }}",
+                  "-Out", "gate\v1", "-Receta", "${{ inputs.receta }}")
+          if ("${{ inputs.frames }}" -ne "") { $pa += @("-Frames", "${{ inputs.frames }}") }
+          $t0 = Get-Date
+          & powershell.exe @pa 2>&1 | Tee-Object -FilePath emision-windows-1.txt
+          if ($LASTEXITCODE -ne 0) { throw "emitir.ps1 fallo con $LASTEXITCODE" }
+          $seg = [int]((Get-Date) - $t0).TotalSeconds
+          $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
+          $zip = (Get-Content bundle-sha256.tsv) -split "`t"
+          [IO.File]::WriteAllText("$PWD\pasada-1.tsv", "pasada`tcpu`tsegundos`tbundle_bytes`tbundle_sha256`n1`t$cpu`t$seg`t$($zip[0])`t$($zip[1])`n")
+          Get-Content pasada-1.tsv
+          $rows = Get-ChildItem gate\v1 -File | Where-Object { $_.Extension -in ".webm", ".mp4", ".mp3" } | Sort-Object Name | ForEach-Object {
+            "{0}`t{1}`t{2}" -f $_.Name, $_.Length, (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
+          }
+          [IO.File]::WriteAllText("$PWD\gate-windows-1.tsv", (($rows -join "`n") + "`n"))
+          Get-Content gate-windows-1.tsv
+          "dash-vp9: $((Get-ChildItem gate\v1\dash-vp9 -File).Count) archivos, $((Get-ChildItem gate\v1\dash-vp9 -File | Measure-Object Length -Sum).Sum) B" | Tee-Object -FilePath dash-windows-1.txt
+
+      - name: Publicar la pasada 1 (piezas + manifiesto + logs)
         if: ${{ inputs.gate }}
         uses: actions/upload-artifact@v4
         with:
-          name: gate-windows
+          name: pasada-1-windows
           path: |
-            gate-windows.tsv
-            tiempo-windows.tsv
-            emision-windows.txt
-            dash-windows.txt
+            gate/v1/
+            gate-windows-1.tsv
+            pasada-1.tsv
+            emision-windows-1.txt
+            dash-windows-1.txt
             bundle-sha256.tsv
             vgen-portable/VERSIONES.tsv
+          retention-days: 90
+
+  reproducir:
+    name: reproducir con el zip publicado (pasada 2, otro Windows, sin checkout)
+    if: ${{ inputs.gate }}
+    needs: armar
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Bajar el bundle publicado
+        uses: actions/download-artifact@v4
+        with:
+          name: vgen-portable
+          path: dl
+
+      - name: Verificar el zip y descomprimirlo (lo que hace el operador)
+        shell: pwsh
+        run: |
+          $z = Get-Item dl\vgen-portable.zip
+          $sha = (Get-FileHash -Algorithm SHA256 $z.FullName).Hash.ToLower()
+          [IO.File]::WriteAllText("$PWD\bundle-sha256-2.tsv", "$($z.Length)`t$sha`n")
+          Write-Host "zip $($z.Length) B  sha256 $sha"
+          7z x -y dl\vgen-portable.zip | Select-Object -Last 2
+          if ($LASTEXITCODE -ne 0) { throw "7z x fallo" }
+          if (-not (Test-Path vgen-portable\emitir.ps1)) { throw "el zip no trae vgen-portable\emitir.ps1" }
+          Get-Content vgen-portable\VERSIONES.tsv
+
+      - name: Pasada 2 - emitir con el bundle publicado (Windows PowerShell 5.1)
+        shell: pwsh
+        run: |
+          # El mismo bloque que la pasada 1 (job `armar`): si se toca uno, se toca el otro.
+          $pa = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "vgen-portable\emitir.ps1",
+                  "-Master", "${{ inputs.master_url }}", "-Sha256", "${{ inputs.master_sha256 }}",
+                  "-Out", "gate\v1", "-Receta", "${{ inputs.receta }}")
+          if ("${{ inputs.frames }}" -ne "") { $pa += @("-Frames", "${{ inputs.frames }}") }
+          $t0 = Get-Date
+          & powershell.exe @pa 2>&1 | Tee-Object -FilePath emision-windows-2.txt
+          if ($LASTEXITCODE -ne 0) { throw "emitir.ps1 fallo con $LASTEXITCODE" }
+          $seg = [int]((Get-Date) - $t0).TotalSeconds
+          $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
+          $zip = (Get-Content bundle-sha256-2.tsv) -split "`t"
+          [IO.File]::WriteAllText("$PWD\pasada-2.tsv", "pasada`tcpu`tsegundos`tbundle_bytes`tbundle_sha256`n2`t$cpu`t$seg`t$($zip[0])`t$($zip[1])`n")
+          Get-Content pasada-2.tsv
+          $rows = Get-ChildItem gate\v1 -File | Where-Object { $_.Extension -in ".webm", ".mp4", ".mp3" } | Sort-Object Name | ForEach-Object {
+            "{0}`t{1}`t{2}" -f $_.Name, $_.Length, (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
+          }
+          [IO.File]::WriteAllText("$PWD\gate-windows-2.tsv", (($rows -join "`n") + "`n"))
+          Get-Content gate-windows-2.tsv
+          "dash-vp9: $((Get-ChildItem gate\v1\dash-vp9 -File).Count) archivos, $((Get-ChildItem gate\v1\dash-vp9 -File | Measure-Object Length -Sum).Sum) B" | Tee-Object -FilePath dash-windows-2.txt
+
+      - name: Publicar la pasada 2 (manifiesto + logs; las piezas son las de la pasada 1 si el gate pasa)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pasada-2-windows
+          path: |
             gate/v1/MANIFEST-v1.tsv
             gate/v1/*.ffmpeg.log
+            gate-windows-2.tsv
+            pasada-2.tsv
+            emision-windows-2.txt
+            dash-windows-2.txt
+            bundle-sha256-2.tsv
           retention-days: 90
 
   linux:
-    name: emitir en Linux (como emitir-v1)
-    if: ${{ inputs.gate }}
+    name: emitir en Linux (informativo, como emitir-v1)
+    if: ${{ inputs.gate && inputs.linux }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    continue-on-error: true
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
@@ -200,6 +276,7 @@ jobs:
         with:
           name: gate-linux
           path: |
+            gate/v1/MANIFEST-v1.tsv
             gate-linux.tsv
             tiempo-linux.tsv
             emision-linux.txt
@@ -207,56 +284,85 @@ jobs:
           retention-days: 90
 
   comparar:
-    name: comparar Windows vs Linux (el CI manda)
-    if: ${{ inputs.gate }}
-    needs: [armar, linux]
+    name: comparar las dos pasadas (el bundle manda) y publicar pack-v1
+    if: ${{ !cancelled() && inputs.gate && needs.armar.result == 'success' && needs.reproducir.result == 'success' }}
+    needs: [armar, reproducir, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: gate-windows
-          path: w
+          name: pasada-1-windows
+          path: a
       - uses: actions/download-artifact@v4
+        with:
+          name: pasada-2-windows
+          path: b
+      - uses: actions/download-artifact@v4
+        if: ${{ inputs.linux }}
+        continue-on-error: true
         with:
           name: gate-linux
           path: l
-      - name: Pieza por pieza
+      - name: Pieza por pieza (las cuatro del manifiesto, DASH incluido)
         run: |
           # Los archivos de Windows pueden traer CRLF: se limpian antes de comparar.
-          for F in w/gate-windows.tsv w/tiempo-windows.tsv w/dash-windows.txt; do
-            [ -f "$F" ] && tr -d '\r' < "$F" > "$F.lf" && mv "$F.lf" "$F"
+          for F in $(find a b -name '*.tsv' -o -name '*.txt' 2>/dev/null); do
+            tr -d '\r' < "$F" > "$F.lf" && mv "$F.lf" "$F"
           done
+          # Las filas del manifiesto que emite emit_v1.py: id, bytes, sha256 (columnas 1, 5 y 6).
+          rows() { [ -f "$1" ] && grep -v '^#' "$1" | awk -F'\t' 'NF >= 6 {print $1"\t"$5"\t"$6}' || true; }
+          rows a/gate/v1/MANIFEST-v1.tsv > a.rows
+          rows b/gate/v1/MANIFEST-v1.tsv > b.rows
+          rows l/gate/v1/MANIFEST-v1.tsv > l.rows
+          echo "pasada 1:"; cat a.rows; echo "pasada 2:"; cat b.rows; echo "linux:"; cat l.rows
+          N=$(wc -l < a.rows)
+          test "$N" -ge 3 || { echo "la pasada 1 no dejo manifiesto con piezas"; exit 1; }
           DISTINTAS=0
           TABLA=""
-          while IFS=$'\t' read -r NAME WBYTES WSHA; do
-            [ -z "$NAME" ] && continue
-            LINE=$(grep -P "^${NAME}\t" l/gate-linux.tsv || true)
-            LBYTES=$(echo "$LINE" | cut -f2); LSHA=$(echo "$LINE" | cut -f3)
-            if [ -n "$LSHA" ] && [ "$WSHA" = "$LSHA" ]; then V="IDENTICA"; else V="**DISTINTA**"; DISTINTAS=$((DISTINTAS+1)); fi
-            TABLA="$TABLA| $NAME | $WBYTES B \`${WSHA:0:12}\` | $LBYTES B \`${LSHA:0:12}\` | $V |"$'\n'
-          done < w/gate-windows.tsv
+          while IFS=$'\t' read -r ID ABYTES ASHA; do
+            [ -z "$ID" ] && continue
+            B=$(grep -P "^${ID}\t" b.rows || true); BBYTES=$(echo "$B" | cut -f2); BSHA=$(echo "$B" | cut -f3)
+            L=$(grep -P "^${ID}\t" l.rows || true); LBYTES=$(echo "$L" | cut -f2); LSHA=$(echo "$L" | cut -f3)
+            if [ -n "$BSHA" ] && [ "$ASHA" = "$BSHA" ]; then V="IDENTICA"; else V="**DISTINTA**"; DISTINTAS=$((DISTINTAS+1)); fi
+            if [ -z "$LSHA" ]; then LV="-"; elif [ "$ASHA" = "$LSHA" ]; then LV="$LBYTES B \`${LSHA:0:12}\` = bundle"; else LV="$LBYTES B \`${LSHA:0:12}\` otro"; fi
+            TABLA="$TABLA| \`$ID\` | $ABYTES B \`$ASHA\` | $BBYTES B \`${BSHA:0:12}\` | $V | $LV |"$'\n'
+          done < a.rows
+          C1=$(sed -n 2p a/pasada-1.tsv); C2=$(sed -n 2p b/pasada-2.tsv)
           {
-            echo "## Gate P-008: el bundle de Windows contra Linux (misma receta, mismo master)"
+            echo "## P-008b: el bundle manda — dos runners de Windows, mismo zip, mismos bytes"
             echo ""
             echo "Receta: \`${{ inputs.receta }}\`  frames: '${{ inputs.frames }}'"
             echo ""
-            echo "| pieza | Windows (bundle) | Linux (CI) | veredicto |"
-            echo "|---|---|---|---|"
+            echo "| pieza | pasada 1 (bundle recien armado) SHA-256 completo | pasada 2 (zip publicado) | veredicto | Linux (informativo) |"
+            echo "|---|---|---|---|---|"
             printf '%s' "$TABLA"
             echo ""
-            echo "Tiempos: Windows $(cut -f2 w/tiempo-windows.tsv) s, Linux $(cut -f2 l/tiempo-linux.tsv) s. Windows $(cat w/dash-windows.txt 2>/dev/null)."
-            echo ""
             echo '```'
-            echo "Windows: $(grep '^ffmpeg' w/vgen-portable/VERSIONES.tsv 2>/dev/null | cut -f2)"
-            echo "Linux:   $(cat l/ffmpeg-linux.txt)"
+            echo "pasada 1: cpu $(echo "$C1" | cut -f2) | $(echo "$C1" | cut -f3) s | zip $(echo "$C1" | cut -f4) B sha256 $(echo "$C1" | cut -f5)"
+            echo "pasada 2: cpu $(echo "$C2" | cut -f2) | $(echo "$C2" | cut -f3) s | zip $(echo "$C2" | cut -f4) B sha256 $(echo "$C2" | cut -f5)"
+            echo "bundle:   $(grep '^ffmpeg' a/vgen-portable/VERSIONES.tsv 2>/dev/null | cut -f2)"
+            echo "linux:    $(cat l/ffmpeg-linux.txt 2>/dev/null || echo 'no corrio') $( [ -f l/tiempo-linux.tsv ] && echo "| $(cut -f2 l/tiempo-linux.tsv) s")"
+            echo "dash:     pasada 1 $(cat a/dash-windows-1.txt 2>/dev/null) | pasada 2 $(cat b/dash-windows-2.txt 2>/dev/null)"
             echo '```'
             if [ "$DISTINTAS" -eq 0 ]; then
-              echo "**Las piezas son byte-identicas: el bundle emite lo mismo que el CI para esta receta.**"
+              echo "**Las $N piezas son byte-identicas entre los dos runners de Windows: la huella del pack es la del bundle (artifact \`pack-v1\`).** Linux no arbitra: si difiere es porque es otro ffmpeg."
             else
-              echo "**$DISTINTAS pieza(s) distinta(s): manda el CI. El bundle sirve para probar, no para publicar, hasta pinnear el mismo libvpx/x264 (ENCODER-PORTATIL S4).**"
+              echo "**$DISTINTAS pieza(s) distinta(s) entre las dos pasadas del MISMO bundle: no hay huella; no se publica \`pack-v1\`.** Revisar VERSIONES.tsv y los logs de ffmpeg de las dos pasadas."
             fi
           } | tee comparacion.md | tee -a "$GITHUB_STEP_SUMMARY"
           test "$DISTINTAS" -eq 0
+      - name: Armar pack-v1 (las piezas de la pasada 1, ya verificadas)
+        run: |
+          { echo "pasada	cpu	segundos	bundle_bytes	bundle_sha256"; sed -n 2p a/pasada-1.tsv; sed -n 2p b/pasada-2.tsv; } > a/gate/v1/PASADAS.tsv
+          cp comparacion.md a/gate/v1/COMPARACION.md
+          rm -rf a/gate/v1/work
+          ls -la a/gate/v1 a/gate/v1/dash-vp9 | head -40
+      - name: Publicar pack-v1
+        uses: actions/upload-artifact@v4
+        with:
+          name: pack-v1
+          path: a/gate/v1/
+          retention-days: 90
       - name: Publicar la comparacion
         if: always()
         uses: actions/upload-artifact@v4

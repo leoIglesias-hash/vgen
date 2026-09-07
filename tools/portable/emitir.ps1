@@ -9,7 +9,9 @@
 # Corre el MISMO tools/emit_v1.py que el CI, con el Python embebido y el ffmpeg
 # del bundle. El PATH se toca solo en este proceso. Al final imprime el SHA-256
 # de cada pieza: el numero que se compara contra el resumen del workflow
-# `portable` / `emitir-v1` (el CI es el arbitro de bytes).
+# `portable`, que emite con ESTE MISMO bundle en dos runners de Windows. El
+# bundle manda (P-008b, decision del operador 2026-09-06): si los SHA coinciden,
+# el pack local ES el pack publicado.
 #
 # Windows PowerShell 5.1 alcanza (viene con Windows).
 

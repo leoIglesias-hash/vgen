@@ -22,9 +22,14 @@ receta v1 vigente, y deja en `outputs\v1\`:
 | `MANIFEST-v1.tsv` | id, bytes, SHA-256, MIME de cada pieza |
 
 Al final imprime el **SHA-256 de cada pieza**. Ese número se compara contra
-el resumen del workflow `portable` (o `emitir-v1`) en GitHub: **si coincide,
-el pack local es el mismo archivo que emite el CI** y se puede publicar; si
-no coincide, manda el CI (docs/ENCODER-PORTATIL.md §4).
+el resumen del workflow `portable` en GitHub, que emite con **este mismo
+bundle** en dos runners de Windows y publica `pack-v1` solo si los dos dieron
+los mismos bytes. **El bundle manda** (P-008b, decisión del operador
+2026-09-06): si el SHA local coincide con el del resumen, el pack local **es**
+el pack publicado. Si no coincide, algo cambió en la máquina (otro
+`VERSIONES.tsv`, otro máster, otra receta): mandar las dos líneas de abajo.
+La emisión de Linux del CI (`emitir-v1`) es otro ffmpeg y da otros bytes; es
+informativa (docs/ENCODER-PORTATIL.md §7-8).
 
 ## Variantes
 
@@ -46,8 +51,9 @@ py.cmd repo\backend\encoder.py --help
 ```
 
 `py.cmd` es el Python embebido con el ffmpeg del bundle en el PATH de ese
-proceso. Sirve para la mitad A (el máster) y la B (la emisión); el CI sigue
-siendo el árbitro de bytes de las dos.
+proceso. Sirve para la mitad A (el máster) y la B (la emisión). Para la B el
+bundle es el emisor de referencia; para la A el CI (`regression`) sigue
+verificando byte-identidad del máster.
 
 ## Qué hay adentro
 

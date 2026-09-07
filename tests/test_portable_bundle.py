@@ -127,6 +127,26 @@ class PinesTest(unittest.TestCase):
         self.assertIn("windows-latest", yml)
         self.assertIn("ubuntu-latest", yml)
 
+    def test_el_bundle_manda_dos_pasadas_en_windows_y_pack_v1(self):
+        """P-008b (decision B del operador, 2026-09-06): la huella del pack es
+        la del bundle, probada con DOS runners de Windows (pasada 1 con el
+        bundle recien armado, pasada 2 con el zip publicado y sin checkout) y
+        recien entonces se publica `pack-v1`. Linux solo informa."""
+        yml = leer(".github/workflows/portable.yml")
+        self.assertEqual(yml.count("runs-on: windows-latest"), 2)
+        reproducir = yml[yml.index("  reproducir:"):yml.index("  linux:")]
+        self.assertIn("needs: armar", reproducir)
+        self.assertIn("name: vgen-portable", reproducir)
+        self.assertNotIn("actions/checkout", reproducir)
+        self.assertIn("emitir.ps1", reproducir)
+        linux = yml[yml.index("  linux:"):yml.index("  comparar:")]
+        self.assertIn("continue-on-error: true", linux)
+        comparar = yml[yml.index("  comparar:"):]
+        self.assertIn("name: pack-v1", comparar)
+        self.assertIn('test "$DISTINTAS" -eq 0', comparar)
+        self.assertLess(comparar.index('test "$DISTINTAS" -eq 0'), comparar.index("name: pack-v1"))
+        self.assertIn("PASADAS.tsv", comparar)
+
 
 if __name__ == "__main__":
     unittest.main()
