@@ -235,13 +235,17 @@ Qué cambia en este diseño:
 - **E-E (calidad por corte) y E-F (escalera por clase)** se hacen sobre el
   carril v2, después de que v2 esté de pie.
 - **Dónde vive la fuente para el CI:** la fuente no está en el remoto
-  público (`assets` se retiró el 2026-09-05). Dos opciones, decide el
-  operador: (1) publicarla en el bucket como el máster
-  (`outputs/fuente.<sha12>.mp4`, pineada por contenido; la misma exposición
-  que ya tiene el `.asclv` servido) y el workflow la baja por URL + SHA;
-  (2) solo emisión local con el bundle (`emitir.cmd -Fuente …`), y el CI
-  reproduce a partir de la fuente que el operador suba por el ritual. La
-  tarea arranca por lo que no depende de esto (el emisor y sus tests).
+  público (`assets` se retiró el 2026-09-05). Dos opciones: (1) publicarla
+  en el bucket como el máster (`outputs/fuente.<sha12>.mp4`, pineada por
+  contenido; la misma exposición que ya tiene el `.asclv` servido) y el
+  workflow la baja por URL + SHA; (2) solo emisión local con el bundle
+  (`emitir.cmd -Fuente …`). **Respuesta del operador (2026-09-07, tras el
+  compact): *«debe correr lo mismo de mi PC en CI; trabajaremos sobre eso
+  cuando terminemos las optimizaciones desde la PC»*** → el orden es (2)
+  primero (emisor + matriz desde la PC, receta elegida) y recién después el
+  carril v2 en `portable` reproduciendo esa emisión; la opción (1) queda
+  como el mecanismo probable para ese momento. Ejecución:
+  [`EMISION-V2.md`](EMISION-V2.md).
 
 La ejecución es **H-26** (RUNBOOK-IMPLEMENTACION). Anotado como **P-009**
 en [`../PROPUESTAS.md`](../PROPUESTAS.md), adoptada.

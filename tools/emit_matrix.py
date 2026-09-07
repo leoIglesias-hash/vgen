@@ -262,13 +262,13 @@ def build_command(ffmpeg, variant, ref_path, out_path):
     return command + list(variant["args"]) + list(BITEXACT) + [out_path]
 
 
-def build_metrics_command(ffmpeg, out_path, ref_path):
+def build_metrics_command(ffmpeg, out_path, ref_path, fps=15):
     """Decodifica la pieza y la compara contra la referencia con `ssim` y
     `psnr` en UNA pasada. `fps=15` re-expande las piezas de cadencia variable
     -repite el cuadro mientras dura, como hace el <video>- y no cambia nada en
-    las de cadencia fija."""
-    graph = ("[0:v]fps=15,format=yuv420p,split[a][b];"
-             "[1:v]split[c][d];[a][c]ssim;[b][d]psnr")
+    las de cadencia fija. El carril v2 (H-26) pasa la cadencia de su base."""
+    graph = ("[0:v]fps=%d,format=yuv420p,split[a][b];"
+             "[1:v]split[c][d];[a][c]ssim;[b][d]psnr" % fps)
     return [ffmpeg, "-nostdin", "-i", out_path, "-i", ref_path,
             "-lavfi", graph, "-f", "null", "-"]
 

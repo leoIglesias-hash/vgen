@@ -14,7 +14,7 @@ Este script no baja nada: recibe las carpetas ya descomprimidas (el workflow
 `portable` las baja, pinneadas por version) y deja:
 
   vgen-portable/
-    emitir.cmd / emitir.ps1   la emision v1 con un doble clic o una linea
+    emitir.cmd / emitir.ps1   la emision v1 (o v2 con -Fuente) con una linea
     py.cmd                    el interprete embebido con ffmpeg en el PATH
     LEEME.md                  como se usa
     VERSIONES.tsv             commit, fecha, Python, ffmpeg, receta v1
@@ -41,6 +41,11 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 
 # La receta v1 (docs/EMISION-V1.md S3): lo que eligio la matriz H-6.
 RECETA_V1 = "--vp9-crf 38 --h264-profile high --h264-crf 23 --h264-bframes 3 --h264-refs 4"
+
+# La receta v2 (docs/EMISION-V2.md S2, H-26): la fuente a 1280@20, VP9 dos
+# pasadas, techo 20 MB. Es la APUESTA de arranque; la matriz v2 desde la PC
+# del operador (`emitir.cmd -Fuente ... -Receta "--barrer ..."`) la corrige.
+RECETA_V2 = "--fps 20 --ancho 1280 --vp9-crf 34 --h264-crf 21 --techo 20000000"
 
 # El master producto (1280@15 v3, con audio), pineado por contenido.
 MASTER_URL = "https://iargen.com/player/outputs/clip.dcd6afb66907.asclv"
@@ -124,6 +129,7 @@ def copiar_ffmpeg(src, out):
 def escribir_versiones(out, commit, fecha, python_version, ffmpeg_version):
     rows = [("commit", commit), ("fecha", fecha), ("python", python_version),
             ("ffmpeg", ffmpeg_version), ("receta_v1", RECETA_V1),
+            ("receta_v2", RECETA_V2),
             ("master_url", MASTER_URL), ("master_sha256", MASTER_SHA256)]
     with io.open(os.path.join(out, VERSIONES_NAME), "w", encoding="utf-8", newline="\n") as f:
         for key, value in rows:

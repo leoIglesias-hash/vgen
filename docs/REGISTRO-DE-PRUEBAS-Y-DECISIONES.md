@@ -6204,3 +6204,41 @@ v2 después. Queda una decisión chica del operador dentro de la tarea: dónde
 vive la fuente para el CI (bucket pineado por contenido como el `.asclv`, o
 solo bundle local). **Agenda inmediata: H-26** (RUNBOOK-IMPLEMENTACION),
 antes de H-24 y la radio, que siguen en pausa.
+
+### 2026-09-07 (noche) — H-26 ejecutada hasta el emisor: v2 se emite desde la PC, el CI después
+
+Operador (tras el compact): *«ahora sí sigue! con respecto a H-26 debe
+correr lo mismo de mi PC en CI. Trabajaremos sobre eso cuando terminemos las
+optimizaciones desde la PC»*. Se lee así: el orden de la fila H-26 se
+invierte —primero el emisor y la matriz **desde la PC del operador** con el
+bundle, se elige la receta a ojo, y **recién después** el carril v2 del
+workflow `portable` reproduce esa misma emisión en dos runners (la regla de
+P-008b no cambia: el bundle manda; lo que cambia es cuándo entra el CI).
+
+**Hecho:** `tools/emit_v2.py` (fuente → referencia y4m a 1280 de ancho @20
+con lanczos, matriz 709 y rango tv explícitos y etiquetas en cada pieza
+[E-C]; VP9 dos pasadas + alt-ref + lag 25 + arnr + tpl [E-D], GOP 20 = 1 s;
+H.264 High crf, 3 B, ref 4, `cpu-independent=1`, audio de la fuente copiado
+si es AAC; radio = la pista de la fuente tal cual; `dash-v2-vp9/` por remux;
+`MANIFEST-v2.tsv` con `# fuente` (SHA-256 y **etiquetas de color leídas con
+ffprobe**, la verificación que el diseño §2 dejó como supuesto), `# receta`
+canónica sin rutas y `# techo`; **techo 20 MB por pieza de video** → nota
+`SUPERA EL TECHO` y código 4 = emitido, no se publica; `--barrer`/
+`--barrer-h264` = la matriz v2 midiendo SSIM/PSNR **contra la fuente llevada
+a la base**, con `MATRIZ-v2.tsv` y tabla `pasa`/`SUPERA`). Retoques mínimos:
+`emit_v1.x264_params(gop=)` y `emit_matrix.build_metrics_command(fps=)`,
+ambos con su default de antes (v1 y la matriz H-6 no cambian de bytes).
+`tests/test_emit_v2.py` (referencia, cabecera y4m, receta, dos pasadas,
+audio, techo, manifiesto, barrido) y `test_portable_bundle` cruzando
+`RECETA_V2` en `armar.py`, `emitir.ps1` y `EMISION-V2.md`. `emitir.ps1`
+elige el carril por `-Fuente` (v2) y sin `-Fuente` sigue siendo v1 (plan B
+intacto). Papel: [`EMISION-V2.md`](EMISION-V2.md).
+
+**Receta de arranque (apuesta):** `--fps 20 --ancho 1280 --vp9-crf 34
+--h264-crf 21 --techo 20000000`. **Sin emisión real todavía**: la primera la
+hace el operador (`emitir.cmd -Fuente "…TKN-2443-GANADOR- 15seg-.mp4"`) y
+reporta la línea `fuente …` (SHA y `color:`), la referencia, las filas y los
+SHA-256; después `-Receta "--barrer 26,30,34,38 --barrer-h264 18,21,24
+--sin-piezas"`. Lo que sigue en H-26: elegir el crf bajo el techo, publicar
+v2 en `v0/` con una tecla v1/v2 a pantalla entera, foto de la caja a 20 fps
+(caídos ≤ 3 %), y entonces el carril v2 en `portable`.

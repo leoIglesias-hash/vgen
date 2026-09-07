@@ -65,12 +65,13 @@ MANIFEST_NAME = "MANIFEST-v1.tsv"
 MANIFEST_COLUMNS = emit_pieces.MANIFEST_COLUMNS
 
 
-def x264_params(profile, bframes, refs):
+def x264_params(profile, bframes, refs, gop=GOP):
     """Los parametros de x264 de v1 se arman con los MISMOS invariantes de v0
     (GOP cerrado de 15, sin scenecut, un hilo, cpu-independent) y lo unico que
-    la matriz puede haber relajado: cuadros B y referencias."""
+    la matriz puede haber relajado: cuadros B y referencias. `gop` lo cambia
+    solo el carril v2 (H-26): ahi el GOP es 1 s a la cadencia de la fuente."""
     params = ("bframes=%d:ref=%d:keyint=%d:min-keyint=%d:scenecut=0"
-              ":threads=1:cpu-independent=1" % (bframes, refs, GOP, GOP))
+              ":threads=1:cpu-independent=1" % (bframes, refs, gop, gop))
     # Mismo b-adapt que la fila de la matriz que se reproduce (X264_B2 usa 1,
     # X264_B3 usa 2): asi el video de v1 es el que la tabla midio.
     if bframes >= 3:

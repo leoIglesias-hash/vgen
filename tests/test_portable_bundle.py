@@ -95,6 +95,7 @@ class ArmarTest(unittest.TestCase):
         self.assertEqual(rows["python"], "3.11.9")
         self.assertEqual(rows["master_sha256"], armar.MASTER_SHA256)
         self.assertEqual(rows["receta_v1"], armar.RECETA_V1)
+        self.assertEqual(rows["receta_v2"], armar.RECETA_V2)
 
     def test_falla_claro_sin_python_o_sin_ffmpeg(self):
         with self.assertRaises(SystemExit):
@@ -109,6 +110,27 @@ class PinesTest(unittest.TestCase):
 
     def test_receta_v1_es_la_de_emision_v1(self):
         self.assertIn("```\n%s\n```" % armar.RECETA_V1, leer("docs/EMISION-V1.md"))
+
+    def test_receta_v2_es_la_de_emision_v2_y_el_carril_v2_entra_por_fuente(self):
+        """H-26: la receta v2 se cita igual en armar.py, emitir.ps1 y el papel;
+        emitir.ps1 elige el carril por -Fuente y sin -Fuente sigue siendo v1
+        (el plan B no se rompe por sumar v2)."""
+        ps1 = leer("tools/portable/emitir.ps1")
+        self.assertIn('[string]$RecetaV2 = "%s"' % armar.RECETA_V2, ps1)
+        self.assertIn("```\n%s\n```" % armar.RECETA_V2, leer("docs/EMISION-V2.md"))
+        self.assertIn('[string]$Fuente = ""', ps1)
+        self.assertIn('[string]$FuenteSha256 = ""', ps1)
+        self.assertIn('repo\\tools\\emit_v2.py', ps1)
+        self.assertIn('repo\\tools\\emit_v1.py', ps1)
+        self.assertIn('"outputs\\v2"', ps1)
+        self.assertIn('".m4a"', ps1, "la radio de v2 puede ser m4a y tiene que listarse")
+        self.assertIn("-eq 4", ps1, "el codigo 4 (techo) es aviso, no error")
+        self.assertIn("--frames", leer("tools/emit_v2.py"))
+        self.assertIn("--fuente-sha256", leer("tools/emit_v2.py"))
+        for token in armar.RECETA_V2.split():
+            if token.startswith("--"):
+                self.assertIn('"%s"' % token, leer("tools/emit_v2.py"),
+                              "la receta v2 usa una opcion que emit_v2.py no declara: " + token)
 
     def test_emitir_ps1_trae_los_mismos_pines(self):
         ps1 = leer("tools/portable/emitir.ps1")

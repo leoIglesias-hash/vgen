@@ -31,6 +31,47 @@ el pack publicado. Si no coincide, algo cambió en la máquina (otro
 La emisión de Linux del CI (`emitir-v1`) es otro ffmpeg y da otros bytes; es
 informativa (docs/ENCODER-PORTATIL.md §7-8).
 
+## Emitir el pack v2 desde la fuente (H-26)
+
+```
+emitir.cmd -Fuente "C:\ruta\al\clip-original.mp4"
+```
+
+Decisión del operador (2026-09-07): «el look fue un medio». v2 no pasa por
+el máster de 256 colores: toma **el clip original**, lo lleva a **1280 de
+ancho a 20 fps** con color 709 declarado, y lo codifica con VP9 de **dos
+pasadas** (alt-ref, lag, tpl) y H.264 High. Deja en `outputs\v2\`:
+
+| pieza | qué es |
+|---|---|
+| `v2-vp9.webm` | VP9 dos pasadas + Opus (la base) |
+| `v2-h264.mp4` | H.264 High + el audio de la fuente (copiado si es AAC) |
+| `v2-ambiente.m4a` / `.mp3` | la pista de la fuente tal cual (radio) |
+| `dash-v2-vp9\` | VP9 segmentado por remux (MSE) |
+| `MANIFEST-v2.tsv` | id, bytes, SHA-256, MIME; la fuente (SHA y etiquetas de color), la receta, el techo |
+
+**Techo: 20 MB por pieza de video.** Si una lo pasa, el manifiesto lo marca
+en la nota, el script avisa y termina con código 4: se emitió, no se publica.
+
+La receta se corrige desde acá, sin CI (el operador: «debe correr lo mismo de
+mi PC en CI; trabajaremos sobre eso cuando terminemos las optimizaciones
+desde la PC»):
+
+```
+emitir.cmd -Fuente "C:\clip.mp4" -Receta "--fps 20 --ancho 1280 --vp9-crf 30 --h264-crf 20 --techo 20000000"
+emitir.cmd -Fuente "C:\clip.mp4" -Receta "--barrer 26,30,34,38 --barrer-h264 18,21,24 --sin-piezas"
+emitir.cmd -Fuente "C:\clip.mp4" -Frames 40                (humo: 2 s de la base)
+emitir.cmd -Fuente "C:\clip.mp4" -FuenteSha256 <hex>       (pinea la fuente)
+```
+
+`--barrer` emite `v2-vp9` a cada crf (misma receta, sin audio) y mide SSIM y
+PSNR **contra la fuente llevada a la base**; deja `MATRIZ-v2.tsv` y una tabla
+en pantalla con `pasa` / `SUPERA` por fila. Se elige el crf más bajo bajo el
+techo que el ojo apruebe en la caja. Lo que se reporta de cada corrida: la
+línea `fuente …` (SHA y `color:`), la tabla, y los SHA-256 del final.
+`--vp9-1pass` acota (una pasada); `--matriz-fuente bt709` declara la matriz
+si la fuente vino sin etiquetar (la línea `color:` dice `unknown`).
+
 ## Variantes
 
 ```
