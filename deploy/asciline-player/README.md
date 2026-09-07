@@ -588,3 +588,10 @@ borrar (el `prune` sigue pendiente, SPEC §5.5).
 **El Worker no se tocó.** Verificación: las 21 keys bajadas con cache-buster y
 comparadas por SHA-256 contra `pack-v1`; `v1-ambiente.mp3` servido comparado
 también; token quemado y 403 comprobado (ver abajo el resultado exacto).
+
+Resultado exacto (2026-09-06, 23:5x): 21 `PUT` con `x-sha256` → `200`; las 22
+keys de v1 (`v1-ambiente.mp3` incluida, sin tocar) bajadas con cache-buster y
+**SHA-256 igual al de `pack-v1` en las 22**; `Content-Type: video/webm` y
+`Content-Length: 2941178` en `v1-vp9.webm`; `v0/MANIFEST-v1.tsv` servido con
+las cuatro filas del bundle; token quemado con otro valor generado dentro de
+la llamada, el viejo devuelve `403`.

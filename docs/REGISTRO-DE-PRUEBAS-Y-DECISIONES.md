@@ -6105,7 +6105,9 @@ tarea **P-008b** (RUNBOOK-IMPLEMENTACION), sin nada implementado todavía:
 
 Operador: *«listo, ahora puedes seguir implementando»*. Los tres pasos:
 
-1. **Workflow** (`706f21f`→`c642a0c`, regression verde): `portable` arma y publica el
+1. **Workflow** (`706f21f`→`c642a0c`, regression verde) — el test nuevo necesitó dos correcciones: cortaba el YAML por `"  linux:"` y el input `linux:` de la cabecera matcheaba antes que el job (regression 34077462369 roja), y el arreglo por `perl` dejó saltos de línea literales dentro de las cadenas; queda una función `job()` que corta por `"
+  nombre:
+"`: `portable` arma y publica el
    zip **antes** de emitir (el de ayer traía `work\master.asclv` adentro),
    emite v1 con el bundle en el job `armar` (**pasada 1**) y en un job nuevo
    `reproducir` en **otro runner de Windows, sin checkout, con el zip
