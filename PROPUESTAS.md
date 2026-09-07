@@ -226,6 +226,34 @@ tome.
 - **Qué la refutaría:** que la caja no presente cuadros alt-ref o no sostenga 24 fps; que el máster sin pérdida dispare los bytes sin que el ojo lo note; que el operador quiera otro look (§5 del diseño).
 - **Discusión / estado:** el operador contestó el mismo día: 1280@20, 1280 se mantiene, techo 20 MB por pieza, y **(b): el look indexado fue un medio** para que el player JS fuera fluido; el video sale de la fuente (H-26) y v1 queda como plan B. E-A cae; E-E y E-F se hacen sobre v2.
 
+### P-010 · La pista Opus emitida una vez, pineada y muxeada por copia · 🟡 propuesta · 2026-09-07 · corrida `portable` 34083813584
+
+- **Problema:** medido, no supuesto: con el mismo zip `vgen-portable`, un
+  runner AMD y uno Intel emiten **el mismo VP9** (el DASH sin audio es
+  idéntico) y **el mismo H.264**, pero `v1-vp9.webm` sale distinto
+  (`4b0714ed21ca` vs `ff812fdbb642`, mismo tamaño): **libopus** es punto
+  flotante con SIMD por CPU. La residencia pinea por contenido: una pieza con
+  Opus adentro tiene una huella por familia de CPU. `v2-vp9.webm` lo hereda.
+- **Idea:** el Opus se emite **una vez** (`v*-opus.ogg`, o directamente
+  dentro del webm de la emisión de referencia), se publica **pineado por
+  contenido** como insumo (igual que el máster y la fuente), y el emisor lo
+  **muxea por `-c:a copy`** en el webm en vez de recodificarlo. El video
+  sigue saliendo del encoder en cada corrida (es cpu-independent); el audio
+  es un archivo de entrada. Determinista por construcción, como P-006 para
+  el mp3 en mp4.
+- **Qué compra:** «el bundle manda» vuelve a valer para la pieza entera en
+  cualquier CPU; el workflow deja de salir rojo cuando el pool mezcla
+  familias. **Qué cuesta:** un insumo más que pinear y declarar (URL + SHA
+  en `VERSIONES.tsv`), y que el primer Opus lo emita alguien (el operador
+  desde su PC o una corrida), con su CPU anotada.
+- **Cómo se mide:** `portable` con pool mixto (o forzando `runs-on` distinto)
+  y las cuatro filas idénticas; el operador compara su `emitir.cmd`.
+- **Qué la refutaría:** que el webm con Opus copiado no reproduzca en la caja
+  (no debería: es el mismo contenedor y el mismo códec).
+- **Alternativa menor:** aceptar una huella por CPU y declarar la CPU en el
+  manifiesto; la residencia no se rompe (pinea lo que se publicó), pero la
+  regla 5 para la emisión queda con una excepción escrita.
+
 ## Adoptadas
 
 *(vacío — la primera que llegue con su fila se muda acá con el enlace a su tarea)*

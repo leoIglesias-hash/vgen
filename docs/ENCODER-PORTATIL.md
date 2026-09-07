@@ -227,6 +227,18 @@ operador cierra el círculo emitiendo local con `emitir.cmd` y comparando su
 SHA con el resumen de la corrida. Linux se conserva como testigo de que «otro
 ffmpeg = otros bytes» y nada más.
 
+**Corrección medida el 2026-09-07 (corrida 34083813584, zip
+`a3d31b3f7250…`, con `emit_v2.py` adentro):** la pasada 2 cayó por primera
+vez en un **Intel** (Xeon Platinum 8573C) y `v1-vp9.webm` salió **distinta**
+(`ff812fdbb642`, mismo tamaño) mientras `v1-h264`, el mp3 y **el DASH (el
+mismo VP9 sin audio)** salieron idénticos. Conclusión: el bitstream VP9 y el
+H.264 son cpu-independent con el bundle; **la pista Opus no** (punto
+flotante + SIMD por CPU). La regla queda: **dos runners de Windows con el
+mismo zip → mismos bytes de VIDEO**; una pieza con Opus adentro tiene una
+huella por familia de CPU. `pack-v1` no se publicó y `v0/` sigue con la
+huella AMD. Propuesta P-010 (Opus emitido una vez y muxeado por copia).
+REGISTRO, entrada del 2026-09-07 (noche).
+
 **Lo que hay que hacer cuando cambie el ffmpeg del bundle** (`ffmpeg_url`):
 correr `portable`, anotar la fila nueva de `VERSIONES.tsv` en EMISION-V1 §3 y
 en el REGISTRO, y republicar el pack con las huellas nuevas. No hay

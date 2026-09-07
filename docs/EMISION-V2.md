@@ -113,7 +113,12 @@ Regla 5 / P-008b: el binario de referencia es el ffmpeg del bundle. Con
 zip; **eso no está verificado todavía** (es lo que el carril v2 del workflow
 `portable` dirá cuando entre). El audio copiado de la fuente no pasa por
 ningún encoder: determinismo gratis; Opus (webm) sigue siendo punto flotante
-y ya se repitió en cuatro runners para v1.
+y **ya se sabe que NO se repite entre familias de CPU** (corrida
+34083813584 del 2026-09-07: AMD e Intel emitieron `v1-vp9.webm` distinto
+con el mismo zip, y el DASH sin audio idéntico). `v2-vp9.webm` hereda eso;
+`v2-h264.mp4` no. Salida propuesta: P-010 (la pista Opus emitida una vez,
+publicada pineada por contenido y muxeada por `-c:a copy`); hasta que el
+operador decida, la huella del webm se declara **con la CPU que lo emitió**.
 
 La receta viaja en el manifiesto como texto **canónico** (solo lo que decide
 los bytes, sin rutas): así el `MANIFEST-v2.tsv` de la PC y el del CI pueden

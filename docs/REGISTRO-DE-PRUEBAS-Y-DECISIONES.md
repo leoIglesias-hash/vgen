@@ -6242,3 +6242,47 @@ SHA-256; después `-Receta "--barrer 26,30,34,38 --barrer-h264 18,21,24
 --sin-piezas"`. Lo que sigue en H-26: elegir el crf bajo el techo, publicar
 v2 en `v0/` con una tecla v1/v2 a pantalla entera, foto de la caja a 20 fps
 (caídos ≤ 3 %), y entonces el carril v2 en `portable`.
+
+### 2026-09-07 (noche) — corrida `portable` 34083813584: el Opus depende de la CPU (AMD ≠ Intel); VP9 y H.264 idénticos
+
+Se disparó `portable` sobre `17d9903` para que exista un zip con
+`emit_v2.py` adentro. El zip salió (166.248.313 B, SHA-256
+`a3d31b3f725064f35e3bbc6d0a8f0a294e031e39bdd5cd9d9737fe41370c69a2`, el
+mismo en las dos pasadas) pero **la comparación falló**, y por primera vez
+las dos pasadas cayeron en **familias de CPU distintas**: pasada 1 en AMD
+EPYC 7763 (108 s), pasada 2 en **Intel Xeon Platinum 8573C** (111 s).
+
+| pieza | pasada 1 (AMD) | pasada 2 (Intel) | veredicto |
+|---|---|---|---|
+| `v1-vp9` (VP9 + **Opus**) | 2.941.178 B `4b0714ed21ca` | 2.941.178 B **`ff812fdbb642`** | **DISTINTA** (mismo tamaño) |
+| `v1-h264` (H.264 + AAC) | 5.254.451 B `175722d34d0f` | idéntica | idéntica |
+| `v1-ambiente` (mp3 copiado) | 183.353 B `c886263508da` | idéntica | idéntica |
+| `v1-dash-vp9` (**el mismo VP9, solo video**, remux) | 2.831.164 B `7c89d04d9301` | idéntica | idéntica |
+
+**Lectura.** El DASH es `-c copy` del video de `v1-vp9`: si sus 18 archivos
+son idénticos, **el bitstream VP9 es idéntico entre AMD e Intel** (con
+`-threads 1`, libvpx sí es cpu-independent en la práctica). H.264 con
+`cpu-independent=1` idéntico, como en H-14b. El mp3 es copia. Lo único que
+queda dentro de `v1-vp9.webm` y no está en el DASH es **la pista Opus**:
+libopus es de punto flotante con caminos SIMD elegidos en tiempo de
+ejecución, y AMD e Intel no redondean igual. Es exactamente la cláusula que
+EMISION-V1 §3 dejó escrita («si un día no, la residencia lo tiene que
+saber»): ese día llegó. Nota: el AAC nativo de ffmpeg **sí** salió idéntico
+entre las dos familias en esta corrida (una muestra; no es una garantía).
+
+**Consecuencias.** (1) La regla de P-008b se afina: **el bundle manda para
+el VIDEO** (VP9 y H.264 tienen una huella por zip, en cualquier CPU); una
+pieza que lleve **Opus adentro tiene una huella por familia de CPU** con el
+mismo zip. `pack-v1` no se publicó (la regla del workflow), y `v0/` sigue
+sirviendo la huella AMD `4b0714ed21ca`, que es la que el operador ya vio en
+la caja: nada cambia en producción. (2) Para la comparación pendiente del
+operador con su `emitir.cmd` v1: H.264, mp3 y DASH tienen que coincidir con
+el resumen; `v1-vp9.webm` coincidirá con `4b0714ed…` si su PC es AMD o con
+`ff812fdb…` si es Intel; un tercer valor sería noticia. (3) `v2-vp9.webm`
+(VP9 + Opus) hereda el problema; `v2-h264.mp4` **no**, porque copia el AAC de
+la fuente (determinista por construcción). (4) Se abre **P-010**
+(PROPUESTAS): emitir la pista Opus **una vez**, publicarla pineada por
+contenido y muxearla por `-c:a copy` en el webm (la idea de P-006 aplicada al
+Opus); decide el operador. Mientras tanto el workflow sigue exigiendo
+identidad total: una corrida con pool mixto sale roja **a propósito**, para
+que no se publique una huella que otra CPU no reproduce.

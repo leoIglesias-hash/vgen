@@ -133,7 +133,11 @@ v1 (workflow `emitir-v1`, run `33936096738`, Ubuntu con ffmpeg 6.1.1:
 `v1-vp9` 2.941.449 B, `v1-h264` 5.254.272 B) queda como historia: otro ffmpeg,
 otros bytes (ENCODER-PORTATIL §7-8). Los encoders de audio son de punto
 flotante y no tienen `cpu-independent`: el bundle ya demostró repetirlos en
-cuatro runners de Windows; si un día no, la residencia lo tiene que saber
+cuatro runners de Windows **hasta que el pool mezcló familias: el
+2026-09-07 (corrida 34083813584) un runner Intel emitió otro `v1-vp9.webm`
+(`ff812fdbb642`, mismo tamaño) con VP9, H.264, mp3 y DASH idénticos → el
+Opus es el que cambia; la huella AMD `4b0714ed21ca` sigue en `v0/`; P-010
+propone el Opus emitido una vez y muxeado por copia**; la residencia lo tiene que saber
 (P-006 propone el mp3 tal cual dentro del mp4). **Cada cambio del ffmpeg del
 bundle es un cambio de huella declarado** acá y en el REGISTRO.
 
