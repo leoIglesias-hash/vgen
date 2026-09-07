@@ -6074,3 +6074,29 @@ Recomendación nueva: **B, el bundle manda y el CI corre el bundle en
 Windows para reproducir la huella**; hasta que el operador decida, rige A
 (el CI manda). Tabla y detalle: ENCODER-PORTATIL §7. Artifact
 `vgen-portable` en la corrida 34012545002 (SHA-256 `3bc08fe4…4de7d`).
+
+### 2026-09-06 (noche) — DECISIÓN: «vamos con B, el bundle manda»
+
+Operador: *«vamos con B, el bundle manda. Pero antes documentá todo para un
+compact, así seguís»*. Queda decidido (ENCODER-PORTATIL §7, párrafo
+«DECIDIDO»): **el emisor de referencia del pack es `vgen-portable`** (ffmpeg
+8.1.2 de gyan.dev pinneado por URL); **el CI reproduce con el mismo bundle
+en runners de Windows** (dos pasadas en dos máquinas = la prueba de la regla
+5, como H-14b) y la emisión de Linux pasa a ser informativa; **cada cambio
+de ffmpeg del bundle es un cambio de huella declarado**. Lo que sigue es la
+tarea **P-008b** (RUNBOOK-IMPLEMENTACION), sin nada implementado todavía:
+
+1. **Workflow:** `portable` con `publicar_pack=true` emite el pack v1 con el
+   bundle en **dos** jobs de Windows y exige SHA idénticos entre los dos;
+   publica `pack-v1` (las piezas + `MANIFEST-v1.tsv` + los SHA en el
+   resumen). El job de Linux queda como comparación informativa, ya no
+   falla el run.
+2. **Huellas nuevas de v1:** re-emitir el producto con el bundle (las de
+   hoy en `v0/` salieron del Ubuntu: `v1-vp9.webm` 2.941.449 B, `v1-h264.mp4`
+   5.254.272 B) y republicar en `v0/` con el ritual de siempre (MANIFEST y
+   README de deploy antes de subir, SHA verificado, token quemado). La
+   residencia (H-15) pinea por contenido, así que el cambio de huella es
+   solo eso: otro archivo.
+3. **Papel:** EMISION-V1 §3 («binario de referencia: vgen-portable, ffmpeg
+   8.1.2»), SPEC-VGEN §5 (la huella es la del bundle) y regla 5 del runbook
+   (byte-identidad = dos runners de Windows + el SHA del operador).

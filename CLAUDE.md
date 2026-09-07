@@ -34,7 +34,7 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 9. [`docs/historico/`](docs/historico/README.md) — diseños del paradigma JS anterior; solo si una tarea suspendida se retoma.
 10. [`docs/MAPA-DEL-PROYECTO.md`](docs/MAPA-DEL-PROYECTO.md) / [`docs/ASCL-format-spec.md`](docs/ASCL-format-spec.md) — solo si falta orientación estructural o la tarea toca bytes del máster.
 
-> ## ▶ Próxima acción: **el operador decide P-008 A/B (¿quién manda los bytes: el CI de Linux o el bundle?) y baja `vgen-portable`**; después, más ideas con el operador; H-24 / radio / H-7 / H-8 en la cola
+> ## ▶ Próxima acción: **P-008b — poner en pie «el bundle manda» (decisión B del operador)**: workflow con dos pasadas en Windows que publica el pack, re-emitir v1 con el bundle y republicar `v0/`, papel (EMISION-V1 §3, SPEC §5, regla 5). Después: más ideas con el operador; H-24 / radio / H-7 / H-8 en la cola
 >
 > **2026-09-06 (tarde) — P-008 EJECUTADA hasta el CI** (operador: *«mejor
 > vamos directo al P-008»*): `tools/portable/` + workflow **`portable`**
@@ -44,8 +44,11 @@ que ejecuta: antes un intérprete JS, ahora un bloque de silicio.
 > manda) + `tests/test_portable_bundle.py`. Nada se instala en la máquina.
 > **Gate leído (§7):** funciona de punta a punta (106 s), mp3 idéntico,
 > **VP9/H.264 distintos** del Ubuntu; el bundle es determinista consigo
-> mismo y el CI de Linux no repite el VP9 (Opus) → recomendación **B**: el
-> bundle manda y el CI lo corre en Windows; rige A hasta la decisión.
+> mismo y el CI de Linux no repite el VP9 (Opus) → **DECIDIDO B (operador,
+> 2026-09-06 noche): «el bundle manda»**: el emisor de referencia es
+> `vgen-portable` (ffmpeg 8.1.2 gyan pinneado), el CI reproduce con el mismo
+> bundle en Windows (dos runners = regla 5), cada cambio de ffmpeg es un
+> cambio de huella declarado. Falta **P-008b** (nada implementado aún).
 > Detalle: [`docs/ENCODER-PORTATIL.md`](docs/ENCODER-PORTATIL.md) §6-7.
 >
 > **2026-09-06 — H-23 APARCADA:** con `reloj raf` la caja la vio *«un poco

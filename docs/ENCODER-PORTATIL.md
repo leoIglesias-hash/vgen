@@ -170,7 +170,31 @@ nada toca PATH ni registro.
 La recomendación cambia con el punto 4: **B**, porque es la única de las dos
 donde el archivo que el operador emite en su máquina y el que el CI
 reproduce son **el mismo**, que es la definición de árbitro que pide la
-regla 5. Hasta que el operador decida, rige A.
+regla 5.
+
+**DECIDIDO POR EL OPERADOR (2026-09-06, noche): «vamos con B, el bundle
+manda».** Desde ahora:
+
+- **El emisor de referencia del pack es `vgen-portable`** (Python embebido
+  3.11.9 + ffmpeg **8.1.2 essentials de gyan.dev**, pinneado por URL en el
+  workflow y declarado en `VERSIONES.tsv`). Lo que el operador emite en su
+  máquina con `emitir.cmd` y lo que el CI emite en un runner de Windows con
+  el mismo bundle **son el mismo archivo**; ésa es la huella que se publica
+  y se pinea por contenido (SPEC §5).
+- **El CI reproduce, no arbitra contra Linux:** la prueba de byte-identidad
+  (regla 5) pasa a ser **dos runners de Windows con el bundle → mismos
+  SHA-256** (como H-14b), y el operador compara el SHA de su `emitir.cmd`
+  contra el resumen. La emisión de Linux queda informativa (`emitir-v1`
+  sigue existiendo para lo que no sea el producto).
+- **Cada cambio de ffmpeg del bundle es un cambio de huella declarado**:
+  se anota en `VERSIONES.tsv`, en EMISION-V1 §3 y en el REGISTRO, y se
+  re-emite el producto.
+
+Lo que falta para que B esté en pie es la tarea **P-008b** (RUNBOOK-
+IMPLEMENTACION): el workflow publica el pack emitido por el bundle con dos
+pasadas en dos runners de Windows, las huellas de v1 se re-emiten con el
+bundle y se republican en `v0/`, y la spec y EMISION-V1 dicen cuál es el
+binario de referencia.
 
 **Cómo se baja:** Actions → `portable` → la corrida → artifact
 **`vgen-portable`** (zip 190.785.339 B, SHA-256

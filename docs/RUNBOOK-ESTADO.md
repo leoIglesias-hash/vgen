@@ -191,7 +191,7 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **el operador decide P-008 A/B (¿quién manda los bytes: el CI de Linux o el bundle?) y baja `vgen-portable`**; después, más ideas con el operador; H-24 / radio / H-7 / H-8 en la cola
+> ## ▶ PRÓXIMA ACCIÓN: **P-008b — poner en pie «el bundle manda» (decisión B del operador, 2026-09-06 noche)**: workflow con dos pasadas en Windows que publica el pack, re-emitir v1 con el bundle y republicar `v0/`, papel (EMISION-V1 §3, SPEC §5, regla 5). Después: más ideas con el operador; H-24 / radio / H-7 / H-8 en la cola
 >
 > **2026-09-06 — P-008 EJECUTADA hasta el CI** (operador: *«mejor vamos
 > directo al P-008 mientras vamos a tratar de pensar más ideas»*):
@@ -206,8 +206,11 @@ nada.
 > (106 s; DASH 16 segmentos tras arreglar el path con barras), mp3 idéntico,
 > **VP9/H.264 distintos** del Ubuntu (otro ffmpeg); **el bundle es
 > determinista consigo mismo** y **el CI de Linux no repite el VP9 entre
-> corridas** (Opus). Recomendación: **B** (el bundle manda, el CI lo corre en
-> Windows); rige A hasta que el operador decida. Artifact `vgen-portable`
+> corridas** (Opus). **DECIDIDO B por el operador (2026-09-06 noche): «el
+> bundle manda»** — el emisor de referencia es `vgen-portable` (ffmpeg 8.1.2
+> gyan), el CI reproduce con el mismo bundle en Windows, cada cambio de
+> ffmpeg es un cambio de huella declarado. Lo que falta es **P-008b**
+> (RUNBOOK-IMPLEMENTACION; nada implementado aún). Artifact `vgen-portable`
 > (190,8 MB) en la corrida 34012545002.
 >
 > **2026-09-06 — H-23 APARCADA (refutada en la caja, sin reemplazo):** con

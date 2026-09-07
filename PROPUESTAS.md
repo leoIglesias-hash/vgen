@@ -176,7 +176,7 @@ tome.
 - **Qué la refutaría:** que la elección automática elija un crf que el
   operador rechace a ojo dos veces seguidas.
 
-### P-008 · El encoder fuera del CI: bundle portátil, con el CI como árbitro · 🔵 en estudio: ejecutada y medida el 2026-09-06, decisión A/B del operador pendiente · 2026-09-05 · operador
+### P-008 · El encoder fuera del CI: bundle portátil, con el CI como árbitro · 🟢 adoptada 2026-09-06 en su variante B («el bundle manda»; P-008b la pone en pie) · 2026-09-05 · operador
 
 - **Problema:** cada emisión pasa por GitHub Actions (1–2 min + bajar el
   artifact) y la máquina del operador no tiene Python ni Node a propósito.
@@ -208,8 +208,11 @@ tome.
   ffmpeg de Ubuntu (otro binario); el bundle repite sus bytes entre dos
   runners de Windows, y el CI de Linux **no** repite el VP9 entre corridas
   (Opus). La refutación de arriba no aplica tal cual: no hace falta que
-  Windows iguale a Ubuntu si el CI corre el bundle (**B**). Decide el
-  operador.
+  Windows iguale a Ubuntu si el CI corre el bundle (**B**).
+- **Decidido (2026-09-06 noche, operador): «vamos con B, el bundle manda».**
+  El emisor de referencia es `vgen-portable`; el CI reproduce con el mismo
+  bundle en Windows; cada cambio de ffmpeg es un cambio de huella declarado.
+  Lo que falta: **P-008b** (RUNBOOK-IMPLEMENTACION).
 
 ---
 
