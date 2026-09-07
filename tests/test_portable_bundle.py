@@ -134,24 +134,19 @@ class PinesTest(unittest.TestCase):
         recien entonces se publica `pack-v1`. Linux solo informa."""
         yml = leer(".github/workflows/portable.yml")
         self.assertEqual(yml.count("runs-on: windows-latest"), 2)
-        reproducir = yml[yml.index("
-  reproducir:
-"):yml.index("
-  linux:
-")]
+        def job(nombre):
+            # "\n  linux:\n" y no "  linux:": el input `linux:` de la cabecera
+            # (seis espacios) matchea antes que el job (dos) y deja el tramo vacio.
+            return yml.index("\n  %s:\n" % nombre)
+
+        reproducir = yml[job("reproducir"):job("linux")]
         self.assertIn("needs: armar", reproducir)
         self.assertIn("name: vgen-portable", reproducir)
         self.assertNotIn("actions/checkout", reproducir)
         self.assertIn("emitir.ps1", reproducir)
-        linux = yml[yml.index("
-  linux:
-"):yml.index("
-  comparar:
-")]
+        linux = yml[job("linux"):job("comparar")]
         self.assertIn("continue-on-error: true", linux)
-        comparar = yml[yml.index("
-  comparar:
-"):]
+        comparar = yml[job("comparar"):]
         self.assertIn("name: pack-v1", comparar)
         self.assertIn('test "$DISTINTAS" -eq 0', comparar)
         self.assertLess(comparar.index('test "$DISTINTAS" -eq 0'), comparar.index("name: pack-v1"))
