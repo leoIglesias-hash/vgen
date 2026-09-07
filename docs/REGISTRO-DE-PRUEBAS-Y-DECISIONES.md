@@ -6148,3 +6148,32 @@ bundle y cabecera de `emitir.ps1` («el bundle manda»).
 34077462713, correr `emitir.cmd` y comparar los SHA que imprime con los de
 arriba. Si coinciden, su máquina es el quinto runner y el círculo cierra; si
 no, mandar `VERSIONES.tsv` y la salida.
+
+### 2026-09-07 — DEBATE ABIERTO: calidad de imagen en 1280 con el front liviano
+
+Operador: *«bien yo me encargo de esa parte [bajar el bundle y comparar el
+SHA], sin embargo pensemos en cómo mejorar el encode para lograr una mejor
+calidad de video en 1280 pero manteniendo un nivel de eficiencia y
+reproducibilidad livianos en el front. La idea es ser eficientes en ese
+sentido. Las dos ideas para seguir de momento quedarán pendientes mientras
+pensamos en esto, formas de mejorar para que soporte mejoras vgen que
+realmente impacten como novedad. Tomando ejemplos de los mejores
+reproductores como YouTube pero destinado a esto, reproducibilidad desde
+memoria, de forma eficiente, liviana y usando menos recursos»*.
+
+**H-24 y la radio quedan en pausa.** Se escribió
+[`DISENO-CALIDAD-VGEN.md`](DISENO-CALIDAD-VGEN.md) (P-009), que no decide:
+ordena la cadena de pérdidas de hoy (fuente 1920@~24 → 15 fps y 1280 →
+256 colores + near-lossless 8 → `yuv420p` sin matriz ni etiqueta de color →
+VP9 crf 38 sin alt-ref ni dos pasadas → escalado del hardware), marca qué
+está medido y qué es supuesto (la etiqueta de color de las piezas **no se
+verificó**), y lista seis palancas con costo cero en el front: **E-C** color
+709 etiquetado, **E-D** VP9 con alt-ref + lag + dos pasadas (lo que la
+matriz H-6 nunca midió: probó apagar cosas que ya estaban apagadas), **E-A**
+máster sin pérdida (la pérdida E-24/E-12 se adoptó para achicar un `.asclv`
+que ya no viaja; reemplaza a F10 y DIAG-001), **E-B** cadencia de la fuente
+(24 fps) y 1920 (el hardware los reproduce; el JS ya no limita), **E-E**
+calidad constante por corte con segmentos alineados a los cortes (el anillo
+no cambia), **E-F** escalera por clase elegida una vez. Cuatro preguntas al
+operador (§5) antes de medir nada: si el look indexado sigue siendo el
+producto, 24 fps, 1920, techo de bytes por pieza.

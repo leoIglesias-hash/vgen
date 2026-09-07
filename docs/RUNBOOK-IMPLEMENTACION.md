@@ -71,7 +71,7 @@ Resumen ejecutable; el desarrollo está en
 ## 2. Fase H — formato híbrido
 
 **Orden (actualizado al cierre de H-13, 2026-09-01 noche): ~~H-11~~ → ~~H-12~~ → ~~H-6~~ →
-H-7 → H-8.** **H-6 ejecutada hasta la pantalla el 2026-09-05** (matriz + v1 publicada; falta la foto con `76`/`95`: [`EMISION-V1.md`](EMISION-V1.md)). **Orden vivo (2026-09-06, noche): ~~P-008b~~ (cerrada) → más ideas con el operador → H-24 (incentivador armado en pausa) → radio con la primera tecla → firma de H-7 → H-8 (muxer + archivo único).** H-8a se sostuvo en la caja; H-23 aparcada (sin tercer video: la ruleta es interacción). H-11 ejecutada hasta la pantalla (falta la foto de la caja). H-13 cerrada (REGISTRO «H-13: reporte de la caja»). H-9 cerrada; H-10 tiene la caja medida y queda
+H-7 → H-8.** **H-6 ejecutada hasta la pantalla el 2026-09-05** (matriz + v1 publicada; falta la foto con `76`/`95`: [`EMISION-V1.md`](EMISION-V1.md)). **Orden vivo (2026-09-07): ~~P-008b~~ (cerrada) → DEBATE de calidad en 1280 ([`DISENO-CALIDAD-VGEN.md`](DISENO-CALIDAD-VGEN.md), P-009; el operador contesta §5 y se mide E-C → E-D → E-A → E-B → E-E → E-F) → H-24 (incentivador armado, EN PAUSA por pedido del operador) → radio con la primera tecla (EN PAUSA) → firma de H-7 → H-8 (muxer + archivo único).** H-8a se sostuvo en la caja; H-23 aparcada (sin tercer video: la ruleta es interacción). H-11 ejecutada hasta la pantalla (falta la foto de la caja). H-13 cerrada (REGISTRO «H-13: reporte de la caja»). H-9 cerrada; H-10 tiene la caja medida y queda
 abierta para las otras clases. Se arrancó **emitiendo** (pack v0,
 [`EMISION-V0.md`](EMISION-V0.md)) y se corrige reproduciendo. Regla de
 dependencia: **H-7 no empieza sin H-13 y H-11 cerradas; H-8 no empieza sin H-7

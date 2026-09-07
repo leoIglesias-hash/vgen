@@ -191,7 +191,7 @@ nada.
     que puede arbitrar el 11 % de los tres planos**. **La caja sigue siendo la
     clase principal.**
 
-> ## ▶ PRÓXIMA ACCIÓN: **más ideas con el operador** (P-008b cerrada: el bundle manda y `v0/` sirve las huellas del bundle; el operador baja `vgen-portable` de la corrida 34077462713, corre `emitir.cmd` y compara su SHA con el resumen). Después: H-24 / radio / H-7 / H-8 en la cola
+> ## ▶ PRÓXIMA ACCIÓN: **DEBATE ABIERTO — calidad de imagen en 1280 con el front liviano** (operador, 2026-09-07): leer [`DISENO-CALIDAD-VGEN.md`](DISENO-CALIDAD-VGEN.md), esperar las respuestas a su §5 (look indexado sí/no, 24 fps, 1920, techo de bytes) y medir en el orden E-C → E-D → E-A → E-B → E-E → E-F (P-009). **H-24 y la radio en pausa** por pedido del operador. Sigue pendiente del operador: bajar `vgen-portable` de la corrida 34077462713 y comparar el SHA de su `emitir.cmd` (P-008b).
 >
 > **2026-09-06 — P-008 EJECUTADA hasta el CI** (operador: *«mejor vamos
 > directo al P-008 mientras vamos a tratar de pensar más ideas»*):
