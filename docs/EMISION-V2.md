@@ -193,5 +193,11 @@ que el ojo apruebe entra a §2 (tres lugares) y a `producto.html`. Si ninguno
 lo es, v1 sigue de plan B y la pregunta pasa al decodificador (el Smart TV,
 que sí cuenta cuadros, arbitra).
 
-Estado: emisor y página con CI verde; **falta que el operador emita los
-cuatro planos**, publicarlos en `v1/` y la foto plano por plano.
+Estado (2026-09-08 noche): los cuatro planos **emitidos y publicados** en
+`player/v1/` (REGISTRO): `3` 15 fps 6.011.270 B (SSIM 0,9916), `6` sin
+alt-ref 6.775.111 B (0,9902), `4` 512 colores @20 **10.376.435 B** (0,9759),
+`5` 512 colores @15 **8.931.539 B** (0,9763). **Hallazgo:** a igual crf la
+paleta cuesta +49 % de bytes: los escalones sin dither son bordes y el borde
+es lo caro para VP9; lo que hacía chico a v1 era el crf 38, no los 256
+colores. Si el ojo quisiera la paleta a igual peso, pediría otro crf (no
+emitido). **Falta la foto plano por plano.**

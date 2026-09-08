@@ -93,7 +93,10 @@ los cuadros alt-ref de VP9 (cuadros ocultos que el decodificador procesa sin
 mostrar; v1 nunca los tuvo). `--solo-vp9` no emite el H.264. Cada carpeta
 deja su `v2-vp9.webm`, `MANIFEST-v2.tsv` (con `# colores` si hubo paleta) y
 el SHA-256 al final; esos cuatro archivos se publican en `player/v1/` y se
-miran uno por tecla.
+miran uno por tecla. Corridas el 2026-09-08 (noche) en la PC del operador:
+15 fps 6.011.270 B, 512 colores @20 10.376.435 B, 512 @15 8.931.539 B, sin
+alt-ref 6.775.111 B (a igual crf la paleta pesa MÁS: los escalones son
+bordes; ver REGISTRO).
 
 ## Variantes
 

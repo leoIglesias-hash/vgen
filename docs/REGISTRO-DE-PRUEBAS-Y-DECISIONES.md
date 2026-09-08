@@ -6521,3 +6521,60 @@ PLANES.tsv, cuatro webm) con el ritual; (3) **la foto y el veredicto de la
 caja plano por plano**, entera y normal. Con eso se firma la receta v2 de
 H-26 (que sigue abierta: `78`/`79` de v0 quedan como estaban) y
 `producto.html` pasa a v2; si ningún plano es fluido, v1 sigue de plan B.
+
+### 2026-09-08 (noche) — H-27: los cuatro planos emitidos y `v1/` PUBLICADA; hallazgo: a igual crf, 512 colores pesa MÁS, no menos
+
+Operador: *«ejecutá esto vos»* → las cuatro emisiones corrieron desde esta
+sesión en su PC (Intel i7-13700H), con el bundle `vgen-portable` (`17d9903`
+más `emit_v2.py` y `cuantizar_y4m.py` de `ac859be`), 6 min en total, código
+0 las cuatro. Fuente `6e78efa38e10…` (709 tv). Todas VP9 crf 18 dos pasadas
++ Opus, `--solo-vp9`:
+
+| plano | receta | base | bytes | SSIM (vs. la referencia sin paleta) | s encode | SHA-256 |
+|---|---|---|---:|---:|---:|---|
+| `2` (testigo, ya publicado) | `--fps 20` | 308 cuadros | 6.986.728 | 0,991844 | 74 | `0f4683bcca01…` |
+| `3` 15 fps | `--fps 15` | 231 cuadros | 6.011.270 | 0,991628 | 53 | `1c9b383c93e5…` |
+| `4` 512 colores @20 | `--colores 512` | 308 | **10.376.435** | 0,975881 | 81 | `f457c82df882…` |
+| `5` 512 colores @15 | `--fps 15 --colores 512` | 231 | **8.931.539** | 0,976288 | 64 | `28e67cc08332…` |
+| `6` sin alt-ref @20 | `--sin-altref` | 308 | 6.775.111 | 0,990212 | 44 | `50da5f6f4580…` |
+
+La paleta corrió bien la primera vez: 240.000 muestras, 512 centros en
+Oklab, los 512 usados, 22–23 s de K-means y 38–48 s por los cuadros.
+
+**Hallazgo (E5, el contador antes que la hipótesis): a igual crf, 512 colores
+cuesta +49 % de bytes y −0,016 de SSIM, no menos.** La hipótesis era «menos
+colores = zonas planas = menos bits». Lo que pasa es lo contrario: la paleta
+sin dither convierte cada degradé suave (el cielo, la chapa del auto, el
+huevo) en **escalones con borde duro**, y para VP9 un borde es lo caro; un
+degradé suave era lo barato. Lo que hacía chico a v1 no eran los 256
+colores: era el **crf 38** (y los 15 fps). Así que el plano `4` va a la caja
+con **más bytes** que el trabado, no menos: si igual se ve fluido, la causa
+del trabado no son los bytes; si se traba más, tampoco lo prueba del todo,
+porque cambió también el contenido. La prueba «paleta a igual peso» pediría
+otro crf (más alto) y no se emitió: primero que el ojo diga si vale la pena.
+
+**Los otros dos sí bajan:** 15 fps ahorra el 14 % (no el 25 % de los
+cuadros: los cuadros restantes se parecen menos entre sí) con SSIM igual;
+sin alt-ref ahorra el 3 % y pierde 0,0016 de SSIM (los alt-ref se pagaban
+solos). Ninguno cambia el contenido: si uno de esos dos es fluido, la causa
+está aislada.
+
+**Publicado `player/v1/`** con el ritual: copia en `deploy/` commiteada
+antes (`aea30ff`); 7 keys (`index.html`, `keypad.js` = la misma de `v0/`,
+`PLANES.tsv` con bytes y SHA completos, cuatro webm), `PUT` con `x-sha256`;
+dos `PUT` dieron `403` en el primer intento (el secreto recién puesto no
+había llegado a ese nodo) y `200` al reintentar con el mismo token; **las 7
+bajadas con cache-buster y SHA-256 igual al del staging**; `video/webm` y
+`Content-Length: 6011270` en `crf18-15fps.webm`; token quemado con otro valor
+generado dentro de la llamada, el viejo devuelve `403`. La página se abrió en
+el navegador de esta sesión contra lo servido: los siete planos con sus
+megas, el `6` carga el sin alt-ref. Los cuatro manifiestos de la emisión
+quedan como evidencia en `docs/matrices/2026-09-08-H27-*-MANIFEST.tsv`.
+Radios y DASH de estas emisiones no se publican (la página mira progresivo).
+
+**Lo que se le pide a la caja:** lanzador `8` (o `iargen.com/player/v1/`),
+y cada plano un rato, entera (`0`) y normal, en este orden de valor: `3`
+(15 fps), `6` (sin alt-ref), `4` y `5` (512 colores, sabiendo que pesan
+más), `7` (H.264), con `1` y `2` de referencia. Decir de cada uno **fluido /
+trabado** y, si lo cuenta, los caídos del zócalo. Con eso se firma la receta
+v2 (H-26 §2) o se cae al plan B.

@@ -692,4 +692,13 @@ la página mira progresivo, uno por vez.
 **El Worker no se tocó.** Ritual de siempre: `MANIFEST.tsv` y esta sección
 commiteados **antes** de subir; token efímero, `PUT` con `x-sha256`, cada key
 bajada con cache-buster y comparada por SHA-256, token quemado y `403`
-comprobado. El resultado exacto va debajo cuando termine.
+comprobado.
+
+Resultado exacto (2026-09-08, 17:4x): 7 `PUT` con `x-sha256` → `200` (dos
+de ellos al segundo intento: el primero dio `403` porque el secreto recién
+puesto no había llegado a ese nodo); las 7 keys bajadas con cache-buster y
+**SHA-256 igual al del staging en las 7**; `Content-Type: text/html` en
+`index.html`, `video/webm` y `Content-Length: 6011270` en
+`crf18-15fps.webm`, `text/plain` en `PLANES.tsv`; token quemado con otro
+valor generado dentro de la llamada, el viejo devuelve `403`. La página
+abierta contra lo servido muestra los siete planos con sus megas.
