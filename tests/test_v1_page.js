@@ -166,8 +166,8 @@ assert.strictEqual(textoDe(filas.childNodes[0].childNodes[0]), "1");
 assert.strictEqual(textoDe(filas.childNodes[7].childNodes[0]), "0");
 assert(/2\.9 MB/.test(textoDe(filas.childNodes[0].childNodes[1])),
   "la fila dice los megas cuando los sabe: " + textoDe(filas.childNodes[0].childNodes[1]));
-assert.strictEqual(/MB/.test(textoDe(filas.childNodes[2].childNodes[1])), false,
-  "y no inventa megas cuando la pieza todavia no existe");
+assert(/(6 MB)/.test(textoDe(filas.childNodes[2].childNodes[1])),
+  "los planos emitidos el 2026-09-08 (noche) ya tienen bytes: " + textoDe(filas.childNodes[2].childNodes[1]));
 
 /* --- El mando: 0 y una tecla de UNA cifra por plano; ninguna espera --- */
 
