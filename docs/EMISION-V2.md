@@ -115,6 +115,16 @@ saber cuánto compran las dos pasadas.
 Techo: 20 000 000 B por pieza de video (el ejemplo de la pregunta 4). Se
 ajusta con las primeras filas si resulta que todo pasa de sobra o nada pasa.
 
+**Resultado (2026-09-08, PC del operador, 615 s;** archivo
+[`matrices/2026-09-08-MATRIZ-v2-pc-operador.tsv`](matrices/2026-09-08-MATRIZ-v2-pc-operador.tsv),
+transcripción en el REGISTRO**):** VP9 **no llega al techo ni a crf 10**
+(10.825.432 B, ssim 0,9938; crf 14 = 8,26 MB; 18 = 6,87 MB; 22 = 5,94 MB;
+26 = 5,04 MB; 30 = 4,30 MB; 34 = 3,76 MB). H.264 lo cruza: crf 11 =
+21.944.485 B **SUPERA**, crf 14 = 14.399.566 B pasa (ssim 0,9942), 17 = 9,68
+MB, 20 = 6,71 MB. Por la regla, el candidato es **VP9 crf 10 + H.264 crf 14**;
+como en VP9 el techo no decide, la alternativa de ahorro es crf 18 (mitad de
+bytes por −0,002 de SSIM). El ojo del operador en la caja elige.
+
 ## 5. Determinismo y huella
 
 Regla 5 / P-008b: el binario de referencia es el ffmpeg del bundle. Con
@@ -138,8 +148,9 @@ coincidir línea a línea aunque la fuente viva en otra carpeta.
 
 1. ~~**Primera emisión desde la PC** con la receta de arranque; reportar §3.~~
    HECHA 2026-09-08 (REGISTRO): 709 verificado, 3,76 / 6,6 MB, techo 5× arriba.
-2. **Matriz v2** (§4) y elección del crf; si el ojo la firma, la receta
-   nueva reemplaza a la de §2 en los tres lugares.
+2. ~~**Matriz v2** (§4)~~ HECHA 2026-09-08 (VP9 crf 10 = 10,8 MB bajo el
+   techo; H.264 cruza entre 14 y 11). Falta la **elección del crf** a ojo; si
+   el ojo la firma, la receta nueva reemplaza a la de §2 en los tres lugares.
 3. **Publicar v2 en `v0/`** con el ritual (copia en `deploy/` antes) y una
    tecla que alterne **v1 (256 colores, 15 fps) / v2 (fuente, 20 fps)** a
    pantalla entera; `producto.html` sigue con v1 hasta la foto.

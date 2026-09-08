@@ -6343,3 +6343,51 @@ propuesto (6 crf de VP9 en dos pasadas + 4 de H.264) ronda los 6 minutos.
 `-Receta "--barrer 10,14,18,22,26,30 --barrer-h264 11,14,17,20 --sin-piezas"`,
 para acorralar el techo por arriba y por abajo; después el operador elige a
 ojo en la caja el crf más bajo que pase.
+
+### 2026-09-08 — H-26: matriz v2 desde la PC del operador (615 s): VP9 no llega al techo ni a crf 10; H.264 lo cruza entre crf 14 y 11
+
+Misma PC (Intel i7-13700H), mismo bundle, la fuente `6e78efa38e10…`:
+
+```
+.\emitir.cmd -Fuente "…\TKN-2443-GANADOR- 15seg-.mp4" -Receta "--barrer 10,14,18,22,26,30 --barrer-h264 11,14,17,20 --sin-piezas"
+```
+
+La emisión base (crf 34 / 21) salió **byte-idéntica** a la de la mañana
+(`74ea7f4b…`, `f75a2125…`, `48885b2d…`): la misma máquina se repite a sí
+misma. La matriz, tal cual la imprimió (archivo:
+[`matrices/2026-09-08-MATRIZ-v2-pc-operador.tsv`](matrices/2026-09-08-MATRIZ-v2-pc-operador.tsv)):
+
+| id | eje | bytes | techo | ssim All | psnr | cuadros | s encode | perfil |
+|---|---|---:|:---:|---:|---:|---:|---:|---|
+| `v2-vp9-crf10` | vp9-crf | 10.825.432 | pasa | 0.993754 | 48.861508 | 308 | 84.9 | vp9 Profile 0 |
+| `v2-vp9-crf14` | vp9-crf | 8.256.790 | pasa | 0.992697 | 47.772932 | 308 | 75.6 | vp9 Profile 0 |
+| `v2-vp9-crf18` | vp9-crf | 6.874.925 | pasa | 0.991844 | 46.962503 | 308 | 70.7 | vp9 Profile 0 |
+| `v2-vp9-crf22` | vp9-crf | 5.941.695 | pasa | 0.991001 | 46.262956 | 308 | 69.7 | vp9 Profile 0 |
+| `v2-vp9-crf26` | vp9-crf | 5.038.386 | pasa | 0.989938 | 45.456905 | 308 | 63.6 | vp9 Profile 0 |
+| `v2-vp9-crf30` | vp9-crf | 4.297.009 | pasa | 0.988659 | 44.590028 | 308 | 55.4 | vp9 Profile 0 |
+| (`v2-vp9` crf 34) | — | 3.757.946 | pasa | 0.987052 | 43.659236 | 308 | 57 | vp9 Profile 0 |
+| `v2-h264-crf11` | h264-crf | 21.944.485 | **SUPERA** | 0.995754 | 50.133044 | 308 | 33.5 | h264 High 3.1 |
+| `v2-h264-crf14` | h264-crf | 14.399.566 | pasa | 0.994150 | 48.383070 | 308 | 27.7 | h264 High 3.1 |
+| `v2-h264-crf17` | h264-crf | 9.682.620 | pasa | 0.992415 | 46.736259 | 308 | 21.7 | h264 High 3.1 |
+| `v2-h264-crf20` | h264-crf | 6.713.372 | pasa | 0.990394 | 45.080365 | 308 | 17.4 | h264 High 3.1 |
+| (`v2-h264` crf 21) | — | 6.600.291 | pasa | 0.989614 | 44.519671 | 308 | 20 | h264 High 3.1 |
+
+**Lectura.** (1) **VP9 no toca el techo en ningún crf**: a crf 10 (el
+extremo útil del eje) pesa 10,8 MB, 54 % del techo; el techo de 20 MB
+**no decide nada en VP9**. La escalera es suave y con rendimientos
+decrecientes: de crf 30 a 10 los bytes se multiplican por 2,5 por +0,005 de
+SSIM y +4,3 dB; cada escalón de 4 crf cuesta entre 17 % y 31 % más bytes por
+~+0,001 SSIM. (2) **H.264 cruza el techo entre crf 14 (14,4 MB, pasa) y 11
+(21,9 MB, SUPERA)**: por la regla acordada («el crf más bajo bajo el techo»)
+el candidato H.264 es **crf 14**. (3) A igual SSIM, VP9 cuesta cerca de la
+mitad que H.264 (0,9927 en 8,3 MB vs 0,9924 en 9,7 MB; 0,9938 en 10,8 MB vs
+0,9942 en 14,4 MB): coherente con que VP9 es la base y H.264 el plan B por
+códec. (4) Los tiempos: VP9 dos pasadas 55–85 s por crf en la PC; el CI lo
+reproducirá con la receta elegida, no con el barrido entero.
+
+**Candidato por la regla:** VP9 **crf 10** (10.825.432 B) y H.264 **crf 14**
+(14.399.566 B), ambos bajo el techo; y como el techo no muerde en VP9, la
+alternativa de ahorro que el ojo puede preferir es **crf 18** (6,9 MB, 0,9918):
+mitad de bytes que crf 10 por −0,002 de SSIM. **Decide el operador a ojo**;
+lo que sigue es emitir la receta elegida entera (`--vp9-crf N --h264-crf 14`)
+y publicarla en `v0/` con la tecla v1/v2 para la foto de la caja.
