@@ -649,3 +649,47 @@ las 42**; `Content-Type: video/webm` y `Content-Length: 10937235` en
 `v2-vp9-crf10.webm`, `video/mp4` en `v2-ambiente.mp4`; `v0/MANIFEST-v2.tsv`
 servido con las seis filas; token quemado con otro valor generado dentro de
 la llamada, el viejo devuelve `403`.
+
+## 2026-09-08 (noche) — H-27: la página `v1/` y los cuatro planos de fluidez (7 keys nuevas)
+
+| key | bytes | md5 |
+|---|---|---|
+| `v1/index.html` | 14.686 | `1a2e51de5057c328e64e2cc76b28ef94` |
+| `v1/keypad.js` (la misma de `v0/`) | 7.853 | `2423d8b649bfb8c80a6de30defcc42e5` |
+| `v1/PLANES.tsv` | 1.544 | `09ee6f48b49ed4f9a2df1db0affe81a5` |
+| `v1/crf18-15fps.webm` | 6.011.270 | `98d53b625a4256ad601124a3567d4f68` |
+| `v1/crf18-20fps-512.webm` | 10.376.435 | `a11c4e5bd875a1156c2de147b008b814` |
+| `v1/crf18-15fps-512.webm` | 8.931.539 | `67d95195de421108d72b8967dfcd2ac3` |
+| `v1/crf18-20fps-sinaltref.webm` | 6.775.111 | `83733beb0cb22df03c7c3dd7832e016f` |
+
+**Por qué existe `v1/`:** veredicto del operador en la caja sobre el `78` de
+`v0/` (2026-09-08): v2 (crf 10 y 18) *«se ven mejor definitivamente que la de
+256 colores.. pero el problema es que se traban»*, y *«apretás una tecla y se
+hace una ensalada bárbara de videos donde no entiendo qué estoy probando»*.
+`v1/` es una página que hace una sola cosa: **un video por vez**, un plano por
+tecla (`1`..`7`), la misma tecla pausa/sigue, **`0` pone y saca la pantalla
+entera**. Los planos salen de `PLANES.tsv` (texto tabulado; copia autorizada
+`frontend/v1-planes.tsv`); los de `v0/` se referencian por ruta relativa
+(`../v0/v1-vp9.webm`, `../v0/v2-vp9-crf18.webm`, `../v0/v2-h264.mp4`), no se
+duplican.
+
+**Los cuatro planos nuevos**, todos VP9 crf 18 desde la fuente (`6e78efa38e10…`,
+709 tv), emitidos con el bundle `vgen-portable` (`17d9903` + `emit_v2.py` y
+`cuantizar_y4m.py` de `ac859be` copiados a mano) en la PC del operador (Intel
+i7-13700H) por esta sesión, a pedido suyo (*«ejecutá esto vos»*):
+
+| plano | receta | bytes | SSIM (contra la referencia sin paleta) | SHA-256 |
+|---|---|---:|---:|---|
+| `3` 15 fps | `--fps 15 --vp9-crf 18 --solo-vp9` | 6.011.270 | 0,991628 | `1c9b383c93e5…` |
+| `4` 512 colores, 20 fps | `--fps 20 --vp9-crf 18 --colores 512 --solo-vp9` | 10.376.435 | 0,975881 | `f457c82df882…` |
+| `5` 512 colores, 15 fps | `--fps 15 --vp9-crf 18 --colores 512 --solo-vp9` | 8.931.539 | 0,976288 | `28e67cc08332…` |
+| `6` sin alt-ref, 20 fps | `--fps 20 --vp9-crf 18 --sin-altref --solo-vp9` | 6.775.111 | 0,990212 | `50da5f6f4580…` |
+
+Testigos ya publicados: `v0/v2-vp9-crf18.webm` (el trabado, 6.986.728 B) y
+`v0/v2-h264.mp4`. Las radios y los DASH de estas emisiones **no se publican**:
+la página mira progresivo, uno por vez.
+
+**El Worker no se tocó.** Ritual de siempre: `MANIFEST.tsv` y esta sección
+commiteados **antes** de subir; token efímero, `PUT` con `x-sha256`, cada key
+bajada con cache-buster y comparada por SHA-256, token quemado y `403`
+comprobado. El resultado exacto va debajo cuando termine.

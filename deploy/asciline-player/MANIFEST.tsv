@@ -7,6 +7,7 @@
 # 2026-09-06 (P-008b): 21 keys de v1 re-emitidas con el bundle vgen-portable
 # (corrida portable 34077462713): MANIFEST-v1.tsv, v1-vp9.webm, v1-h264.mp4 y dash-vp9/*.
 # 2026-09-08 (H-26): 41 keys nuevas del pack v2 (la fuente a 1280@20, emitida por el operador desde su PC con vgen-portable 34083813584): MANIFEST-v2.tsv, v2-vp9-crf10.webm, v2-vp9-crf18.webm, v2-h264.mp4, v2-ambiente.mp4 y dash-v2-vp9-crf10/* + dash-v2-vp9-crf18/*; index.html regenerada (teclas 78/79).
+# 2026-09-08 (noche, H-27): 7 keys nuevas del prefijo v1/ (pagina de un video por vez: index.html, keypad.js, PLANES.tsv y los cuatro planos de fluidez crf 18 emitidos con vgen-portable en la PC del operador: 15 fps, 512 colores @20, 512 colores @15, sin alt-ref).
 # Leido con la API de Cloudflare. etag = MD5 (subidas de una sola parte).
 # key	bytes	etag(md5)
 1280-12/cache-refresh.js	5889	32c8be62f2a4107f852c779fec3d1ae6
@@ -213,3 +214,10 @@ v0/v2-ambiente.mp4	614020	dafa9695760c159ec649c08a6916a88d
 v0/v2-h264.mp4	15017319	349357fedf78b41f672e523040add308
 v0/v2-vp9-crf10.webm	10937235	557f68af44e38d688286e3a8d6100013
 v0/v2-vp9-crf18.webm	6986728	49fe6ba9fda7442981b39c6e89463742
+v1/PLANES.tsv	1544	09ee6f48b49ed4f9a2df1db0affe81a5
+v1/crf18-15fps-512.webm	8931539	67d95195de421108d72b8967dfcd2ac3
+v1/crf18-15fps.webm	6011270	98d53b625a4256ad601124a3567d4f68
+v1/crf18-20fps-512.webm	10376435	a11c4e5bd875a1156c2de147b008b814
+v1/crf18-20fps-sinaltref.webm	6775111	83733beb0cb22df03c7c3dd7832e016f
+v1/index.html	14686	1a2e51de5057c328e64e2cc76b28ef94
+v1/keypad.js	7853	2423d8b649bfb8c80a6de30defcc42e5

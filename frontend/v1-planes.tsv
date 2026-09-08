@@ -1,12 +1,12 @@
 # v1/PLANES.tsv - ASCILINE-hybrid - H-27: los planos de la pagina v1 (frontend/v1.html)
 # Se sirve como v1/PLANES.tsv al lado de la pagina. Texto tabulado, nunca JSON.
 # Una tecla (1..9), un video. Los archivos de v0/ se referencian por ruta relativa.
-# bytes y sha256 de las piezas nuevas se completan cuando el operador las emite (vgen-portable).
+# bytes y sha256 de las piezas nuevas: emitidas el 2026-09-08 (noche) con vgen-portable en la PC del operador (Intel), por esta sesion a pedido suyo.
 # tecla	id	nombre	archivo	bytes	sha256	nota
 1	v1-256	v1: 256 colores, 15 fps, VP9 crf 38	../v0/v1-vp9.webm	2941178	-	el de referencia: en la caja es fluido
 2	v2-crf18	v2 crf 18: la fuente, 20 fps	../v0/v2-vp9-crf18.webm	6986728	0f4683bcca016f14c392122da95275958a3196cc928ca881a063b40ffed9679b	el que se ve mejor y se traba
-3	v2-crf18-15	v2 crf 18 a 15 fps	crf18-15fps.webm	-	-	la cadencia de v1
-4	v2-crf18-512	v2 crf 18, 512 colores, 20 fps	crf18-20fps-512.webm	-	-	paleta adaptativa Oklab sobre la fuente
-5	v2-crf18-15-512	v2 crf 18, 512 colores, 15 fps	crf18-15fps-512.webm	-	-	las dos cosas juntas
-6	v2-crf18-sinaltref	v2 crf 18, 20 fps, sin alt-ref	crf18-20fps-sinaltref.webm	-	-	VP9 sin cuadros ocultos, como v1
+3	v2-crf18-15	v2 crf 18 a 15 fps	crf18-15fps.webm	6011270	1c9b383c93e529318d48e671803ad4fb10a0d3031a22566984f691872d97b779	la cadencia de v1
+4	v2-crf18-512	v2 crf 18, 512 colores, 20 fps	crf18-20fps-512.webm	10376435	f457c82df882c021b670bd30dd2a41411b366ea3fe9f1ed9e1464f827a359b11	paleta adaptativa Oklab sobre la fuente
+5	v2-crf18-15-512	v2 crf 18, 512 colores, 15 fps	crf18-15fps-512.webm	8931539	28e67cc0833286a2718c65ce5c7e0e916ea971fec8af1023faa809b74e822967	las dos cosas juntas
+6	v2-crf18-sinaltref	v2 crf 18, 20 fps, sin alt-ref	crf18-20fps-sinaltref.webm	6775111	50da5f6f45808e9856956f6efd9a5f838426ad9645a3fb8f72d2b4d4bb05b417	VP9 sin cuadros ocultos, como v1
 7	v2-h264	v2 H.264 crf 14, 20 fps	../v0/v2-h264.mp4	15017319	b5242feb7dc87bb87a446217135767505baea4a4b7bbffe077be212ac657d136	el otro decodificador

@@ -1,0 +1,11 @@
+# pack v2 - ASCILINE-hybrid - docs/EMISION-V2.md
+# fuente	6e78efa38e10e926473a8bd9073b4108107e905c1f73f6dc2edaf3a974cc6563	TKN-2443-GANADOR- 15seg-.mp4
+# fuente_color	tv bt709 bt709 bt709
+# base	1280x720	20 fps	308 cuadros
+# receta	--ancho 1280 --fps 20 --vp9-crf 18 --vp9-cpu 2 --colores 512 --solo-vp9 --h264-crf 21 --h264-bframes 3 --h264-refs 4 --techo 20000000
+# techo	20000000
+# colores	512	paleta adaptativa Oklab sobre la referencia (H-27)
+# id	role	mime	file	bytes	sha256	note
+v2-vp9	v2	video/webm; codecs="vp9, opus"	v2-vp9.webm	10376435	f457c82df882c021b670bd30dd2a41411b366ea3fe9f1ed9e1464f827a359b11	VP9 crf 18 cpu-used 2 dos pasadas alt-ref lag 25 tpl + Opus 64k; 709 tv; 20 fps; GOP 20; 512 colores (paleta adaptativa Oklab sobre la referencia); ssim 0.975881 psnr 40.183315; 308 cuadros; 81 s
+v2-ambiente	radio	audio/mp4	v2-ambiente.m4a	614020	48885b2d200e7b7e49d6ccd8f54a247933d2a7fcc3e8f671bb3ebd0eadf366f8	la pista de la fuente (aac) tal cual, para <audio> aparte
+v2-dash-vp9	stream-v2	video/webm; codecs="vp9"	dash-v2-vp9/manifest.mpd	10265431	30578846752624dd032c500f0afc4179cbec24084aa061a8982d704933e68068	WebM segmentado solo video, remux de v2-vp9; 16 segmentos
