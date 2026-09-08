@@ -6,6 +6,7 @@
 # md5 local.
 # 2026-09-06 (P-008b): 21 keys de v1 re-emitidas con el bundle vgen-portable
 # (corrida portable 34077462713): MANIFEST-v1.tsv, v1-vp9.webm, v1-h264.mp4 y dash-vp9/*.
+# 2026-09-08 (H-26): 41 keys nuevas del pack v2 (la fuente a 1280@20, emitida por el operador desde su PC con vgen-portable 34083813584): MANIFEST-v2.tsv, v2-vp9-crf10.webm, v2-vp9-crf18.webm, v2-h264.mp4, v2-ambiente.mp4 y dash-v2-vp9-crf10/* + dash-v2-vp9-crf18/*; index.html regenerada (teclas 78/79).
 # Leido con la API de Cloudflare. etag = MD5 (subidas de una sola parte).
 # key	bytes	etag(md5)
 1280-12/cache-refresh.js	5889	32c8be62f2a4107f852c779fec3d1ae6
@@ -138,7 +139,7 @@ v0/hls-ts/seg014.ts	492748	d9ba184b963e65bb0f3a5c09d2d3deb2
 v0/hls-ts/seg015.ts	209996	1e1180dabdf3df60c7d7f3dce30206c3
 v0/hls-ts/stream.m3u8	589	6463e426a8a45448018c51480eb76214
 v0/HoboStd.ttf	31444	56461958360533730babbd1bcc04ca77
-v0/index.html	89020	4f4a360c381f9b43c7eaa7b68965da67
+v0/index.html	95145	54405a5c10ee51dcb61b5bec0ef8e6b5
 v0/keypad.js	7853	2423d8b649bfb8c80a6de30defcc42e5
 v0/producto.html	52491	64b003ed7e31c37d0e3c1b64f60dc2be
 v0/GUION.tsv	1021	205d5bbb2cfe89c23b505d4dee02e85d
@@ -171,3 +172,44 @@ v0/dash-vp9/chunk-00015.webm	126163	c165f3e36773e6c621b958290c12b36f
 v0/dash-vp9/chunk-00016.webm	70257	fbd4ce4af0b6bfd05ac25b4b50f7f3c6
 v0/dash-vp9/init.webm	322	e0c3fe5d1377e8a85675e205331ba6a5
 v0/dash-vp9/manifest.mpd	1227	c5ba40799525cf5c2cad7400b63ab291
+v0/MANIFEST-v2.tsv	2385	668d17e3c715cf5f7f5a2590cbe458f6
+v0/dash-v2-vp9-crf10/chunk-00001.webm	391408	f40e75d2c1be682c6db0954b1b477baf
+v0/dash-v2-vp9-crf10/chunk-00002.webm	520823	4e1999b64b0a0c245ad1530021ba3d42
+v0/dash-v2-vp9-crf10/chunk-00003.webm	439819	2d6b76ae69c729c34189c18771decec1
+v0/dash-v2-vp9-crf10/chunk-00004.webm	657933	4356ae9b42f9713ad19af30c7df7ea95
+v0/dash-v2-vp9-crf10/chunk-00005.webm	1524274	8271abbad9a38e9510dd4f3f288968c9
+v0/dash-v2-vp9-crf10/chunk-00006.webm	865451	819ec8a47a3d173e999836d7f73a1a9e
+v0/dash-v2-vp9-crf10/chunk-00007.webm	912974	ed3a8d0a2525e3878f0a481c97f0786d
+v0/dash-v2-vp9-crf10/chunk-00008.webm	607689	9dc355fe435e5ec89b8a5ed567e5ab3e
+v0/dash-v2-vp9-crf10/chunk-00009.webm	561774	a342328f2c83f636cf22472179476e6c
+v0/dash-v2-vp9-crf10/chunk-00010.webm	684751	55b8c610414be6d23a2e62d723075059
+v0/dash-v2-vp9-crf10/chunk-00011.webm	793475	bde5000da369c99ca93bc8bfe318333d
+v0/dash-v2-vp9-crf10/chunk-00012.webm	668003	af5fd171f9168a9bfd3bf385d86abd1e
+v0/dash-v2-vp9-crf10/chunk-00013.webm	722734	f64e47a1a29752292ee02ec75650d942
+v0/dash-v2-vp9-crf10/chunk-00014.webm	702634	9637bc1e61da361e7ebe0c92c6979e25
+v0/dash-v2-vp9-crf10/chunk-00015.webm	525756	ef7f7a1701947443819010666ecfcc43
+v0/dash-v2-vp9-crf10/chunk-00016.webm	245208	f1d02cd4c14eeda3d2b3d619846bbd66
+v0/dash-v2-vp9-crf10/init.webm	318	1ed62386ec9413ceb5c65175a31e7f4a
+v0/dash-v2-vp9-crf10/manifest.mpd	1207	3a6722b8accb954d1abfa54a632de9fb
+v0/dash-v2-vp9-crf18/chunk-00001.webm	220763	6d8481c2c8d5ec12a3ecafc82672fab8
+v0/dash-v2-vp9-crf18/chunk-00002.webm	319809	c5cae692e699bbac38b7ccd61af0f07c
+v0/dash-v2-vp9-crf18/chunk-00003.webm	279431	d51a3789bc333c6165e263c397e5c867
+v0/dash-v2-vp9-crf18/chunk-00004.webm	424707	452b33cee8216d67feb098de2cd3f5e5
+v0/dash-v2-vp9-crf18/chunk-00005.webm	1012752	7dd1252f45f5600eec517fb736c4528f
+v0/dash-v2-vp9-crf18/chunk-00006.webm	545476	3ef94596c5f58c656e95c2392fea6671
+v0/dash-v2-vp9-crf18/chunk-00007.webm	579413	437dd27056833b2b2ec4f95ed36c3c6b
+v0/dash-v2-vp9-crf18/chunk-00008.webm	394992	1de692dac2ddabb151a6fd9d9f3eec9a
+v0/dash-v2-vp9-crf18/chunk-00009.webm	371738	1003bf86240a9891605fc0ce5710e4ed
+v0/dash-v2-vp9-crf18/chunk-00010.webm	444050	9d9d20b2758a6e2379ecf27ebca5697e
+v0/dash-v2-vp9-crf18/chunk-00011.webm	513292	6027df97f4e6085ecd94f4175af1d251
+v0/dash-v2-vp9-crf18/chunk-00012.webm	412442	311b78e2717833155a21dd51c854ec1a
+v0/dash-v2-vp9-crf18/chunk-00013.webm	451724	7b4141cc9928d76cf758fecef20e9d78
+v0/dash-v2-vp9-crf18/chunk-00014.webm	436437	2124fc9b3e7c2ab1dd599c3ba2ef542e
+v0/dash-v2-vp9-crf18/chunk-00015.webm	312283	bfb321e48c805db1b075e1bd80c1a1d5
+v0/dash-v2-vp9-crf18/chunk-00016.webm	154890	0dc7224c3ef032159d49f4ed4e5a46ca
+v0/dash-v2-vp9-crf18/init.webm	318	1ed62386ec9413ceb5c65175a31e7f4a
+v0/dash-v2-vp9-crf18/manifest.mpd	1207	be10689de02a66d0b92f94f178af8fff
+v0/v2-ambiente.mp4	614020	dafa9695760c159ec649c08a6916a88d
+v0/v2-h264.mp4	15017319	349357fedf78b41f672e523040add308
+v0/v2-vp9-crf10.webm	10937235	557f68af44e38d688286e3a8d6100013
+v0/v2-vp9-crf18.webm	6986728	49fe6ba9fda7442981b39c6e89463742

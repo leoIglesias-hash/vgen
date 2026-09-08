@@ -1251,32 +1251,42 @@ function stepRadio() {
   } };
 }
 
-/* S11: VP9 por MSE. Los segmentos WebM que dejo el remux de v1-vp9, en orden. */
-function dashVp9Urls() {
-  var piece = findPiece("v1-dash-vp9"), found, n, i, s, urls;
+/* S11: VP9 por MSE. Los segmentos WebM que dejo el remux de v1-vp9, en orden.
+ * H-26 lo generaliza: la carpeta sale del archivo de la pieza DASH del
+ * manifiesto (dash-vp9/manifest.mpd -> dash-vp9/) y la cantidad de su nota,
+ * asi que los DASH de v2 (dash-v2-vp9-crf10/, -crf18/) usan el mismo camino. */
+function dashUrlsDe(pieceId) {
+  var piece = findPiece(pieceId), dir, found, n, i, s, urls;
   if (!piece) { return null; }
+  dir = piece.file.slice(0, piece.file.lastIndexOf("/") + 1);
   found = /(\d+) segmentos/.exec(piece.note);
   n = found ? parseInt(found[1], 10) : 0;
-  urls = [base + "dash-vp9/init.webm"];
+  urls = [base + dir + "init.webm"];
   for (i = 1; i <= n; i++) {
     s = "0000" + i;
-    urls.push(base + "dash-vp9/chunk-" + s.slice(s.length - 5) + ".webm");
+    urls.push(base + dir + "chunk-" + s.slice(s.length - 5) + ".webm");
   }
   return urls;
 }
 
+function dashVp9Urls() { return dashUrlsDe("v1-dash-vp9"); }
+
 function stepMseVp9() {
-  var id = "mse:vp9";
+  return stepMseDe("mse:vp9", "v1-dash-vp9", "falta MANIFEST-v1.tsv");
+}
+
+function stepMseDe(id, dashId, falta) {
   return { id: id, go: function (done) {
-    var urls = dashVp9Urls(), piece, row;
+    var urls = dashUrlsDe(dashId), dash = findPiece(dashId), piece, row;
     if (!urls) {
       piece = addExtra(fake(id, "paquete", "", "", ""));
       row = blank(piece);
-      row.error = "no esta v1-dash-vp9: falta MANIFEST-v1.tsv";
+      row.error = "no esta " + dashId + ": " + falta;
       finishRow(id, done)(row);
       return;
     }
-    piece = addExtra(fake(id, "paquete", VP9_MSE_MIME, "dash-vp9/*",
+    piece = addExtra(fake(id, "paquete", VP9_MSE_MIME,
+                          dash.file.slice(0, dash.file.lastIndexOf("/") + 1) + "*",
                           "WebM segmentado por SourceBuffer, " +
                           (urls.length - 1) + " segmentos"));
     if (VGenFeed.mseSupport(VP9_MSE_MIME) !== "si") {
@@ -1302,7 +1312,131 @@ function v1Steps() { return conAudioSteps().concat([stepRadio(), stepMseVp9()]);
 
 function pendingSteps() {
   return techoSteps().concat([stepDosVideos()], enteraSteps(),
-                             hayV1() ? v1Steps() : []);
+                             hayV1() ? v1Steps() : [],
+                             hayV2() ? v2Steps() : []);
+}
+
+/* --- H-26: el pack v2 -la FUENTE a 1280@20, sin pasar por el master de 256
+ * colores- y la comparacion A OJO contra v1 ---
+ *
+ * Decision del operador (2026-09-07): «el look fue un medio». v2 se anexa
+ * igual que v1 (MANIFEST-v2.tsv) y trae DOS VP9 de la misma receta con
+ * distinto crf, porque la matriz v2 (2026-09-08) no pudo elegir sola: el techo
+ * de 20 MB no muerde en VP9 (crf 10 = 10,9 MB, el tope util del eje) y la
+ * diferencia entre crf 10 y crf 18 (7,0 MB, la mitad) es de las que «el
+ * contador no ve, la firma el ojo». v2-h264 (crf 14, 15 MB) es uno solo: salio
+ * byte-identico en las dos emisiones. */
+var COMPARA_IDS = ["v1-vp9", "v2-vp9-crf10", "v2-vp9-crf18"];
+var COMPARA_NOMBRES = ["v1: 256 colores, 15 fps",
+                       "v2 crf 10: la fuente, 20 fps",
+                       "v2 crf 18: la fuente, 20 fps"];
+
+function hayV2() { return findPiece("v2-vp9-crf10") ? true : false; }
+
+function megas(piece) {
+  var b = parseInt(piece.bytes, 10);
+  return b > 0 ? (Math.round(b / 100000) / 10) + " MB" : "";
+}
+
+/* Pantalla entera con UNA pieza en bucle, medida: la misma nota que el 70
+ * (tamano, api) mas los megas, para que la fila diga que se estaba mirando. */
+function stepEnteraPieza(pieceId) {
+  var id = "entera:" + pieceId;
+  return { id: id, go: function (done) {
+    var src = findPiece(pieceId), piece, row;
+    if (!src) {
+      piece = addExtra(fake(id, "v2", "", "", ""));
+      row = blank(piece);
+      row.error = "no esta " + pieceId + ": falta MANIFEST-v2.tsv";
+      finishRow(id, done)(row);
+      return;
+    }
+    piece = addExtra(fake(id, src.role, src.mime, src.file, ""));
+    measure(piece, base + src.file, function (r) {
+      piece.note = notaEntera("none", false) + "; " + megas(src);
+      finishRow(id, done)(r);
+    }, { loop: true });
+  } };
+}
+
+/* El lote v2: las tres piezas progresivas a pantalla entera (el gate es
+ * caidos <= 3 % a 20 fps) y los dos VP9 por MSE, que es como los usa el
+ * producto (el anillo desde la cache). */
+function v2Steps() {
+  return [stepEntera(true),
+          stepEnteraPieza("v2-vp9-crf10"),
+          stepEnteraPieza("v2-vp9-crf18"),
+          stepEnteraPieza("v2-h264"),
+          stepEntera(false),
+          stepMseDe("mse:v2-crf10", "v2-dash-vp9-crf10", "falta MANIFEST-v2.tsv"),
+          stepMseDe("mse:v2-crf18", "v2-dash-vp9-crf18", "falta MANIFEST-v2.tsv")];
+}
+
+/* A OJO: v1, v2 crf 10 y v2 crf 18, enteros y en bucle, y cada 78 pasa a la
+ * siguiente sin salir de la pantalla entera. No mide ni agrega fila (como el
+ * 71): el zocalo dice cual se esta mirando, los megas y los caidos vivos, para
+ * que la foto de la caja lleve el nombre de lo que el ojo firmo. El 0 corta. */
+var compara = { on: false, i: -1, timer: 0, t0: 0, armed: false,
+                baseTotal: 0, baseDropped: 0 };
+
+function pararCompara() {
+  if (compara.timer) { window.clearInterval(compara.timer); compara.timer = 0; }
+  compara.on = false;
+  compara.armed = false;
+  compara.i = -1;
+}
+
+function comparaTitulo() {
+  var piece = findPiece(COMPARA_IDS[compara.i]);
+  return COMPARA_NOMBRES[compara.i] + (piece ? " (" + megas(piece) + ")" : "");
+}
+
+function tickCompara() {
+  var video = byId("video"), q, caidos = "-", segundos;
+  if (!compara.on || compara.i < 0) { return; }
+  if (!compara.armed && video.currentTime > 0) {
+    q = quality(video);
+    compara.baseTotal = q ? q.total : 0;
+    compara.baseDropped = q ? q.dropped : 0;
+    compara.armed = true;
+  }
+  if (compara.armed) { caidos = vivos(video, compara.baseTotal, compara.baseDropped); }
+  segundos = Math.round((new Date().getTime() - compara.t0) / 1000);
+  say("a ojo " + (compara.i + 1) + "/" + COMPARA_IDS.length + ": " +
+      comparaTitulo() + " - " + segundos + " s - caidos " + caidos +
+      " - 78 pasa a la siguiente, 0 corta");
+}
+
+function comparaPone(i) {
+  var video = byId("video"), piece = findPiece(COMPARA_IDS[i]);
+  compara.i = i;
+  compara.armed = false;
+  compara.t0 = new Date().getTime();
+  if (!piece) {
+    say("a ojo: no esta " + COMPARA_IDS[i] + " - 78 sigue, 0 corta");
+    return;
+  }
+  video.loop = true;
+  video.src = base + piece.file;
+  video.load();
+  video.play();
+  tickCompara();
+}
+
+function toggleCompara() {
+  if (compara.on) {
+    comparaPone((compara.i + 1) % COMPARA_IDS.length);
+    return;
+  }
+  if (!hayV2()) {
+    say("a ojo: no esta v2-vp9-crf10: falta MANIFEST-v2.tsv");
+    return;
+  }
+  stopAll();
+  compara.on = true;
+  entrarEntera();
+  comparaPone(0);
+  compara.timer = window.setInterval(tickCompara, 1000);
 }
 
 /* Cortar y limpiar: en una TV no hay forma comoda de recargar la pagina, asi
@@ -1311,6 +1445,7 @@ function stopAll() {
   var video = byId("video");
   aborted = true;
   pararBucle();
+  pararCompara();
   stopFeeding();
   video.pause();
   video.muted = true;          /* H-6: si una pieza v1 lo destapo */
@@ -2051,6 +2186,14 @@ var TECLAS = [
   { code: "76", label: "lote v1", tier: "now",
     detail: "las tres de arriba, seguidas",
     run: function () { runSteps(v1Steps(), 0); } },
+  /* H-26: el pack v2 (la fuente a 1280@20) y la comparacion a ojo contra v1.
+   * Si v2 no esta publicado, las filas y el zocalo lo dicen. */
+  { code: "78", label: "v1 / v2 a ojo", tier: "now",
+    detail: "H-26: v1 (256 colores, 15 fps), v2 crf 10 y v2 crf 18 (la fuente, 20 fps), enteros y en BUCLE; cada 78 pasa a la siguiente",
+    run: toggleCompara },
+  { code: "79", label: "lote v2", tier: "now",
+    detail: "H-26: las tres piezas v2 a pantalla entera y los dos VP9 por MSE, medidos (gate: caidos <= 3 %)",
+    run: function () { runSteps(v2Steps(), 0); } },
   /* H-8a: el producto entero, en su propia pagina (producto.html): loop en
    * bucle por MSE desde la cache, publicidad, incentivador, radio y capa. Va
    * como tecla porque escribir la direccion con el control remoto no es
@@ -2204,10 +2347,23 @@ function start() {
       }
       say("listo - " + pieces.length + " piezas (v1 anexado)");
       draw();
-    }, function () {});
+      anexarV2();
+    }, anexarV2);
   }, function (why) {
     say("no se pudo leer MANIFEST.tsv: " + why);
   });
+}
+
+/* H-26: el pack v2 se anexa despues de v1, este o no v1 (son independientes). */
+function anexarV2() {
+  get(base + "MANIFEST-v2.tsv", function (more) {
+    var extra = parseManifest(more), i;
+    for (i = 0; i < extra.length; i++) {
+      if (!findPiece(extra[i].id)) { pieces.push(extra[i]); }
+    }
+    say("listo - " + pieces.length + " piezas (v1 y v2 anexados)");
+    draw();
+  }, function () {});
 }
 
 window.onresize = layout;

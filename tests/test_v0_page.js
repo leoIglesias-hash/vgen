@@ -158,11 +158,31 @@ var MANIFEST_V1 = [
    "dash-vp9/manifest.mpd", "3100000", "44", "solo video; 16 segmentos"].join("\t")
 ].join("\n") + "\n";
 
+/* H-26: el pack v2 (la fuente a 1280@20) tambien se sirve aparte
+ * (MANIFEST-v2.tsv), con DOS VP9 (crf 10 y 18) porque el techo no eligio. */
+var MANIFEST_V2 = [
+  "# pack v2 - ASCILINE-hybrid - docs/EMISION-V2.md",
+  "# id\trole\tmime\tfile\tbytes\tsha256\tnote",
+  ["v2-vp9-crf10", "v2", 'video/webm; codecs="vp9, opus"',
+   "v2-vp9-crf10.webm", "10937235", "55", "VP9 crf 10 + Opus"].join("\t"),
+  ["v2-vp9-crf18", "v2", 'video/webm; codecs="vp9, opus"',
+   "v2-vp9-crf18.webm", "6986728", "66", "VP9 crf 18 + Opus"].join("\t"),
+  ["v2-h264", "v2", 'video/mp4; codecs="avc1.64001F, mp4a.40.2"',
+   "v2-h264.mp4", "15017319", "77", "H.264 High crf 14 + AAC"].join("\t"),
+  ["v2-ambiente", "radio", "audio/mp4",
+   "v2-ambiente.mp4", "614020", "88", "la pista de la fuente"].join("\t"),
+  ["v2-dash-vp9-crf10", "stream-v2", 'video/webm; codecs="vp9"',
+   "dash-v2-vp9-crf10/manifest.mpd", "10826231", "99", "solo video; 16 segmentos"].join("\t"),
+  ["v2-dash-vp9-crf18", "stream-v2", 'video/webm; codecs="vp9"',
+   "dash-v2-vp9-crf18/manifest.mpd", "6875724", "aa", "solo video; 16 segmentos"].join("\t")
+].join("\n") + "\n";
+
 FakeXHR.prototype.send = function () {
   requested.push(this.url);
   this.readyState = 4;
   this.status = 200;
-  this.responseText = /MANIFEST-v1/.test(this.url) ? MANIFEST_V1 : MANIFEST;
+  this.responseText = /MANIFEST-v2/.test(this.url) ? MANIFEST_V2
+                    : /MANIFEST-v1/.test(this.url) ? MANIFEST_V1 : MANIFEST;
   if (this.onreadystatechange) { this.onreadystatechange(); }
 };
 
@@ -210,14 +230,15 @@ var run = new Function("window", "document", "navigator", "screen",
 run(windowStub, documentStub, navigatorStub, screenStub, FakeXHR, VGenFeed,
     VGenCache);
 
-assert.strictEqual(requested.length, 2,
-  "la pagina pide el manifiesto de v0 y despues el de v1");
+assert.strictEqual(requested.length, 3,
+  "la pagina pide el manifiesto de v0, despues el de v1 y despues el de v2");
 assert(/MANIFEST\.tsv$/.test(requested[0]), "pide MANIFEST.tsv");
 assert(/MANIFEST-v1\.tsv$/.test(requested[1]), "y anexa MANIFEST-v1.tsv (H-6)");
+assert(/MANIFEST-v2\.tsv$/.test(requested[2]), "y anexa MANIFEST-v2.tsv (H-26)");
 
 var filas = byId("filas");
-assert.strictEqual(filas.childNodes.length, 11,
-  "una fila por pieza: 3 progresivas + alfa + 3 empaquetados + 4 de v1");
+assert.strictEqual(filas.childNodes.length, 17,
+  "una fila por pieza: 3 progresivas + alfa + 3 empaquetados + 4 de v1 + 6 de v2");
 assert.strictEqual(filas.childNodes[0].childNodes.length, 6,
   "seis columnas: pieza, ok, caidos/total, 1er, congel, cambio");
 
@@ -247,7 +268,7 @@ assert(registered, "la pagina registra un mando numerico");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 var codigos = registered.actions.map(function (action) { return action.code; });
-assert.strictEqual(codigos.length, 37);
+assert.strictEqual(codigos.length, 39);
 ["0", "1", "2", "3", "4", "5", "6", "7", "8"].forEach(function (code) {
   assert(codigos.indexOf(code) >= 0, "falta la tecla " + code);
 });
@@ -339,8 +360,8 @@ var ahora = registered.actions.filter(function (item) {
   return item.tier === "now";
 }).map(function (item) { return item.code; }).sort();
 assert.deepStrictEqual(ahora,
-  ["1", "70", "71", "72", "74", "75", "76", "77", "84", "85", "87"],
-  "lo pendiente: la cache, los dos videos, la pantalla entera, el bucle a ojo, el pack v1 y el 1");
+  ["1", "70", "71", "72", "74", "75", "76", "77", "78", "79", "84", "85", "87"],
+  "lo pendiente: la cache, los dos videos, la pantalla entera, el bucle a ojo, el pack v1, el pack v2 y el 1");
 
 function emDe(sel) {
   var m = page.match(new RegExp("#teclas \\." + sel +
@@ -374,8 +395,8 @@ assert(/px\(byId\("side"\), sideX, midTop, w - sideX - 12, midH\)/.test(inline[1
 var visibles = byId("teclas").childNodes.length;
 assert(visibles >= 10,
   "tienen que quedar al menos 10 teclas a la vista, y hay " + visibles);
-assert.strictEqual(visibles, 19,
-  "hoy son 18: las 10 de ahora y las 8 herramientas");
+assert.strictEqual(visibles, 21,
+  "hoy son 21: las 13 de ahora y las 8 herramientas");
 var ocultas = registered.actions.filter(function (item) {
   return item.tier === "done";
 }).length;
@@ -770,9 +791,9 @@ assert(/function enteraSteps\(\)/.test(inline[1]));
 ["entera:solo", "entera:capa", "entera:dos", "entera:todo"].forEach(function (id) {
   assert(inline[1].indexOf('"' + id + '"') >= 0, "falta el paso " + id);
 });
-assert(/return techoSteps\(\)\.concat\(\[stepDosVideos\(\)\], enteraSteps\(\),\n\s+hayV1\(\) \? v1Steps\(\) : \[\]\)/
+assert(/return techoSteps\(\)\.concat\(\[stepDosVideos\(\)\], enteraSteps\(\),\n\s+hayV1\(\) \? v1Steps\(\) : \[\],\n\s+hayV2\(\) \? v2Steps\(\) : \[\]\)/
   .test(inline[1]),
-  "el 1 suma la pantalla entera y, si esta publicado, el pack v1 (H-6)");
+  "el 1 suma la pantalla entera y, si estan publicados, los packs v1 (H-6) y v2 (H-26)");
 
 /* H-21: los dos planos A OJO, en bucle y sin cortes.
  *
@@ -875,8 +896,8 @@ assert(/if \(!findPiece\(extra\[i\]\.id\)\) \{ pieces\.push\(extra\[i\]\); \}/.t
   .forEach(function (name) {
     assert(inline[1].indexOf(name) >= 0, "falta " + name);
   });
-assert(/enteraSteps\(\),\n\s+hayV1\(\) \? v1Steps\(\) : \[\]\);\n\}/.test(inline[1]),
-  "el 1 corre v1 solo si esta publicado");
+assert(/enteraSteps\(\),\n\s+hayV1\(\) \? v1Steps\(\) : \[\],\n\s+hayV2\(\) \? v2Steps\(\) : \[\]\);\n\}/.test(inline[1]),
+  "el 1 corre v1 y v2 solo si estan publicados");
 assert(/video\.muted = false;\n    video\.volume = 1;/.test(inline[1]),
   "S13 se mide CON SONIDO: el video se destapa para la pieza con audio");
 assert(/measure\(piece, base \+ piece\.file, function \(r\) \{\n      video\.muted = true;/.test(inline[1]),
@@ -916,4 +937,73 @@ assert(/v0-vp9\.webm$/.test(byId("video").src),
 action("0").run();
 assert.strictEqual(byId("radio").paused, true);
 
-console.log("v0 page tests (H-18b + H-20 + H-21 + red + H-22 + H-6 v1): OK");
+/* --- H-26: el pack v2 (la fuente a 1280@20) y la comparacion a ojo v1 / v2 ---
+ *
+ * La matriz v2 no pudo elegir el crf: el techo de 20 MB no muerde en VP9. Se
+ * publican DOS VP9 (crf 10 y crf 18) y la tecla 78 los pone, con v1, a
+ * pantalla entera y en bucle, uno tras otro, para que el ojo del operador en
+ * la caja firme. Como el 71: no mide, muestra; el zocalo dice cual es. */
+assert(/get\(base \+ "MANIFEST-v2\.tsv"/.test(inline[1]),
+  "el pack v2 se anexa desde su propio manifiesto");
+assert(/\}, anexarV2\);/.test(inline[1]),
+  "v2 se anexa aunque v1 no este: son packs independientes");
+["function hayV2", "function v2Steps", "function stepEnteraPieza",
+ "function stepMseDe", "function dashUrlsDe", "function toggleCompara",
+ "function pararCompara", "function tickCompara"]
+  .forEach(function (name) {
+    assert(inline[1].indexOf(name) >= 0, "falta " + name);
+  });
+assert(/piece\.file\.slice\(0, piece\.file\.lastIndexOf\("\/"\) \+ 1\)/.test(inline[1]),
+  "la carpeta de los segmentos sale del archivo de la pieza DASH, no de un nombre fijo");
+assert(/return dashUrlsDe\("v1-dash-vp9"\);/.test(inline[1]),
+  "y el MSE de v1 pasa por el mismo camino");
+["v2-vp9-crf10", "v2-vp9-crf18", "v2-h264", "v2-dash-vp9-crf10", "v2-dash-vp9-crf18"]
+  .forEach(function (id) {
+    assert(inline[1].indexOf('"' + id + '"') >= 0, "el lote v2 no mide " + id);
+  });
+assert(/v1 \/ v2 a ojo/.test(action("78").label), "78 = la comparacion a ojo");
+assert(/H-26/.test(action("78").detail));
+assert(/BUCLE/.test(action("78").detail),
+  "la leyenda dice que no corta: es una comparacion, no una medicion");
+assert(/lote v2/.test(action("79").label));
+assert(/caidos <= 3 %/.test(action("79").detail),
+  "la leyenda lleva el gate acordado");
+var comparaCuerpo = cuerpoDe("toggleCompara");
+assert(/entrarEntera\(\);/.test(comparaCuerpo),
+  "a pantalla entera, como el 71");
+assert(comparaCuerpo.indexOf("addExtra") < 0 &&
+       comparaCuerpo.indexOf("measure(") < 0,
+  "no mide y no agrega fila: muestra");
+assert(/setInterval\(tickCompara, 1000\)/.test(comparaCuerpo),
+  "el zocalo lleva el nombre de lo que se mira y los caidos vivos");
+assert(/video\.loop = true;/.test(cuerpoDe("comparaPone")),
+  "en bucle: la pieza no puede terminarse mientras se la mira");
+assert(/pararCompara\(\);/.test(cuerpoDe("stopAll")),
+  "el 0 apaga el reloj de la comparacion");
+assert(cuerpoDe("pararCompara").indexOf("stopAll") < 0,
+  "pararCompara solo apaga el reloj");
+
+/* Y anda con el stub: 78 arranca por v1, cada 78 pasa a la siguiente y da la
+ * vuelta; el 0 corta y el proximo 78 vuelve a empezar por v1. */
+action("78").run();
+assert(/v1-vp9\.webm$/.test(byId("video").src),
+  "el 78 arranca por v1: " + byId("video").src);
+assert.strictEqual(byId("video").loop, true);
+assert(/a ojo 1\/3: v1: 256 colores, 15 fps \(3 MB\)/.test(textoDe(byId("estado"))),
+  "el zocalo dice que se esta mirando: " + textoDe(byId("estado")));
+action("78").run();
+assert(/v2-vp9-crf10\.webm$/.test(byId("video").src), "el segundo 78 pasa a v2 crf 10");
+assert(/a ojo 2\/3: v2 crf 10: la fuente, 20 fps \(10\.9 MB\)/.test(textoDe(byId("estado"))),
+  textoDe(byId("estado")));
+action("78").run();
+assert(/v2-vp9-crf18\.webm$/.test(byId("video").src), "el tercero pasa a v2 crf 18");
+action("78").run();
+assert(/v1-vp9\.webm$/.test(byId("video").src), "y el cuarto da la vuelta a v1");
+action("0").run();
+assert.strictEqual(byId("video").paused, true, "el 0 corta");
+action("78").run();
+assert(/v1-vp9\.webm$/.test(byId("video").src),
+  "despues del 0, el 78 vuelve a empezar por v1");
+action("0").run();
+
+console.log("v0 page tests (H-18b + H-20 + H-21 + red + H-22 + H-6 v1 + H-26 v2): OK");

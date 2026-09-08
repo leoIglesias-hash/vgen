@@ -595,3 +595,50 @@ keys de v1 (`v1-ambiente.mp3` incluida, sin tocar) bajadas con cache-buster y
 `Content-Length: 2941178` en `v1-vp9.webm`; `v0/MANIFEST-v1.tsv` servido con
 las cuatro filas del bundle; token quemado con otro valor generado dentro de
 la llamada, el viejo devuelve `403`.
+
+## 2026-09-08 — H-26: el pack v2, la fuente a 1280@20 (42 keys: 41 nuevas + `index.html`)
+
+| key | bytes | md5 |
+|---|---|---|
+| `v0/MANIFEST-v2.tsv` | 2.385 | `668d17e3c715cf5f7f5a2590cbe458f6` |
+| `v0/v2-vp9-crf10.webm` | 10.937.235 | `557f68af44e38d688286e3a8d6100013` |
+| `v0/v2-vp9-crf18.webm` | 6.986.728 | `49fe6ba9fda7442981b39c6e89463742` |
+| `v0/v2-h264.mp4` | 15.017.319 | `349357fedf78b41f672e523040add308` |
+| `v0/v2-ambiente.mp4` | 614.020 | `dafa9695760c159ec649c08a6916a88d` |
+| `v0/dash-v2-vp9-crf10/manifest.mpd` + `init.webm` + `chunk-00001..16.webm` | 10.826.231 en total | en `MANIFEST.tsv` |
+| `v0/dash-v2-vp9-crf18/manifest.mpd` + `init.webm` + `chunk-00001..16.webm` | 6.875.724 en total | en `MANIFEST.tsv` |
+| `v0/index.html` (regenerada: teclas `78` y `79`) | 95.145 | `54405a5c10ee51dcb61b5bec0ef8e6b5` |
+
+**Qué es v2:** el video emitido **desde el clip original** (decisión del
+operador 2026-09-07: *«el look fue un medio»*), no desde el máster de 256
+colores: `tools/emit_v2.py`, fuente `6e78efa38e10…` (etiquetada 709 tv),
+referencia 1280×720 @20 = 308 cuadros, VP9 dos pasadas + alt-ref + Opus 64k,
+H.264 High crf 14 + el AAC de la fuente copiado, radio = la pista de la fuente
+tal cual, DASH por remux. **Emitido por el operador desde su PC** (Intel
+i7-13700H) con el bundle `vgen-portable` de la corrida 34083813584 (commit
+`17d9903`): las huellas de acá son las de esa PC, y el carril v2 del workflow
+`portable` las reproducirá después (pedido del operador). SHA-256:
+`v2-vp9-crf10` `dc1334bf8031…`, `v2-vp9-crf18` `0f4683bcca01…`, `v2-h264`
+`b5242feb7dc8…` (byte-idéntico en las dos emisiones), `v2-ambiente`
+`48885b2d200e…`, DASH crf 10 `febea479dea4…`, DASH crf 18 `3f03a4f3bb13…`.
+
+**Por qué DOS VP9:** la matriz v2 (`docs/matrices/2026-09-08-MATRIZ-v2-pc-operador.tsv`)
+no pudo elegir sola: el techo de 20 MB por pieza **no muerde en VP9** (crf 10,
+el tope útil del eje, pesa 10,9 MB) y la diferencia entre crf 10 (ssim
+0,9938) y crf 18 (7,0 MB, ssim 0,9918) es de las que el contador no ve. Se
+publican las dos y **la tecla `78` de `v0/`** las pone, con v1, a pantalla
+entera y en bucle, una tras otra, para que el ojo del operador en la caja
+firme; la `79` las mide (gate: caídos ≤ 3 % a 20 fps). `producto.html` sigue
+con v1 hasta esa foto.
+
+**Dos detalles del servido:** (1) la radio v2 es un `.m4a` (AAC de la fuente),
+pero el Worker no conoce esa extensión (`TYPES`) y su redeploy sigue
+bloqueado por permisos, así que se publica como **`v2-ambiente.mp4`** (mismo
+contenedor, `video/mp4`; el manifiesto lo dice en la nota). (2) Las carpetas
+DASH llevan el crf en el nombre (`dash-v2-vp9-crf10/`, `-crf18/`) y la página
+saca la carpeta del archivo de la pieza, no de un nombre fijo.
+
+**El Worker no se tocó.** Ritual de siempre: `MANIFEST.tsv` y esta sección
+commiteados **antes** de subir; token efímero, `PUT` con `x-sha256`, cada key
+bajada con cache-buster y comparada por SHA-256, token quemado y `403`
+comprobado. El resultado exacto va debajo cuando termine.

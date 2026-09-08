@@ -18,7 +18,7 @@ abajo a la izquierda lo que se va tecleando (`8_`, `83_`) y ejecuta cuando pasan
 900 ms sin otra tecla, así que **una tecla de una cifra tarda un momento en
 salir**: es normal, está esperando a ver si viene la segunda.
 
-## Lo que se ve en pantalla (19 teclas)
+## Lo que se ve en pantalla (21 teclas)
 
 **Lo que hay que probar**
 
@@ -34,6 +34,8 @@ salir**: es normal, está esperando a ver si viene la segunda.
 | `74` | **radio + video** (H-6/S14): el mp3 del máster en un `<audio>` en bucle **y** el VP9 mudo en bucle a la vez. La nota trae «radio arrancó en N ms; deriva radio; **deriva A/V**» |
 | `75` | **MSE vp9** (H-6/S11): los 16 segmentos WebM de `v1-vp9` por `SourceBuffer` |
 | `76` | **lote v1**: las tres de arriba seguidas |
+| `78` | **v1 / v2 a ojo** (H-26): `v1-vp9` (256 colores, 15 fps), `v2-vp9-crf10` y `v2-vp9-crf18` (la fuente a 1280@20, VP9 dos pasadas), **a toda la superficie y en bucle**; cada `78` pasa a la siguiente y da la vuelta. No mide: el zócalo dice cuál se mira, sus MB y los caídos vivos. Se sale con `0`. Es la tecla de la foto que firma la receta v2 |
+| `79` | **lote v2** (H-26): `v2-vp9-crf10`, `v2-vp9-crf18` y `v2-h264` a pantalla entera en bucle, medidas, y los dos VP9 por MSE (`dash-v2-vp9-crf10/`, `-crf18/`). Gate acordado: **caídos ≤ 3 %** a 20 fps |
 | `1` | **lo que falta**: corre solo lo que la caja todavía no consagró — el techo, los dos videos, la pantalla entera y, si está publicado, el pack v1 |
 
 **Herramientas**
