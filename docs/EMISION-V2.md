@@ -151,9 +151,12 @@ coincidir línea a línea aunque la fuente viva en otra carpeta.
 2. ~~**Matriz v2** (§4)~~ HECHA 2026-09-08 (VP9 crf 10 = 10,8 MB bajo el
    techo; H.264 cruza entre 14 y 11). Falta la **elección del crf** a ojo; si
    el ojo la firma, la receta nueva reemplaza a la de §2 en los tres lugares.
-3. **Publicar v2 en `v0/`** con el ritual (copia en `deploy/` antes) y una
+3. ~~**Publicar v2 en `v0/`** con el ritual (copia en `deploy/` antes) y una
    tecla que alterne **v1 (256 colores, 15 fps) / v2 (fuente, 20 fps)** a
-   pantalla entera; `producto.html` sigue con v1 hasta la foto.
+   pantalla entera~~ HECHO 2026-09-08 (tarde): **las dos recetas** (crf 10 y
+   crf 18, un solo H.264 crf 14) en `v0/` (42 keys, SHA verificados), tecla
+   `78` (a ojo, en bucle, tres piezas) y `79` (lote medido). `producto.html`
+   sigue con v1 hasta la foto.
 4. **Foto de la caja**: v2 a 20 fps con caídos ≤ 3 % y el operador firma el
    look contra v1. Si la caja no sostiene 20, `--fps 15` desde la fuente
    antes de volver al carril v1.

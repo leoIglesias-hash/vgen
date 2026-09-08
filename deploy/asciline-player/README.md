@@ -641,4 +641,11 @@ saca la carpeta del archivo de la pieza, no de un nombre fijo.
 **El Worker no se tocó.** Ritual de siempre: `MANIFEST.tsv` y esta sección
 commiteados **antes** de subir; token efímero, `PUT` con `x-sha256`, cada key
 bajada con cache-buster y comparada por SHA-256, token quemado y `403`
-comprobado. El resultado exacto va debajo cuando termine.
+comprobado.
+
+Resultado exacto (2026-09-08, 14:3x): 42 `PUT` con `x-sha256` → `200`; las
+42 keys bajadas con cache-buster y **SHA-256 igual al del archivo emitido en
+las 42**; `Content-Type: video/webm` y `Content-Length: 10937235` en
+`v2-vp9-crf10.webm`, `video/mp4` en `v2-ambiente.mp4`; `v0/MANIFEST-v2.tsv`
+servido con las seis filas; token quemado con otro valor generado dentro de
+la llamada, el viejo devuelve `403`.

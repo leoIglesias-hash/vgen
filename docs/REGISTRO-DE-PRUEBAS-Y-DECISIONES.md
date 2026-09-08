@@ -6391,3 +6391,53 @@ alternativa de ahorro que el ojo puede preferir es **crf 18** (6,9 MB, 0,9918):
 mitad de bytes que crf 10 por −0,002 de SSIM. **Decide el operador a ojo**;
 lo que sigue es emitir la receta elegida entera (`--vp9-crf N --h264-crf 14`)
 y publicarla en `v0/` con la tecla v1/v2 para la foto de la caja.
+
+### 2026-09-08 (tarde) — H-26: las DOS recetas emitidas y publicadas en `v0/`; tecla `78` = v1 / v2 crf 10 / v2 crf 18 a ojo en la caja
+
+Operador: *«¿podremos hacer y subir las dos versiones? … luego deberás
+adaptar el reproductor con las nuevas expectativas para que funcione ambos en
+modo prueba … hacemos el comparativo directamente en el TV box»*. Emitió las
+dos desde su PC con el mismo bundle:
+
+| carpeta | receta | pieza | bytes | SSIM | SHA-256 |
+|---|---|---|---|---|---|
+| `outputs\v2` | `--vp9-crf 10 --h264-crf 14` | `v2-vp9.webm` | 10.937.235 | 0,993754 | `dc1334bf8031…` |
+| `outputs\v2-crf18` | `--vp9-crf 18 --h264-crf 14` | `v2-vp9.webm` | 6.986.728 | 0,991844 | `0f4683bcca01…` |
+| ambas | `--h264-crf 14` | `v2-h264.mp4` | 15.017.319 | 0,994150 | `b5242feb7dc8…` (**byte-idéntico** en las dos emisiones) |
+| ambas | copia | `v2-ambiente.m4a` | 614.020 | — | `48885b2d200e…` |
+| — | remux | DASH crf 10 / crf 18 | 10.826.231 / 6.875.724 | — | `febea479dea4…` / `3f03a4f3bb13…` |
+
+(El VP9 con Opus pesa 112 KB más que la fila de la matriz, que era solo
+video; el H.264 con el AAC copiado, 618 KB más.)
+
+**Publicado en `v0/` con el ritual** (copia en `deploy/` commiteada antes,
+`4c77749`): 42 keys (41 nuevas + `index.html`), 51.354.787 B; `PUT` con
+`x-sha256` → 42 × `200`; las 42 bajadas con cache-buster y **SHA-256 igual
+en todas**; `Content-Type: video/webm` / `Content-Length: 10937235` en
+`v2-vp9-crf10.webm`; token quemado, el viejo devuelve `403`. Los archivos
+llevan el crf en el nombre (`v2-vp9-crf10.webm`, `v2-vp9-crf18.webm`,
+`dash-v2-vp9-crf10/`, `dash-v2-vp9-crf18/`) y un solo `v2-h264.mp4`;
+`MANIFEST-v2.tsv` combinado, con `# receta_crf10` y `# receta_crf18`. La
+radio va como **`v2-ambiente.mp4`** porque el Worker no conoce `.m4a` y su
+redeploy sigue bloqueado por permisos (mismo contenedor, `video/mp4`; la
+nota del manifiesto lo dice).
+
+**La página (`v0/index.html`, H-26):** anexa `MANIFEST-v2.tsv` después de
+v1 (esté o no v1); **`78` = «v1 / v2 a ojo»**: v1 (256 colores, 15 fps), v2
+crf 10 y v2 crf 18, a toda la superficie y en bucle; cada `78` pasa a la
+siguiente y da la vuelta; el zócalo dice cuál se mira, sus MB y los caídos
+vivos (`a ojo 2/3: v2 crf 10: la fuente, 20 fps (10.9 MB) - 12 s - caidos
+0/240 - 78 pasa a la siguiente, 0 corta`); no mide ni agrega fila, como el
+`71`. **`79` = «lote v2»**: las tres piezas a pantalla entera en bucle,
+medidas, más los dos VP9 por MSE (gate: caídos ≤ 3 % a 20 fps). El MSE se
+generalizó (`dashUrlsDe`: la carpeta sale del archivo de la pieza DASH) y el
+`75` de v1 pasa por el mismo camino. `producto.html` sigue con v1.
+`MANUAL-TECLAS-V0.md` con las dos teclas.
+
+**Lo que se le pide a la caja:** `78` tres veces mirando cada una el rato
+que haga falta, y decir a ojo si crf 10 se distingue de crf 18 (mi
+expectativa: en el panel a distancia de sofá, no); `79` y `95` para la foto
+con los caídos de las cinco filas (`entera:v2-vp9-crf10`, `-crf18`,
+`entera:v2-h264`, `mse:v2-crf10`, `mse:v2-crf18`). Con eso se firma la
+receta v2 en los tres lugares (`armar.RECETA_V2`, `emitir.ps1`, EMISION-V2
+§2) y recién entonces el carril v2 del `portable` la reproduce.
