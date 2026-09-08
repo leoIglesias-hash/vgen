@@ -59,7 +59,7 @@ desde la PC»):
 
 ```
 emitir.cmd -Fuente "C:\clip.mp4" -Receta "--fps 20 --ancho 1280 --vp9-crf 30 --h264-crf 20 --techo 20000000"
-emitir.cmd -Fuente "C:\clip.mp4" -Receta "--barrer 26,30,34,38 --barrer-h264 18,21,24 --sin-piezas"
+emitir.cmd -Fuente "C:\clip.mp4" -Receta "--barrer 10,14,18,22,26,30 --barrer-h264 11,14,17,20 --sin-piezas"
 emitir.cmd -Fuente "C:\clip.mp4" -Frames 40                (humo: 2 s de la base)
 emitir.cmd -Fuente "C:\clip.mp4" -FuenteSha256 <hex>       (pinea la fuente)
 ```

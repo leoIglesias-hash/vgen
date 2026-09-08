@@ -6286,3 +6286,60 @@ contenido y muxearla por `-c:a copy` en el webm (la idea de P-006 aplicada al
 Opus); decide el operador. Mientras tanto el workflow sigue exigiendo
 identidad total: una corrida con pool mixto sale roja **a propósito**, para
 que no se publique una huella que otra CPU no reproduce.
+
+### 2026-09-08 — H-26: primera emisión v2 real, desde la PC del operador (bundle `17d9903`): la fuente es 709 etiquetada y las dos piezas quedan MUY por debajo del techo
+
+El operador bajó `vgen-portable` de la corrida 34083813584 (descomprimido en
+`Escritorio\vgen-portable`) y corrió, en su PC (**Intel Core i7-13700H**):
+
+```
+.\emitir.cmd -Fuente "C:\Users\leo_8\OneDrive\Escritorio\ASCILINE-video\inputs\TKN-2443-GANADOR- 15seg-.mp4"
+```
+
+Salida transcripta tal cual:
+
+```
+la fuente SHA-256: 6e78efa38e10e926473a8bd9073b4108107e905c1f73f6dc2edaf3a974cc6563
+fuente 6e78efa38e10  TKN-2443-GANADOR- 15seg-.mp4  color: tv bt709 bt709 bt709  audio: aac
++ referencia 1280x? @20 (lanczos, 709 tv, yuv420p)
+  referencia 1280x720 @20  308 cuadros
++ v2-vp9 (dos pasadas)
+  v2-vp9              3757946 B  ssim 0.987052  psnr 43.659236  308 cuadros  47 s
++ v2-h264
+  v2-h264             6600291 B  ssim 0.989614  psnr 44.519671  308 cuadros  17 s
++ v2-ambiente (copia)
+  v2-ambiente          614020 B
++ dash-v2-vp9 (remux, sin recodificar)
+  v2-dash-vp9         3646942 B  16 segmentos
+-- PIEZAS v2 (80 s) --
+48885b2d200e7b7e49d6ccd8f54a247933d2a7fcc3e8f671bb3ebd0eadf366f8      614020  v2-ambiente.m4a
+f75a21256f5308049cc0e86d7529649bd8e7f194a7524df7d52fd7fe1753d212     6600291  v2-h264.mp4
+74ea7f4b9bcb7bd5e271ed8bbe8578bba782bc98401f502b4d08856c0c44f34e     3757946  v2-vp9.webm
+```
+
+`MANIFEST-v2.tsv`: `# receta --ancho 1280 --fps 20 --vp9-crf 34 --vp9-cpu 2
+--h264-crf 21 --h264-bframes 3 --h264-refs 4 --techo 20000000`; DASH
+`74c69015c530…` (16 segmentos, 3.646.942 B).
+
+**Lo que se aprende.** (1) **La fuente viene etiquetada 709 / rango tv**
+(`color: tv bt709 bt709 bt709`, leído con ffprobe): el supuesto de
+DISENO-CALIDAD §2 queda **verificado**, no hace falta `--matriz-fuente`. El
+SHA-256 de la fuente, `6e78efa38e10…`, es el que se pinea de acá en más
+(`-FuenteSha256`). (2) La base es 1280×720 @20 con **308 cuadros** (15,4 s;
+v1 tenía 232 a 15 fps). (3) **El techo de 20 MB no muerde**: con la receta
+de arranque VP9 pesa 3,76 MB (19 % del techo) y H.264 6,6 MB (33 %), ambas
+por encima de v1 (2,94 / 5,25 MB) pero con **SSIM 0,987 / 0,990 contra la
+fuente misma** (v1 medía 0,95-0,97 contra el máster de 256 colores; no son
+comparables, distinta referencia). La receta de arranque fue **conservadora
+por 5×**: el barrido va hacia crf más bajos que los del diseño (34..42 no
+sirve; el rango útil arranca en ~26 y baja), y el H.264 también. (4) La PC
+es **Intel**: la huella del `v2-vp9.webm` (`74ea7f4b…`) es la huella Intel
+(Opus, P-010); `v2-h264.mp4` (`f75a2125…`, AAC copiado) y el DASH deberían
+salir idénticos en cualquier CPU, y eso es lo que el carril v2 de
+`portable` verificará después. (5) Tiempo total 80 s en la PC; el barrido
+propuesto (6 crf de VP9 en dos pasadas + 4 de H.264) ronda los 6 minutos.
+
+**Siguiente:** el barrido, con los ejes corridos a la evidencia:
+`-Receta "--barrer 10,14,18,22,26,30 --barrer-h264 11,14,17,20 --sin-piezas"`,
+para acorralar el techo por arriba y por abajo; después el operador elige a
+ojo en la caja el crf más bajo que pase.

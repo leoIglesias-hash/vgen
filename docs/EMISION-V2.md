@@ -1,8 +1,14 @@
 # Emisión v2 — el video desde la fuente
 
-> **Estado (2026-09-07): emisor escrito y probado en CI (líneas de comando,
-> manifiesto, techo); todavía SIN una emisión real.** La primera emisión la
-> hace **el operador desde su PC** con el bundle (`emitir.cmd -Fuente …`),
+> **Estado (2026-09-08): primera emisión real HECHA desde la PC del operador**
+> (Intel i7-13700H, bundle de la corrida 34083813584 = commit `17d9903`):
+> fuente `6e78efa38e10…` **etiquetada 709 tv** (supuesto de §1 verificado),
+> base 1280×720 @20 = 308 cuadros; `v2-vp9` **3.757.946 B** ssim 0,987 psnr
+> 43,66 (`74ea7f4b…`, huella Intel por el Opus), `v2-h264` **6.600.291 B**
+> ssim 0,990 psnr 44,52 (`f75a2125…`), `v2-ambiente.m4a` 614.020 B, DASH 16
+> segmentos. **El techo de 20 MB queda 5× arriba**: el barrido (§4) se corre a
+> crf bajos. Transcripción completa: REGISTRO 2026-09-08. La emisión la hace
+> **el operador desde su PC** con el bundle (`emitir.cmd -Fuente …`),
 > porque la fuente no está en el remoto público y porque así lo pidió:
 > *«debe correr lo mismo de mi PC en CI; trabajaremos sobre eso cuando
 > terminemos las optimizaciones desde la PC»*. El carril v2 del workflow
@@ -90,8 +96,12 @@ PSNR, cuadros, segundos) y los SHA-256 del final.
 ## 4. La matriz v2: elegir el crf bajo el techo
 
 ```
-emitir.cmd -Fuente "C:\clip.mp4" -Receta "--barrer 26,30,34,38 --barrer-h264 18,21,24 --sin-piezas"
+emitir.cmd -Fuente "C:\clip.mp4" -Receta "--barrer 10,14,18,22,26,30 --barrer-h264 11,14,17,20 --sin-piezas"
 ```
+
+(Ejes corregidos el 2026-09-08 con la primera emisión: crf 34 dio 3,76 MB y
+h264 crf 21 dio 6,6 MB, 5× por debajo del techo; el rango del diseño, 34..42,
+no acorrala nada. Estos ejes van de ~2× el techo a ~4 MB.)
 
 Emite `v2-vp9-crfNN` (dos pasadas, sin audio) por cada crf, y `v2-h264-crfNN`,
 mide SSIM y PSNR **contra la fuente llevada a la base**, y deja
@@ -126,7 +136,8 @@ coincidir línea a línea aunque la fuente viva en otra carpeta.
 
 ## 6. Qué falta para cerrar H-26 (en orden)
 
-1. **Primera emisión desde la PC** con la receta de arranque; reportar §3.
+1. ~~**Primera emisión desde la PC** con la receta de arranque; reportar §3.~~
+   HECHA 2026-09-08 (REGISTRO): 709 verificado, 3,76 / 6,6 MB, techo 5× arriba.
 2. **Matriz v2** (§4) y elección del crf; si el ojo la firma, la receta
    nueva reemplaza a la de §2 en los tres lugares.
 3. **Publicar v2 en `v0/`** con el ritual (copia en `deploy/` antes) y una
