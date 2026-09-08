@@ -6618,3 +6618,47 @@ candidatas que el ojo ya aprobó en la caja: **crf 18 @20 (6.986.728 B)** y
 (mirar `2` y `3` a pantalla entera, `0`, y decir si los 20 fps se notan);
 lo que no se firma es 512 colores. `producto.html` sigue con v1 hasta esa
 firma.
+
+### 2026-09-08 (noche) — RECETA v2 FIRMADA: crf 18 a 15 fps (plano `3`), con 20 fps como upgrade declarado
+
+Operador, textual: *«de momento me quedo con la 3, pero está bien tener la
+opción para el upgrade a la 2 de fps.... pero la 3 en este tipo de videos se
+ve perfecto. documentá y todo y ahí dime cómo seguimos así luego hago un
+compact»*.
+
+**La receta v2, firmada en los tres lugares** (`tools/portable/armar.py`
+`RECETA_V2`, `tools/portable/emitir.ps1 -RecetaV2`, `EMISION-V2.md` §2;
+`test_portable_bundle` cruza los tres y exige que cada opción exista en
+`emit_v2.py`):
+
+```
+--fps 15 --ancho 1280 --vp9-crf 18 --h264-crf 14 --techo 20000000
+```
+
+Cómo se llegó, en una línea por paso: P-009 (2026-09-07) → la fuente, no
+el máster; matriz (2026-09-08) → el techo no muerde en VP9, H.264 cruza
+entre 14 y 11; `78` en la caja → crf 10 no se distingue de crf 18, y «se
+traban» (era la página v0); H-27 en `v1/` → 512 colores no dio nada (ni en
+bytes ni a ojo), 15 fps «se ve perfecto». Lo que firma el ojo, en bytes:
+VP9 `1c9b383c93e5…` 6.011.270 B (SSIM 0,9916 contra la fuente a 15 fps),
+**82 % más que v1** (2.941.178 B) por el look de la fuente; la caja lo
+reproduce fluido. **Upgrade declarado:** `--fps 20` (plano `2`,
+6.986.728 B, `0f4683bcca01…`), aprobado a ojo, no elegido; es cambiar un
+número. Lo que retira: `--colores` (queda en el emisor como herramienta),
+crf 10 (y su DASH, a retirar del bucket), la receta de arranque crf 34/21.
+
+**Lo que NO existe todavía con esta receta:** el H.264 crf 14 **a 15 fps**
+(el publicado es @20), el DASH del VP9 firmado en `v0/` (existe en
+`outputs\v2-15\dash-v2-vp9\`, 5.900.286 B, no publicado) y el manifiesto
+del pack. Sale todo de **una emisión completa** con la receta firmada
+(EMISION-V2 §6 4b): `emitir.cmd -Fuente "…" -Out outputs\v2-firmada`, sin
+`-Receta`. El VP9 debería repetir el SHA del plano `3` (misma máquina,
+misma receta: la base re-emitida ya salió byte-idéntica el 2026-09-08).
+
+**Cómo sigue (escrito en RUNBOOK-ESTADO §Próxima acción):** (1) esa
+emisión completa; (2) publicarla en `v0/` como pack v2 definitivo con el
+ritual (deploy antes) y retirar los perdedores; (3) `producto.html` +
+`GUION.tsv` a v2 y la foto del producto entero en la caja; (4) el carril v2
+en `portable` reproduciendo lo de la PC (P-010 abierta); (5) SPEC §9,
+DISENO-CALIDAD §5.3, cierre de H-26 y H-27. Pendiente menor: repetir `78`
+en `v0/` para confirmar que lo trabado era esa página.

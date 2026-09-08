@@ -45,7 +45,10 @@ RECETA_V1 = "--vp9-crf 38 --h264-profile high --h264-crf 23 --h264-bframes 3 --h
 # La receta v2 (docs/EMISION-V2.md S2, H-26): la fuente a 1280@20, VP9 dos
 # pasadas, techo 20 MB. Es la APUESTA de arranque; la matriz v2 desde la PC
 # del operador (`emitir.cmd -Fuente ... -Receta "--barrer ..."`) la corrige.
-RECETA_V2 = "--fps 20 --ancho 1280 --vp9-crf 34 --h264-crf 21 --techo 20000000"
+# H-26/H-27, FIRMADA por el operador el 2026-09-08 (noche) en la caja, plano 3
+# de v1/: «de momento me quedo con la 3 ... la 3 en este tipo de videos se ve
+# perfecto». Upgrade declarado (aprobado a ojo, no elegido): --fps 20.
+RECETA_V2 = "--fps 15 --ancho 1280 --vp9-crf 18 --h264-crf 14 --techo 20000000"
 
 # El master producto (1280@15 v3, con audio), pineado por contenido.
 MASTER_URL = "https://iargen.com/player/outputs/clip.dcd6afb66907.asclv"

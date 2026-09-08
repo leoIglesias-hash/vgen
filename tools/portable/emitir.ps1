@@ -28,7 +28,7 @@ param(
   [string]$FuenteSha256 = "",
   [string]$Out = "outputs\v1",
   [string]$Receta = "--vp9-crf 38 --h264-profile high --h264-crf 23 --h264-bframes 3 --h264-refs 4",
-  [string]$RecetaV2 = "--fps 20 --ancho 1280 --vp9-crf 34 --h264-crf 21 --techo 20000000",
+  [string]$RecetaV2 = "--fps 15 --ancho 1280 --vp9-crf 18 --h264-crf 14 --techo 20000000",
   [int]$Frames = 0,
   [switch]$SinVerificar
 )

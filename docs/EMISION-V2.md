@@ -52,16 +52,27 @@ contenido), la capa, las teclas, el ES5 del front. v2 es otra pieza con el
 mismo manifiesto (`MANIFEST-v2.tsv`, mismas siete columnas que v0/v1) y la
 página la anexa con el mismo parser.
 
-## 2. La receta de arranque
+## 2. La receta (FIRMADA 2026-09-08 noche)
 
 ```
---fps 20 --ancho 1280 --vp9-crf 34 --h264-crf 21 --techo 20000000
+--fps 15 --ancho 1280 --vp9-crf 18 --h264-crf 14 --techo 20000000
 ```
 
-Es la **apuesta**, no un resultado: `crf 34` es el centro del eje que el
-diseño propuso (34..42) y `h264-crf 21` dos escalones más generosos que v1,
-porque el material ya no es plano. La matriz v2 la corrige (§4). Está en
-tres lugares y un test los cruza (`tests/test_portable_bundle.py`):
+**Firmada por el operador en la caja** (plano `3` de `player/v1/`): *«de
+momento me quedo con la 3, pero está bien tener la opción para el upgrade a
+la 2 de fps… pero la 3 en este tipo de videos se ve perfecto»*. Cómo se
+llegó: la matriz (§4) dijo que el techo no muerde en VP9 y que H.264 cruza
+entre crf 14 y 11; el ojo dijo que crf 10 no se distingue de crf 18 (§7); la
+paleta de 512 colores no dio nada (§7); y entre 20 y 15 fps eligió 15
+(6.011.270 B, SSIM 0,9916 contra la fuente a 15). **Upgrade declarado:**
+`--fps 20` (plano `2`, 6.986.728 B), aprobado a ojo, no elegido; se emite
+cambiando solo ese número. Lo que la receta todavía no tiene emitido con
+esta cadencia es el **H.264 crf 14 a 15 fps** (el publicado es @20): sale
+en la primera emisión completa con la receta firmada (§6).
+
+La receta de arranque fue `--fps 20 --ancho 1280 --vp9-crf 34 --h264-crf 21
+--techo 20000000` (una apuesta: el centro del eje 34..42). Está en tres
+lugares y un test los cruza (`tests/test_portable_bundle.py`):
 `tools/portable/armar.py` (`RECETA_V2`, fila `receta_v2` de `VERSIONES.tsv`),
 `tools/portable/emitir.ps1` (`-RecetaV2`) y este archivo.
 
@@ -157,9 +168,20 @@ coincidir línea a línea aunque la fuente viva en otra carpeta.
    crf 18, un solo H.264 crf 14) en `v0/` (42 keys, SHA verificados), tecla
    `78` (a ojo, en bucle, tres piezas) y `79` (lote medido). `producto.html`
    sigue con v1 hasta la foto.
-4. **Foto de la caja**: v2 a 20 fps con caídos ≤ 3 % y el operador firma el
+4. ~~**Foto de la caja**: v2 a 20 fps con caídos ≤ 3 % y el operador firma el
    look contra v1. Si la caja no sostiene 20, `--fps 15` desde la fuente
-   antes de volver al carril v1.
+   antes de volver al carril v1.~~ HECHO 2026-09-08 (noche), por el camino
+   de H-27 (§7): la caja firmó **crf 18 a 15 fps** (§2), con 20 fps como
+   upgrade declarado. Sin contador (`quality no`): lo firmó el ojo.
+4b. **La emisión completa con la receta firmada** (falta): desde
+   `vgen-portable`, `emitir.cmd -Fuente "…" -Out outputs\v2-firmada` (sin
+   `-Receta`: toma la firmada) → `v2-vp9.webm` (debería dar los mismos bytes
+   que el plano `3`, `1c9b383c93e5…`), **`v2-h264.mp4` @15 (nuevo)**, radio,
+   `dash-v2-vp9/`, `MANIFEST-v2.tsv`. Publicar en `v0/` como pack v2
+   definitivo (ritual; retirar del bucket los VP9 perdedores crf 10 y sus
+   DASH, y los cuatro planos de `v1/` que no se firmaron pueden quedar como
+   evidencia o retirarse: decide el operador), y pasar `producto.html` /
+   `GUION.tsv` a v2.
 5. **El CI reproduce lo de la PC** (pedido del operador): carril `v2` en el
    workflow `portable` (inputs `fuente_url`/`fuente_sha256`, dos runners,
    `pack-v2`), y `ffprobe` en la corrida verificando las etiquetas de color
