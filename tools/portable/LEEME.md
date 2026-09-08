@@ -72,6 +72,29 @@ línea `fuente …` (SHA y `color:`), la tabla, y los SHA-256 del final.
 `--vp9-1pass` acota (una pasada); `--matriz-fuente bt709` declara la matriz
 si la fuente vino sin etiquetar (la línea `color:` dice `unknown`).
 
+### H-27: los planos de fluidez (la caja ve v2 trabado)
+
+Sobre crf 18, cuatro emisiones de solo VP9, cada una en su carpeta (el H.264
+ya está publicado). Se pegan las cuatro líneas seguidas en PowerShell, parado
+en la carpeta del bundle; tardan unos 2 minutos cada una (la de 512 colores
+suma ~1 minuto de paleta):
+
+```
+.\emitir.cmd -Fuente "C:\clip.mp4" -Out outputs\v2-15       -Receta "--fps 15 --vp9-crf 18 --solo-vp9"
+.\emitir.cmd -Fuente "C:\clip.mp4" -Out outputs\v2-512      -Receta "--fps 20 --vp9-crf 18 --colores 512 --solo-vp9"
+.\emitir.cmd -Fuente "C:\clip.mp4" -Out outputs\v2-15-512   -Receta "--fps 15 --vp9-crf 18 --colores 512 --solo-vp9"
+.\emitir.cmd -Fuente "C:\clip.mp4" -Out outputs\v2-sinaltref -Receta "--fps 20 --vp9-crf 18 --sin-altref --solo-vp9"
+```
+
+`--colores N` pasa la referencia por una **paleta adaptativa de N colores**
+(K-means en Oklab, como la de 256 de v1, sin el máster) antes del encoder; el
+SSIM se sigue midiendo contra la referencia sin paleta. `--sin-altref` apaga
+los cuadros alt-ref de VP9 (cuadros ocultos que el decodificador procesa sin
+mostrar; v1 nunca los tuvo). `--solo-vp9` no emite el H.264. Cada carpeta
+deja su `v2-vp9.webm`, `MANIFEST-v2.tsv` (con `# colores` si hubo paleta) y
+el SHA-256 al final; esos cuatro archivos se publican en `player/v1/` y se
+miran uno por tecla.
+
 ## Variantes
 
 ```

@@ -167,3 +167,31 @@ coincidir línea a línea aunque la fuente viva en otra carpeta.
    pineado por contenido, como el `.asclv`).
 6. Papel: bytes, SSIM y huellas acá; SPEC §9 (carril v2 = huella del
    bundle); DISENO-CALIDAD §5.3 cerrado; REGISTRO.
+
+## 7. H-27: la caja vio v2 trabado — los planos de fluidez (2026-09-08 noche)
+
+Veredicto del operador sobre el `78` (REGISTRO 2026-09-08 noche): crf 10 y
+crf 18 **se ven mejor** que los 256 colores, **no se distinguen** entre sí
+lo suficiente, y **se traban**; v1 (VP9 crf 38, 15 fps, 3 MB, sin alt-ref)
+no se traba en el mismo aparato. Se sigue con **crf 18** y se prueban, a
+ojo y uno por vez en `player/v1/`, tres cosas y un testigo:
+
+| plano | receta (`emitir.cmd -Fuente … -Receta "…"`) | qué cambia respecto del trabado |
+|---|---|---|
+| `3` 15 fps | `--fps 15 --vp9-crf 18 --solo-vp9` | un cuarto menos de cuadros por segundo (la cadencia de v1) |
+| `4` 512 colores | `--fps 20 --vp9-crf 18 --colores 512 --solo-vp9` | la referencia pasa por una paleta adaptativa Oklab de 512 colores (`tools/cuantizar_y4m.py`) antes del encoder: menos colores = zonas planas = menos bytes al mismo crf. El decodificador no sabe de paletas: lo que cambia son los bytes |
+| `5` las dos | `--fps 15 --vp9-crf 18 --colores 512 --solo-vp9` | las dos juntas |
+| `6` sin alt-ref | `--fps 20 --vp9-crf 18 --sin-altref --solo-vp9` | `-auto-alt-ref 0`, sin arnr/tpl: los cuadros **ocultos** de VP9 que la receta v2 (E-D) encendió y v1 nunca tuvo. Es la única diferencia de VP9 entre lo fluido y lo trabado que no es fps ni bytes |
+| `7` H.264 | ya publicado (crf 14, 15 MB) | el otro decodificador |
+
+Reglas que no cambian: el SSIM de cada plano se mide contra la referencia
+**sin** paleta (la fuente llevada a la base); el manifiesto declara
+`# colores N` cuando hubo paleta y la receta canónica lleva las tres perillas
+(`--sin-altref`, `--colores N`, `--solo-vp9`); el techo sigue en 20 MB. La
+receta de §2 **no se firma** hasta que la caja diga cuál es fluido: el plano
+que el ojo apruebe entra a §2 (tres lugares) y a `producto.html`. Si ninguno
+lo es, v1 sigue de plan B y la pregunta pasa al decodificador (el Smart TV,
+que sí cuenta cuadros, arbitra).
+
+Estado: emisor y página con CI verde; **falta que el operador emita los
+cuatro planos**, publicarlos en `v1/` y la foto plano por plano.

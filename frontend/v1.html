@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCILINE-hybrid - v1: la fluidez de v2</title>
+<style>
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  html { background: #101014; color: #e8e8ee; font-family: monospace; }
+  #head { position: absolute; left: 0; right: 0; top: 0; padding: 0.25em 0.6em; }
+  #titulo { font-size: 0.7em; color: #9aa0b4; }
+  #video { position: absolute; background: #000; }
+  /* La lista de planos, a la izquierda: una tecla, un video. Es lo unico que
+   * hay que leer en esta pagina, asi que lleva la letra grande. */
+  #lista { position: absolute; left: 0; padding: 0 0.4em 0 0.6em;
+           box-sizing: border-box; overflow: hidden; }
+  #buffer { font-size: 1em; color: #ffd479; height: 1.15em;
+            letter-spacing: 0.08em; }
+  .op { display: block; margin: 0.16em 0; cursor: pointer; line-height: 1.3;
+        font-size: 0.72em; color: #c3c8da; white-space: nowrap; overflow: hidden; }
+  .op.on { color: #ffffff; }
+  .n { display: inline-block; min-width: 1.7em; text-align: center;
+       background: #2a2f45; border: 1px solid #4a5170; color: #ffd479;
+       margin-right: 0.35em; }
+  .op.on .n { background: #ffd479; border-color: #ffd479; color: #101014; }
+  .d { display: block; font-size: 0.85em; color: #9aa0b4; margin-left: 2.3em;
+       white-space: nowrap; overflow: hidden; }
+  /* El zocalo queda a la vista tambien a pantalla entera: es una linea de
+   * texto quieta sobre el borde de abajo, y en una TV es la unica forma de
+   * saber que se esta mirando y como se sale. */
+  #foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0.15em 0.6em;
+          background: rgba(5, 6, 10, 0.72); }
+  #estado { display: block; font-size: 0.8em; color: #e8e8ee; white-space: nowrap;
+            overflow: hidden; }
+  #pie { display: block; font-size: 0.5em; color: #8d93a8; white-space: nowrap;
+         overflow: hidden; }
+</style>
+</head>
+<body>
+
+<div id="head">
+  <span id="titulo">v1 - la fluidez de v2 en la caja: un plano por tecla, 0 pone y saca la pantalla entera</span>
+</div>
+
+<video id="video" muted playsinline></video>
+
+<div id="lista">
+  <div id="buffer"></div>
+  <div id="planos"></div>
+</div>
+
+<div id="foot">
+  <span id="estado">cargando PLANES.tsv</span>
+  <span id="pie"></span>
+</div>
+
+<script src="keypad.js"></script>
+<script>
+"use strict";
+
+/* v1.html - H-27: la pagina para mirar UN video por vez y decidir a ojo.
+ *
+ * Pedido del operador (2026-09-08, mirando v2 en la caja): «las calidades se
+ * ven aceptables de crf 10 y 18 ... pero el problema es que se traban ...
+ * crea en el primer menu algun boton para entrar en vez del pack v0 en otro
+ * ... ahi solo deberiamos tener para probar estas cosas, porque sino apretas
+ * una tecla y se hace una ensalada barbara de videos donde no entiendo que
+ * estoy probando. ademas, pantalla completa debe ser el 0 para poner o
+ * sacarla y el resto son los planes de video uno por uno asi puedo verlo
+ * fullscreen o simple cuando yo quiera para comparar».
+ *
+ * Reglas, entonces:
+ *   - UN <video>. Cada tecla de una cifra pone UN plano, en bucle, y lo deja
+ *     hasta que se elija otro. La misma tecla otra vez lo pausa y lo sigue.
+ *   - El 0 pone y saca la pantalla entera, sin cambiar lo que suena.
+ *   - Nada se corre solo, nada mide en serie, no hay lotes ni reportes: el
+ *     zocalo dice que plano es, cuanto pesa, hace cuanto suena y los caidos
+ *     vivos (si el aparato los cuenta; la caja no, el Smart TV si).
+ *   - Los planos salen de PLANES.tsv (texto tabulado, al lado de la pagina):
+ *     tecla, id, nombre, archivo, bytes, sha256, nota. Agregar un plano es
+ *     subir un archivo y una linea, no tocar la pagina.
+ *
+ * Todo lo demas (la geometria de la caja -superficie 4K sobre panel 720-, la
+ * pantalla entera de H-20, el mando de H-22) se hereda de v0 tal cual.
+ *
+ * ES5.1 estricto (gate tests/test_frontend_compatibility.js). */
+
+var base = "";
+var planes = [];
+var filas = [];
+var actual = -1;
+var entera = { on: false, api: "" };
+var reloj = { timer: 0, t0: 0, armed: false, baseTotal: 0, baseDropped: 0 };
+var ultimaTecla = "tecla 0: (todavia no llego ninguna)";
+var mando = null;
+
+function byId(id) { return document.getElementById(id); }
+
+function param(name) {
+  var pattern = new RegExp("[?&]" + name + "=([^&]*)");
+  var found = pattern.exec(window.location.search);
+  return found ? decodeURIComponent(found[1]) : "";
+}
+
+function text(node, value) {
+  while (node.firstChild) { node.removeChild(node.firstChild); }
+  node.appendChild(document.createTextNode(value));
+}
+
+function px(node, left, top, width, height) {
+  node.style.left = left + "px";
+  node.style.top = top + "px";
+  node.style.width = width + "px";
+  node.style.height = height + "px";
+}
+
+function say(value) { text(byId("estado"), value); }
+
+/* --- PLANES.tsv: texto tabulado, nunca JSON ---
+ * tecla  id  nombre  archivo  bytes  sha256  nota
+ * Solo entran las teclas 1..9 y una sola vez cada una: el 0 es la pantalla
+ * entera y una tecla repetida seria justamente la ensalada que se evita. */
+function parsePlanes(body) {
+  var lines = body.split("\n"), out = [], usadas = {}, i, line, f;
+  for (i = 0; i < lines.length; i++) {
+    line = lines[i];
+    if (line.length === 0 || line.charAt(0) === "#") { continue; }
+    f = line.split("\t");
+    if (f.length < 4) { continue; }
+    if (!/^[1-9]$/.test(f[0]) || usadas[f[0]]) { continue; }
+    usadas[f[0]] = true;
+    out.push({ tecla: f[0], id: f[1], nombre: f[2], file: f[3],
+               bytes: f.length > 4 ? f[4] : "", sha256: f.length > 5 ? f[5] : "",
+               note: f.length > 6 ? f[6] : "" });
+  }
+  return out;
+}
+
+function get(url, onText, onFail) {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", url, true);
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) { return; }
+    if (xhr.status >= 200 && xhr.status < 300) { onText(xhr.responseText); }
+    else { onFail("HTTP " + xhr.status); }
+  };
+  xhr.send(null);
+}
+
+function urlDe(plano) {
+  if (/^https?:\/\//.test(plano.file)) { return plano.file; }
+  return base + plano.file;
+}
+
+function megas(bytes) {
+  var b = parseInt(bytes, 10);
+  return b > 0 ? (Math.round(b / 100000) / 10) + " MB" : "";
+}
+
+/* --- lo que el aparato cuenta (la misma regla que v0) --- */
+
+function quality(video) {
+  if (video.getVideoPlaybackQuality) {
+    var q = video.getVideoPlaybackQuality();
+    return { total: q.totalVideoFrames, dropped: q.droppedVideoFrames };
+  }
+  if (typeof video.webkitDecodedFrameCount === "number") {
+    return { total: video.webkitDecodedFrameCount,
+             dropped: video.webkitDroppedFrameCount || 0 };
+  }
+  return null;
+}
+
+function vivos(node, baseTotal, baseDropped) {
+  var q = quality(node), total, dropped;
+  if (!q) { return "-"; }
+  total = q.total - baseTotal;
+  dropped = q.dropped - baseDropped;
+  if (total < 0 || dropped < 0) { total = q.total; dropped = q.dropped; }
+  if (dropped < 0) { dropped = 0; }
+  return dropped + "/" + total;
+}
+
+/* --- geometria: la lista a la izquierda, el video 16:9 a la derecha --- */
+
+function layoutEntera(w, h) {
+  var vw = w, vh = Math.round(w * 9 / 16);
+  if (vh > h) { vh = h; vw = Math.round(h * 16 / 9); }
+  px(byId("video"), Math.round((w - vw) / 2), Math.round((h - vh) / 2), vw, vh);
+}
+
+function layout() {
+  var w = window.innerWidth || 1280;
+  var h = window.innerHeight || 720;
+  var headH, footH, midTop, midH, listaW, stageX, stageW, vw, vh;
+  document.documentElement.style.fontSize =
+    Math.max(11, Math.round(w / 46)) + "px";
+  if (entera.on) { layoutEntera(w, h); return; }
+  headH = Math.round(h * 0.08);
+  footH = Math.round(h * 0.09);
+  midTop = headH;
+  midH = h - headH - footH;
+  /* Los nombres de los planos son largos ("crf 18, 512 colores, 15 fps"):
+   * la lista se lleva un tercio largo, con un piso para pantallas angostas. */
+  listaW = Math.max(Math.round(w * 0.36), Math.min(240, Math.round(w * 0.5)));
+  stageX = listaW;
+  stageW = w - listaW - 12;
+  vw = stageW;
+  vh = Math.round(stageW * 9 / 16);
+  if (vh > midH) { vh = midH; vw = Math.round(midH * 16 / 9); }
+  px(byId("video"), stageX + Math.round((stageW - vw) / 2),
+     midTop + Math.round((midH - vh) / 2), vw, vh);
+  byId("lista").style.top = midTop + "px";
+  byId("lista").style.width = listaW + "px";
+  byId("lista").style.height = midH + "px";
+}
+
+/* --- pantalla entera (H-20): el video ocupa la superficie; la API es un
+ * extra que se pide y se declara, nunca se supone --- */
+
+function apiEntera() {
+  var root = document.documentElement;
+  if (root.requestFullscreen) { root.requestFullscreen(); return "pedida"; }
+  if (root.webkitRequestFullscreen) {
+    root.webkitRequestFullscreen(); return "pedida";
+  }
+  return "sin api";
+}
+
+function dioLaApi() {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    return "si";
+  }
+  return entera.api === "sin api" ? "sin api" : "no";
+}
+
+function esconder(si) {
+  byId("lista").style.display = si ? "none" : "";
+  byId("head").style.display = si ? "none" : "";
+}
+
+function entrarEntera() {
+  if (entera.on) { return; }
+  entera.on = true;
+  entera.api = apiEntera();
+  esconder(true);
+  layout();
+  tick();
+}
+
+function salirEntera() {
+  if (!entera.on) { return; }
+  entera.on = false;
+  if (document.exitFullscreen && document.fullscreenElement) {
+    document.exitFullscreen();
+  } else if (document.webkitExitFullscreen && document.webkitFullscreenElement) {
+    document.webkitExitFullscreen();
+  }
+  esconder(false);
+  layout();
+  tick();
+}
+
+/* El 0: pone o saca la pantalla entera. Lo que suena, sigue sonando. */
+function toggleEntera() {
+  if (entera.on) { salirEntera(); } else { entrarEntera(); }
+}
+
+/* --- los planos --- */
+
+function marcar() {
+  var i;
+  for (i = 0; i < filas.length; i++) {
+    filas[i].className = "op" + (i === actual ? " on" : "");
+  }
+}
+
+/* Una tecla, un plano: se pone en bucle y se queda. La misma tecla otra vez
+ * lo pausa, y otra vez lo sigue. Cambiar de plano es cambiar el src del
+ * UNICO <video>: nunca hay dos sonando. */
+function poner(i) {
+  var video = byId("video"), plano = planes[i];
+  if (!plano) { return; }
+  if (i === actual) {
+    if (video.paused) { video.play(); } else { video.pause(); }
+    tick();
+    return;
+  }
+  actual = i;
+  reloj.armed = false;
+  reloj.t0 = new Date().getTime();
+  video.loop = true;
+  video.src = urlDe(plano);
+  video.load();
+  video.play();
+  marcar();
+  tick();
+}
+
+function teclasDe() {
+  var out = [], i;
+  for (i = 0; i < planes.length; i++) { out.push(planes[i].tecla); }
+  return out.join(" ");
+}
+
+function tick() {
+  var video = byId("video"), plano, q, caidos = "-", segundos;
+  if (actual < 0) {
+    say(planes.length ? "elegi un plano: " + teclasDe() + " - 0 pantalla entera"
+                      : "sin planos - 0 pantalla entera");
+    escribirPie();
+    return;
+  }
+  plano = planes[actual];
+  /* La linea de base se toma cuando EMPIEZA A SONAR: tomarla al pedir el play
+   * contaria contra los contadores del plano anterior. */
+  if (!reloj.armed && video.currentTime > 0) {
+    q = quality(video);
+    reloj.baseTotal = q ? q.total : 0;
+    reloj.baseDropped = q ? q.dropped : 0;
+    reloj.armed = true;
+  }
+  if (reloj.armed) { caidos = vivos(video, reloj.baseTotal, reloj.baseDropped); }
+  segundos = Math.round((new Date().getTime() - reloj.t0) / 1000);
+  say("plano " + plano.tecla + ": " + plano.nombre +
+      (megas(plano.bytes) ? " (" + megas(plano.bytes) + ")" : "") +
+      " - " + segundos + " s - caidos " + caidos +
+      (video.paused ? " - EN PAUSA" : "") +
+      " - " + plano.tecla + " pausa/sigue, 0 pantalla " +
+      (entera.on ? "normal" : "entera"));
+  escribirPie();
+}
+
+function escribirPie() {
+  text(byId("pie"), "panel " + screen.width + "x" + screen.height +
+       " · superficie " + window.innerWidth + "x" + window.innerHeight +
+       " · quality " + (quality(byId("video")) ? "si" : "no") +
+       (entera.on ? " · PANTALLA ENTERA (api " + dioLaApi() + ")" : "") +
+       " · " + ultimaTecla);
+}
+
+function renderPlanos() {
+  var box = byId("planos"), i, row, tag, name, detail;
+  while (box.firstChild) { box.removeChild(box.firstChild); }
+  filas = [];
+  for (i = 0; i < planes.length; i++) {
+    row = document.createElement("div");
+    row.className = "op";
+    tag = document.createElement("span");
+    tag.className = "n";
+    text(tag, planes[i].tecla);
+    row.appendChild(tag);
+    name = document.createElement("span");
+    text(name, planes[i].nombre + (megas(planes[i].bytes) ? " (" + megas(planes[i].bytes) + ")" : ""));
+    row.appendChild(name);
+    if (planes[i].note) {
+      detail = document.createElement("span");
+      detail.className = "d";
+      text(detail, planes[i].note);
+      row.appendChild(detail);
+    }
+    /* La misma lista es el boton: en la PC se toca, en la TV se aprieta. */
+    row.onclick = (function (index) {
+      return function () { poner(index); };
+    })(i);
+    box.appendChild(row);
+    filas.push(row);
+  }
+  row = document.createElement("div");
+  row.className = "op";
+  tag = document.createElement("span");
+  tag.className = "n";
+  text(tag, "0");
+  row.appendChild(tag);
+  name = document.createElement("span");
+  text(name, "pantalla entera: pone / saca");
+  row.appendChild(name);
+  row.onclick = toggleEntera;
+  box.appendChild(row);
+}
+
+/* Todas las teclas son de UNA cifra, asi que ninguna espera: el mando dispara
+ * al instante (regla de keypad.js: solo se espera si el digito puede crecer). */
+function acciones() {
+  var out = [{ code: "0", run: toggleEntera }], i;
+  for (i = 0; i < planes.length; i++) {
+    out.push({ code: planes[i].tecla,
+               run: (function (index) { return function () { poner(index); }; })(i) });
+  }
+  return out;
+}
+
+function armarMando() {
+  if (mando || !window.ASCLKeypad) { return; }
+  mando = ASCLKeypad.create({
+    delay: param("delay") ? parseInt(param("delay"), 10) : 900,
+    actions: acciones(),
+    onBuffer: function (buffer) {
+      text(byId("buffer"), buffer ? buffer + "_" : "");
+    },
+    onKey: function (linea, n) {
+      ultimaTecla = "tecla " + n + ": " + linea;
+      escribirPie();
+    }
+  });
+}
+
+function start() {
+  layout();
+  base = param("base");
+  if (base && base.charAt(base.length - 1) !== "/") { base += "/"; }
+  escribirPie();
+  get(base + "PLANES.tsv", function (body) {
+    planes = parsePlanes(body);
+    renderPlanos();
+    armarMando();
+    tick();
+    reloj.timer = window.setInterval(tick, 1000);
+  }, function (why) {
+    say("no se pudo leer PLANES.tsv: " + why + " - 0 pantalla entera");
+    armarMando();
+  });
+}
+
+window.onresize = layout;
+start();
+</script>
+</body>
+</html>

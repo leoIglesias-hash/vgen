@@ -119,6 +119,42 @@ class RecetaTest(unittest.TestCase):
         # v1 no cambia por el parametro nuevo: sigue con su GOP de 15.
         self.assertIn("keyint=15:min-keyint=15", emit_v1.x264_params("high", 3, 4))
 
+    def test_h27_sin_altref_apaga_los_cuadros_ocultos_y_lo_dice(self):
+        vp9 = emit_v2.recipe(sin_altref=True)[0]
+        self.assertEqual(after(vp9["args"], "-auto-alt-ref"), "0")
+        self.assertEqual(after(vp9["args"], "-lag-in-frames"), "25")
+        for flag in ("-arnr-maxframes", "-arnr-strength", "-enable-tpl"):
+            self.assertNotIn(flag, vp9["args"], flag + " solo tiene sentido con alt-ref")
+        self.assertIn("sin alt-ref (como v1)", vp9["note"])
+        self.assertEqual(vp9["pasadas"], 2, "sigue siendo de dos pasadas")
+        con = emit_v2.recipe()[0]
+        self.assertEqual(after(con["args"], "-auto-alt-ref"), "1")
+        self.assertIn("alt-ref lag 25 tpl", con["note"])
+        self.assertIn("20 fps", con["note"])
+        self.assertIn("15 fps", emit_v2.recipe(fps=15)[0]["note"])
+
+    def test_h27_colores_se_declara_en_la_nota_y_solo_vp9_deja_una_pieza(self):
+        piezas = emit_v2.recipe(colores=512)
+        self.assertEqual(len(piezas), 2)
+        for pieza in piezas:
+            self.assertIn("512 colores (paleta adaptativa Oklab", pieza["note"])
+        self.assertNotIn("colores", emit_v2.recipe()[0]["note"])
+        sola = emit_v2.recipe(solo_vp9=True, colores=512, fps=15)
+        self.assertEqual([p["id"] for p in sola], ["v2-vp9"])
+        self.assertEqual(after(sola[0]["args"], "-g"), "15")
+
+    def test_h27_la_referencia_del_encoder_puede_ser_otra_que_la_de_la_medicion(self):
+        vp9 = emit_v2.recipe()[0]
+        commands = emit_v2.build_commands("ffmpeg", vp9, "work/ref-c512.y4m", "fuente.mp4",
+                                          "v2-vp9.webm", "work/v2-vp9")
+        for command in commands:
+            self.assertEqual(after(command, "-i"), "work/ref-c512.y4m")
+        lines = emit_v2.manifest_lines([], "abc", "TKN.mp4", "-", 1280, 720, 20, 300,
+                                       "--colores 512", 20000000, colores=512)
+        self.assertIn("# colores\t512\tpaleta adaptativa Oklab sobre la referencia (H-27)", lines)
+        sin = emit_v2.manifest_lines([], "abc", "TKN.mp4", "-", 1280, 720, 20, 300, "", 20000000)
+        self.assertFalse(any(line.startswith("# colores") for line in sin))
+
     def test_las_dos_piezas_declaran_709_tv(self):
         for variant in emit_v2.recipe():
             for flag, value in (("-colorspace", "bt709"), ("-color_primaries", "bt709"),
@@ -261,6 +297,15 @@ class TechoYManifiestoTest(unittest.TestCase):
         self.assertIn("--matriz-fuente bt709", receta)
         self.assertTrue(receta.endswith("--frames 40"))
         self.assertNotIn("out", receta)
+        # H-27: las perillas de fluidez van en la receta canonica, en orden fijo.
+        args = argparse.Namespace(
+            ancho=1280, fps=15, vp9_crf=18, vp9_cpu=2, vp9_1pass=False, vp9_extra="",
+            h264_crf=14, h264_bframes=3, h264_refs=4, techo=20000000,
+            matriz_fuente="auto", frames=None, sin_altref=True, colores=512, solo_vp9=True)
+        self.assertEqual(emit_v2.receta_de(args),
+                         "--ancho 1280 --fps 15 --vp9-crf 18 --vp9-cpu 2 --sin-altref "
+                         "--colores 512 --solo-vp9 --h264-crf 14 --h264-bframes 3 "
+                         "--h264-refs 4 --techo 20000000")
 
 
 class BarridoTest(unittest.TestCase):
@@ -279,6 +324,11 @@ class BarridoTest(unittest.TestCase):
         self.assertIn("-enable-tpl", variants[1]["args"])
         self.assertEqual(emit_v2.parse_lista("28, 32,36"), [28, 32, 36])
         self.assertEqual(emit_v2.parse_lista(""), [])
+        # H-27: --solo-vp9 no recorta el barrido de H.264 que se pide explicitamente.
+        variants = emit_v2.barrido_variants([18], [14], solo_vp9=True, sin_altref=True,
+                                            fps=15, audio_codec="aac")
+        self.assertEqual([v["id"] for v in variants], ["v2-vp9-crf18", "v2-h264-crf14"])
+        self.assertEqual(after(variants[0]["args"], "-auto-alt-ref"), "0")
 
     def test_la_tabla_del_barrido_dice_techo_y_ssim(self):
         row = {"id": "v2-vp9-crf30", "eje": "vp9-crf", "bytes": 21000000, "techo": "SUPERA",

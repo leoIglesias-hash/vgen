@@ -1,0 +1,12 @@
+# v1/PLANES.tsv - ASCILINE-hybrid - H-27: los planos de la pagina v1 (frontend/v1.html)
+# Se sirve como v1/PLANES.tsv al lado de la pagina. Texto tabulado, nunca JSON.
+# Una tecla (1..9), un video. Los archivos de v0/ se referencian por ruta relativa.
+# bytes y sha256 de las piezas nuevas se completan cuando el operador las emite (vgen-portable).
+# tecla	id	nombre	archivo	bytes	sha256	nota
+1	v1-256	v1: 256 colores, 15 fps, VP9 crf 38	../v0/v1-vp9.webm	2941178	-	el de referencia: en la caja es fluido
+2	v2-crf18	v2 crf 18: la fuente, 20 fps	../v0/v2-vp9-crf18.webm	6986728	0f4683bcca016f14c392122da95275958a3196cc928ca881a063b40ffed9679b	el que se ve mejor y se traba
+3	v2-crf18-15	v2 crf 18 a 15 fps	crf18-15fps.webm	-	-	la cadencia de v1
+4	v2-crf18-512	v2 crf 18, 512 colores, 20 fps	crf18-20fps-512.webm	-	-	paleta adaptativa Oklab sobre la fuente
+5	v2-crf18-15-512	v2 crf 18, 512 colores, 15 fps	crf18-15fps-512.webm	-	-	las dos cosas juntas
+6	v2-crf18-sinaltref	v2 crf 18, 20 fps, sin alt-ref	crf18-20fps-sinaltref.webm	-	-	VP9 sin cuadros ocultos, como v1
+7	v2-h264	v2 H.264 crf 14, 20 fps	../v0/v2-h264.mp4	15017319	b5242feb7dc87bb87a446217135767505baea4a4b7bbffe077be212ac657d136	el otro decodificador

@@ -6441,3 +6441,83 @@ con los caídos de las cinco filas (`entera:v2-vp9-crf10`, `-crf18`,
 `entera:v2-h264`, `mse:v2-crf10`, `mse:v2-crf18`). Con eso se firma la
 receta v2 en los tres lugares (`armar.RECETA_V2`, `emitir.ps1`, EMISION-V2
 §2) y recién entonces el carril v2 del `portable` la reproduce.
+
+### 2026-09-08 (noche) — H-27: la caja vio v2 MEJOR que v1 pero TRABADO; se buscan planos de fluidez sobre crf 18 y nace la página `v1/` (un video por vez)
+
+**Veredicto del operador sobre el `78` en la caja**, textual: *«las calidades
+se ven aceptables de crf 10 y 18, se ven mejor definitivamente que la de 256
+colores.. pero el problema es que se traban.. como sabemos que crf 18 se ve
+parecido concentrémonos en ese y pensemos cómo podemos hacer para darle
+fluidez, tal vez metiéndole 15fps como el de 256 colores. y también podríamos
+probar reducirle la paleta de colores a 512 a ver qué pasa, 256 no porque ya
+sabemos cómo se ve. dos pruebas en una. además, creá en el primer menú algún
+botón para entrar en vez del pack v0 en otro, donde contemplamos estas cosas
+deberíamos ponerle tal vez v1, entonces ahí solo deberíamos tener para probar
+estas cosas, porque sino apretás una tecla y se hace una ensalada bárbara de
+videos donde no entiendo qué estoy probando. además, pantalla completa debe
+ser el 0 para poner o sacarla y el resto son los planes de video uno por uno
+así puedo verlo fullscreen o simple cuando yo quiera para comparar»*. Y
+después: *«avisame si subo otro ir.html»* (sí: gana la tecla `8`).
+
+**Lo que dice el veredicto.** (1) El look de la fuente **gana a ojo** sobre
+los 256 colores: el debate P-009 queda confirmado por el aparato que
+consagra. (2) crf 10 y crf 18 **no se distinguen lo suficiente** como para
+pagar el doble de bytes: se sigue con **crf 18** (7,0 MB). (3) Lo que falla
+es la **fluidez**, y en v1 (mismo VP9, mismo aparato, 3 MB, 15 fps, sin
+alt-ref) no fallaba. El `79` medido no se corrió; la caja dice `quality no`,
+así que la respuesta la va a dar el ojo, plano por plano.
+
+**Tres sospechosos, no dos.** Los dos del operador: la **cadencia** (20 → 15
+fps: un cuarto menos de cuadros por segundo para decodificar y presentar) y
+la **cantidad de colores** (512: menos colores = zonas planas = menos bytes
+al mismo crf; el decodificador de hardware no sabe de paletas, lo que cambia
+son los bytes que tiene que procesar). El tercero, propio: los **cuadros
+alt-ref** de VP9. La receta v2 (E-D) encendió `-auto-alt-ref 1` con arnr y
+tpl, que la receta v1 (H-6) nunca tuvo; son cuadros **ocultos** que el
+decodificador procesa sin mostrar, y en un decodificador justo eso es carga
+que v1 no le pedía. Se prueba también, porque es la única diferencia de
+VP9 entre lo fluido y lo trabado que no es ni fps ni bytes. Cuarto testigo,
+gratis: el H.264 crf 14 ya publicado, que va por el otro decodificador.
+
+**Hecho en el emisor (`tools/emit_v2.py`):** `--colores N` pasa la
+referencia por una **paleta adaptativa de N colores en Oklab**
+(`tools/cuantizar_y4m.py`, nuevo: muestreo repartido de cuadros y
+posiciones, K-means con la inicialización determinista del backend, tabla
+64×64×64 → color más cercano en Oklab, ida y vuelta 709 tv en numpy; la
+misma familia que la paleta de v1, sin pasar por el máster) y el encoder
+recibe **esa** referencia, pero el SSIM se sigue midiendo contra la de
+antes; el manifiesto lo declara (`# colores`). `--sin-altref` = VP9 con
+`-auto-alt-ref 0` y sin arnr/tpl (se conserva la anticipación de las dos
+pasadas). `--solo-vp9` no emite el H.264. Las tres perillas entran en la
+receta canónica (`receta_de`) y en la nota de la pieza (que ahora dice
+también los fps). Tests: `test_cuantizar_y4m.py` (nuevo: ida y vuelta 709,
+K-means encuentra los colores que hay, la tabla los aplica, el y4m de salida
+tiene la misma cabecera y no más colores que los pedidos),
+`test_emit_v2.py` (tres tests nuevos + la receta canónica).
+
+**Hecho en el frontend: `frontend/v1.html` → `iargen.com/player/v1/`.** Una
+página que hace UNA cosa: mirar un video por vez. Lee `PLANES.tsv` (texto
+tabulado: tecla, id, nombre, archivo, bytes, sha256, nota; la copia
+autorizada es `frontend/v1-planes.tsv`); cada tecla de una cifra pone UN
+plano en bucle en el único `<video>` y lo deja; la misma tecla lo pausa y lo
+sigue; **`0` pone y saca la pantalla entera** sin tocar lo que suena (la
+misma geometría y la misma API declarada de H-20); ninguna tecla espera
+(todas de una cifra); nada se corre solo, no hay lotes ni reporte. El zócalo
+dice `plano 3: v2 crf 18 a 15 fps (6.9 MB) - 12 s - caidos - - 3
+pausa/sigue, 0 pantalla entera` y el pie lleva panel, superficie, `quality`
+y la última tecla (H-22). Los planos: `1` v1 256 colores 15 fps (el fluido),
+`2` v2 crf 18 @20 (el trabado), `3` crf 18 @15, `4` crf 18 @20 512 colores,
+`5` crf 18 @15 512 colores, `6` crf 18 @20 sin alt-ref, `7` v2 H.264 crf 14.
+`ir.html` gana la tecla **`8`** → `v1/` (ningún otro código empieza con 8:
+dispara al instante). Tests: `test_v1_page.js` (nuevo, cableado en
+`run_all`), `test_ir_page.js`. Manual: fila del lanzador y sección propia.
+
+**Lo que falta, en orden:** (1) el operador emite los cuatro planos nuevos
+desde `vgen-portable` (comandos en `tools/portable/LEEME.md` §H-27;
+`emit_v2.py` y `cuantizar_y4m.py` se copiaron a mano al `repo\tools\` del
+bundle porque el bundle es de `17d9903`); (2) bytes y SHA a `v1-planes.tsv`,
+`deploy/MANIFEST.tsv` **antes**, publicar `v1/` (index, keypad.js,
+PLANES.tsv, cuatro webm) con el ritual; (3) **la foto y el veredicto de la
+caja plano por plano**, entera y normal. Con eso se firma la receta v2 de
+H-26 (que sigue abierta: `78`/`79` de v0 quedan como estaban) y
+`producto.html` pasa a v2; si ningún plano es fluido, v1 sigue de plan B.

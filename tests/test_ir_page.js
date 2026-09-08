@@ -88,8 +88,14 @@ assert.strictEqual(api.target("https://otro/lado/"), "https://otro/lado/",
   "una URL entera pasa tal cual");
 assert.strictEqual(api.target("   "), "", "vacio no navega");
 
-/* La leyenda se dibuja: 8 destinos mas la opcion de escribir. */
-assert.strictEqual(byId("ops").childNodes.length, 10);
+/* La leyenda se dibuja: 10 destinos mas la opcion de escribir. */
+assert.strictEqual(byId("ops").childNodes.length, 11);
+
+/* H-27: la pagina v1 (un video por vez) tiene tecla propia, y como ningun
+ * otro codigo empieza con 8, dispara al instante. */
+windowStub.location.href = "";
+api.push("8");
+assert.strictEqual(windowStub.location.href, "https://iargen.com/player/v1/");
 
 /* W-26: la raiz forzada a Canvas2D tiene tecla propia. Es un destino con
  * pregunta y sin ruta, asi que `target` no le puede pegar una barra final: si

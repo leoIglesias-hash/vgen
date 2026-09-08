@@ -43,10 +43,20 @@ referencia; `--barrer-h264 20,23` idem para H.264. Deja MATRIZ-v2.tsv y
 marca las filas que superan el techo. Se elige el crf mas bajo bajo el techo
 que el ojo apruebe.
 
+H-27 (2026-09-08, la caja ve v2 «trabado» y v1 no): tres perillas para buscar
+la fluidez sin tocar la receta de bytes: `--fps 15` (la cadencia de v1),
+`--colores 512` (la referencia pasa por una paleta adaptativa Oklab de N
+colores ANTES del encoder: tools/cuantizar_y4m.py; el SSIM se sigue midiendo
+contra la referencia sin paleta) y `--sin-altref` (VP9 sin cuadros alt-ref ni
+arnr/tpl, como v1: los alt-ref son cuadros OCULTOS que el decodificador tiene
+que procesar sin mostrar). `--solo-vp9` no emite el H.264 (ya esta publicado).
+
 Uso:
   python tools/emit_v2.py fuente.mp4 --out outputs/v2
   python tools/emit_v2.py fuente.mp4 --out outputs/v2 --vp9-crf 32 --h264-crf 20
   python tools/emit_v2.py fuente.mp4 --out work/matriz-v2 --barrer 28,32,36,40 --sin-piezas
+  python tools/emit_v2.py fuente.mp4 --out outputs/v2-15 --fps 15 --vp9-crf 18 --solo-vp9
+  python tools/emit_v2.py fuente.mp4 --out outputs/v2-512 --vp9-crf 18 --colores 512 --solo-vp9
 """
 
 import argparse
@@ -89,6 +99,10 @@ COLOR_709 = ["-colorspace", "bt709", "-color_primaries", "bt709",
 VP9_CALIDAD = ["-auto-alt-ref", "1", "-lag-in-frames", "25",
                "-arnr-maxframes", "7", "-arnr-strength", "4",
                "-enable-tpl", "1"]
+# H-27: la misma receta SIN alt-ref (como v1, que en la caja es fluido). Se
+# conserva la anticipacion de las dos pasadas; se apagan los cuadros ocultos y
+# lo que solo tiene sentido con ellos (arnr, tpl).
+VP9_SIN_ALTREF = ["-auto-alt-ref", "0", "-lag-in-frames", "25"]
 
 AUDIO_WEBM = emit_v1.AUDIO_WEBM
 AUDIO_MP4 = emit_v1.AUDIO_MP4
@@ -228,36 +242,44 @@ def radio_plan(codec):
 # La receta.
 
 def recipe(fps=FPS, vp9_crf=34, vp9_cpu=2, vp9_2pass=True, vp9_extra=None,
-           h264_crf=21, h264_bframes=3, h264_refs=4, audio_codec="aac"):
+           h264_crf=21, h264_bframes=3, h264_refs=4, audio_codec="aac",
+           sin_altref=False, colores=0, solo_vp9=False):
     """Las dos piezas de video de v2. `audio_codec` es el de la fuente: decide
-    si el mp4 copia la pista o la recodifica. GOP = 1 s a la cadencia."""
+    si el mp4 copia la pista o la recodifica. GOP = 1 s a la cadencia.
+    H-27: `sin_altref` apaga los cuadros ocultos de VP9, `colores` solo se
+    declara en la nota (la paleta se aplica a la referencia, no aca) y
+    `solo_vp9` devuelve una sola pieza."""
     gop = int(round(fps))
     vp9_args = ["-c:v", "libvpx-vp9", "-crf", str(vp9_crf), "-b:v", "0",
                 "-deadline", "good", "-cpu-used", str(vp9_cpu),
                 "-g", str(gop), "-keyint_min", str(gop), "-row-mt", "0"]
-    vp9_args += VP9_CALIDAD
+    vp9_args += VP9_SIN_ALTREF if sin_altref else VP9_CALIDAD
     if vp9_extra:
         vp9_args += list(vp9_extra)
     vp9_args += ["-pix_fmt", "yuv420p"] + COLOR_709
+    paleta = ("; %d colores (paleta adaptativa Oklab sobre la referencia)" % colores
+              if colores else "")
     h264_args = ["-c:v", "libx264", "-profile:v", "high", "-level", "3.1",
                  "-preset", "slow", "-crf", str(h264_crf),
                  "-x264-params", emit_v1.x264_params("high", h264_bframes, h264_refs, gop=gop),
                  "-pix_fmt", "yuv420p"] + COLOR_709 + ["-movflags", "+faststart"]
     plan = radio_plan(audio_codec) or RADIO_OTRO
-    return [
+    piezas = [
         {"id": "v2-vp9", "role": "v2", "ext": "webm", "mime": VP9_MIME,
          "codec": "vp9", "args": vp9_args, "audio": AUDIO_WEBM,
          "pasadas": 2 if vp9_2pass else 1,
-         "note": "VP9 crf %d cpu-used %d %s pasada%s alt-ref lag 25 tpl%s + Opus 64k; 709 tv; GOP %d" % (
+         "note": "VP9 crf %d cpu-used %d %s pasada%s %s%s + Opus 64k; 709 tv; %d fps; GOP %d%s" % (
              vp9_crf, vp9_cpu, "dos" if vp9_2pass else "una", "s" if vp9_2pass else "",
-             (" " + " ".join(vp9_extra)) if vp9_extra else "", gop)},
+             "sin alt-ref (como v1) lag 25" if sin_altref else "alt-ref lag 25 tpl",
+             (" " + " ".join(vp9_extra)) if vp9_extra else "", fps, gop, paleta)},
         {"id": "v2-h264", "role": "v2", "ext": "mp4", "mime": H264_MIME,
          "codec": "h264", "args": h264_args, "audio": plan["mp4"], "pasadas": 1,
-         "note": "H.264 high crf %d B=%d ref=%d + %s; 709 tv; GOP %d" % (
+         "note": "H.264 high crf %d B=%d ref=%d + %s; 709 tv; %d fps; GOP %d%s" % (
              h264_crf, h264_bframes, h264_refs,
              "audio de la fuente copiado" if plan["mp4"] == ["-c:a", "copy"] else "AAC 96k",
-             gop)},
+             fps, gop, paleta)},
     ]
+    return piezas[:1] if solo_vp9 else piezas
 
 
 def build_commands(ffmpeg, variant, ref_path, audio_path, out_path, passlog):
@@ -319,7 +341,7 @@ def marcar_techo(rows, techo):
 
 
 def manifest_lines(rows, fuente_sha, fuente_nombre, fuente_color, width, height,
-                   fps, frames, receta, techo):
+                   fps, frames, receta, techo, colores=0):
     lines = [
         "# pack v2 - ASCILINE-hybrid - docs/EMISION-V2.md",
         "# fuente\t%s\t%s" % (fuente_sha, fuente_nombre),
@@ -327,8 +349,10 @@ def manifest_lines(rows, fuente_sha, fuente_nombre, fuente_color, width, height,
         "# base\t%dx%d\t%s fps\t%d cuadros" % (width, height, fps, frames),
         "# receta\t%s" % receta,
         "# techo\t%d" % techo,
-        "# " + "\t".join(MANIFEST_COLUMNS),
     ]
+    if colores:
+        lines.append("# colores\t%d\tpaleta adaptativa Oklab sobre la referencia (H-27)" % colores)
+    lines.append("# " + "\t".join(MANIFEST_COLUMNS))
     for row in rows:
         lines.append("\t".join(str(row[column]) for column in MANIFEST_COLUMNS))
     return lines
@@ -360,6 +384,7 @@ def barrido_variants(vp9_crfs, h264_crfs, **kwargs):
     kwargs = dict(kwargs)
     kwargs.pop("vp9_crf", None)
     kwargs.pop("h264_crf", None)
+    kwargs.pop("solo_vp9", None)      # el barrido mide lo que se le pide, entero
     variants = []
     for crf in vp9_crfs:
         vp9 = recipe(vp9_crf=crf, **kwargs)[0]
@@ -408,14 +433,17 @@ def medir(ffmpeg, out_path, ref_path, fps):
 
 
 def emit_variant(ffmpeg, variant, ref_path, audio_path, out_dir, work_dir, log,
-                 fps, medir_look=True):
+                 fps, medir_look=True, enc_ref=None):
+    """`enc_ref` (H-27) es la referencia que ENTRA al encoder cuando no es la
+    misma contra la que se mide (la de la paleta); el SSIM se mide siempre
+    contra `ref_path`, la fuente llevada a la base."""
     out_path = os.path.join(out_dir, variant["id"] + "." + variant["ext"])
     log_path = os.path.join(out_dir, variant["id"] + ".ffmpeg.log")
     passlog = os.path.join(work_dir, variant["id"])
     log("+ " + variant["id"] + (" (dos pasadas)" if variant.get("pasadas") == 2 else ""))
     started = time.time()
-    for index, command in enumerate(build_commands(ffmpeg, variant, ref_path, audio_path,
-                                                   out_path, passlog)):
+    for index, command in enumerate(build_commands(ffmpeg, variant, enc_ref or ref_path,
+                                                   audio_path, out_path, passlog)):
         run(command, log_path, append=index > 0)
     elapsed = time.time() - started
     row = {
@@ -442,7 +470,7 @@ def emit_variant(ffmpeg, variant, ref_path, audio_path, out_dir, work_dir, log,
 def emit(fuente_path, out_dir, ancho=ANCHO, fps=FPS, variants=None, max_frames=None,
          ffmpeg=None, log=None, receta="", techo=TECHO_BYTES, matriz_fuente="auto",
          barrer_vp9=(), barrer_h264=(), keep_pieces=True, medir_look=True,
-         recipe_kwargs=None, fuente_sha256=None):
+         recipe_kwargs=None, fuente_sha256=None, colores=0):
     log = log or (lambda message: None)
     ffmpeg = ffmpeg or emit_pieces._resolve_ffmpeg()
     recipe_kwargs = dict(recipe_kwargs or {})
@@ -468,6 +496,17 @@ def emit(fuente_path, out_dir, ancho=ANCHO, fps=FPS, variants=None, max_frames=N
     width, height, ref_fps, frames = read_y4m_header(ref_path)
     log("  referencia %dx%d @%s  %d cuadros" % (width, height, ref_fps, frames))
 
+    # H-27: la paleta adaptativa se aplica a la REFERENCIA, una vez, y lo que
+    # sale es lo que entra a todos los encoders. Se mide contra la de antes.
+    enc_ref = None
+    if colores:
+        import cuantizar_y4m
+        enc_ref = os.path.join(work_dir, "ref-c%d.y4m" % colores)
+        log("+ paleta de %d colores sobre la referencia (Oklab)" % colores)
+        paleta = cuantizar_y4m.cuantizar(ref_path, enc_ref, colores, log)
+        log("  referencia con paleta: %d cuadros, %.0f s" % (paleta["cuadros"], paleta["segundos"]))
+        recipe_kwargs.setdefault("colores", colores)
+
     recipe_kwargs.setdefault("fps", fps)
     recipe_kwargs["audio_codec"] = audio_codec
     variants = variants or recipe(**recipe_kwargs)
@@ -476,7 +515,7 @@ def emit(fuente_path, out_dir, ancho=ANCHO, fps=FPS, variants=None, max_frames=N
     rows = []
     for variant in variants:
         rows.append(emit_variant(ffmpeg, variant, ref_path, audio_path, out_dir, work_dir,
-                                 log, ref_fps, medir_look))
+                                 log, ref_fps, medir_look, enc_ref))
 
     plan = radio_plan(audio_codec)
     if plan:
@@ -519,7 +558,7 @@ def emit(fuente_path, out_dir, ancho=ANCHO, fps=FPS, variants=None, max_frames=N
     with open(manifest_path, "w") as stream:
         stream.write("\n".join(manifest_lines(
             rows, fuente_sha, os.path.basename(fuente_path), fuente_color,
-            width, height, ref_fps, frames, receta, techo)) + "\n")
+            width, height, ref_fps, frames, receta, techo, colores)) + "\n")
 
     matriz_path = None
     matriz_rows = []
@@ -527,7 +566,7 @@ def emit(fuente_path, out_dir, ancho=ANCHO, fps=FPS, variants=None, max_frames=N
         log("-- barrido --")
         for variant in barrido_variants(barrer_vp9, barrer_h264, **recipe_kwargs):
             row = emit_variant(ffmpeg, variant, ref_path, None, out_dir, work_dir, log,
-                               ref_fps, True)
+                               ref_fps, True, enc_ref)
             row["techo"] = "SUPERA" if supera_techo(row, techo) else "pasa"
             matriz_rows.append(row)
             if not keep_pieces:
@@ -558,6 +597,12 @@ def receta_de(args):
         parts.append("--vp9-1pass")
     if args.vp9_extra:
         parts += ["--vp9-extra", '"%s"' % args.vp9_extra]
+    if getattr(args, "sin_altref", False):
+        parts.append("--sin-altref")
+    if getattr(args, "colores", 0):
+        parts += ["--colores", str(args.colores)]
+    if getattr(args, "solo_vp9", False):
+        parts.append("--solo-vp9")
     parts += ["--h264-crf", str(args.h264_crf), "--h264-bframes", str(args.h264_bframes),
               "--h264-refs", str(args.h264_refs), "--techo", str(args.techo)]
     if args.matriz_fuente != "auto":
@@ -586,6 +631,12 @@ def main(argv=None):
     parser.add_argument("--vp9-1pass", action="store_true", help="una pasada (acota, no es la receta)")
     parser.add_argument("--vp9-extra", default="",
                         help='opciones extra del encoder VP9, p. ej. "-aq-mode 1"')
+    parser.add_argument("--sin-altref", action="store_true",
+                        help="H-27: VP9 sin cuadros alt-ref ni arnr/tpl (como v1)")
+    parser.add_argument("--colores", type=int, default=0,
+                        help="H-27: paleta adaptativa Oklab de N colores sobre la referencia (0 = no)")
+    parser.add_argument("--solo-vp9", action="store_true",
+                        help="H-27: no emitir el H.264 (ya esta publicado)")
     parser.add_argument("--h264-crf", type=int, default=21)
     parser.add_argument("--h264-bframes", type=int, default=3)
     parser.add_argument("--h264-refs", type=int, default=4)
@@ -600,16 +651,20 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     extra = args.vp9_extra.split() if args.vp9_extra else None
+    if args.colores and args.colores < 2:
+        parser.error("--colores tiene que ser >= 2 (o 0 para no aplicar paleta)")
     recipe_kwargs = dict(vp9_crf=args.vp9_crf, vp9_cpu=args.vp9_cpu,
                          vp9_2pass=not args.vp9_1pass, vp9_extra=extra,
                          h264_crf=args.h264_crf, h264_bframes=args.h264_bframes,
-                         h264_refs=args.h264_refs)
+                         h264_refs=args.h264_refs, sin_altref=args.sin_altref,
+                         solo_vp9=args.solo_vp9)
     result = emit(args.fuente, args.out, ancho=args.ancho, fps=args.fps,
                   max_frames=args.frames, ffmpeg=args.ffmpeg, receta=receta_de(args),
                   techo=args.techo, matriz_fuente=args.matriz_fuente,
                   barrer_vp9=parse_lista(args.barrer), barrer_h264=parse_lista(args.barrer_h264),
                   keep_pieces=not args.sin_piezas, medir_look=not args.sin_medir,
                   recipe_kwargs=recipe_kwargs, fuente_sha256=args.fuente_sha256,
+                  colores=args.colores,
                   log=lambda message: print(message, flush=True))
     print("-- PACK v2 --  %s" % result["manifest"])
     if result["matriz"]:

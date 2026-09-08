@@ -173,9 +173,43 @@ Sus teclas:
 | `5` | `player/1920-10/` |
 | `6` | **`player/?renderer=canvas2d`** — la raíz **sin WebGL**. Es el escape de W-26: la raíz elige WebGL en los primeros 240 ms y en la caja esa GPU no presenta (pantallazo blanco) |
 | `7` | **`player/v0/producto.html`** — **el producto** (H-8a): loop + publicidad + incentivador + radio, desde la caché. Una cifra, dispara al instante |
+| `8` | **`player/v1/`** — **la fluidez de v2** (H-27): un video por vez, un plano por tecla, `0` pone y saca la pantalla entera. Ver la sección de abajo |
 | `90` | `player/v0/` con retardo de tecla de 1600 ms |
 | `91` | `player/v0/` con retardo de tecla de 400 ms |
 | `0` | foco en el campo para escribir un destino a mano |
 
 Ninguna otra tecla empieza con `6`, así que dispara al instante: no hay que
 esperar el retardo de los códigos de dos cifras.
+
+## La página `v1/` (H-27 — la fluidez de v2, un video por vez)
+
+`https://iargen.com/player/v1/` (desde el lanzador, tecla `8`). Pedido del
+operador, 2026-09-08: *«ahí solo deberíamos tener para probar estas cosas,
+porque sino apretás una tecla y se hace una ensalada bárbara de videos donde
+no entiendo qué estoy probando. además, pantalla completa debe ser el 0 para
+poner o sacarla y el resto son los planes de video uno por uno así puedo
+verlo fullscreen o simple cuando yo quiera para comparar»*.
+
+Un solo `<video>`, un plano por tecla, en bucle, hasta que se elija otro.
+**Ninguna tecla espera** (todas de una cifra). Nada se mide en serie ni hay
+reporte: el zócalo dice qué plano es, cuánto pesa, hace cuánto suena y los
+caídos vivos (si el aparato los cuenta; la caja no, el Smart TV sí).
+
+| tecla | plano |
+|---|---|
+| `0` | **pantalla entera: pone / saca**. Lo que suena sigue sonando |
+| `1` | v1: 256 colores, 15 fps, VP9 crf 38 — el de referencia, fluido en la caja |
+| `2` | v2 crf 18: la fuente, 20 fps — el que se ve mejor y **se traba** |
+| `3` | v2 crf 18 a **15 fps** — la cadencia de v1 |
+| `4` | v2 crf 18, **512 colores**, 20 fps — paleta adaptativa Oklab sobre la fuente |
+| `5` | v2 crf 18, 512 colores, 15 fps — las dos cosas juntas |
+| `6` | v2 crf 18, 20 fps, **sin alt-ref** — VP9 sin cuadros ocultos, como v1 |
+| `7` | v2 H.264 crf 14, 20 fps — el otro decodificador |
+| la misma tecla otra vez | pausa; otra vez, sigue |
+
+Los planos salen de `v1/PLANES.tsv` (texto tabulado; la copia autorizada es
+`frontend/v1-planes.tsv`): agregar un plano es subir el archivo y una línea,
+no tocar la página. Acepta `?delay=` y `?base=` como `v0/`.
+
+Lo que se le pide a la caja: cada plano un rato, entera (`0`) y normal, y
+decir **cuál es fluido** y cuál no. Con eso se firma la receta v2 de H-26.

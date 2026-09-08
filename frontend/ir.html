@@ -86,6 +86,12 @@ var DESTINOS = [
    * capa- desde la cache del aparato. Una cifra, dispara al instante. */
   { code: "7", label: "producto", detail: "vgen: loop + publicidad + incentivador + radio (H-8a)",
     to: "v0/producto.html" },
+  /* H-27: la pagina para mirar UN video por vez (pedido del operador,
+   * 2026-09-08: "sino apretas una tecla y se hace una ensalada barbara de
+   * videos donde no entiendo que estoy probando"). Un plano por tecla, 0 pone
+   * y saca la pantalla entera. Una cifra, dispara al instante. */
+  { code: "8", label: "v1: fluidez de v2", detail: "H-27: un plano por tecla (15 fps, 512 colores, sin alt-ref), 0 = pantalla entera",
+    to: "v1/" },
   { code: "90", label: "pack v0 lento", detail: "retardo de tecla 1600 ms",
     to: "v0/?delay=1600" },
   { code: "91", label: "pack v0 rapido", detail: "retardo de tecla 400 ms",
@@ -142,7 +148,7 @@ function go(where) {
 
 /* --- mando numerico (misma regla que keypad.js, en version corta) ---
  * Se espera SOLO cuando el digito puede ser el comienzo de un codigo mas
- * largo: con 1..5 y 90/91, el 3 dispara al instante y el 9 espera. */
+ * largo: con 1..8 y 90/91, el 3 dispara al instante y el 9 espera. */
 var buffer = "";
 var timer = 0;
 var delay = 900;
