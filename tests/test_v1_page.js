@@ -189,7 +189,7 @@ assert.strictEqual(video.src, "crf18-15fps.webm");
 assert.strictEqual(video.loop, true, "en bucle: se mira el rato que haga falta");
 assert.strictEqual(video.paused, false);
 assert.strictEqual(video.loaded, 1);
-assert(/^plano 3: v2 crf 18 a 15 fps - 0 s - caidos -/.test(textoDe(byId("estado"))),
+assert(/^plano 3: v2 crf 18 a 15 fps (6 MB) - 0 s - caidos -/.test(textoDe(byId("estado"))),
   "el zocalo dice que se esta mirando: " + textoDe(byId("estado")));
 assert(/3 pausa\/sigue, 0 pantalla entera$/.test(textoDe(byId("estado"))));
 assert.strictEqual(filas.childNodes[2].className, "op on", "la fila del plano se marca");
