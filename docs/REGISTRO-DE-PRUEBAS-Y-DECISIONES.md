@@ -6578,3 +6578,43 @@ y cada plano un rato, entera (`0`) y normal, en este orden de valor: `3`
 más), `7` (H.264), con `1` y `2` de referencia. Decir de cada uno **fluido /
 trabado** y, si lo cuenta, los caídos del zócalo. Con eso se firma la receta
 v2 (H-26 §2) o se cae al plan B.
+
+### 2026-09-08 (noche) — H-27: veredicto de la caja en `v1/`: los planos `2` y `3` «se ven bárbaro»; los colores no dieron nada; los fps «pueden darnos menos pérdida»
+
+Operador, textual: *«en este caso tanto 2 y 3 se ven bárbaro. controlar los
+colores no nos dio ganancia para nada. pero los fps sí pueden darnos menos
+pérdida. así que es algo a tener en cuenta»*.
+
+**Lo que dice, punto por punto.**
+
+1. **`2` (v2 crf 18 a 20 fps, el MISMO archivo que en `v0/` con el `78` se
+   veía trabado: SHA `0f4683bcca01…`) en `v1/` se ve bárbaro.** El archivo no
+   cambió; cambió la página. Diferencias entre las dos situaciones: en `v0/`
+   el `78` entra en pantalla entera y arranca el video en el mismo gesto,
+   con la página entera de v0 detrás (tabla, leyenda, capa, dos `<video>`,
+   `<audio>`, el reloj del zócalo); en `v1/` hay un solo `<video>` y nada
+   más, y el plano se elige con la pantalla normal. No se afirma cuál de
+   esas cosas era: **se anota que «trabado» fue una observación de `v0/`
+   `78`, no del archivo**, y que la forma de mirar de `v1/` (un video por
+   vez) es la que vale para juzgar fluidez. Queda para la próxima visita
+   repetir `78` en `v0/` y ver si sigue trabado ahí: si sí, el culpable es
+   la página de pruebas, no el plano.
+2. **`3` (15 fps) también bárbaro**, con un 14 % menos de bytes que `2`.
+3. **Los colores no dieron ganancia** (`4`/`5`): confirma con el ojo lo que
+   el contador ya había dicho (a igual crf, +49 % de bytes y −0,016 de
+   SSIM). **La paleta se retira de la receta v2**: `--colores` queda en el
+   emisor como herramienta, no como camino.
+4. **Los fps «pueden darnos menos pérdida»**: la cadencia queda como perilla
+   viva de la receta (E-F, escalera por clase, ya lo tenía anotado); no se
+   fija todavía.
+
+**No reportados:** `6` (sin alt-ref) y `7` (H.264). Sin veredicto sobre `6`
+no se sabe si los alt-ref pesan en la caja; con `2` fluido en `v1/`, la
+pregunta pierde urgencia y **no se emite nada nuevo** por ahora.
+
+**Estado de la receta v2 (H-26 §2):** sigue sin firma, pero con dos
+candidatas que el ojo ya aprobó en la caja: **crf 18 @20 (6.986.728 B)** y
+**crf 18 @15 (6.011.270 B)**. La elección entre las dos es del operador
+(mirar `2` y `3` a pantalla entera, `0`, y decir si los 20 fps se notan);
+lo que no se firma es 512 colores. `producto.html` sigue con v1 hasta esa
+firma.

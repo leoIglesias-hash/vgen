@@ -200,4 +200,10 @@ alt-ref 6.775.111 B (0,9902), `4` 512 colores @20 **10.376.435 B** (0,9759),
 paleta cuesta +49 % de bytes: los escalones sin dither son bordes y el borde
 es lo caro para VP9; lo que hacía chico a v1 era el crf 38, no los 256
 colores. Si el ojo quisiera la paleta a igual peso, pediría otro crf (no
-emitido). **Falta la foto plano por plano.**
+emitido). **Veredicto de la caja (2026-09-08 noche):** `2` (crf 18 @20) y
+`3` (crf 18 @15) *«se ven bárbaro»*; *«controlar los colores no nos dio
+ganancia para nada»*; *«los fps sí pueden darnos menos pérdida»*. El plano
+`2` es el mismo archivo que en `v0/` `78` se veía trabado: lo trabado era
+la página v0, no el archivo. **La paleta queda fuera de la receta.** La
+receta de §2 se firma cuando el operador elija entre **crf 18 @20** y
+**crf 18 @15** (las dos aprobadas a ojo).
