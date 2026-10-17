@@ -122,6 +122,21 @@ proceso. Sirve para la mitad A (el máster) y la B (la emisión). Para la B el
 bundle es el emisor de referencia; para la A el CI (`regression`) sigue
 verificando byte-identidad del máster.
 
+## Intro + loop (un video que repite el mismo tramo)
+
+```
+py.cmd repo\tools\buscar_loops.py C:\clip.mp4 --fps-destino 10
+py.cmd repo\tools\emit_intro_loop.py C:\clip.mp4 --out outputs\mi-loop
+py.cmd repo\tools\medir_banding.py ref.y4m pieza.mp4
+```
+
+El primero dice dónde termina la intro, cuánto dura el loop, cuántas vueltas
+hay y si la costura se nota. El segundo emite la intro (una vez) y una vuelta
+del loop (la repite el reproductor), con vista previa y manifiesto; por
+defecto la receta C3 (`docs/INTRO-Y-LOOP.md`). El tercero mide el halo
+escalonado de una pieza contra su referencia (`--conservar-refs` del segundo
+la deja en `work\`).
+
 ## Qué hay adentro
 
 `VERSIONES.tsv` dice de qué commit salió, con qué Python y qué ffmpeg.

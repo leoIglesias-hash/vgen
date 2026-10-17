@@ -6662,3 +6662,56 @@ ritual (deploy antes) y retirar los perdedores; (3) `producto.html` +
 en `portable` reproduciendo lo de la PC (P-010 abierta); (5) SPEC §9,
 DISENO-CALIDAD §5.3, cierre de H-26 y H-27. Pendiente menor: repetir `78`
 en `v0/` para confirmar que lo trabado era esa página.
+
+### 2026-10-17 — Intro + loop: un video exploratorio deja un método, tres herramientas y nueve lecciones (no se publica)
+
+Pedido del operador, en cuatro pasos el mismo día: procesar
+`intro_D_loop_ondas_perfecto_x9.mp4` (1280×720 @24, 40 s, 26,5 MB, sin
+audio, `0ee33f22acae…`) con **128 colores, crf 14, 10 fps, 1280×720**; luego
+*«bajar eficientemente el tamaño en H.264 al igual que en VP9… tenés vía
+libre… lienzo igual, 10 a 15 fps»*; luego *«evaluar un método que aproveche
+lo que ya sabés que es loop»* (y la advertencia, correcta, de que con mucho
+movimiento congelar no rinde); luego reducir el halo del fondo. Cierre:
+*«excelente, nos quedamos con ese… no vamos a publicar esto»*, y *«documentá
+todo y armá las herramientas nuevas acá mismo»*.
+
+**Hallazgo principal (estructura, no compresión):** el video es una intro de
+197 cuadros + el mismo loop de 85 cuadros (3,542 s) repetido 9 veces — las
+vueltas se parecen ~99 % (SSIM 0,993; no 1 por el ruido de la fuente). Con
+la misma receta, **intro + una vuelta** bajó VP9 15,8 → 3,65 MB (−77 %) y
+H.264 38,0 → 8,26 MB (−78 %): el encoder no aprovecha repeticiones a 3,5 s.
+El loop se retemporiza a **cuadros enteros** (35 a 10 fps, +1,2 %) para que
+la costura no salte; la costura medida cae en el percentil 92 de los pasos
+normales del loop.
+
+**Elegido por el operador: C3** — sin paleta, prefiltro
+`hqdn3d=3:2:4:3,deband=…`, H.264 High, intro crf 24 (847.555 B) + loop crf 26
+(415.302 B) = **1,26 MB** (el primer intento con paleta pesaba 38 MB).
+
+**Lecciones medidas** (detalle y números en `docs/INTRO-Y-LOOP.md` §4):
+(1) la ganancia grande es de estructura; (2) **la paleta reducida no ayuda
+en `<video>` por hardware**: suma bytes (+31/+40 %), suma decodificación
+(1,14 s vs 0,75–1,06 s para 40 s en CPU) y escalona los degradés —coincide
+con H-27—; (3) el crf no se compara entre códecs (H.264 crf 18 ≈ VP9 crf 14
+en fidelidad al look); (4) GOP de una pieza: −7,9 % H.264, −19 % VP9;
+(5) congelar píxeles quietos empeora (+2,9/+5,9 %); (6) `aq-mode=3` y
+deblock no sirven para el halo; (7) `hqdn3d` antes de comprimir baja bytes y
+manchas (−11 % banding oscuro en el loop); (8) el halo es un degradé de **8
+tonos de luma (16..23)** que la fuente ya trae en anillos: `deband` antes de
+comprimir lo deja más parejo que la fuente; (9) el banding relativo a la
+fuente no puede premiar ir más allá de ella: se decidió con recortes de
+gamma realzada.
+
+**Herramientas nuevas** (núcleo numpy testeado sin ffmpeg; 28 tests nuevos):
+`tools/buscar_loops.py` (detecta intro/período/vueltas/costura; sobre
+intro_D devuelve 197/85/9 sin datos — recorta el fundido intro→loop, que el
+ojo a mano había ubicado un cuadro antes), `tools/emit_intro_loop.py`
+(emite las dos piezas con la receta C3 por defecto, vista previa y
+manifiesto; reprodujo C3 en 1.261.054 B y **dos corridas dieron los mismos
+bytes**) y `tools/medir_banding.py` (`proxy_banding` total y en oscuros
+sobre piezas de video).
+
+**Alcance y límites:** no publicado; no probado en la caja ni en el Smart
+TV; sirve solo donde el reproductor repite una pieza (no en el pedido de
+MPEG-TS de archivo único); el VP9 de C3 no se miró a ojo. La propuesta de
+llevar el método a `producto.html`/`GUION.tsv` queda sin tarea.
