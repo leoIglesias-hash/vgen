@@ -6767,3 +6767,41 @@ Piezas: intro 843.326 B + loop 404.346 B. **Archivo único 1.256.714 B**
 piezas salieron un poco más livianas porque este export de la fuente es más
 limpio. Halo de la intro tratado igual (recorte realzado contra la fuente).
 No publicado; sin probar en la caja.
+
+### 2026-10-17 (noche) — Loop en una parte de la pantalla: H.264 con más referencias (`--por-zona`, `tools/emit_loop_zona.py`)
+
+Pregunta del operador: *«¿se podrá conseguir alguna ganancia extrapolando
+este sistema a secciones de video? capaz el video está en loop en el 50 % de
+la pantalla y el otro 50 % está en movimiento… siempre trabajando sobre el
+formato video y no sobre el reproductor»*; luego *«convertilo en
+herramienta y documentalo»*.
+
+**Mecanismo:** no hay cuadros enteros repetidos (mp4_dedup no aplica), pero
+H.264 toma cada cuadro como referencia de hasta 16 anteriores; si la zona
+repite dentro de ese alcance el encoder encuentra la copia sola. El archivo
+sigue siendo H.264 estándar: cambian las referencias y el nivel declarado.
+
+**Medido a mano** (300 cuadros 1280×720 @10 del material de intro_D, mitad
+superior en ciclo de 12 cuadros, crf 26, B=3, un keyframe): 4 referencias
+3.250.041 B; 5 → −2,4 %; 9 → −22,1 %; 11/12/13 → −24,3/−24,5/−24,8 %;
+**16 → −29,2 %**. Control sin loop: 4 → 16 refs solo −5,8 %. Sin cuadros B,
+16 refs −21,6 % (los B no ocupan lugar en la lista de referencias).
+Límite = DPB del nivel: a 720p 5 cuadros en 3.1, 9 en 4.0/4.1, 16 desde 5.0;
+a 1080p 4 en 4.0/4.1, 16 en 5.1. (Corrección a la respuesta en sesión, que
+dijo 5.1 para 720p: alcanza 5.0.)
+
+**Herramientas:** `buscar_loops.py --por-zona` (grilla 4×4, mismo criterio
+por zona, 0,3 a 3 s, mapa de zonas, aviso si el período no es entero a la
+cadencia destino) y `tools/emit_loop_zona.py` (16 referencias + nivel mínimo,
+`--nivel-max` topea, GOP ≥ 10 s y ≥ 4 períodos, `--comparar` mide contra 4
+referencias, se niega sin loop). 13 tests nuevos (6 por zona + 7 de niveles
+y comandos). De punta a punta sobre el video de prueba: zona detectada en 2 s
+(`####/####/..../....`, período 12); **−25,5 %** con 16 refs (nivel 5.0) y
+**−18,0 %** con `--nivel-max 4.1` (9 refs), SSIM igual a la receta de hoy.
+Menos que a mano por los keyframes cada 10 s (cortan las referencias).
+
+**Límites:** solo loops cortos (el de ondas, 35 cuadros, queda afuera); solo
+H.264 (VP9/AV1 no, con los encoders actuales); falta un video real con loop
+parcial y saber qué nivel acepta el decodificador de la caja. A diferencia
+del archivo único, sirve en cualquier contenedor (también MPEG-TS).
+Detalle: `docs/INTRO-Y-LOOP.md` §7.

@@ -2,8 +2,8 @@
 
 **2026-10-17.** Trabajo exploratorio del operador sobre un video propio
 (`intro_D_loop_ondas_perfecto_x9.mp4`). **No se publicó** (decisión del
-operador); lo que queda es el método, cuatro herramientas y las lecciones,
-todas medidas.
+operador); lo que queda es el método, cinco herramientas y las lecciones,
+todas medidas. §7 extiende la idea a un loop en **una parte** de la pantalla.
 
 > **En una línea:** si un video es *intro + el mismo loop repetido*, no hace
 > falta pagar cada vuelta. Dos formas: **dos piezas** —la intro (una vez) y
@@ -18,6 +18,7 @@ todas medidas.
 |---|---|
 | Dos piezas: el reproductor puede repetir una pieza (`producto.html` con su anillo MSE, o `<video loop>` si no hay intro) | Dos piezas: un aparato que reproduce **un solo archivo una vez** |
 | Archivo único (§6): un mp4 que el reproductor lee **siguiendo su índice** (Chromium y ffmpeg, medido) | Archivo único en **MPEG-TS** (sin índice: el pedido de ~2 min en `.ts`) o **WebM**: ahí cada vuelta se paga entera |
+| Loop en una **parte** de la pantalla (§7): corto (hasta ~1,5 s a 10 fps), H.264 con más referencias; sirve en cualquier contenedor, también `.ts` | Loop parcial largo (el de ondas: 3,5 s = 35 cuadros): fuera del alcance de las referencias de H.264; VP9/AV1 con los encoders actuales |
 | El loop se repite **igual** (mismo render): las vueltas se parecen ~99 % | Escenas parecidas pero no idénticas (la cámara se movió, cambió el texto) |
 | Fondos/gráficas en bucle, separadores, «en vivo», cortinas | Video sin repetición (el detector lo dice: `sin loop`) |
 
@@ -78,6 +79,8 @@ py.cmd repo\tools\buscar_loops.py fuente.mp4 --fps-destino 10
 py.cmd repo\tools\emit_intro_loop.py fuente.mp4 --out outputs\mi-loop
 py.cmd repo\tools\medir_banding.py ref.y4m pieza1.mp4 pieza2.mp4
 py.cmd repo\tools\mp4_dedup.py pegado.mp4 unico.mp4
+py.cmd repo\tools\buscar_loops.py fuente.mp4 --por-zona --fps-destino 10
+py.cmd repo\tools\emit_loop_zona.py fuente.mp4 --out outputs\zona --comparar
 ```
 
 (Hasta que se rearme el bundle con estas herramientas, usar la ruta del repo:
@@ -85,7 +88,8 @@ py.cmd repo\tools\mp4_dedup.py pegado.mp4 unico.mp4
 
 | Herramienta | Qué hace | Test |
 |---|---|---|
-| `tools/buscar_loops.py` | detecta intro, período, vueltas, cola y costura; ajusta el loop a cuadros enteros al fps destino. Solo lee | `tests/test_buscar_loops.py` (13): loop sintético con intro/cola, período fundamental y no su múltiplo, escena quieta ≠ loop, sin repetición, costura buena y costura que salta, recorte de fundidos |
+| `tools/buscar_loops.py` | detecta intro, período, vueltas, cola y costura; ajusta el loop a cuadros enteros al fps destino. Con `--por-zona`, el loop corto de una **parte** de la pantalla y su mapa (§7). Solo lee | `tests/test_buscar_loops.py` (19): loop sintético con intro/cola, período fundamental y no su múltiplo, escena quieta ≠ loop, sin repetición, costura buena y costura que salta, recorte de fundidos; por zona: media pantalla, pantalla completa, todo en movimiento, escena quieta |
+| `tools/emit_loop_zona.py` | H.264 con las referencias y el nivel que aprovechan un loop parcial (16 referencias y el nivel mínimo que las admite; `--nivel-max` topea), GOP largo frente al período, `--comparar` emite también con 4 referencias y mide la ganancia, `MANIFEST-loop-zona.tsv` | `tests/test_emit_loop_zona.py` (7): tabla de niveles contra la DPB del estándar, tope por nivel, GOP, línea de x264, manifiesto |
 | `tools/emit_intro_loop.py` | detecta (o recibe `--intro`/`--periodo` en cuadros de la fuente), arma las dos referencias 709 (la del loop retemporizada a cuadros enteros), emite las **dos piezas** H.264 (y VP9 con `--vp9-crf`), el **archivo único** `unico-h264.mp4` (intro + loop × `--vueltas`, pegado sin recodificar y pasado por `mp4_dedup`) y `MANIFEST-intro-loop.tsv` con bytes, SHA-256 y SSIM. `--conservar-refs` deja las referencias y el pegado expandido en `work\` | `tests/test_emit_intro_loop.py` (11): receta C3 fijada, plan de cortes, filtros, un keyframe por pieza, determinismo, VP9 dos pasadas, pegado sin recodificar, manifiesto |
 | `tools/mp4_dedup.py` | un mp4 común con cada muestra repetida guardada **una vez**: reapunta el índice (§6). Varias pistas; relee lo que escribió y exige las mismas muestras byte a byte; rechaza mp4 fragmentado | `tests/test_mp4_dedup.py` (13): mp4 sintéticos caja por caja (intro + vueltas, varias corridas de `stsc`, tamaño fijo, `co64`, varias pistas, sin repeticiones), tiempos y keyframes intactos, determinismo, fragmentado rechazado, byte cambiado atrapado |
 | `tools/medir_banding.py` | el `proxy_banding` de `bench_ref.py` aplicado a piezas de video contra su referencia, total y **solo en zonas oscuras** | `tests/test_medir_banding.py` (5) |
@@ -211,7 +215,84 @@ Lo que el códec no puede hacer solo: H.264 mira hasta 16 cuadros hacia atrás
 y VP9 menos; el loop dura 35 cuadros, así que al empezar una vuelta el
 compresor ya «se olvidó» de la anterior.
 
-## 7. Lo que falta / límites conocidos
+## 7. Un loop en una parte de la pantalla (`buscar_loops.py --por-zona`, `tools/emit_loop_zona.py`)
+
+Pregunta del operador: *«¿se podrá conseguir ganancia extrapolando este
+sistema a secciones de video? capaz el video está en loop en el 50 % de la
+pantalla y el otro 50 % está en movimiento… siempre trabajando sobre el
+formato video y no sobre el reproductor»*.
+
+Ahí no hay cuadros enteros repetidos, así que `mp4_dedup` no sirve. Pero el
+códec mismo puede: H.264 toma cada cuadro como referencia de hasta **16
+cuadros anteriores**. Si la zona repite dentro de ese alcance, el encoder
+encuentra **solo** la copia exacta y casi no paga por esa zona; el archivo
+sigue siendo un H.264 estándar (cambian las referencias que usa el encoder y
+el nivel que declara). Con las 4 referencias de la receta de siempre no llega.
+
+**Medido a mano (2026-10-17):** video de prueba de 300 cuadros 1280×720
+@10 armado con el material de intro_D: mitad superior repitiendo un ciclo de
+12 cuadros (1,2 s), mitad inferior siempre en movimiento. H.264 crf 26,
+preset slow, cuadros B 3, un keyframe:
+
+| Referencias | 4 (hoy) | 5 | 9 | 11 | 12 | 13 | 16 |
+|---|---|---|---|---|---|---|---|
+| Bytes | 3.250.041 | 3.171.824 | 2.532.209 | 2.461.255 | 2.453.260 | 2.444.857 | **2.301.501** |
+| vs 4 refs | — | −2,4 % | −22,1 % | −24,3 % | −24,5 % | −24,8 % | **−29,2 %** |
+
+- **Control** (el mismo video sin loop): 4 → 16 referencias solo −5,8 %;
+  o sea ~23 puntos vienen del loop. Con 4 referencias el loop no se aprovecha
+  nada (cuesta lo mismo que sin loop). SSIM igual en las cuatro medidas
+  (4 y 16 referencias, con y sin loop: 0,992–0,993); las demás filas son
+  solo de bytes, al mismo crf.
+- **Los cuadros B ayudan**: sin B, 16 referencias = 2.547.446 B (−21,6 %).
+  Los B (no referencia) no ocupan lugar en la lista, así que 11 referencias
+  ya alcanzan un cuadro 12 atrás.
+
+**El límite lo pone el nivel de H.264** (la memoria de cuadros del
+decodificador, DPB; tabla A-1 del estándar):
+
+| Resolución | 3.1 | 4.0 / 4.1 | 5.0 | 5.1 |
+|---|---|---|---|---|
+| 1280×720 | 5 cuadros | 9 | **16** | 16 |
+| 1920×1080 | — | 4 | 13 | **16** |
+
+Por defecto `emit_loop_zona.py` pide 16 referencias y el **nivel mínimo**
+que las admite (a 720p: 5.0); `--nivel-max 4.1` las baja a 9. Al aparato le
+cuesta **memoria** (16 cuadros de 720p ≈ 22 MB), no cálculo por cuadro.
+
+**Con la herramienta, de punta a punta, sobre el mismo video de prueba:**
+`buscar_loops --por-zona` encontró la mitad superior (mapa `####/####/..../....`,
+50 %, período 12, exacto a 10 fps) en 2 s; `emit_loop_zona --comparar`:
+
+| | Referencias | Nivel | Bytes | SSIM | vs hoy |
+|---|---|---|---|---|---|
+| hoy | 4 | 3.1 | 3.032.758 | 0,9899 | — |
+| zona | 16 | 5.0 | 2.259.457 | 0,9904 | **−25,5 %** |
+| zona con `--nivel-max 4.1` | 9 | 4.0 | 2.488.345 | 0,9903 | **−18,0 %** |
+
+Un poco menos que a mano porque la herramienta pone un keyframe cada 10 s
+(cada keyframe corta las referencias) y a mano había uno solo en 30 s: se
+prioriza poder adelantar y recuperarse de un error en videos largos. Sobre
+un video sin loop por zona, se niega a emitir (`--forzar` emite igual).
+
+**Condiciones:**
+
+1. **Loop corto**: tiene que caer dentro del alcance de las referencias
+   (medido: 12 cuadros; con cuadros B el alcance pasa algo de 16 cuadros, no
+   está medido cuánto). A 10 fps ≈ 1,5 s. Por eso `--por-zona` busca de 0,3
+   a 3 s. El loop de ondas de intro_D (3,5 s = 35 cuadros) queda afuera: para
+   loops de pantalla completa está §6.
+2. **Período entero a la cadencia destino** (12 cuadros de la fuente a la
+   misma cadencia, o 24 a 24 → 10): si no, cada vuelta cae en otra fase del
+   muestreo y las copias son aproximadas (`--por-zona` lo avisa).
+3. **El aparato tiene que aceptar el nivel**: 5.0 a 720p con 16 referencias,
+   o 4.0/4.1 con 9. Se verifica reproduciendo.
+4. **Solo H.264 (y HEVC, sin herramienta)**: VP9 y AV1 usan pocas
+   referencias activas a la vez; con los encoders actuales no lo aprovechan.
+5. A diferencia de §6, esto **no depende del contenedor**: sirve también en
+   MPEG-TS, porque la ganancia está dentro del stream de H.264.
+
+## 8. Lo que falta / límites conocidos
 
 - **No probado en la caja ni en el Smart TV.** Los anillos de un degradé tan
   oscuro dependen del brillo/contraste del panel; la costura intro → loop
@@ -219,6 +300,9 @@ compresor ya «se olvidó» de la anterior.
   **archivo único**: pasó ffmpeg y Chromium de escritorio; la caja
   (Chromium 70), el Smart TV (Chrome 142) y los reproductores de hardware
   (MediaPlayer/ExoPlayer de una app) hay que verlos reproduciendo.
+- **Loop por zona (§7): falta un video real** con un loop parcial (solo se
+  midió el armado de prueba) y saber qué nivel de H.264 acepta el
+  decodificador de la caja (¿5.0, o 4.1 → 9 referencias?).
 - **VP9 de C3 sin mirar a ojo** (la caja tiene VP9 por hardware y la receta
   firmada v2 es VP9): `--vp9-crf` existe, la elección del crf es del operador.
 - **No está cableado a `emitir.ps1`** ni al workflow `portable`: se corre con

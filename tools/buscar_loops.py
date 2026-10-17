@@ -34,6 +34,12 @@ Uso:
   python tools/buscar_loops.py fuente.mp4
   python tools/buscar_loops.py fuente.mp4 --fps-destino 10
   python tools/buscar_loops.py fuente.mp4 --min-seg 1 --max-seg 20
+  python tools/buscar_loops.py fuente.mp4 --por-zona --fps-destino 10
+
+--por-zona busca en cambio un loop CORTO (0,3 a 3 s) en una PARTE de la
+pantalla (grilla 4x4 por defecto, --grilla FxC), con el mismo criterio por
+zona, e imprime el mapa de zonas que repiten. Eso lo aprovecha el encoder con
+mas referencias: tools/emit_loop_zona.py.
 
 Solo lee la fuente; no escribe nada. El corte en piezas lo hace
 tools/emit_intro_loop.py con lo que este reporta.
@@ -250,6 +256,118 @@ def costura(mini, inicio, periodo):
 
 
 # --------------------------------------------------------------------------
+# Loops por zona: una PARTE de la pantalla repite y el resto se mueve.
+#
+# Ahi no hay cuadros enteros repetidos (mp4_dedup no sirve), pero el encoder
+# puede tomar como referencia un cuadro de hasta 16 atras: si la zona repite
+# dentro de ese alcance, la encuentra sola y casi no paga por ella. Medido
+# (docs/INTRO-Y-LOOP.md §7): mitad de pantalla con loop de 12 cuadros, H.264
+# crf 26 -> -22 % con 9 referencias, -29 % con 16 (control sin loop: -6 %).
+# Los loops por zona que sirven son CORTOS, por eso la busqueda va de 0,3 a 3 s.
+
+ZONA_FILAS = 4
+ZONA_COLUMNAS = 4
+# Una zona "loopea" con periodo d si la racha de copias iguales cubre al menos
+# esta fraccion del video (y una vuelta entera).
+ZONA_FRACCION = 0.5
+
+
+def _cortes(total, partes):
+    return np.linspace(0, total, partes + 1).astype(int)
+
+
+def por_zona(valores, filas, columnas):
+    """(cuadros, alto, ancho) -> (cuadros, filas, columnas): media por zona."""
+    ys = _cortes(valores.shape[1], filas)
+    xs = _cortes(valores.shape[2], columnas)
+    salida = np.empty((valores.shape[0], filas, columnas), dtype=np.float32)
+    for f in range(filas):
+        for c in range(columnas):
+            salida[:, f, c] = valores[:, ys[f]:ys[f + 1], xs[c]:xs[c + 1]].mean(axis=(1, 2))
+    return salida
+
+
+def movimiento_por_zona(mini, filas, columnas, ventana=VENTANA_MOVIMIENTO):
+    """Como movimiento_local, pero por zona: (cuadros, filas, columnas)."""
+    n = len(mini)
+    if n < 2:
+        return np.zeros((n, filas, columnas), dtype=np.float32)
+    vecino = por_zona(np.abs(mini[1:] - mini[:-1]), filas, columnas)
+    vecino = np.concatenate([vecino, vecino[-1:]], axis=0)
+    medio = ventana // 2
+    salida = np.empty_like(vecino)
+    for i in range(n):
+        salida[i] = np.median(vecino[max(0, i - medio):i + medio + 1], axis=0)
+    return salida
+
+
+def detectar_loops_por_zona(mini, fps_fuente, min_seg=0.3, max_seg=3.0,
+                            filas=ZONA_FILAS, columnas=ZONA_COLUMNAS,
+                            umbral_abs=UMBRAL_ABS, umbral_rel=UMBRAL_REL,
+                            fraccion=ZONA_FRACCION):
+    """El periodo (cuadros de la FUENTE) que mas superficie de pantalla repite,
+    y que zonas lo hacen. None si ninguna zona repite. dict con periodo,
+    area (0..1), mascara (filas x columnas, bool), cuadros, fps_fuente."""
+    n = len(mini)
+    mov = movimiento_por_zona(mini, filas, columnas)
+    min_desp = max(2, int(round(min_seg * fps_fuente)))
+    max_desp = min(int(round(max_seg * fps_fuente)), n - 1)
+    filas_lag = []
+    for d in range(min_desp, max_desp + 1):
+        dif = por_zona(np.abs(mini[d:] - mini[:n - d]), filas, columnas)
+        iguales = (dif <= umbral_abs) & (dif <= umbral_rel * mov[:n - d])
+        mascara = np.zeros((filas, columnas), dtype=bool)
+        minimo = max(d, int(fraccion * (n - d)))
+        for f in range(filas):
+            for c in range(columnas):
+                mascara[f, c] = racha_mas_larga(iguales[:, f, c])[1] >= minimo
+        filas_lag.append((d, float(mascara.mean()), mascara))
+    if not filas_lag:
+        return None
+    mejor = max(a for _, a, _ in filas_lag)
+    if mejor <= 0:
+        return None
+    # El periodo fundamental: el MENOR desplazamiento que cubre (casi) la misma
+    # superficie que el mejor (sus multiplos cubren lo mismo).
+    tolerancia = 1.0 / (filas * columnas) - 1e-9
+    d, area, mascara = next(f for f in filas_lag if f[1] >= mejor - tolerancia)
+    return {"periodo": int(d), "area": area, "mascara": mascara, "cuadros": n,
+            "fps_fuente": float(fps_fuente), "filas": filas, "columnas": columnas}
+
+
+def periodo_a_fps(periodo, fps_fuente, fps_destino):
+    """(cuadros del periodo a fps_destino, exacto). Exacto = cantidad entera:
+    cada vuelta de la zona cae en los mismos instantes y las copias son
+    identicas; si no, el muestreo se corre de fase y las copias son aproximadas."""
+    cuadros = periodo * float(fps_destino) / float(fps_fuente)
+    return cuadros, abs(cuadros - round(cuadros)) < 1e-6
+
+
+def reporte_zona(zona, fps_destino=None):
+    if zona is None:
+        return ["sin loop por zona: ninguna parte de la pantalla repite entre 0,3 y 3 s"]
+    fps = zona["fps_fuente"]
+    mapa = ["".join("#" if v else "." for v in fila) for fila in zona["mascara"]]
+    lineas = ["zonas      %dx%d; repite el %.0f %% de la pantalla (# = repite):"
+              % (zona["filas"], zona["columnas"], 100 * zona["area"])]
+    lineas += ["             " + fila for fila in mapa]
+    lineas.append("periodo    %d cuadros de la fuente (%.3f s)" % (zona["periodo"],
+                                                                 zona["periodo"] / fps))
+    if zona["area"] >= 1.0:
+        lineas.append("           es TODA la pantalla: mejor intro + loop / archivo unico "
+                      "(emit_intro_loop.py, mp4_dedup.py)")
+    if fps_destino:
+        cuadros, exacto = periodo_a_fps(zona["periodo"], fps, fps_destino)
+        lineas.append("a %g fps  periodo = %.2f cuadros (%s)" % (
+            fps_destino, cuadros, "exacto" if exacto else
+            "NO entero: copias aproximadas, la ganancia baja"))
+        lineas.append("H.264      el encoder la aprovecha si mira lo bastante atras: "
+                      "tools/emit_loop_zona.py elige referencias y nivel y, con "
+                      "--comparar, mide la ganancia real")
+    return lineas
+
+
+# --------------------------------------------------------------------------
 # Reporte
 
 def reporte(loop, fps_destino=None, salto=None):
@@ -303,11 +421,22 @@ def main(argv=None):
     parser.add_argument("--max-seg", type=float, default=30.0, help="loop mas largo a buscar")
     parser.add_argument("--umbral-abs", type=float, default=UMBRAL_ABS)
     parser.add_argument("--umbral-rel", type=float, default=UMBRAL_REL)
+    parser.add_argument("--por-zona", action="store_true",
+                        help="busca loops en una PARTE de la pantalla (0,3 a 3 s; ver emit_loop_zona.py)")
+    parser.add_argument("--grilla", default="%dx%d" % (ZONA_FILAS, ZONA_COLUMNAS),
+                        help="filas x columnas de zonas para --por-zona (default 4x4)")
     parser.add_argument("--ffmpeg", default="ffmpeg")
     args = parser.parse_args(argv)
 
     fps = fps_de_fuente(args.ffmpeg, args.fuente)
     mini = leer_miniaturas(args.ffmpeg, args.fuente)
+    if args.por_zona:
+        filas, columnas = (int(v) for v in args.grilla.lower().split("x"))
+        zona = detectar_loops_por_zona(mini, fps, filas=filas, columnas=columnas,
+                                       umbral_abs=args.umbral_abs, umbral_rel=args.umbral_rel)
+        for linea in reporte_zona(zona, args.fps_destino):
+            print(linea)
+        return 0 if zona else 1
     loop = detectar_loop(mini, fps, args.min_seg, args.max_seg,
                          args.umbral_abs, args.umbral_rel)
     if loop:

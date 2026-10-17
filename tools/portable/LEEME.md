@@ -129,6 +129,8 @@ py.cmd repo\tools\buscar_loops.py C:\clip.mp4 --fps-destino 10
 py.cmd repo\tools\emit_intro_loop.py C:\clip.mp4 --out outputs\mi-loop
 py.cmd repo\tools\medir_banding.py ref.y4m pieza.mp4
 py.cmd repo\tools\mp4_dedup.py pegado.mp4 unico.mp4
+py.cmd repo\tools\buscar_loops.py C:\clip.mp4 --por-zona --fps-destino 10
+py.cmd repo\tools\emit_loop_zona.py C:\clip.mp4 --out outputs\zona --comparar
 ```
 
 El primero dice dónde termina la intro, cuánto dura el loop, cuántas vueltas
@@ -137,7 +139,10 @@ del loop (la repite el reproductor), más `unico-h264.mp4`: un solo mp4 común
 con todas las vueltas, cada una guardada una vez; por defecto la receta C3
 (`docs/INTRO-Y-LOOP.md`). El tercero mide el halo escalonado de una pieza
 contra su referencia (`--conservar-refs` del segundo la deja en `work\`). El
-cuarto deduplica cualquier mp4 cuyas repeticiones sean bytes idénticos.
+cuarto deduplica cualquier mp4 cuyas repeticiones sean bytes idénticos. Los
+dos últimos son para un loop corto en una PARTE de la pantalla: el detector
+dibuja qué zonas repiten y el emisor sube las referencias de H.264 para que
+el encoder lo aproveche (`--nivel-max 4.1` si el aparato no acepta 5.0).
 
 ## Qué hay adentro
 

@@ -96,6 +96,67 @@ class DeteccionTest(unittest.TestCase):
                       "\n".join(buscar_loops.reporte(loop, salto=(salto, percentil, mediana))))
 
 
+def media_pantalla(periodo=6, cuadros=60, ruido=0.3, semilla=0):
+    """Mitad superior en loop ciclico de `periodo`; mitad inferior siempre en
+    movimiento, sin repetir."""
+    rng = np.random.RandomState(semilla)
+    salida = []
+    for t in range(cuadros):
+        arriba = cuadro_ciclico(t % periodo, periodo)
+        abajo = cuadro_movil(t, 5)
+        cuadro = np.vstack([arriba[:ALTO // 2], abajo[ALTO // 2:]])
+        salida.append(cuadro)
+    mini = np.stack(salida)
+    return mini + rng.normal(0, ruido, mini.shape).astype(np.float32)
+
+
+class PorZonaTest(unittest.TestCase):
+    def test_encuentra_la_mitad_que_repite(self):
+        zona = buscar_loops.detectar_loops_por_zona(media_pantalla(), fps_fuente=10,
+                                                    min_seg=0.3, max_seg=3)
+        self.assertIsNotNone(zona)
+        self.assertEqual(zona["periodo"], 6)
+        self.assertAlmostEqual(zona["area"], 0.5)
+        self.assertTrue(zona["mascara"][:2].all())
+        self.assertFalse(zona["mascara"][2:].any())
+        texto = "\n".join(buscar_loops.reporte_zona(zona, fps_destino=10))
+        self.assertIn("50 % de la pantalla", texto)
+        self.assertIn("####", texto)
+        self.assertIn("6.00 cuadros (exacto)", texto)
+
+    def test_pantalla_completa_se_deriva_al_archivo_unico(self):
+        mini = video(intro=0, periodo=8, vueltas=8, cola=0)
+        zona = buscar_loops.detectar_loops_por_zona(mini, 10, 0.3, 3)
+        self.assertEqual(zona["periodo"], 8)
+        self.assertEqual(zona["area"], 1.0)
+        self.assertIn("TODA la pantalla", "\n".join(buscar_loops.reporte_zona(zona)))
+
+    def test_todo_en_movimiento_no_es_loop_por_zona(self):
+        sin = np.stack([cuadro_movil(t, 1) for t in range(60)])
+        self.assertIsNone(buscar_loops.detectar_loops_por_zona(sin, 10, 0.3, 3))
+
+    def test_escena_quieta_no_es_loop_por_zona(self):
+        rng = np.random.RandomState(2)
+        quieto = np.full((60, ALTO, ANCHO), 70.0, dtype=np.float32)
+        quieto += rng.normal(0, 0.3, quieto.shape).astype(np.float32)
+        self.assertIsNone(buscar_loops.detectar_loops_por_zona(quieto, 10, 0.3, 3))
+
+    def test_periodo_a_fps(self):
+        self.assertEqual(buscar_loops.periodo_a_fps(12, 10, 10), (12.0, True))
+        cuadros, exacto = buscar_loops.periodo_a_fps(85, 24, 10)
+        self.assertAlmostEqual(cuadros, 35.4166, places=3)
+        self.assertFalse(exacto)
+        self.assertTrue(buscar_loops.periodo_a_fps(24, 24, 10)[1])
+
+    def test_por_zona_promedia_cada_zona(self):
+        valores = np.zeros((1, 4, 4), dtype=np.float32)
+        valores[0, :2, :2] = 8.0
+        zonas = buscar_loops.por_zona(valores, 2, 2)
+        self.assertEqual(zonas.shape, (1, 2, 2))
+        self.assertEqual(float(zonas[0, 0, 0]), 8.0)
+        self.assertEqual(float(zonas[0, 1, 1]), 0.0)
+
+
 class PiezasTest(unittest.TestCase):
     def test_racha_tolera_un_hueco_chico(self):
         iguales = [False, True, True, False, True, True, True, False, False, False, True]
