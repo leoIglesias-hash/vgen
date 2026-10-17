@@ -6751,3 +6751,19 @@ una vez y pegarlo); solo mp4 (MPEG-TS no tiene índice, WebM guarda los
 bloques en los clusters); el reproductor tiene que seguir el índice — falta
 verlo en la caja (Chromium 70), el Smart TV y reproductores de hardware.
 Detalle en `docs/INTRO-Y-LOOP.md` §6.
+
+### 2026-10-17 (tarde, 2) — El mismo video con 18 vueltas: el archivo único no crece
+
+Operador: *«aplicalo a este video, manteniendo todo lo aprendido… es el mismo
+video pero multiplicamos por dos la cantidad de loops y ahora tiene 18»*
+(`intro_D_loop_ondas_perfecto_x18.mp4`: 1.727 cuadros, 72 s, 25,1 MB).
+
+`emit_intro_loop.py` con sus valores por defecto (receta C3), sin datos:
+detectó intro 197 + loop 85 × 18 (exacto, sin cola), costura percentil 92.
+Piezas: intro 843.326 B + loop 404.346 B. **Archivo único 1.256.714 B**
+(712 cuadros, 117 únicos) contra 8.107.673 B del pegado expandido (15,5 %) y
+25,1 MB de la fuente (5 %); decodifica idéntico al pegado. Respecto del x9
+(1.265.036 B) el doble de vueltas no sumó peso: el índice crece ~2 KB y las
+piezas salieron un poco más livianas porque este export de la fuente es más
+limpio. Halo de la intro tratado igual (recorte realzado contra la fuente).
+No publicado; sin probar en la caja.

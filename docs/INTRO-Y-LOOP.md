@@ -112,6 +112,15 @@ fundido); **dos corridas, mismos bytes** (`8f5be78391ae…` intro,
 por cuadro y también sale con los mismos bytes en dos corridas
 (`8fe4d155c542…`).
 
+**Mismo video con el doble de vueltas (`…_x18.mp4`, 2026-10-17):** 1.727
+cuadros, 72 s, 25,1 MB. Detectado solo: intro 197 + loop 85 × **18**
+(197 + 85 × 18 = 1.727). Con la receta C3 sin tocar: intro 843.326 B + loop
+404.346 B; **archivo único 1.256.714 B** (712 cuadros, 117 únicos) contra
+8.107.673 B del pegado expandido, decodifica idéntico al pegado. Duplicar las
+vueltas no agrega peso: el índice crece ~2 KB y nada más (este export de la
+fuente venía algo más limpio, por eso las piezas pesan un poco menos que las
+del x9). El halo de la intro queda tratado igual que en C3.
+
 ## 4. Lo que aprendimos (todo medido)
 
 | # | Lección | Números |
