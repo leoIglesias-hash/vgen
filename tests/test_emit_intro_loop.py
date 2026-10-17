@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""2026-10-17: tools/emit_intro_loop.py arma intro + loop como piezas. Sin
-ffmpeg: el plan de cortes (loop a cuadros enteros), los filtros, las lineas
-de H.264/VP9 (un keyframe por pieza, determinismo del proyecto), la lista de
-la vista previa, el manifiesto y la receta C3 que eligio el operador."""
+"""2026-10-17: tools/emit_intro_loop.py arma intro + loop como piezas y como
+archivo unico deduplicado. Sin ffmpeg: el plan de cortes (loop a cuadros
+enteros), los filtros, las lineas de H.264/VP9 (un keyframe por pieza,
+determinismo del proyecto), el pegado sin recodificar, el manifiesto y la
+receta C3 que eligio el operador."""
 import os
 import sys
 import unittest
@@ -81,10 +82,16 @@ class VistaYManifiestoTest(unittest.TestCase):
                          "file '../intro.mp4'\nfile '../loop.mp4'\nfile '../loop.mp4'\n")
         self.assertEqual(eil.lista_concat(None, "loop.mp4", 1), "file 'loop.mp4'\n")
 
-    def test_vista_no_recodifica(self):
-        command = eil.build_vista_command("ffmpeg", "lista.txt", "vista.mp4")
+    def test_el_pegado_no_recodifica(self):
+        # Sin recodificar, las vueltas pegadas son bytes identicos: eso es lo
+        # que mp4_dedup despues guarda una sola vez.
+        command = eil.build_concat_command("ffmpeg", "lista.txt", "pegado.mp4")
         self.assertEqual(command[command.index("-c") + 1], "copy")
         self.assertIn("concat", command)
+
+    def test_el_archivo_unico_es_mp4(self):
+        self.assertTrue(eil.ARCHIVO_UNICO.endswith(".mp4"))
+        self.assertEqual(eil.mp4_dedup.deduplicar.__module__, "mp4_dedup")
 
     def test_manifiesto(self):
         p = eil.plan(197, 85, 24.0, 10)

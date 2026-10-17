@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-emit_intro_loop.py - emite un video que es INTRO + LOOP REPETIDO como dos
-piezas: la intro (se reproduce una vez) y UNA vuelta del loop (la repite el
-reproductor). El reproductor tiene que saber repetir una pieza (producto.html
-lo hace con su anillo MSE); un aparato que pasa un solo archivo una vez no
-sirve para esto.
+emit_intro_loop.py - emite un video que es INTRO + LOOP REPETIDO de dos
+formas, las dos sin pagar cada vuelta:
+
+  - DOS PIEZAS: la intro (se reproduce una vez) y UNA vuelta del loop (la
+    repite el reproductor: producto.html con su anillo MSE);
+  - UN ARCHIVO UNICO (`unico-h264.mp4`): intro + el loop N veces en un mp4
+    comun y reproducible, con cada vuelta guardada UNA vez
+    (tools/mp4_dedup.py). Pesa como las dos piezas; sirve para un reproductor
+    que pasa un archivo y nada mas (si sigue el indice del mp4).
 
 Receta por defecto = la que eligio el operador el 2026-10-17 para intro_D
 (C3, docs/INTRO-Y-LOOP.md): 1280 de ancho, 10 fps, H.264 High, intro crf 24,
@@ -26,10 +30,15 @@ Pasos:
      destino, y el loop retemporizado para durar una cantidad ENTERA de
      cuadros (si no, la costura salta);
   3. una pieza H.264 por referencia (y VP9 en dos pasadas con --vp9-crf);
-  4. vista previa = intro + el loop N veces, pegado SIN recodificar (es lo
-     que mostraria el reproductor; solo para mirar, no viaja);
+  4. archivo unico = intro + el loop N veces (--vueltas; default: las de la
+     fuente), pegado SIN recodificar -> las vueltas son bytes identicos ->
+     tools/mp4_dedup.py guarda cada una una vez (y verifica muestra por
+     muestra que el archivo reproduce lo mismo que el pegado);
   5. MANIFEST-intro-loop.tsv con bytes, SHA-256, cuadros y SSIM contra la
-     referencia de cada pieza.
+     referencia de cada pieza, y la fila del archivo unico.
+
+VP9 sale solo en piezas (WebM guarda los bloques dentro de los clusters, sin
+un indice de muestras que se pueda reapuntar).
 
 Uso:
   python tools/emit_intro_loop.py fuente.mp4 --out outputs/intro-loop
@@ -42,7 +51,6 @@ import argparse
 import hashlib
 import os
 import shutil
-import subprocess
 import sys
 import time
 
@@ -54,6 +62,7 @@ import buscar_loops  # noqa: E402
 import emit_pieces  # noqa: E402
 import emit_v1  # noqa: E402
 import emit_v2  # noqa: E402
+import mp4_dedup  # noqa: E402
 
 ANCHO = 1280
 FPS = 10
@@ -65,6 +74,7 @@ H264_BFRAMES = 3
 H264_REFS = 4
 VP9_CPU = 2
 MANIFEST_NAME = "MANIFEST-intro-loop.tsv"
+ARCHIVO_UNICO = "unico-h264.mp4"
 MANIFEST_COLUMNS = ("pieza", "file", "bytes", "sha256", "cuadros", "codec", "crf",
                     "ssim_all", "psnr_avg", "note")
 
@@ -141,7 +151,7 @@ def lista_concat(intro_file, loop_file, vueltas):
     return "\n".join(lineas) + "\n"
 
 
-def build_vista_command(ffmpeg, lista_path, out_path):
+def build_concat_command(ffmpeg, lista_path, out_path):
     return [ffmpeg, "-y", "-nostdin", "-f", "concat", "-safe", "0", "-i", lista_path,
             "-c", "copy", "-movflags", "+faststart"] + list(emit_pieces.BITEXACT) + [out_path]
 
@@ -171,9 +181,34 @@ def sha256_de(path):
     return digest.hexdigest()
 
 
+def archivo_unico(ffmpeg, out_dir, work, h264, vueltas, errlog, log=print):
+    """intro + loop x vueltas pegados sin recodificar (work/) y deduplicados
+    con mp4_dedup -> unico-h264.mp4. Devuelve su fila del manifiesto."""
+    lista = os.path.join(work, "unico-h264.txt")
+    with open(lista, "w") as stream:
+        intro_file = h264.get("intro")
+        stream.write(lista_concat("../" + intro_file if intro_file else None,
+                                  "../" + h264["loop"], vueltas))
+    pegado = os.path.join(work, "pegado-h264.mp4")
+    emit_v2.run(build_concat_command(ffmpeg, lista, pegado), errlog, append=True)
+    with open(pegado, "rb") as stream:
+        datos, resumen = mp4_dedup.deduplicar(stream.read())
+    unico = os.path.join(out_dir, ARCHIVO_UNICO)
+    with open(unico, "wb") as stream:
+        stream.write(datos)
+    log("+ archivo unico %s: intro + loop x%d, %d cuadros (%d unicos); %d B pegado -> %d B"
+        % (ARCHIVO_UNICO, vueltas, resumen["muestras"], resumen["unicas"],
+           resumen["bytes_antes"], resumen["bytes_despues"]))
+    return {"pieza": "unico", "file": ARCHIVO_UNICO, "bytes": len(datos),
+            "sha256": hashlib.sha256(datos).hexdigest(), "cuadros": resumen["muestras"],
+            "codec": "h264", "crf": "-", "ssim_all": "-", "psnr_avg": "-",
+            "note": "intro + loop x%d; cada vuelta guardada una vez (mp4_dedup); pegado %d B"
+                    % (vueltas, resumen["bytes_antes"])}
+
+
 def emitir(fuente_path, out_dir, ffmpeg="ffmpeg", intro=None, periodo=None, fps=FPS,
            ancho=ANCHO, crf_intro=CRF_INTRO, crf_loop=CRF_LOOP, prefiltro=PREFILTRO_C3,
-           vp9_crf=None, vista_vueltas=None, matriz_fuente="auto", conservar_refs=False,
+           vp9_crf=None, vueltas=None, matriz_fuente="auto", conservar_refs=False,
            log=print):
     os.makedirs(out_dir, exist_ok=True)
     work = os.path.join(out_dir, "work")
@@ -181,7 +216,6 @@ def emitir(fuente_path, out_dir, ffmpeg="ffmpeg", intro=None, periodo=None, fps=
     errlog = os.path.join(out_dir, "emit_intro_loop.ffmpeg.log")
     fps_fuente = buscar_loops.fps_de_fuente(ffmpeg, fuente_path)
 
-    vueltas = vista_vueltas
     if intro is None or periodo is None:
         log("+ buscando el loop (tools/buscar_loops.py)")
         mini = buscar_loops.leer_miniaturas(ffmpeg, fuente_path)
@@ -234,14 +268,7 @@ def emitir(fuente_path, out_dir, ffmpeg="ffmpeg", intro=None, periodo=None, fps=
             log("  %-16s %10d B  %3d cuadros  ssim %s" % (archivo, fila["bytes"], n,
                                                            fila["ssim_all"]))
 
-    lista = os.path.join(work, "vista-h264.txt")
-    with open(lista, "w") as stream:
-        intro_file = archivos["h264"].get("intro")
-        stream.write(lista_concat("../" + intro_file if intro_file else None,
-                                  "../" + archivos["h264"]["loop"], vueltas))
-    vista = os.path.join(out_dir, "vista-h264.mp4")
-    emit_v2.run(build_vista_command(ffmpeg, lista, vista), errlog, append=True)
-    log("+ vista previa (solo para mirar): vista-h264.mp4 = intro + loop x%d" % vueltas)
+    filas.append(archivo_unico(ffmpeg, out_dir, work, archivos["h264"], vueltas, errlog, log))
 
     receta = "fps %g; ancho %d; h264 intro crf %d / loop crf %d%s; prefiltro %s" % (
         fps, ancho, crf_intro, crf_loop,
@@ -254,8 +281,9 @@ def emitir(fuente_path, out_dir, ffmpeg="ffmpeg", intro=None, periodo=None, fps=
     else:
         shutil.rmtree(work, ignore_errors=True)
     for codec in sorted(archivos):
-        total = sum(f["bytes"] for f in filas if f["codec"] == codec)
-        log("-- %s: viajan %d B (intro + 1 vuelta)" % (codec, total))
+        total = sum(f["bytes"] for f in filas if f["codec"] == codec and f["pieza"] != "unico")
+        log("-- %s: dos piezas = %d B (intro + 1 vuelta)" % (codec, total))
+    log("-- h264: archivo unico = %d B (%s)" % (filas[-1]["bytes"], ARCHIVO_UNICO))
     return filas
 
 
@@ -277,8 +305,9 @@ def main(argv=None):
                         help="filtro ffmpeg antes del encoder; 'ninguno' lo apaga")
     parser.add_argument("--vp9-crf", type=int, default=None,
                         help="emite tambien VP9 (dos pasadas) con este crf")
-    parser.add_argument("--vista-vueltas", type=int, default=None,
-                        help="vueltas del loop en la vista previa (default: las de la fuente)")
+    parser.add_argument("--vueltas", type=int, default=None,
+                        help="vueltas del loop en el archivo unico (default: las de la fuente; "
+                             "3 si se pasan --intro/--periodo a mano)")
     parser.add_argument("--matriz-fuente", default="auto")
     parser.add_argument("--conservar-refs", action="store_true",
                         help="deja work/ref-*.y4m para medir con tools/medir_banding.py")
@@ -289,7 +318,7 @@ def main(argv=None):
     prefiltro = None if args.prefiltro.lower() in ("", "ninguno", "none") else args.prefiltro
     emitir(args.fuente, args.out, args.ffmpeg, args.intro, args.periodo, args.fps,
            args.ancho, args.crf_intro, args.crf_loop, prefiltro, args.vp9_crf,
-           args.vista_vueltas, args.matriz_fuente, args.conservar_refs)
+           args.vueltas, args.matriz_fuente, args.conservar_refs)
     return 0
 
 

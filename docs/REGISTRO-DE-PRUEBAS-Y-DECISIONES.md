@@ -6715,3 +6715,39 @@ sobre piezas de video).
 TV; sirve solo donde el reproductor repite una pieza (no en el pedido de
 MPEG-TS de archivo único); el VP9 de C3 no se miró a ojo. La propuesta de
 llevar el método a `producto.html`/`GUION.tsv` queda sin tarea.
+
+### 2026-10-17 (tarde) — Un solo mp4 reproducible con cada vuelta guardada una vez (`tools/mp4_dedup.py`)
+
+Pregunta del operador: *«¿es posible aprovechar lo que se ahorra en loop en
+el mismo formato de video? como si fuese una compresión zip pero de videos
+reproducibles»*; aclaración: *«el zip es un formato específico que no es
+reproducible… yo te digo algo reproducible que cumpla con xz»*; y luego
+*«convertilo en herramienta y documentalo»*.
+
+**Medido primero el techo:** intro + 9 vueltas pegadas sin recodificar
+(cada vuelta = bytes idénticos) = 4.578.034 B; gzip -9 = 4.573.776 (su
+ventana de 32 KB no alcanza una vuelta de 415 KB); **xz -9 = 1.262.632 B**,
+lo mismo que las dos piezas (1.262.857). La repetición es lo único que sobra.
+
+**La forma reproducible:** en un mp4 cada pista tiene un índice (`stsz`,
+`stsc`, `stco`) que dice dónde está cada cuadro; el índice de las vueltas
+2..9 se reapunta a los bytes de la vuelta 1. Resultado: **1.266.930 B** (397
+cuadros en el índice, 117 guardados), mp4 común. Verificado: ffmpeg decodifica
+los 397 cuadros idénticos al archivo expandido y la lista de paquetes es la
+misma; Chromium (servido por HTTP) da los mismos píxeles saltando a la intro
+y a las vueltas 1/3/6/9, y reproduce de corrido cruzando tres costuras sin
+errores ni cuadros caídos.
+
+**Herramienta:** `tools/mp4_dedup.py` (varias pistas, `stco`/`co64`, relee
+lo escrito y exige las mismas muestras byte a byte, rechaza mp4
+fragmentado; 13 tests con mp4 sintéticos armados caja por caja).
+`tools/emit_intro_loop.py` entrega ahora, además de las dos piezas,
+**`unico-h264.mp4`** (en lugar de la vista previa expandida): sobre intro_D
+1.265.036 B contra 4.562.436 del pegado, decodifica idéntico al pegado y
+sale con los mismos bytes en dos corridas.
+
+**Límites:** las vueltas tienen que ser bytes idénticos (codificar el loop
+una vez y pegarlo); solo mp4 (MPEG-TS no tiene índice, WebM guarda los
+bloques en los clusters); el reproductor tiene que seguir el índice — falta
+verlo en la caja (Chromium 70), el Smart TV y reproductores de hardware.
+Detalle en `docs/INTRO-Y-LOOP.md` §6.

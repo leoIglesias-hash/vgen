@@ -2,19 +2,22 @@
 
 **2026-10-17.** Trabajo exploratorio del operador sobre un video propio
 (`intro_D_loop_ondas_perfecto_x9.mp4`). **No se publicó** (decisión del
-operador); lo que queda es el método, tres herramientas y las lecciones,
+operador); lo que queda es el método, cuatro herramientas y las lecciones,
 todas medidas.
 
-> **En una línea:** si un video es *intro + el mismo loop repetido*, se
-> emiten dos piezas —la intro (una vez) y **una** vuelta del loop (la repite
-> el reproductor)—. En este video eso solo, con la misma receta, bajó el
-> peso **77 % (VP9) y 78 % (H.264)**: más que cualquier ajuste del compresor.
+> **En una línea:** si un video es *intro + el mismo loop repetido*, no hace
+> falta pagar cada vuelta. Dos formas: **dos piezas** —la intro (una vez) y
+> **una** vuelta del loop (la repite el reproductor)— o **un solo mp4 común**
+> con todas las vueltas adentro pero cada una guardada **una vez** (§6). En
+> este video eso solo, con la misma receta, bajó el peso **77 % (VP9) y 78 %
+> (H.264)**: más que cualquier ajuste del compresor.
 
 ## 1. Cuándo sirve y cuándo no
 
 | Sirve | No sirve |
 |---|---|
-| El reproductor puede repetir una pieza: `producto.html` (anillo MSE), o `<video loop>` si no hay intro | Un aparato que reproduce **un solo archivo una vez** (p. ej. el pedido de MPEG-TS de ~2 min): ahí el loop tiene que ir adentro del archivo |
+| Dos piezas: el reproductor puede repetir una pieza (`producto.html` con su anillo MSE, o `<video loop>` si no hay intro) | Dos piezas: un aparato que reproduce **un solo archivo una vez** |
+| Archivo único (§6): un mp4 que el reproductor lee **siguiendo su índice** (Chromium y ffmpeg, medido) | Archivo único en **MPEG-TS** (sin índice: el pedido de ~2 min en `.ts`) o **WebM**: ahí cada vuelta se paga entera |
 | El loop se repite **igual** (mismo render): las vueltas se parecen ~99 % | Escenas parecidas pero no idénticas (la cámara se movió, cambió el texto) |
 | Fondos/gráficas en bucle, separadores, «en vivo», cortinas | Video sin repetición (el detector lo dice: `sin loop`) |
 
@@ -74,6 +77,7 @@ ffmpeg del bundle queda en el PATH de ese proceso):
 py.cmd repo\tools\buscar_loops.py fuente.mp4 --fps-destino 10
 py.cmd repo\tools\emit_intro_loop.py fuente.mp4 --out outputs\mi-loop
 py.cmd repo\tools\medir_banding.py ref.y4m pieza1.mp4 pieza2.mp4
+py.cmd repo\tools\mp4_dedup.py pegado.mp4 unico.mp4
 ```
 
 (Hasta que se rearme el bundle con estas herramientas, usar la ruta del repo:
@@ -82,7 +86,8 @@ py.cmd repo\tools\medir_banding.py ref.y4m pieza1.mp4 pieza2.mp4
 | Herramienta | Qué hace | Test |
 |---|---|---|
 | `tools/buscar_loops.py` | detecta intro, período, vueltas, cola y costura; ajusta el loop a cuadros enteros al fps destino. Solo lee | `tests/test_buscar_loops.py` (13): loop sintético con intro/cola, período fundamental y no su múltiplo, escena quieta ≠ loop, sin repetición, costura buena y costura que salta, recorte de fundidos |
-| `tools/emit_intro_loop.py` | detecta (o recibe `--intro`/`--periodo` en cuadros de la fuente), arma las dos referencias 709 (la del loop retemporizada a cuadros enteros), emite H.264 (y VP9 con `--vp9-crf`), vista previa (intro + loop × vueltas, pegado sin recodificar) y `MANIFEST-intro-loop.tsv` con bytes, SHA-256 y SSIM. `--conservar-refs` deja las referencias para medir | `tests/test_emit_intro_loop.py` (10): receta C3 fijada, plan de cortes, filtros, un keyframe por pieza, determinismo, VP9 dos pasadas, lista de la vista, manifiesto |
+| `tools/emit_intro_loop.py` | detecta (o recibe `--intro`/`--periodo` en cuadros de la fuente), arma las dos referencias 709 (la del loop retemporizada a cuadros enteros), emite las **dos piezas** H.264 (y VP9 con `--vp9-crf`), el **archivo único** `unico-h264.mp4` (intro + loop × `--vueltas`, pegado sin recodificar y pasado por `mp4_dedup`) y `MANIFEST-intro-loop.tsv` con bytes, SHA-256 y SSIM. `--conservar-refs` deja las referencias y el pegado expandido en `work\` | `tests/test_emit_intro_loop.py` (11): receta C3 fijada, plan de cortes, filtros, un keyframe por pieza, determinismo, VP9 dos pasadas, pegado sin recodificar, manifiesto |
+| `tools/mp4_dedup.py` | un mp4 común con cada muestra repetida guardada **una vez**: reapunta el índice (§6). Varias pistas; relee lo que escribió y exige las mismas muestras byte a byte; rechaza mp4 fragmentado | `tests/test_mp4_dedup.py` (13): mp4 sintéticos caja por caja (intro + vueltas, varias corridas de `stsc`, tamaño fijo, `co64`, varias pistas, sin repeticiones), tiempos y keyframes intactos, determinismo, fragmentado rechazado, byte cambiado atrapado |
 | `tools/medir_banding.py` | el `proxy_banding` de `bench_ref.py` aplicado a piezas de video contra su referencia, total y **solo en zonas oscuras** | `tests/test_medir_banding.py` (5) |
 
 **Receta por defecto de `emit_intro_loop.py` = C3** (la que eligió el
@@ -101,7 +106,11 @@ se descarga una vez; el loop es lo que paga cada aparato y cada caché.
 sola y emitió **1.261.054 B** en H.264 (intro 847.518 + loop 413.536;
 C3 hecho a mano: 1.262.857 B, el loop arrancaba un cuadro antes, dentro del
 fundido); **dos corridas, mismos bytes** (`8f5be78391ae…` intro,
-`b30154754ab7…` loop). Con `--vp9-crf 14`: VP9 1.901.576 B.
+`b30154754ab7…` loop). Con `--vp9-crf 14`: VP9 1.901.576 B. El archivo único
+(intro + 9 vueltas, 397 cuadros, 117 únicos) pesa **1.265.036 B** contra
+4.562.436 B del pegado expandido, decodifica idéntico a ese pegado cuadro
+por cuadro y también sale con los mismos bytes en dos corridas
+(`8fe4d155c542…`).
 
 ## 4. Lo que aprendimos (todo medido)
 
@@ -135,11 +144,72 @@ C3 hecho a mano: intro `defe38cf805a…` 847.555 B, loop `2795a693ad42…`
 415.302 B. Las piezas viven en la PC (`vgen-portable\outputs\introD-*`), no
 en el repo (video del cliente).
 
-## 6. Lo que falta / límites conocidos
+## 6. Un solo archivo reproducible que guarda cada vuelta una vez (`tools/mp4_dedup.py`)
+
+Pregunta del operador: ¿se puede aprovechar lo del loop **en el mismo
+archivo de video**, como una compresión zip pero reproducible? Primero se
+midió qué hace un compresor general con el archivo de intro + 9 vueltas
+pegadas sin recodificar (cada vuelta = bytes idénticos):
+
+| | Bytes |
+|---|---|
+| Archivo único (intro + 9 vueltas) | 4.578.034 |
+| …con gzip -9 (recuerda 32 KB hacia atrás) | 4.573.776 — no gana nada: una vuelta pesa 415 KB |
+| …con xz -9 (recuerda 64 MB) | **1.262.632** |
+| Dos piezas (intro + 1 vuelta) | 1.262.857 |
+| **mp4 deduplicado (`mp4_dedup`)** | **1.266.930 — reproducible directo** |
+
+xz demuestra que la repetición es lo único que sobra (sobre las piezas solas
+ahorra ~400 B: el video ya está comprimido), pero un `.xz` no se reproduce.
+`mp4_dedup` consigue lo mismo **dentro de un mp4 común**:
+
+- un mp4 guarda los datos de cada cuadro en `mdat` y un **índice** por pista
+  (`stsz` tamaños; `stsc` + `stco`/`co64` posiciones) que le dice al
+  reproductor dónde está cada uno;
+- nada obliga a que dos cuadros vivan en bytes distintos: el índice de las
+  vueltas 2..9 **apunta a los bytes de la vuelta 1** (un «acceso directo» por
+  cuadro). 397 cuadros en el índice, 117 guardados (82 de intro + 35 del loop);
+- el reproductor busca cada cuadro donde dice el índice y recibe exactamente
+  la misma secuencia que en el archivo expandido. Tiempos (`stts`/`ctts`),
+  keyframes (`stss`), `stsd` y edit lists se copian tal cual; solo cambian
+  `mdat`, `stsc` (una muestra por chunk) y `stco` (una posición por muestra).
+  La diferencia con las dos piezas (~4 KB) es ese índice más largo.
+
+**Verificado (2026-10-17):**
+
+- ffmpeg: los 397 cuadros decodificados son idénticos al archivo expandido
+  (framemd5) y la lista de paquetes también (pts, dts, duración, tamaño,
+  keyframe);
+- Chromium (el motor de la caja), servido por HTTP: saltando a la intro y a
+  las vueltas 1, 3, 6 y 9 cada cuadro es **idéntico píxel por píxel** al del
+  archivo expandido; reproducción continua del segundo 29 al final cruzando
+  tres costuras: sin errores, 0 cuadros caídos, termina en 39,7 s;
+- la herramienta relee el archivo que escribió y exige, pista por pista, las
+  mismas muestras byte a byte; si no, no lo entrega.
+
+**Condiciones:**
+
+1. Las vueltas tienen que ser **bytes idénticos**: el loop se codifica **una
+   vez** y se pega N veces sin recodificar (`emit_intro_loop.py` lo hace).
+   Recodificar el video de 40 s nunca da dos vueltas iguales.
+2. **Solo mp4** (ISO BMFF) no fragmentado. MPEG-TS no tiene índice (los bytes
+   son la transmisión misma) y WebM guarda los bloques dentro de los clusters:
+   ahí no se puede. VP9 se puede meter en mp4 si hiciera falta.
+3. El reproductor tiene que **seguir el índice**. Chromium y ffmpeg lo hacen;
+   un reproductor de hardware que lea el archivo de corrido podría no hacerlo.
+
+Lo que el códec no puede hacer solo: H.264 mira hasta 16 cuadros hacia atrás
+y VP9 menos; el loop dura 35 cuadros, así que al empezar una vuelta el
+compresor ya «se olvidó» de la anterior.
+
+## 7. Lo que falta / límites conocidos
 
 - **No probado en la caja ni en el Smart TV.** Los anillos de un degradé tan
   oscuro dependen del brillo/contraste del panel; la costura intro → loop
-  también se valida reproduciendo, no en el banco.
+  también se valida reproduciendo, no en el banco. Lo mismo para el
+  **archivo único**: pasó ffmpeg y Chromium de escritorio; la caja
+  (Chromium 70), el Smart TV (Chrome 142) y los reproductores de hardware
+  (MediaPlayer/ExoPlayer de una app) hay que verlos reproduciendo.
 - **VP9 de C3 sin mirar a ojo** (la caja tiene VP9 por hardware y la receta
   firmada v2 es VP9): `--vp9-crf` existe, la elección del crf es del operador.
 - **No está cableado a `emitir.ps1`** ni al workflow `portable`: se corre con
