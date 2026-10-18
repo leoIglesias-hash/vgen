@@ -89,22 +89,46 @@ py.cmd repo\tools\emit_loop_zona.py fuente.mp4 --out outputs\zona --comparar
 | Herramienta | Qué hace | Test |
 |---|---|---|
 | `tools/buscar_loops.py` | detecta intro, período, vueltas, cola y costura; ajusta el loop a cuadros enteros al fps destino. Con `--por-zona`, el loop corto de una **parte** de la pantalla y su mapa (§7). Solo lee | `tests/test_buscar_loops.py` (19): loop sintético con intro/cola, período fundamental y no su múltiplo, escena quieta ≠ loop, sin repetición, costura buena y costura que salta, recorte de fundidos; por zona: media pantalla, pantalla completa, todo en movimiento, escena quieta |
-| `tools/emit_loop_zona.py` | H.264 con las referencias y el nivel que aprovechan un loop parcial (16 referencias y el nivel mínimo que las admite; `--nivel-max` topea), GOP largo frente al período, `--comparar` emite también con 4 referencias y mide la ganancia, `MANIFEST-loop-zona.tsv` | `tests/test_emit_loop_zona.py` (7): tabla de niveles contra la DPB del estándar, tope por nivel, GOP, línea de x264, manifiesto |
-| `tools/emit_intro_loop.py` | detecta (o recibe `--intro`/`--periodo` en cuadros de la fuente), arma las dos referencias 709 (la del loop retemporizada a cuadros enteros), emite las **dos piezas** H.264 (y VP9 con `--vp9-crf`), el **archivo único** `unico-h264.mp4` (intro + loop × `--vueltas`, pegado sin recodificar y pasado por `mp4_dedup`) y `MANIFEST-intro-loop.tsv` con bytes, SHA-256 y SSIM. `--conservar-refs` deja las referencias y el pegado expandido en `work\` | `tests/test_emit_intro_loop.py` (11): receta C3 fijada, plan de cortes, filtros, un keyframe por pieza, determinismo, VP9 dos pasadas, pegado sin recodificar, manifiesto |
+| `tools/emit_loop_zona.py` | H.264 con las referencias y el nivel que aprovechan un loop parcial (16 referencias y el nivel mínimo que las admite; `--nivel-max` topea), GOP largo frente al período, `--comparar` emite también con 4 referencias y mide la ganancia, `MANIFEST-loop-zona.tsv` | `tests/test_emit_loop_zona.py` (8): tabla de niveles contra la DPB del estándar, tope por nivel, GOP, línea de x264, referencia etiquetada 709, manifiesto |
+| `tools/emit_intro_loop.py` | detecta (o recibe `--intro`/`--periodo` en cuadros de la fuente), arma las dos referencias 709 (la del loop retemporizada a cuadros enteros), emite las **dos piezas** H.264 (y VP9 con `--vp9-crf`), el **archivo único** `unico-h264.mp4` (intro + loop × `--vueltas`, pegado sin recodificar y pasado por `mp4_dedup`) y `MANIFEST-intro-loop.tsv` con bytes, SHA-256 y SSIM. `--conservar-refs` deja las referencias y el pegado expandido en `work\` | `tests/test_emit_intro_loop.py` (14): receta C3 fijada, C4 en 16 bits con tramado, nombres de prefiltro, referencia etiquetada 709 antes del `-i`, plan de cortes, filtros, un keyframe por pieza, determinismo, VP9 dos pasadas, pegado sin recodificar, manifiesto |
 | `tools/mp4_dedup.py` | un mp4 común con cada muestra repetida guardada **una vez**: reapunta el índice (§6). Varias pistas; relee lo que escribió y exige las mismas muestras byte a byte; rechaza mp4 fragmentado | `tests/test_mp4_dedup.py` (13): mp4 sintéticos caja por caja (intro + vueltas, varias corridas de `stsc`, tamaño fijo, `co64`, varias pistas, sin repeticiones), tiempos y keyframes intactos, determinismo, fragmentado rechazado, byte cambiado atrapado |
 | `tools/medir_banding.py` | el `proxy_banding` de `bench_ref.py` aplicado a piezas de video contra su referencia, total y **solo en zonas oscuras** | `tests/test_medir_banding.py` (5) |
 
-**Receta por defecto de `emit_intro_loop.py` = C3** (la que eligió el
-operador, §5): 1280 de ancho, 10 fps, H.264 High 3.1, **intro crf 24 / loop
-crf 26**, un keyframe por pieza (la pieza se reproduce entera, no por
-segmentos), y prefiltro:
+**Receta por defecto de `emit_intro_loop.py` = C4 (2026-10-18)**: la de C3
+que eligió el operador (§5) —1280 de ancho, 10 fps, H.264 High 3.1, **intro
+crf 24 / loop crf 26**, un keyframe por pieza (la pieza se reproduce entera,
+no por segmentos)— con el prefiltro trabajado **en 16 bits**:
 
 ```
-hqdn3d=3:2:4:3,deband=1thr=0.015:2thr=0.015:3thr=0.015:range=24:blur=1
+format=yuv420p16le,hqdn3d=3:2:4:3,
+deband=1thr=0.02:2thr=0.02:3thr=0.02:range=40:blur=1,
+deband=1thr=0.02:2thr=0.02:3thr=0.02:range=64:blur=1,
+scale=sws_dither=bayer,format=yuv420p
 ```
 
-`--prefiltro ninguno` lo apaga. La intro lleva más calidad que el loop porque
-se descarga una vez; el loop es lo que paga cada aparato y cada caché.
+(una sola línea, sin saltos). El alisado calcula tonos **intermedios** (en 8
+bits los volvía a redondear a los mismos escalones); el segundo `deband`, de
+más alcance, toma el borde ancho del resplandor a los costados; y la vuelta a
+8 bits va con un **tramado fijo** (el mismo dibujo en cada cuadro: casi no
+cuesta bits). `--prefiltro c3` usa el anterior
+(`hqdn3d=3:2:4:3,deband=1thr=0.015:2thr=0.015:3thr=0.015:range=24:blur=1`),
+`--prefiltro ninguno` lo apaga, y cualquier otro texto es el filtro tal cual.
+La intro lleva más calidad que el loop porque se descarga una vez; el loop es
+lo que paga cada aparato y cada caché.
+
+**C4 sobre intro_D x9 (2026-10-18; otro export de la fuente, SHA-256
+`ed5ecc11930b…`, misma estructura 197 + 85 × 9):** intro **1.000.349 B**
+(`424f6f07dd60…`), loop **435.443 B** (`1907a3417138…`), **archivo único
+1.439.883 B** (`8f4b375e5db4…`, 397 cuadros, 117 únicos; 4.912.259 B el
+pegado). Dos corridas, mismos bytes. Contra C3 con los colores ya corregidos
+(§4 fila 11): +14 % de peso, la **ondulación del fondo oscuro** (medida sin
+referencia: lo que queda entre un suavizado de 7 px y uno de 41 px, en el fondo
+oscuro lejos de partículas y letras) baja de **0,48 a 0,34** en la intro (la
+fuente misma da 0,58) y de 0,65 a 0,60 en el loop; el borde del resplandor a
+los costados deja de verse como una caja. Probado y descartado en el camino:
+bajar el crf de la intro a 22 (+38 % de bytes, la ondulación casi no se mueve),
+`aq-mode=3`, `deadzone`/`no-dct-decimate`, y un tercer alisado de alcance 96
+(+8 % más, misma ondulación).
 
 **Verificado sobre intro_D (2026-10-17):** la herramienta detectó el loop
 sola y emitió **1.261.054 B** en H.264 (intro 847.518 + loop 413.536;
@@ -137,7 +161,9 @@ del x9). El halo de la intro queda tratado igual que en C3.
 | 6 | **`aq-mode=3` y deblock más fuerte no sirven** para el halo | aq3: +8 % bytes y más banding; deblock 1/2: sin cambio |
 | 7 | **Limpiar ruido antes de comprimir** (`hqdn3d=3:2:4:3`) baja bytes y mancha menos | loop crf 26: 448.668 → 434.679 B y banding en oscuros −11 %; denoise fuerte ya come detalle (SSIM 0,9818) |
 | 8 | **Degradé muy oscuro = anillos; se arregla con `deband` antes de comprimir** | el halo de intro_D se dibuja con **8 tonos de luma (16..23)**; la fuente ya trae los anillos y la compresión los vuelve manchas en bloque. Con deband la intro queda más pareja que la fuente; en el loop además baja bytes (430 → 424 KB) |
-| 9 | **Medir halo**: el número relativo a la fuente detecta escalones nuevos pero **no puede premiar ir más allá de la fuente** (un deband suma un poco donde la fuente tenía mesetas) | por eso cada decisión de halo se tomó con recortes de gamma realzada y la vista previa |
+| 9 | **Medir halo**: el número relativo a la fuente detecta escalones nuevos pero **no puede premiar ir más allá de la fuente** (un deband suma un poco donde la fuente tenía mesetas) | por eso cada decisión de halo se tomó con recortes de gamma realzada y la vista previa; desde C4 también con la **ondulación** sin referencia (§3) |
+| 10 | **Alisar en 8 bits no alcanza**: el deband promedia y vuelve a redondear a los mismos 8 tonos. **En 16 bits + tramado fijo** quedan los tonos intermedios y el encoder los respeta | mismo filtro que C3 en 16 bits: ondulación de la intro 0,48 → 0,46 y el error de contorno contra el degradé ideal 0,82 → 0,34, **con menos bytes** (878.893 → 871.299 B); C4 (más alcance): 0,34 con 1.000.349 B |
+| 11 | **🔴 La etiqueta de color en la salida, sola, CONVIERTE**: el y4m de referencia no guarda la matriz; ffmpeg 8 la supone 601 y, al ver `-colorspace bt709` en la salida, convierte 601→709 un video que ya era 709. Los rojos bajan **3 a 5 tonos de luma** (el resplandor de la intro quedaba más oscuro y con el borde marcado). Y la **medición** (SSIM/PSNR) también convertía, así que no lo veía. Arreglado en `emit_v2`, `emit_intro_loop` y `emit_loop_zona` (la referencia entra etiquetada antes del `-i`) y en la medición compartida de `emit_matrix` (las dos entradas con la misma etiqueta) | intro C3: luma de una zona 32,7 en la referencia → **28,0** en la pieza; con la etiqueta de entrada, 32,75. PSNR de luma real de la intro C3 publicada: **33,3 dB** (la medición vieja decía ~46); C3 corregido 45,5 dB. Lo mismo en VP9. **Afecta a todo lo emitido con `emit_v2` (pack v2)**: ver REGISTRO 2026-10-18 |
 
 ## 5. El recorrido sobre intro_D (para no repetirlo)
 
@@ -152,6 +178,7 @@ SHA-256 `0ee33f22acae…`.
 | 4 | Halo a ojo: A paleta crf 22 · B sin paleta crf 22 · C sin paleta crf 26 | 2,2 · 2,0 · **1,24 MB**; sin paleta, sin manchas y más liviano |
 | 5 | C2: C + `hqdn3d` | 1,17 MB, banding oscuros −7 % (intro) / −11 % (loop) |
 | 6 | **C3: + `deband`, intro crf 24** (la captura del operador: el halo detrás de «TABLEROS») | **1,26 MB — elegido por el operador** («excelente, nos quedamos con ese») |
+| 7 | **C4 (2026-10-18)**: el operador vio en el aparato que *«aún se nota mucho el halo de costado al iniciar el video»*. Midiendo apareció la fila 11 de §4 (la conversión de color de más) y el límite de alisar en 8 bits (fila 10). C4 = C3 con los colores corregidos y el alisado en 16 bits + tramado fijo; vuelta a **9** vueltas (el aparato que lo recibe tomaba las 18 como memoria extra) | archivo único **1,44 MB**; el resplandor del arranque ya no tiene bordes a los costados |
 
 C3 hecho a mano: intro `defe38cf805a…` 847.555 B, loop `2795a693ad42…`
 415.302 B. Las piezas viven en la PC (`vgen-portable\outputs\introD-*`), no
@@ -303,8 +330,11 @@ un video sin loop por zona, se niega a emitir (`--forzar` emite igual).
 - **Loop por zona (§7): falta un video real** con un loop parcial (solo se
   midió el armado de prueba) y saber qué nivel de H.264 acepta el
   decodificador de la caja (¿5.0, o 4.1 → 9 referencias?).
-- **VP9 de C3 sin mirar a ojo** (la caja tiene VP9 por hardware y la receta
+- **VP9 de C4 sin mirar a ojo** (la caja tiene VP9 por hardware y la receta
   firmada v2 es VP9): `--vp9-crf` existe, la elección del crf es del operador.
+- **Las cifras de C3 de este documento (§3, §5) se midieron con la conversión
+  de color de más** (§4 fila 11): los bytes son los que fueron, pero esas
+  piezas tienen los rojos 3 a 5 tonos más oscuros que la fuente.
 - **No está cableado a `emitir.ps1`** ni al workflow `portable`: se corre con
   `py.cmd` (§3). Entra al bundle en el próximo armado (`armar.py` copia
   `tools/*.py`).

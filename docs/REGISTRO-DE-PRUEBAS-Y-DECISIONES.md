@@ -6805,3 +6805,75 @@ H.264 (VP9/AV1 no, con los encoders actuales); falta un video real con loop
 parcial y saber qué nivel acepta el decodificador de la caja. A diferencia
 del archivo único, sirve en cualquier contenedor (también MPEG-TS).
 Detalle: `docs/INTRO-Y-LOOP.md` §7.
+
+### 2026-10-18 — C4: el halo de los costados, y una conversión de color de más en toda la emisión desde y4m
+
+Operador, después de verlo en el aparato: *«aún se nota mucho el halo de
+costado al iniciar el video, ajusta aún más los parámetros para mantener
+buena calidad… recortemos el video, actualmente hace 18 repeticiones, vamos a
+9 nuevamente (el dispositivo que reproduce… toma los loops repetidos como
+memoria extra; es problema del dispositivo que recibe, no de nuestro proceso,
+seguí haciéndolo como hasta ahora)»*. Fuente que pasó de nuevo:
+`intro_D_loop_ondas_perfecto_x9.mp4` 26.542.301 B, SHA-256
+`ed5ecc11930bc15730400a70b3d017b043a87b2fcdd26b79799ccc47e2df7380` (otro
+export que el del 2026-10-17, misma estructura: intro 197 + loop 85 × 9, sin
+cola).
+
+**1. Lo que se encontró midiendo (🔴, más grande que el halo).** El y4m de
+referencia no guarda la matriz de color. Al codificarlo con
+`-colorspace bt709` (y demás etiquetas) **solo en la salida**, ffmpeg 8.1.2
+supone que la entrada es 601 y **convierte 601→709** un video que ya es 709.
+Medido sobre la intro (zona oscura del resplandor, primer cuadro): referencia
+32,73 de luma → pieza 27,91; máximo 159 → 152. Igual en H.264 y en VP9;
+sin ninguna etiqueta de salida no convierte; con la etiqueta **antes del
+`-i`**, la pieza da 32,75. Y la medición (`emit_matrix.build_metrics_command`,
+que usan `emit_v2` y `emit_intro_loop`) convertía también, así que **no lo
+veía**: con su grafo, la pieza corrida medía 55,8 dB de luma y la correcta
+40,2; con las dos entradas re-etiquetadas igual da al revés (lo real). La
+intro C3 que está en el aparato tiene **33,3 dB** de luma real contra su
+referencia (la medición vieja decía ~46). **Arreglo** (commit de esta
+entrada): `emit_v2.COLOR_709_ENTRADA` antes del `-i` de la referencia en
+`emit_v2.build_commands`, `emit_intro_loop` (H.264 y VP9) y `emit_loop_zona`;
+`emit_matrix.MISMAS_ETIQUETAS` (`setparams`, solo cambia la etiqueta) en las
+dos entradas de la medición. v1 y la matriz H-6 no cambian: sus piezas no
+llevan etiqueta de salida y se medían plano contra plano igual que ahora.
+**Alcance:** todo lo emitido con `emit_v2` tiene los rojos corridos (el pack
+v2 publicado en `v0/`, los planos H-27 de `v1/`, la receta firmada se midió
+así); el mecanismo está comprobado con la misma línea de comando en los dos
+códecs, no re-midiendo esas piezas una por una. Re-emitir y republicar es
+decisión del operador; la próxima emisión con la receta firmada ya sale
+corregida.
+
+**2. El halo.** Con los colores bien, quedaba un límite de C3: el deband
+promedia y **vuelve a redondear a 8 bits**, a los mismos escalones. Probado
+en la intro (82 cuadros, crf 24), midiendo la ondulación del fondo oscuro sin
+referencia (|suavizado 7 px − suavizado 41 px| en el fondo oscuro lejos de
+partículas y letras; la fuente da 0,578):
+
+| variante | bytes intro | ondulación |
+|---|---:|---:|
+| C3 (colores corregidos) | 878.893 | 0,483 |
+| C3 en 16 bits + tramado fijo | 871.299 | 0,455 |
+| deband más fuerte (0,02 / alcance 40) en 16 bits | 917.469 | 0,388 |
+| **C4 = + segundo deband de alcance 64** | **1.000.349** | **0,340** |
+| C4 con alcance 96 | 1.081.769 | 0,335 |
+| deband fuerte + crf 22 | 1.216.650 | 0,381 |
+| deband fuerte + `aq-mode=3` / `deadzone 6` + `no-dct-decimate` | 1.002.183 / 943.234 | ≈ igual |
+
+Elegido **C4** (default nuevo de `emit_intro_loop.py`; `--prefiltro c3` lo
+deja comparar): `format=yuv420p16le,hqdn3d=3:2:4:3,deband(0,02, 40),deband(0,02,
+64),scale=sws_dither=bayer,format=yuv420p`. Se arma desde la referencia de 8
+bits de siempre (desde una de 16 bits sacada de la fuente da lo mismo: 0,344;
+la fuente ya es 1280×720, no hay escalado que sume precisión). El tramado es
+fijo por posición (el mismo en cada cuadro), por eso casi no cuesta bits. Logo
+y partículas intactos a ojo; se pierden un par de motas muy tenues. SSIM
+contra la referencia sin alisar: intro 0,9870, loop 0,9772 (mide la
+diferencia con los escalones de la fuente, no un defecto).
+
+**Emitido** (`vgen-portable\outputs\introD-C4-x9\`, 9 vueltas): intro
+1.000.349 B `424f6f07dd60…`, loop 435.443 B `1907a3417138…`, **archivo único
+1.439.883 B** `8f4b375e5db4…` (397 cuadros, 117 únicos; pegado 4.912.259 B;
+High 3.1, 709 etiquetado). Dos corridas, mismos bytes. +14 % contra C3 (1,27
+MB). Loop: ondulación 0,646 → 0,603, luma 30,8 → 41,1 dB (la mayor parte es el
+color corregido). Comparación del arranque a brillo normal y ×3 en la misma
+carpeta. Falta el ojo del operador en el aparato.

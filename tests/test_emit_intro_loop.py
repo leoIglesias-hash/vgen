@@ -24,6 +24,22 @@ class RecetaTest(unittest.TestCase):
                          "hqdn3d=3:2:4:3,deband=1thr=0.015:2thr=0.015:3thr=0.015"
                          ":range=24:blur=1")
 
+    def test_c4_alisa_en_16_bits_y_vuelve_con_tramado_fijo(self):
+        # 2026-10-18 (halo de los costados): mismo encoder que C3, el alisado
+        # calcula tonos intermedios en 16 bits y vuelve a 8 con un tramado fijo.
+        partes = eil.PREFILTRO_C4.split(",")
+        self.assertEqual(partes[0], "format=yuv420p16le")
+        self.assertEqual(partes[-2:], ["scale=sws_dither=bayer", "format=yuv420p"])
+        self.assertIn("range=40", eil.PREFILTRO_C4)
+        self.assertIn("range=64", eil.PREFILTRO_C4)
+
+    def test_nombres_de_prefiltro(self):
+        self.assertEqual(eil.resolver_prefiltro("c4"), eil.PREFILTRO_C4)
+        self.assertEqual(eil.resolver_prefiltro("C3"), eil.PREFILTRO_C3)
+        self.assertIsNone(eil.resolver_prefiltro("ninguno"))
+        self.assertIsNone(eil.resolver_prefiltro(""))
+        self.assertEqual(eil.resolver_prefiltro("hqdn3d"), "hqdn3d")
+
 
 class PlanYFiltrosTest(unittest.TestCase):
     def setUp(self):
@@ -58,10 +74,21 @@ class EncoderTest(unittest.TestCase):
         self.assertIn("keyint=35:min-keyint=35", x264)
         self.assertIn("threads=1:cpu-independent=1", x264)
         self.assertEqual(command[command.index("-crf") + 1], "26")
-        self.assertEqual(command[command.index("-vf") + 1], eil.PREFILTRO_C3)
+        self.assertEqual(command[command.index("-vf") + 1], eil.PREFILTRO_C4)
         self.assertEqual(command[command.index("-profile:v") + 1], "high")
         self.assertIn("+faststart", command)
         self.assertEqual(command[-1], "loop-h264.mp4")
+
+    def test_la_referencia_entra_etiquetada_709(self):
+        # 2026-10-18: el y4m no guarda la matriz; con la etiqueta solo en la
+        # salida, ffmpeg 8 convertia 601->709 (rojos 3 a 5 tonos mas oscuros).
+        h264 = eil.build_h264_command("ffmpeg", "ref.y4m", "o.mp4", 24, 82)
+        for command in [h264] + eil.build_vp9_commands("ffmpeg", "ref.y4m", "o.webm", 14, 35, "l"):
+            antes = command[:command.index("-i")]
+            for flag, valor in (("-colorspace", "bt709"), ("-color_primaries", "bt709"),
+                                ("-color_trc", "bt709"), ("-color_range", "tv")):
+                self.assertEqual(antes[antes.index(flag) + 1], valor)
+            self.assertEqual(command[command.index("-i") + 1], "ref.y4m")
 
     def test_sin_prefiltro_no_hay_vf(self):
         command = eil.build_h264_command("ffmpeg", "ref.y4m", "o.mp4", 24, 82, prefiltro=None)

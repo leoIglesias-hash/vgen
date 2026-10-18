@@ -92,6 +92,12 @@ TECHO_BYTES = 20000000
 # va en el filtro `scale` de la referencia.
 COLOR_709 = ["-colorspace", "bt709", "-color_primaries", "bt709",
              "-color_trc", "bt709", "-color_range", "tv"]
+# Lo mismo, dicho de la REFERENCIA, antes de su `-i`. El y4m no guarda la
+# matriz: sin esto ffmpeg 8 la supone 601 y, al ver COLOR_709 en la salida,
+# CONVIERTE 601->709 un video que ya es 709 (los rojos bajan 3 a 5 tonos de
+# luma; medido el 2026-10-18 con intro_D, en H.264 y en VP9). Con la entrada
+# etiquetada no hay conversion: la pieza lleva los planos de la referencia.
+COLOR_709_ENTRADA = list(COLOR_709)
 
 # E-D: lo que la matriz H-6 nunca midio. Cuadros alt-ref (ocultos, viven
 # dentro del GOP cerrado), 25 cuadros de anticipacion, filtro temporal de
@@ -286,8 +292,9 @@ def build_commands(ffmpeg, variant, ref_path, audio_path, out_path, passlog):
     """Las lineas de ffmpeg de una pieza, en orden. Video = la referencia
     (entrada 0); audio = la fuente (entrada 1, solo su pista a:0), o nada.
     Dos pasadas: la primera solo video a `-f null`, la segunda con el log de
-    la primera. `-shortest` recorta al video, como en v1."""
-    base = [ffmpeg, "-y", "-nostdin", "-i", ref_path]
+    la primera. `-shortest` recorta al video, como en v1. La referencia entra
+    etiquetada 709 (COLOR_709_ENTRADA): si no, ffmpeg la re-convierte."""
+    base = [ffmpeg, "-y", "-nostdin"] + COLOR_709_ENTRADA + ["-i", ref_path]
     if audio_path:
         base += ["-i", audio_path]
     base += list(DETERMINISM) + ["-map", "0:v:0"]

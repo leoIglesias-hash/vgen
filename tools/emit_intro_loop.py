@@ -11,14 +11,22 @@ formas, las dos sin pagar cada vuelta:
     (tools/mp4_dedup.py). Pesa como las dos piezas; sirve para un reproductor
     que pasa un archivo y nada mas (si sigue el indice del mp4).
 
-Receta por defecto = la que eligio el operador el 2026-10-17 para intro_D
-(C3, docs/INTRO-Y-LOOP.md): 1280 de ancho, 10 fps, H.264 High, intro crf 24,
-loop crf 26, un solo keyframe por pieza, y un PREFILTRO antes del encoder:
+Receta por defecto = C4 (2026-10-18, docs/INTRO-Y-LOOP.md): la de C3 que
+eligio el operador el 2026-10-17 para intro_D (1280 de ancho, 10 fps, H.264
+High, intro crf 24, loop crf 26, un solo keyframe por pieza) con el PREFILTRO
+trabajado en 16 bits:
 
+  format=yuv420p16le  el alisado calcula tonos INTERMEDIOS (en 8 bits los
+                   volveria a redondear a los mismos escalones);
   hqdn3d=3:2:4:3   limpia el ruido fino de la fuente (ya comprimida): esos
-                   bits pasan al degrade; el fondo oscuro deja de motearse.
-  deband=...       mezcla los pocos tonos de un degrade muy oscuro (8 tonos
-                   de luma en el halo de intro_D) para que no se vean anillos.
+                   bits pasan al degrade; el fondo oscuro deja de motearse;
+  deband x2        mezcla los pocos tonos de un degrade muy oscuro (8 tonos
+                   de luma en el halo de intro_D): alcance 40 y despues 64,
+                   para el borde ancho del resplandor a los costados;
+  scale=sws_dither=bayer,format=yuv420p  vuelve a 8 bits con un tramado
+                   FIJO (no cambia de cuadro a cuadro: casi no cuesta bits).
+
+C3 (`--prefiltro c3`) queda para comparar.
 
 La intro lleva mas calidad que el loop porque se descarga una sola vez; el
 loop es lo que se paga en cada aparato y en la cache.
@@ -44,7 +52,7 @@ Uso:
   python tools/emit_intro_loop.py fuente.mp4 --out outputs/intro-loop
   python tools/emit_intro_loop.py fuente.mp4 --out o --intro 197 --periodo 85
   python tools/emit_intro_loop.py fuente.mp4 --out o --vp9-crf 14
-  python tools/emit_intro_loop.py fuente.mp4 --out o --prefiltro ninguno
+  python tools/emit_intro_loop.py fuente.mp4 --out o --prefiltro c3   (o ninguno)
 """
 
 import argparse
@@ -70,6 +78,11 @@ CRF_INTRO = 24
 CRF_LOOP = 26
 PREFILTRO_C3 = ("hqdn3d=3:2:4:3,"
                 "deband=1thr=0.015:2thr=0.015:3thr=0.015:range=24:blur=1")
+PREFILTRO_C4 = ("format=yuv420p16le,hqdn3d=3:2:4:3,"
+                "deband=1thr=0.02:2thr=0.02:3thr=0.02:range=40:blur=1,"
+                "deband=1thr=0.02:2thr=0.02:3thr=0.02:range=64:blur=1,"
+                "scale=sws_dither=bayer,format=yuv420p")
+PREFILTROS = {"c3": PREFILTRO_C3, "c4": PREFILTRO_C4}
 H264_BFRAMES = 3
 H264_REFS = 4
 VP9_CPU = 2
@@ -115,10 +128,25 @@ def prefiltro_args(prefiltro):
     return ["-vf", prefiltro] if prefiltro else []
 
 
-def build_h264_command(ffmpeg, ref_path, out_path, crf, gop, prefiltro=PREFILTRO_C3):
+def resolver_prefiltro(texto):
+    """'' o ninguno -> None; c3 / c4 -> la receta con ese nombre; otro texto ->
+    el filtro tal cual."""
+    if texto.lower() in ("", "ninguno", "none"):
+        return None
+    return PREFILTROS.get(texto.lower(), texto)
+
+
+def entrada_ref(ffmpeg, ref_path):
+    """El comienzo de todo comando que codifica desde una referencia y4m:
+    etiquetada 709 ANTES del -i (emit_v2.COLOR_709_ENTRADA)."""
+    return ([ffmpeg, "-y", "-nostdin"] + emit_v2.COLOR_709_ENTRADA
+            + ["-f", "yuv4mpegpipe", "-i", ref_path])
+
+
+def build_h264_command(ffmpeg, ref_path, out_path, crf, gop, prefiltro=PREFILTRO_C4):
     """Una pieza H.264 High 3.1 con UN keyframe (gop = cuadros de la pieza):
     la pieza se reproduce entera, no por segmentos."""
-    return ([ffmpeg, "-y", "-nostdin", "-f", "yuv4mpegpipe", "-i", ref_path]
+    return (entrada_ref(ffmpeg, ref_path)
             + list(emit_pieces.DETERMINISM) + ["-map", "0:v:0"] + prefiltro_args(prefiltro)
             + ["-c:v", "libx264", "-profile:v", "high", "-level", "3.1",
                "-preset", "slow", "-crf", str(crf),
@@ -128,9 +156,9 @@ def build_h264_command(ffmpeg, ref_path, out_path, crf, gop, prefiltro=PREFILTRO
             + list(emit_pieces.BITEXACT) + [out_path])
 
 
-def build_vp9_commands(ffmpeg, ref_path, out_path, crf, gop, passlog, prefiltro=PREFILTRO_C3):
+def build_vp9_commands(ffmpeg, ref_path, out_path, crf, gop, passlog, prefiltro=PREFILTRO_C4):
     """VP9 en dos pasadas con la calidad de emit_v2 (alt-ref, arnr, tpl)."""
-    base = ([ffmpeg, "-y", "-nostdin", "-f", "yuv4mpegpipe", "-i", ref_path]
+    base = (entrada_ref(ffmpeg, ref_path)
             + list(emit_pieces.DETERMINISM) + ["-map", "0:v:0"] + prefiltro_args(prefiltro)
             + ["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", str(crf),
                "-cpu-used", str(VP9_CPU), "-row-mt", "0", "-g", str(gop),
@@ -207,7 +235,7 @@ def archivo_unico(ffmpeg, out_dir, work, h264, vueltas, errlog, log=print):
 
 
 def emitir(fuente_path, out_dir, ffmpeg="ffmpeg", intro=None, periodo=None, fps=FPS,
-           ancho=ANCHO, crf_intro=CRF_INTRO, crf_loop=CRF_LOOP, prefiltro=PREFILTRO_C3,
+           ancho=ANCHO, crf_intro=CRF_INTRO, crf_loop=CRF_LOOP, prefiltro=PREFILTRO_C4,
            vp9_crf=None, vueltas=None, matriz_fuente="auto", conservar_refs=False,
            log=print):
     os.makedirs(out_dir, exist_ok=True)
@@ -301,8 +329,8 @@ def main(argv=None):
     parser.add_argument("--ancho", type=int, default=ANCHO)
     parser.add_argument("--crf-intro", type=int, default=CRF_INTRO)
     parser.add_argument("--crf-loop", type=int, default=CRF_LOOP)
-    parser.add_argument("--prefiltro", default=PREFILTRO_C3,
-                        help="filtro ffmpeg antes del encoder; 'ninguno' lo apaga")
+    parser.add_argument("--prefiltro", default="c4",
+                        help="c4 (default), c3, ninguno, o un filtro ffmpeg antes del encoder")
     parser.add_argument("--vp9-crf", type=int, default=None,
                         help="emite tambien VP9 (dos pasadas) con este crf")
     parser.add_argument("--vueltas", type=int, default=None,
@@ -315,7 +343,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if (args.intro is None) != (args.periodo is None):
         parser.error("--intro y --periodo van juntos (o ninguno, para detectarlos)")
-    prefiltro = None if args.prefiltro.lower() in ("", "ninguno", "none") else args.prefiltro
+    prefiltro = resolver_prefiltro(args.prefiltro)
     emitir(args.fuente, args.out, args.ffmpeg, args.intro, args.periodo, args.fps,
            args.ancho, args.crf_intro, args.crf_loop, prefiltro, args.vp9_crf,
            args.vueltas, args.matriz_fuente, args.conservar_refs)

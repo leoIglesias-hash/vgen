@@ -151,6 +151,16 @@ con el mismo zip, y el DASH sin audio idéntico). `v2-vp9.webm` hereda eso;
 publicada pineada por contenido y muxeada por `-c:a copy`); hasta que el
 operador decida, la huella del webm se declara **con la CPU que lo emitió**.
 
+**🔴 Corrección 2026-10-18 (cambia las huellas):** hasta esa fecha las piezas
+v2 se codificaban con las etiquetas 709 solo en la salida; el y4m de la
+referencia no guarda la matriz, ffmpeg 8 la suponía 601 y convertía 601→709
+un video que ya era 709 (rojos 3 a 5 tonos de luma más oscuros, VP9 y
+H.264). La medición SSIM/PSNR también convertía y no lo veía. Desde entonces
+la referencia entra etiquetada (`COLOR_709_ENTRADA` antes del `-i`) y la
+medición re-etiqueta igual las dos entradas: **ninguna huella v2 anterior se
+repite** (tampoco `1c9b383c93e5…`), y las SSIM de §4 y de la matriz se
+midieron con la conversión. REGISTRO 2026-10-18.
+
 La receta viaja en el manifiesto como texto **canónico** (solo lo que decide
 los bytes, sin rutas): así el `MANIFEST-v2.tsv` de la PC y el del CI pueden
 coincidir línea a línea aunque la fuente viva en otra carpeta.

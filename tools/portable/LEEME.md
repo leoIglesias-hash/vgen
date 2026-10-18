@@ -136,8 +136,9 @@ py.cmd repo\tools\emit_loop_zona.py C:\clip.mp4 --out outputs\zona --comparar
 El primero dice dónde termina la intro, cuánto dura el loop, cuántas vueltas
 hay y si la costura se nota. El segundo emite la intro (una vez) y una vuelta
 del loop (la repite el reproductor), más `unico-h264.mp4`: un solo mp4 común
-con todas las vueltas, cada una guardada una vez; por defecto la receta C3
-(`docs/INTRO-Y-LOOP.md`). El tercero mide el halo escalonado de una pieza
+con todas las vueltas, cada una guardada una vez; por defecto la receta C4
+(`docs/INTRO-Y-LOOP.md`: alisado en 16 bits contra el halo; `--prefiltro c3`
+la anterior; `--vueltas 9` fija cuántas lleva el archivo único). El tercero mide el halo escalonado de una pieza
 contra su referencia (`--conservar-refs` del segundo la deja en `work\`). El
 cuarto deduplica cualquier mp4 cuyas repeticiones sean bytes idénticos. Los
 dos últimos son para un loop corto en una PARTE de la pantalla: el detector

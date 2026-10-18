@@ -62,6 +62,13 @@ class EncoderTest(unittest.TestCase):
         con = elz.build_h264_command("ffmpeg", "r.y4m", "z.mp4", 26, 9, "4.0", 100, "hqdn3d")
         self.assertEqual(con[con.index("-vf") + 1], "hqdn3d")
 
+    def test_la_referencia_entra_etiquetada_709(self):
+        # 2026-10-18: sin la etiqueta ANTES del -i, ffmpeg 8 re-convierte 601->709.
+        command = elz.build_h264_command("ffmpeg", "ref.y4m", "zona.mp4", 26, 16, "5.0", 100)
+        antes = command[:command.index("-i")]
+        self.assertEqual(antes[antes.index("-colorspace") + 1], "bt709")
+        self.assertEqual(antes[antes.index("-color_range") + 1], "tv")
+
     def test_manifiesto_con_mapa_de_zonas(self):
         zona = {"area": 0.5, "periodo": 12,
                 "mascara": np.array([[True, True], [False, False]])}

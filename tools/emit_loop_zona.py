@@ -142,7 +142,7 @@ def build_ref_command(ffmpeg, fuente_path, ref_path, ancho=ANCHO, fps=FPS, matri
 
 
 def build_h264_command(ffmpeg, ref_path, out_path, crf, refs, nivel, gop, prefiltro=None):
-    return ([ffmpeg, "-y", "-nostdin", "-f", "yuv4mpegpipe", "-i", ref_path]
+    return (emit_intro_loop.entrada_ref(ffmpeg, ref_path)
             + list(emit_pieces.DETERMINISM) + ["-map", "0:v:0"]
             + (["-vf", prefiltro] if prefiltro else [])
             + ["-c:v", "libx264", "-profile:v", "high", "-level", nivel,
@@ -243,7 +243,7 @@ def main(argv=None):
     parser.add_argument("--nivel-max", default=None,
                         help="nivel H.264 maximo que acepta el aparato (p. ej. 4.1)")
     parser.add_argument("--prefiltro", default="ninguno",
-                        help="filtro ffmpeg antes del encoder; 'c3' = el de intro_D")
+                        help="filtro ffmpeg antes del encoder; 'c4' / 'c3' = los de intro_D")
     parser.add_argument("--comparar", action="store_true",
                         help="emite tambien con 4 referencias y mide la ganancia")
     parser.add_argument("--forzar", action="store_true",
@@ -253,11 +253,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not 1 <= args.refs <= 16:
         parser.error("--refs va de 1 a 16 (el maximo de H.264)")
-    prefiltro = args.prefiltro.strip()
-    if prefiltro.lower() in ("", "ninguno", "none"):
-        prefiltro = None
-    elif prefiltro.lower() == "c3":
-        prefiltro = emit_intro_loop.PREFILTRO_C3
+    prefiltro = emit_intro_loop.resolver_prefiltro(args.prefiltro.strip())
     emitir(args.fuente, args.out, args.ffmpeg, args.fps, args.ancho, args.crf, args.refs,
            args.nivel_max, prefiltro, args.comparar, args.forzar, args.matriz_fuente)
     return 0

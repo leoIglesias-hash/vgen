@@ -262,13 +262,24 @@ def build_command(ffmpeg, variant, ref_path, out_path):
     return command + list(variant["args"]) + list(BITEXACT) + [out_path]
 
 
+# Solo cambia la etiqueta, nunca los pixeles: con las dos entradas iguales la
+# comparacion es plano contra plano.
+MISMAS_ETIQUETAS = ("setparams=colorspace=bt709:color_primaries=bt709"
+                    ":color_trc=bt709:range=tv")
+
+
 def build_metrics_command(ffmpeg, out_path, ref_path, fps=15):
     """Decodifica la pieza y la compara contra la referencia con `ssim` y
     `psnr` en UNA pasada. `fps=15` re-expande las piezas de cadencia variable
     -repite el cuadro mientras dura, como hace el <video>- y no cambia nada en
-    las de cadencia fija. El carril v2 (H-26) pasa la cadencia de su base."""
-    graph = ("[0:v]fps=%d,format=yuv420p,split[a][b];"
-             "[1:v]split[c][d];[a][c]ssim;[b][d]psnr" % fps)
+    las de cadencia fija. El carril v2 (H-26) pasa la cadencia de su base.
+    Las dos entradas se RE-ETIQUETAN igual (MISMAS_ETIQUETAS) antes de
+    compararse: si la pieza dice 709 y la referencia no dice nada, ffmpeg 8
+    convierte una de las dos y la medicion compara otra cosa (2026-10-18: una
+    pieza con los rojos corridos media 55,8 dB y la correcta 40,2)."""
+    graph = ("[0:v]fps=%d,format=yuv420p,%s,split[a][b];"
+             "[1:v]%s,split[c][d];[a][c]ssim;[b][d]psnr"
+             % (fps, MISMAS_ETIQUETAS, MISMAS_ETIQUETAS))
     return [ffmpeg, "-nostdin", "-i", out_path, "-i", ref_path,
             "-lavfi", graph, "-f", "null", "-"]
 

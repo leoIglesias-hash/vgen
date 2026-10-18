@@ -243,6 +243,29 @@ class ComandosTest(unittest.TestCase):
         self.assertIn("[0:v]fps=15,", after(emit_matrix.build_metrics_command(
             "ffmpeg", "p.webm", "ref.y4m"), "-lavfi"))
 
+    def test_la_referencia_entra_etiquetada_709_en_las_dos_piezas(self):
+        # 2026-10-18: el y4m no guarda la matriz. Con COLOR_709 solo en la
+        # salida, ffmpeg 8 suponia 601 y CONVERTIA a 709 un video que ya era
+        # 709 (rojos 3 a 5 tonos mas oscuros, en H.264 y en VP9).
+        for variant in emit_v2.recipe():
+            for command in emit_v2.build_commands("ffmpeg", variant, "ref.y4m", "fuente.mp4",
+                                                  "o", "work/l"):
+                antes = command[:command.index("-i")]
+                for flag, value in (("-colorspace", "bt709"), ("-color_primaries", "bt709"),
+                                    ("-color_trc", "bt709"), ("-color_range", "tv")):
+                    self.assertEqual(after(antes, flag), value, variant["id"])
+                self.assertEqual(after(command, "-i"), "ref.y4m")
+
+    def test_la_medicion_compara_plano_contra_plano(self):
+        # Las dos entradas con la MISMA etiqueta: ffmpeg no convierte ninguna.
+        # Sin esto, la pieza con los rojos corridos media 55,8 dB y la correcta 40,2.
+        graph = after(emit_matrix.build_metrics_command("ffmpeg", "p.mp4", "ref.y4m", fps=10),
+                      "-lavfi")
+        pieza, ref = graph.split(";")[:2]
+        self.assertIn(emit_matrix.MISMAS_ETIQUETAS, pieza)
+        self.assertIn(emit_matrix.MISMAS_ETIQUETAS, ref)
+        self.assertTrue(ref.startswith("[1:v]setparams="))
+
 
 class TechoYManifiestoTest(unittest.TestCase):
 
