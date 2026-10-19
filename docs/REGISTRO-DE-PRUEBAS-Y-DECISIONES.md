@@ -6921,3 +6921,12 @@ Comprobado con la línea del bug (etiquetas 709 solo en la salida, H.264 crf
 no dice nada raro; la pieza buena da +0,04. Con este chequeo el 601→709 se
 habría visto al primer emitir. Costo: una decodificación más por pieza
 medida.
+
+### 2026-10-19 — Veredicto de C4
+
+Operador, sobre la versión C4 x9 (`vgen-portable\outputs\introD-C4-x9\`,
+archivo único `8f4b375e5db4…`, 1.439.883 B): *«quedó perfecto»*. C4 queda
+como la receta de intro_D (ya era el default de `emit_intro_loop.py`). No
+dijo en qué pantalla lo miró; siguen pendientes en aparatos el archivo único
+en la caja y el Smart TV, el nivel H.264 de la caja y un video real con loop
+parcial (`docs/INTRO-Y-LOOP.md` §8).
