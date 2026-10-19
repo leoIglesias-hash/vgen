@@ -6946,3 +6946,45 @@ alfa con sus palancas medidas (opaco → pieza normal; RGB bajo alfa 0 limpiado;
 recorte al rectángulo útil; tramos vacíos; loops), y planos en `v1/` para la
 caja y el Smart TV (en Chromium el alfa va por software). **H.265 no se
 emite.**
+
+### 2026-10-19 (noche) — H-28: el emisor con alfa, hecho y medido con un sintético
+
+`tools/emit_alfa.py` + `tests/test_emit_alfa.py` (37 pruebas). Detalle completo
+en `docs/EMISION-ALFA.md`; acá lo medido, con el ffmpeg 8.1.2 del bundle en la
+PC del operador (Intel).
+
+- **Antes de escribir**: las dos pasadas de VP9 aceptan alfa; VP8 con crf
+  necesita tope de bitrate; `premultiply` acepta rgba. La conversión RGBA →
+  yuva420p con `scale=out_color_matrix=bt709:out_range=tv`, contra la fórmula
+  709 calculada en numpy: sesgo +0,008 tonos y error medio 0,25 (con 601
+  daría −0,36 y 8 tonos). ffprobe ve un WebM con alfa como `yuv420p` +
+  `ALPHA_MODE=1`.
+- **El sintético** (`--hacer-sintetico`, `ea05e8635db1…`): ProRes 4444
+  1920×1080 @30, 4 s, 1 s vacío al principio, disco de borde suave, color
+  ruidoso bajo alfa 0, tono de audio. En el lienzo 1280×720 @15: rect 898×360
+  (35,1 %), cobertura 8,3 %, 21,2 % de lo visible semitransparente, 15/60
+  cuadros vacíos.
+- **Palancas** (VP9 crf 30 sin audio, contra la receta con sangrado):
+  - plano −21,3 % (compuesto 39,03 vs 39,05: el sangrado no compra nada) →
+    **default `plano`**;
+  - sin recorte +9,2 %;
+  - sin hueco +2,3 %;
+  - alfa binario −28,6 %, pero el compuesto contra la receta cae a 32,85 dB
+    → **apagado, a ojo**.
+  - Sin escalar (el ruido de debajo sobrevive): **sin limpiar +170,6 %**.
+  - Al escalar sobre premultiplicado, lo invisible ya sale negro: por eso a
+    1280 «sin limpiar» cuesta poco.
+- **VP9 vs VP8 a igual compuesto**: ≈ 39,0 dB, VP9 crf 30 = 470.532 B y VP8
+  crf 24 = 749.433 B (+59 %); ≈ 40,5, +25 %; 37,25, +110 % → **defaults VP9
+  crf 30 / VP8 crf 24**.
+- **Determinismo**: dos corridas en paralelo, mismos bytes y mismo
+  manifiesto: `alfa-vp9.webm` `3bafca752333…` (470.532 B, con Opus) y
+  `alfa-vp8.webm` `111e43a44dbd…` (con el crf 10 de esa corrida). Color:
+  +0,01 / +0,02 tonos.
+- **Otros caminos**: siempre opaco → `opaco-vp9` + `opaco-h264`; sin alfa →
+  código 3; WebM con alfa de fuente → leído con libvpx-vp9, alfa vivo, los
+  cuadros vacíos siguen exactamente en 0.
+
+Falta para cerrar H-28: el clip real con transparencia del operador, los
+planos en `v1/` con la pieza posicionada por `rect`, y el veredicto de la
+caja y del Smart TV.

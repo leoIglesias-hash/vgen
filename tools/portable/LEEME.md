@@ -167,6 +167,24 @@ corrió más de 1 tono, la salida lo grita con `!!! ALARMA DE COLOR` y la nota
 del manifiesto lo dice: esa pieza no se publica sin mirar qué pasó (así se
 vio tarde el 601→709 del 2026-10-18).
 
+## Video con transparencia (H-28)
+
+```
+py.cmd repo	ools\emit_alfa.py C:\efecto.mov --out outputslfa
+py.cmd repo	ools\emit_alfa.py C:\efecto.mov --out outputslfa --medir-palancas
+```
+
+La fuente tiene que traer canal alfa (ProRes 4444, qtrle, PNG en secuencia o
+WebM con alfa); si no, dice que se use `emit_v2.py`. Deja `alfa-vp9.webm` y
+`alfa-vp8.webm` (con Opus si hay audio), `MANIFEST-alfa.tsv` (con `rect`:
+dónde va la pieza sobre el lienzo, y `tiempo`: desde qué cuadro) e
+`INFORME-alfa.txt` (lo que dice el canal). Lo invisible se pinta de un color
+plano, la pieza se recorta al rectángulo útil y los cuadros vacíos de las
+puntas no se emiten (si no hay audio). Si el canal es siempre opaco emite
+`opaco-vp9.webm` + `opaco-h264.mp4`. `--medir-palancas` deja
+`PALANCAS-alfa.tsv` con cuánto ahorra cada decisión. Detalle:
+`docs/EMISION-ALFA.md`.
+
 ## Qué hay adentro
 
 `VERSIONES.tsv` dice de qué commit salió, con qué Python y qué ffmpeg.
