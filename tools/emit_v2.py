@@ -432,11 +432,101 @@ def run(command, log_path, append=False):
         raise RuntimeError("ffmpeg fallo (%d); ver %s" % (code, log_path))
 
 
+# --------------------------------------------------------------------------
+# Alarma de color (2026-10-19). El corrimiento 601->709 del 2026-10-18 bajo la
+# luma de las piezas 3 a 5 tonos y el SSIM/PSNR no lo vio. Un video bien
+# codificado conserva la luma MEDIA de su referencia (el error de compresion
+# va y viene, no empuja para un lado); con la conversion de mas, todo el
+# cuadro baja. Un tono de umbral deja margen y atrapa ese error al primer
+# emitir.
+
+UMBRAL_SESGO_LUMA = 1.0
+
+
+def build_luma_command(ffmpeg, path, fps=None):
+    """Decodifica a 4:2:0 de 8 bits crudo para leer la luma, re-etiquetado
+    como en la medicion (emit_matrix.MISMAS_ETIQUETAS): ninguna conversion de
+    color en el medio. `fps` re-expande la pieza como el SSIM; la referencia
+    y4m va sin `fps`."""
+    filtro = ("fps=%d," % fps if fps else "") + "format=yuv420p," + emit_matrix.MISMAS_ETIQUETAS
+    return [ffmpeg, "-v", "error", "-nostdin", "-i", path, "-vf", filtro,
+            "-pix_fmt", "yuv420p", "-f", "rawvideo", "-"]
+
+
+def lumas(ffmpeg, path, ancho, alto, fps=None):
+    """Generador: el plano Y de cada cuadro (uint8, alto x ancho)."""
+    import numpy as np
+    tam = ancho * alto * 3 // 2
+    proc = subprocess.Popen(build_luma_command(ffmpeg, path, fps), stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    try:
+        while True:
+            buf = proc.stdout.read(tam)
+            if len(buf) < tam:
+                break
+            yield np.frombuffer(buf, dtype=np.uint8, count=ancho * alto).reshape(alto, ancho)
+    finally:
+        proc.stdout.close()
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait()
+
+
+def sesgo_de(suma_diferencia, pixeles):
+    """Luma media pieza - referencia, en tonos de 8 bits (2 decimales)."""
+    if not pixeles:
+        return None
+    return round(suma_diferencia / float(pixeles), 2)
+
+
+def alarma_color(sesgo, umbral=UMBRAL_SESGO_LUMA):
+    """'' si el sesgo esta dentro del umbral; si no, el texto de la alarma."""
+    if sesgo is None or abs(sesgo) <= umbral:
+        return ""
+    return ("ALARMA DE COLOR: la luma media se corrio %+.2f tonos contra la referencia "
+            "(umbral %.1f; una conversion de color de mas? docs/INTRO-Y-LOOP.md s4 fila 11)"
+            % (sesgo, umbral))
+
+
+def sesgo_luma(ffmpeg, out_path, ref_path, fps):
+    """El sesgo de luma media de una pieza contra su referencia y4m, sumado
+    en enteros (exacto) sobre los cuadros que tienen las dos."""
+    ancho, alto, _, _ = read_y4m_header(ref_path)
+    pieza = lumas(ffmpeg, out_path, ancho, alto, fps)
+    ref = lumas(ffmpeg, ref_path, ancho, alto)
+    suma = cuadros = 0
+    try:
+        for yp, yr in zip(pieza, ref):
+            suma += int(yp.sum(dtype="int64")) - int(yr.sum(dtype="int64"))
+            cuadros += 1
+    finally:
+        pieza.close()
+        ref.close()
+    return sesgo_de(suma, cuadros * ancho * alto)
+
+
+def anotar_color(sesgo, log=None):
+    """La parte de la nota del manifiesto que dice la luma; si hay alarma la
+    grita en la salida (log) y la deja en la nota."""
+    if sesgo is None:
+        return "luma -"
+    alarma = alarma_color(sesgo)
+    if alarma and log:
+        log("  " + "!" * 72)
+        log("  !!! " + alarma)
+        log("  " + "!" * 72)
+    return "luma %+.2f%s" % (sesgo, "; " + alarma if alarma else "")
+
+
 def medir(ffmpeg, out_path, ref_path, fps):
+    """SSIM/PSNR (emit_matrix) y el sesgo de luma media contra la referencia
+    (`sesgo_luma`, la alarma de color)."""
     result = subprocess.run(emit_matrix.build_metrics_command(ffmpeg, out_path, ref_path, fps=fps),
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                             stderr=subprocess.PIPE)
-    return emit_matrix.parse_metrics(result.stderr.decode("utf-8", "replace"))
+    metricas = emit_matrix.parse_metrics(result.stderr.decode("utf-8", "replace"))
+    metricas["sesgo_luma"] = sesgo_luma(ffmpeg, out_path, ref_path, fps)
+    return metricas
 
 
 def emit_variant(ffmpeg, variant, ref_path, audio_path, out_dir, work_dir, log,
@@ -467,7 +557,8 @@ def emit_variant(ffmpeg, variant, ref_path, audio_path, out_dir, work_dir, log,
     }
     if medir_look:
         row.update(medir(ffmpeg, out_path, ref_path, fps))
-        row["note"] += "; ssim %s psnr %s" % (row["ssim_all"], row["psnr_avg"])
+        row["note"] += "; ssim %s psnr %s; %s" % (row["ssim_all"], row["psnr_avg"],
+                                                  anotar_color(row["sesgo_luma"], log))
     row["note"] += "; %d cuadros; %.0f s" % (row["cuadros"], elapsed)
     log("  %-16s %10d B  ssim %s  psnr %s  %d cuadros  %.0f s" % (
         row["id"], row["bytes"], row["ssim_all"], row["psnr_avg"], row["cuadros"], elapsed))

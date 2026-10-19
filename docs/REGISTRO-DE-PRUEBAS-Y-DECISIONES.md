@@ -6877,3 +6877,47 @@ High 3.1, 709 etiquetado). Dos corridas, mismos bytes. +14 % contra C3 (1,27
 MB). Loop: ondulación 0,646 → 0,603, luma 30,8 → 41,1 dB (la mayor parte es el
 color corregido). Comparación del arranque a brillo normal y ×3 en la misma
 carpeta. Falta el ojo del operador en el aparato.
+
+### 2026-10-19 — La evaluación de halo hecha herramienta (`tools/probar_halo.py`) y la alarma de color
+
+Pregunta del operador después del 2026-10-18: cómo aprender de esa
+evaluación, que fue tediosa (scripts sueltos, recortes a mano) y dejó pasar
+un corrimiento de color que el SSIM/PSNR no veía. Dos cosas, sin cambiar la
+receta ni re-emitir nada publicado:
+
+**1. `tools/probar_halo.py`.** Recibe la fuente (o una referencia y4m ya
+hecha) y variantes (`c3`, `c4`, `ninguno` o un filtro, con `@crf`); emite la
+intro (o el loop) con la misma línea de `emit_intro_loop` y mide bytes,
+**ondulación** del fondo oscuro sin referencia (el prototipo del 2026-10-18:
+|caja 7 px − caja 41 px| en luma, máscara = fondo 17..40 lejos de lo
+brillante; la referencia también tiene su fila), SSIM/PSNR con
+`emit_matrix.build_metrics_command` y el **sesgo de luma** medio. Deja
+`HALO.tsv` (también en pantalla) y `HALO.png` (el mismo cuadro de todas,
+normal y ×3, recorte configurable). Núcleo numpy testeado sin ffmpeg; la
+lámina es un PNG escrito a mano (sin dependencias, mismos bytes).
+
+Verificado con el bundle sobre `intro_D_loop_ondas_perfecto_x9.mp4`
+(`ed5ecc11930b…`), sin decirle nada (detectó intro 197 + loop 85 × 9), 63 s:
+
+| fila | variante | bytes | ondulación | p95 | sesgo | SSIM | PSNR |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 0 | referencia | — | 0,575 | 1,88 | — | — | — |
+| 1 | c3 crf 24 | 878.893 | 0,474 | 1,77 | −0,01 | 0,9911 | 45,99 |
+| 2 | c4 crf 24 | 1.000.349 | 0,338 | 1,11 | +0,04 | 0,9870 | 43,96 |
+
+Bytes idénticos a los del 2026-10-18 (c4 = `424f6f07dd60…`, la intro C4
+emitida); ondulación 0,474 / 0,338 contra 0,483 / 0,340 de aquel día (la
+máscara sale ahora de la referencia de 8 bits; el prototipo usaba una de 16).
+Dos corridas: mismos bytes de piezas, `HALO.tsv` y `HALO.png`. En la lámina
+×3 se ven los anillos de la fuente y de C3 y el fondo parejo de C4.
+
+**2. Alarma de color en `emit_v2.medir`** (la usan `emit_v2`,
+`emit_intro_loop` y `emit_loop_zona`). Suma el sesgo de luma media pieza −
+referencia (decodificado con las dos entradas re-etiquetadas igual, en
+enteros, exacto); la nota del manifiesto dice siempre `luma ±x.xx`, y pasado
+**±1 tono** la salida grita `!!! ALARMA DE COLOR` y la nota lo deja escrito.
+Comprobado con la línea del bug (etiquetas 709 solo en la salida, H.264 crf
+24) sobre la referencia de la intro: **−3,44 → alarma**, con SSIM 0,985 que
+no dice nada raro; la pieza buena da +0,04. Con este chequeo el 601→709 se
+habría visto al primer emitir. Costo: una decodificación más por pieza
+medida.

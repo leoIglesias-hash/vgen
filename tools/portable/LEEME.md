@@ -145,6 +145,28 @@ dos últimos son para un loop corto en una PARTE de la pantalla: el detector
 dibuja qué zonas repiten y el emisor sube las referencias de H.264 para que
 el encoder lo aproveche (`--nivel-max 4.1` si el aparato no acepta 5.0).
 
+### Probar el halo (variantes de prefiltro y crf, lado a lado)
+
+```
+py.cmd repo\tools\probar_halo.py C:\clip.mp4 --out outputs\halo --variante c3 --variante c4 --variante c4@22
+```
+
+Emite la intro (`--pieza loop` para el loop) una vez por variante, con la
+misma línea de comando que `emit_intro_loop.py`, y deja en la carpeta:
+`HALO.tsv` (bytes, **ondulación** del fondo oscuro —más bajo = menos halo; la
+fila 0 es la fuente—, SSIM/PSNR y **sesgo de luma**) y `HALO.png` (el mismo
+cuadro de todas, normal y ×3; el número de fila arriba a la izquierda).
+Variantes: `c4`, `c3`, `ninguno` o un filtro ffmpeg entre comillas, con
+`@crf` opcional. La referencia queda en `work\ref-intro.y4m`: pasarla en
+lugar del clip vuelve a probar sin rearmarla. `--cuadro` y `--recorte
+x,y,ancho,alto` eligen qué se ve en la lámina.
+
+**Alarma de color:** `emit_v2`, `emit_intro_loop` y `emit_loop_zona` miden
+además si la luma media de cada pieza se corrió contra su referencia. Si se
+corrió más de 1 tono, la salida lo grita con `!!! ALARMA DE COLOR` y la nota
+del manifiesto lo dice: esa pieza no se publica sin mirar qué pasó (así se
+vio tarde el 601→709 del 2026-10-18).
+
 ## Qué hay adentro
 
 `VERSIONES.tsv` dice de qué commit salió, con qué Python y qué ffmpeg.

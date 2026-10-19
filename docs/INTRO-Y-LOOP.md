@@ -81,6 +81,7 @@ py.cmd repo\tools\medir_banding.py ref.y4m pieza1.mp4 pieza2.mp4
 py.cmd repo\tools\mp4_dedup.py pegado.mp4 unico.mp4
 py.cmd repo\tools\buscar_loops.py fuente.mp4 --por-zona --fps-destino 10
 py.cmd repo\tools\emit_loop_zona.py fuente.mp4 --out outputs\zona --comparar
+py.cmd repo\tools\probar_halo.py fuente.mp4 --out outputs\halo --variante c3 --variante c4
 ```
 
 (Hasta que se rearme el bundle con estas herramientas, usar la ruta del repo:
@@ -93,6 +94,49 @@ py.cmd repo\tools\emit_loop_zona.py fuente.mp4 --out outputs\zona --comparar
 | `tools/emit_intro_loop.py` | detecta (o recibe `--intro`/`--periodo` en cuadros de la fuente), arma las dos referencias 709 (la del loop retemporizada a cuadros enteros), emite las **dos piezas** H.264 (y VP9 con `--vp9-crf`), el **archivo único** `unico-h264.mp4` (intro + loop × `--vueltas`, pegado sin recodificar y pasado por `mp4_dedup`) y `MANIFEST-intro-loop.tsv` con bytes, SHA-256 y SSIM. `--conservar-refs` deja las referencias y el pegado expandido en `work\` | `tests/test_emit_intro_loop.py` (14): receta C3 fijada, C4 en 16 bits con tramado, nombres de prefiltro, referencia etiquetada 709 antes del `-i`, plan de cortes, filtros, un keyframe por pieza, determinismo, VP9 dos pasadas, pegado sin recodificar, manifiesto |
 | `tools/mp4_dedup.py` | un mp4 común con cada muestra repetida guardada **una vez**: reapunta el índice (§6). Varias pistas; relee lo que escribió y exige las mismas muestras byte a byte; rechaza mp4 fragmentado | `tests/test_mp4_dedup.py` (13): mp4 sintéticos caja por caja (intro + vueltas, varias corridas de `stsc`, tamaño fijo, `co64`, varias pistas, sin repeticiones), tiempos y keyframes intactos, determinismo, fragmentado rechazado, byte cambiado atrapado |
 | `tools/medir_banding.py` | el `proxy_banding` de `bench_ref.py` aplicado a piezas de video contra su referencia, total y **solo en zonas oscuras** | `tests/test_medir_banding.py` (5) |
+| `tools/probar_halo.py` (2026-10-19) | **la evaluación de halo en una orden** (abajo): emite la intro (o `--pieza loop`) con cada `--variante` (`c3`, `c4`, `ninguno` o un filtro, con `@crf`) por la misma línea de `emit_intro_loop` y mide bytes, **ondulación** sin referencia (media y p95), SSIM/PSNR y **sesgo de luma**; deja `HALO.tsv` (también en pantalla) y `HALO.png` | `tests/test_probar_halo.py` (25): caja contra la cuenta a mano, máscara del fondo oscuro, escalones sí / tramado y degradé no, sesgo y alarma, variantes, PNG ida y vuelta y mismos bytes, lámina, lecturas sin conversión de color |
+
+**Probar el halo (`tools/probar_halo.py`, 2026-10-19).** Lo que el
+2026-10-18 se hizo con scripts sueltos y recortes a mano, en una orden:
+
+```
+py.cmd repo\tools\probar_halo.py fuente.mp4 --out outputs\halo --variante c3 --variante c4 --variante c4@22
+py.cmd repo\tools\probar_halo.py outputs\halo\work\ref-intro.y4m --out outputs\halo2 --variante "hqdn3d=3:2:4:3@26"
+```
+
+- Arma la referencia de la pieza como `emit_intro_loop` (detecta intro y
+  período, o `--intro`/`--periodo`) y la deja en `work\ref-<pieza>.y4m`
+  para volver a probar sin rearmarla (se le pasa en lugar de la fuente).
+- Cada variante sale con **la misma línea** que la pieza de verdad
+  (`build_h264_command`: referencia etiquetada 709 antes del `-i`, un
+  keyframe): sus bytes son los que tendría la emisión.
+- **Ondulación** = el halo sin referencia: en el fondo oscuro (17..40 de
+  luma en la referencia, a más de 24 px de cualquier cosa por encima de 45)
+  lo que queda entre dos pasadas de caja de 7 px y dos de 41 px. El tramado
+  fino lo borra la de 7, el degradé lo sigue la de 41; queda el escalón. La
+  fila 0 es la referencia misma: una variante puede quedar **por debajo de
+  la fuente** (lo que una métrica contra la referencia no premia, §4 fila 9).
+- **Sesgo de luma** = luma media variante − referencia (con los colores bien,
+  ±0,05); pasado ±1 tono marca la **alarma de color** (§4 fila 12).
+- **Lámina** `HALO.png`: el mismo cuadro (`--cuadro`, default 4: el halo se
+  ve al arrancar) de la referencia y de cada variante, recortado
+  (`--recorte x,y,ancho,alto`, default `0,180,640,360`, el costado
+  izquierdo), a brillo normal y ×3 (`--ganancia`); el número de fila arriba
+  a la izquierda.
+- Determinista: dos corridas, mismos bytes de piezas, `HALO.tsv` y
+  `HALO.png`. ~1 minuto por dos variantes de la intro de intro_D.
+
+Verificado sobre intro_D x9 (`ed5ecc11930b…`, 2026-10-19, bundle):
+
+| fila | variante | bytes | ondulación | p95 | sesgo luma | SSIM | PSNR |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 0 | referencia | — | 0,575 | 1,88 | — | — | — |
+| 1 | c3 | 878.893 | 0,474 | 1,77 | −0,01 | 0,9911 | 45,99 |
+| 2 | c4 | 1.000.349 | 0,338 | 1,11 | +0,04 | 0,9870 | 43,96 |
+
+Bytes idénticos a los del 2026-10-18 (§4 fila 10); la ondulación da 0,474 /
+0,338 contra 0,483 / 0,340 de aquel día porque la máscara sale ahora de la
+referencia de 8 bits (el prototipo la sacaba de una de 16).
 
 **Receta por defecto de `emit_intro_loop.py` = C4 (2026-10-18)**: la de C3
 que eligió el operador (§5) —1280 de ancho, 10 fps, H.264 High 3.1, **intro
@@ -161,9 +205,10 @@ del x9). El halo de la intro queda tratado igual que en C3.
 | 6 | **`aq-mode=3` y deblock más fuerte no sirven** para el halo | aq3: +8 % bytes y más banding; deblock 1/2: sin cambio |
 | 7 | **Limpiar ruido antes de comprimir** (`hqdn3d=3:2:4:3`) baja bytes y mancha menos | loop crf 26: 448.668 → 434.679 B y banding en oscuros −11 %; denoise fuerte ya come detalle (SSIM 0,9818) |
 | 8 | **Degradé muy oscuro = anillos; se arregla con `deband` antes de comprimir** | el halo de intro_D se dibuja con **8 tonos de luma (16..23)**; la fuente ya trae los anillos y la compresión los vuelve manchas en bloque. Con deband la intro queda más pareja que la fuente; en el loop además baja bytes (430 → 424 KB) |
-| 9 | **Medir halo**: el número relativo a la fuente detecta escalones nuevos pero **no puede premiar ir más allá de la fuente** (un deband suma un poco donde la fuente tenía mesetas) | por eso cada decisión de halo se tomó con recortes de gamma realzada y la vista previa; desde C4 también con la **ondulación** sin referencia (§3) |
+| 9 | **Medir halo**: el número relativo a la fuente detecta escalones nuevos pero **no puede premiar ir más allá de la fuente** (un deband suma un poco donde la fuente tenía mesetas) | por eso cada decisión de halo se tomó con recortes de gamma realzada y la vista previa; desde C4 también con la **ondulación** sin referencia (§3). **Desde 2026-10-19 las dos cosas las hace `tools/probar_halo.py`**: tabla con la ondulación (la fuente incluida) y lámina normal / ×3 de todas las variantes |
 | 10 | **Alisar en 8 bits no alcanza**: el deband promedia y vuelve a redondear a los mismos 8 tonos. **En 16 bits + tramado fijo** quedan los tonos intermedios y el encoder los respeta | mismo filtro que C3 en 16 bits: ondulación de la intro 0,48 → 0,46 y el error de contorno contra el degradé ideal 0,82 → 0,34, **con menos bytes** (878.893 → 871.299 B); C4 (más alcance): 0,34 con 1.000.349 B |
 | 11 | **🔴 La etiqueta de color en la salida, sola, CONVIERTE**: el y4m de referencia no guarda la matriz; ffmpeg 8 la supone 601 y, al ver `-colorspace bt709` en la salida, convierte 601→709 un video que ya era 709. Los rojos bajan **3 a 5 tonos de luma** (el resplandor de la intro quedaba más oscuro y con el borde marcado). Y la **medición** (SSIM/PSNR) también convertía, así que no lo veía. Arreglado en `emit_v2`, `emit_intro_loop` y `emit_loop_zona` (la referencia entra etiquetada antes del `-i`) y en la medición compartida de `emit_matrix` (las dos entradas con la misma etiqueta) | intro C3: luma de una zona 32,7 en la referencia → **28,0** en la pieza; con la etiqueta de entrada, 32,75. PSNR de luma real de la intro C3 publicada: **33,3 dB** (la medición vieja decía ~46); C3 corregido 45,5 dB. Lo mismo en VP9. **Afecta a todo lo emitido con `emit_v2` (pack v2)**: ver REGISTRO 2026-10-18 |
+| 12 | **El SSIM/PSNR no ve un corrimiento de brillo; la luma media sí** (2026-10-19). Un video bien codificado conserva la luma media de su referencia (el error va y viene); una conversión de color de más baja todo el cuadro. `emit_v2.medir` (lo usan `emit_v2`, `emit_intro_loop` y `emit_loop_zona`) suma el **sesgo de luma** pieza − referencia: más de **±1 tono** = `ALARMA DE COLOR` a los gritos en la salida y en la nota del manifiesto (`luma ±x.xx` siempre) | intro_D: C3 −0,01, C4 +0,04; la línea del bug (etiquetas solo en la salida, H.264 crf 24) sobre la misma referencia: **−3,44 → alarma** al primer emitir, con SSIM 0,985 que no dice nada raro |
 
 ## 5. El recorrido sobre intro_D (para no repetirlo)
 

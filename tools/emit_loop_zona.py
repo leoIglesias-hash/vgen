@@ -212,7 +212,9 @@ def emitir(fuente_path, out_dir, ffmpeg="ffmpeg", fps=FPS, ancho=ANCHO, crf=CRF,
                 "sha256": emit_intro_loop.sha256_de(out), "cuadros": n, "refs": r,
                 "nivel": niv, "ssim_all": metricas.get("ssim_all", ""),
                 "psnr_avg": metricas.get("psnr_avg", ""),
-                "note": "crf %d; GOP %d; prefiltro %s" % (crf, gop, "si" if prefiltro else "no")}
+                "note": "crf %d; GOP %d; prefiltro %s; %s" % (
+                    crf, gop, "si" if prefiltro else "no",
+                    emit_v2.anotar_color(metricas.get("sesgo_luma"), log))}
         filas.append(fila)
         log("  %-14s %10d B  refs %2d  nivel %-4s ssim %s" % (
             archivo, fila["bytes"], r, niv, fila["ssim_all"]))

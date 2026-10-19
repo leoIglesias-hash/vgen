@@ -234,6 +234,19 @@ def archivo_unico(ffmpeg, out_dir, work, h264, vueltas, errlog, log=print):
                     % (vueltas, resumen["bytes_antes"])}
 
 
+def detectar(ffmpeg, fuente_path, fps_fuente, fps=FPS, log=print):
+    """Intro, periodo y vueltas con tools/buscar_loops.py (y su reporte)."""
+    log("+ buscando el loop (tools/buscar_loops.py)")
+    mini = buscar_loops.leer_miniaturas(ffmpeg, fuente_path)
+    hallado = buscar_loops.detectar_loop(mini, fps_fuente)
+    if hallado is None:
+        raise SystemExit("no se encontro un loop repetido; pasar --intro y --periodo a mano")
+    for linea in buscar_loops.reporte(hallado, fps, buscar_loops.costura(
+            mini, hallado["intro"], hallado["periodo"])):
+        log("  " + linea)
+    return hallado
+
+
 def emitir(fuente_path, out_dir, ffmpeg="ffmpeg", intro=None, periodo=None, fps=FPS,
            ancho=ANCHO, crf_intro=CRF_INTRO, crf_loop=CRF_LOOP, prefiltro=PREFILTRO_C4,
            vp9_crf=None, vueltas=None, matriz_fuente="auto", conservar_refs=False,
@@ -245,14 +258,7 @@ def emitir(fuente_path, out_dir, ffmpeg="ffmpeg", intro=None, periodo=None, fps=
     fps_fuente = buscar_loops.fps_de_fuente(ffmpeg, fuente_path)
 
     if intro is None or periodo is None:
-        log("+ buscando el loop (tools/buscar_loops.py)")
-        mini = buscar_loops.leer_miniaturas(ffmpeg, fuente_path)
-        hallado = buscar_loops.detectar_loop(mini, fps_fuente)
-        if hallado is None:
-            raise SystemExit("no se encontro un loop repetido; pasar --intro y --periodo a mano")
-        for linea in buscar_loops.reporte(hallado, fps, buscar_loops.costura(
-                mini, hallado["intro"], hallado["periodo"])):
-            log("  " + linea)
+        hallado = detectar(ffmpeg, fuente_path, fps_fuente, fps, log)
         intro, periodo = hallado["intro"], hallado["periodo"]
         vueltas = vueltas or hallado["vueltas"]
     p = plan(intro, periodo, fps_fuente, fps)
@@ -289,8 +295,10 @@ def emitir(fuente_path, out_dir, ffmpeg="ffmpeg", intro=None, periodo=None, fps=
                     "sha256": sha256_de(out), "cuadros": n, "codec": codec, "crf": crf_pieza,
                     "ssim_all": metricas.get("ssim_all", ""),
                     "psnr_avg": metricas.get("psnr_avg", ""),
-                    "note": "prefiltro %s; %.0f s" % ("si" if prefiltro else "no",
-                                                      time.time() - started)}
+                    "note": "prefiltro %s; %s; %.0f s" % (
+                        "si" if prefiltro else "no",
+                        emit_v2.anotar_color(metricas.get("sesgo_luma"), log),
+                        time.time() - started)}
             filas.append(fila)
             archivos.setdefault(codec, {})[nombre] = archivo
             log("  %-16s %10d B  %3d cuadros  ssim %s" % (archivo, fila["bytes"], n,
