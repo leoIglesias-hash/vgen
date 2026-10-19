@@ -6930,3 +6930,19 @@ como la receta de intro_D (ya era el default de `emit_intro_loop.py`). No
 dijo en qué pantalla lo miró; siguen pendientes en aparatos el archivo único
 en la caja y el Smart TV, el nivel H.264 de la caja y un video real con loop
 parcial (`docs/INTRO-Y-LOOP.md` §8).
+
+### 2026-10-19 — Decisión: transparencia con VP9 y VP8 (H-28); H.265 fuera
+
+El operador trajo una tabla de formatos de salida (MP4 H.264 + AAC; MP4
+H.265; WebM VP9 + alfa + Opus; WebM VP8 + alfa) y preguntó cuáles prepara
+vgen. Respuesta: H.264 + AAC sí (v1/v2); VP9 + Opus sí pero **sin alfa**; con
+alfa solo existe la pieza sintética de v0 (`v0-vp9-alpha.webm`, papelitos sin
+audio, H-18b); H.265 y VP8 + alfa no existen (el ffmpeg del bundle trae x265
+y libvpx VP8). Decisión textual: *«ponete en tu plan sumar vp9 y vp8 bien,
+h265 no lo vamos a usar.. y alguna manera de aprovechar las transparencias de
+canal alfa donde corresponde»*. → **H-28** (RUNBOOK-IMPLEMENTACION §2): emisor
+desde una fuente con alfa, VP9+alfa y VP8+alfa con Opus, análisis del canal
+alfa con sus palancas medidas (opaco → pieza normal; RGB bajo alfa 0 limpiado;
+recorte al rectángulo útil; tramos vacíos; loops), y planos en `v1/` para la
+caja y el Smart TV (en Chromium el alfa va por software). **H.265 no se
+emite.**
