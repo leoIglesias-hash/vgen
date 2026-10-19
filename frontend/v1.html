@@ -10,6 +10,9 @@
   #head { position: absolute; left: 0; right: 0; top: 0; padding: 0.25em 0.6em; }
   #titulo { font-size: 0.7em; color: #9aa0b4; }
   #video { position: absolute; background: #000; }
+  /* H-28: el efecto con alfa, ENCIMA del plano, en su rectangulo del lienzo.
+   * Sin fondo: lo transparente tiene que dejar ver el video de abajo. */
+  #efecto { position: absolute; display: none; }
   /* La lista de planos, a la izquierda: una tecla, un video. Es lo unico que
    * hay que leer en esta pagina, asi que lleva la letra grande. */
   #lista { position: absolute; left: 0; padding: 0 0.4em 0 0.6em;
@@ -43,6 +46,7 @@
 </div>
 
 <video id="video" muted playsinline></video>
+<video id="efecto" muted playsinline></video>
 
 <div id="lista">
   <div id="buffer"></div>
@@ -80,6 +84,15 @@
  *     tecla, id, nombre, archivo, bytes, sha256, nota. Agregar un plano es
  *     subir un archivo y una linea, no tocar la pagina.
  *
+ * H-28 (2026-10-19, video con transparencia): un plano puede traer un EFECTO
+ * con alfa (VP9 o VP8, tools/emit_alfa.py) que va ENCIMA, en el segundo
+ * <video>, puesto en el rectangulo que dice el manifiesto (`x y ancho alto` sobre
+ * el lienzo `AxB`), escalado con el plano. En Chromium el alfa se decodifica
+ * por SOFTWARE: la caja y el Smart TV dicen si lo sostienen (H-18b: dos
+ * planos se sostienen). El efecto da vueltas por su cuenta; los dos caidos
+ * van en el zocalo. Sigue habiendo UN solo plano por vez: el efecto es parte
+ * del plano, se va con el.
+ *
  * Todo lo demas (la geometria de la caja -superficie 4K sobre panel 720-, la
  * pantalla entera de H-20, el mando de H-22) se hereda de v0 tal cual.
  *
@@ -90,7 +103,9 @@ var planes = [];
 var filas = [];
 var actual = -1;
 var entera = { on: false, api: "" };
-var reloj = { timer: 0, t0: 0, armed: false, baseTotal: 0, baseDropped: 0 };
+var reloj = { timer: 0, t0: 0, armed: false, baseTotal: 0, baseDropped: 0,
+              efArmed: false, efTotal: 0, efDropped: 0 };
+var caja = { x: 0, y: 0, w: 0, h: 0 };
 var ultimaTecla = "tecla 0: (todavia no llego ninguna)";
 var mando = null;
 
@@ -117,11 +132,22 @@ function px(node, left, top, width, height) {
 function say(value) { text(byId("estado"), value); }
 
 /* --- PLANES.tsv: texto tabulado, nunca JSON ---
- * tecla  id  nombre  archivo  bytes  sha256  nota
+ * tecla  id  nombre  archivo  bytes  sha256  nota  [encima  rect  bytes  sha256]
  * Solo entran las teclas 1..9 y una sola vez cada una: el 0 es la pantalla
- * entera y una tecla repetida seria justamente la ensalada que se evita. */
+ * entera y una tecla repetida seria justamente la ensalada que se evita.
+ * Las cuatro columnas de `encima` (H-28) son opcionales: el efecto con alfa,
+ * su rectangulo `x y ancho alto AxB` (de MANIFEST-alfa.tsv) y su huella. */
+function parseRect(value) {
+  var m = /^(\d+) (\d+) (\d+) (\d+) (\d+)x(\d+)$/.exec(value || "");
+  if (!m || parseInt(m[5], 10) <= 0 || parseInt(m[6], 10) <= 0) {
+    return { x: 0, y: 0, w: 1, h: 1, lw: 1, lh: 1 };
+  }
+  return { x: parseInt(m[1], 10), y: parseInt(m[2], 10), w: parseInt(m[3], 10),
+           h: parseInt(m[4], 10), lw: parseInt(m[5], 10), lh: parseInt(m[6], 10) };
+}
+
 function parsePlanes(body) {
-  var lines = body.split("\n"), out = [], usadas = {}, i, line, f;
+  var lines = body.split("\n"), out = [], usadas = {}, i, line, f, plano;
   for (i = 0; i < lines.length; i++) {
     line = lines[i];
     if (line.length === 0 || line.charAt(0) === "#") { continue; }
@@ -129,9 +155,17 @@ function parsePlanes(body) {
     if (f.length < 4) { continue; }
     if (!/^[1-9]$/.test(f[0]) || usadas[f[0]]) { continue; }
     usadas[f[0]] = true;
-    out.push({ tecla: f[0], id: f[1], nombre: f[2], file: f[3],
-               bytes: f.length > 4 ? f[4] : "", sha256: f.length > 5 ? f[5] : "",
-               note: f.length > 6 ? f[6] : "" });
+    plano = { tecla: f[0], id: f[1], nombre: f[2], file: f[3],
+              bytes: f.length > 4 ? f[4] : "", sha256: f.length > 5 ? f[5] : "",
+              note: f.length > 6 ? f[6] : "", encima: "", rect: null,
+              bytesEncima: "", shaEncima: "" };
+    if (f.length > 7 && f[7] && f[7] !== "-") {
+      plano.encima = f[7];
+      plano.rect = parseRect(f.length > 8 ? f[8] : "");
+      plano.bytesEncima = f.length > 9 ? f[9] : "";
+      plano.shaEncima = f.length > 10 ? f[10] : "";
+    }
+    out.push(plano);
   }
   return out;
 }
@@ -183,10 +217,27 @@ function vivos(node, baseTotal, baseDropped) {
 
 /* --- geometria: la lista a la izquierda, el video 16:9 a la derecha --- */
 
+/* El efecto se pone en su rectangulo del lienzo, escalado con el recuadro del
+ * plano: el lienzo del efecto es el del video de abajo (1280x720). */
+function colocarEfecto() {
+  var plano = actual >= 0 ? planes[actual] : null, r;
+  if (!plano || !plano.encima) { return; }
+  r = plano.rect;
+  px(byId("efecto"), caja.x + Math.round(r.x * caja.w / r.lw),
+     caja.y + Math.round(r.y * caja.h / r.lh),
+     Math.round(r.w * caja.w / r.lw), Math.round(r.h * caja.h / r.lh));
+}
+
+function colocar(x, y, w, h) {
+  caja.x = x; caja.y = y; caja.w = w; caja.h = h;
+  px(byId("video"), x, y, w, h);
+  colocarEfecto();
+}
+
 function layoutEntera(w, h) {
   var vw = w, vh = Math.round(w * 9 / 16);
   if (vh > h) { vh = h; vw = Math.round(h * 16 / 9); }
-  px(byId("video"), Math.round((w - vw) / 2), Math.round((h - vh) / 2), vw, vh);
+  colocar(Math.round((w - vw) / 2), Math.round((h - vh) / 2), vw, vh);
 }
 
 function layout() {
@@ -208,8 +259,8 @@ function layout() {
   vw = stageW;
   vh = Math.round(stageW * 9 / 16);
   if (vh > midH) { vh = midH; vw = Math.round(midH * 16 / 9); }
-  px(byId("video"), stageX + Math.round((stageW - vw) / 2),
-     midTop + Math.round((midH - vh) / 2), vw, vh);
+  colocar(stageX + Math.round((stageW - vw) / 2),
+          midTop + Math.round((midH - vh) / 2), vw, vh);
   byId("lista").style.top = midTop + "px";
   byId("lista").style.width = listaW + "px";
   byId("lista").style.height = midH + "px";
@@ -275,14 +326,42 @@ function marcar() {
   }
 }
 
+/* El efecto se va con su plano: sin src no decodifica nada. */
+function apagarEfecto() {
+  var efecto = byId("efecto");
+  efecto.style.display = "none";
+  if (efecto.getAttribute && efecto.getAttribute("src")) {
+    efecto.pause();
+    efecto.removeAttribute("src");
+    efecto.load();
+  }
+}
+
+function prenderEfecto(plano) {
+  var efecto = byId("efecto");
+  reloj.efArmed = false;
+  efecto.loop = true;
+  efecto.src = urlDe({ file: plano.encima });
+  efecto.style.display = "block";
+  colocarEfecto();
+  efecto.load();
+  efecto.play();
+}
+
 /* Una tecla, un plano: se pone en bucle y se queda. La misma tecla otra vez
- * lo pausa, y otra vez lo sigue. Cambiar de plano es cambiar el src del
- * UNICO <video>: nunca hay dos sonando. */
+ * lo pausa, y otra vez lo sigue (con su efecto, si lo trae). Cambiar de
+ * plano es cambiar el src del <video> del plano: nunca hay dos planos. */
 function poner(i) {
-  var video = byId("video"), plano = planes[i];
+  var video = byId("video"), efecto = byId("efecto"), plano = planes[i];
   if (!plano) { return; }
   if (i === actual) {
-    if (video.paused) { video.play(); } else { video.pause(); }
+    if (video.paused) {
+      video.play();
+      if (plano.encima) { efecto.play(); }
+    } else {
+      video.pause();
+      if (plano.encima) { efecto.pause(); }
+    }
     tick();
     return;
   }
@@ -293,8 +372,17 @@ function poner(i) {
   video.src = urlDe(plano);
   video.load();
   video.play();
+  if (plano.encima) { prenderEfecto(plano); } else { apagarEfecto(); }
   marcar();
   tick();
+}
+
+function pesoDe(plano) {
+  var texto = megas(plano.bytes);
+  if (plano.encima && megas(plano.bytesEncima)) {
+    texto = (texto || "?") + " + " + megas(plano.bytesEncima);
+  }
+  return texto ? " (" + texto + ")" : "";
 }
 
 function teclasDe() {
@@ -321,14 +409,26 @@ function tick() {
     reloj.armed = true;
   }
   if (reloj.armed) { caidos = vivos(video, reloj.baseTotal, reloj.baseDropped); }
+  if (plano.encima) { caidos += " - efecto " + caidosEfecto(); }
   segundos = Math.round((new Date().getTime() - reloj.t0) / 1000);
-  say("plano " + plano.tecla + ": " + plano.nombre +
-      (megas(plano.bytes) ? " (" + megas(plano.bytes) + ")" : "") +
+  say("plano " + plano.tecla + ": " + plano.nombre + pesoDe(plano) +
       " - " + segundos + " s - caidos " + caidos +
       (video.paused ? " - EN PAUSA" : "") +
       " - " + plano.tecla + " pausa/sigue, 0 pantalla " +
       (entera.on ? "normal" : "entera"));
   escribirPie();
+}
+
+/* Los caidos del efecto, con su propia linea de base (misma regla). */
+function caidosEfecto() {
+  var efecto = byId("efecto"), q;
+  if (!reloj.efArmed && efecto.currentTime > 0) {
+    q = quality(efecto);
+    reloj.efTotal = q ? q.total : 0;
+    reloj.efDropped = q ? q.dropped : 0;
+    reloj.efArmed = true;
+  }
+  return reloj.efArmed ? vivos(efecto, reloj.efTotal, reloj.efDropped) : "-";
 }
 
 function escribirPie() {
@@ -351,7 +451,7 @@ function renderPlanos() {
     text(tag, planes[i].tecla);
     row.appendChild(tag);
     name = document.createElement("span");
-    text(name, planes[i].nombre + (megas(planes[i].bytes) ? " (" + megas(planes[i].bytes) + ")" : ""));
+    text(name, planes[i].nombre + pesoDe(planes[i]));
     row.appendChild(name);
     if (planes[i].note) {
       detail = document.createElement("span");

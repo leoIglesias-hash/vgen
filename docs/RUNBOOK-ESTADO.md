@@ -205,8 +205,10 @@ nada.
 > (+ Opus) deterministas, alfa vivo, color en +0,01; limpiar lo invisible es
 > obligatorio (sin limpiar +170 %), `plano` −21 % contra sangrado con el mismo
 > compuesto, recorte −8 % y 35 % de los píxeles a decodificar, alfa binario
-> −29 % pero −6 dB de borde (a ojo); VP8 +59 % a igual imagen. **Falta: el
-> clip real del operador y los planos en `v1/`.** El plan de abajo (receta v2)
+> −29 % pero −6 dB de borde (a ojo); VP8 +59 % a igual imagen. Planos `8`/`9` de
+> `v1/` (efecto encima, por `rect`) **hechos y verificados en Chromium, sin
+> publicar** (falta la API de Cloudflare para el token de subida). **Falta: el
+> clip real del operador, publicar `v1/` y la foto de la caja y el Smart TV.** El plan de abajo (receta v2)
 > sigue en pie, después.
 >
 > **🔴 2026-10-18 — antes de la emisión completa:** las piezas v2 emitidas

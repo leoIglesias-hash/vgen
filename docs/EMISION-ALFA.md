@@ -200,8 +200,22 @@ La pieza **no** es necesariamente del tamaño de la pantalla:
 
 1. **Un clip real con transparencia** del operador: emitir, `--medir-palancas`,
    anotar en el REGISTRO.
-2. **Planos en `v1/`**: el video base + el efecto VP9 alfa / VP8 alfa encima,
-   posicionado por `rect`; publicar; la foto y el veredicto de la caja y del
-   Smart TV (caídos ≤ 3 % y el ojo).
+2. **Planos en `v1/`** — **HECHOS en el repo (2026-10-19), falta publicar**:
+   `frontend/v1.html` tiene un segundo `<video id="efecto">` que va encima,
+   puesto por `rect` y escalado con el plano (también a pantalla entera); la
+   misma tecla pausa los dos y el zócalo cuenta los caídos de los dos.
+   `v1-planes.tsv` suma las columnas opcionales `encima rect bytes_encima
+   sha256_encima` y las teclas **8** (v1 + `alfa-sintetico-vp9.webm`) y **9**
+   (v1 + `alfa-sintetico-vp8.webm`), con el v1 fluido abajo para que una
+   traba sea del alfa. Verificado en el Chromium del escritorio: el alfa
+   compone (disco con borde suave, lo demás transparente), VP8 también, y el
+   plano 1 suelta el archivo del efecto. Ese navegador encontró un bug que el
+   test no veía (`display = ""` le devolvía el control al CSS, que lo
+   escondía): ahora `block` y el test lo fija. **Publicar** = 4 keys en
+   `player/v1/` (`index.html`, `PLANES.tsv` y los dos webm de
+   `vgen-portable\outputslfa-sintetico\`, renombrados) con el ritual de
+   `deploy/asciline-player/README.md`: hace falta la API de Cloudflare que
+   pone el secreto `UPLOAD_TOKEN`. Después, la foto y el veredicto de la caja y
+   del Smart TV (caídos ≤ 3 % y el ojo).
 3. **Alfa binario a ojo** con el clip real.
 4. **Loops** (palanca e): si el efecto repite, una vuelta.

@@ -6,7 +6,8 @@
  * bucle, en el UNICO <video>; el 0 pone y saca la pantalla entera sin cambiar
  * lo que suena; la misma tecla pausa y sigue; nada se corre solo; los planos
  * salen de PLANES.tsv (texto tabulado) y una tecla repetida o fuera de 1..9 no
- * entra. */
+ * entra. H-28: un plano puede traer un efecto con alfa ENCIMA (segundo
+ * <video>), puesto en su rectangulo del lienzo y que se va con su plano. */
 
 var assert = require("assert");
 var fs = require("fs");
@@ -21,8 +22,14 @@ assert(page.indexOf("PLANES.tsv") >= 0, "la pagina lee PLANES.tsv, tabulado");
 assert.strictEqual(/\bJSON\s*\./.test(page), false, "sin JSON: el gate ES5 lo prohibe");
 assert(/html,\s*body\s*\{[^}]*overflow:\s*hidden/.test(page),
   "la pagina no puede scrollear: todo tiene que entrar en una pantalla");
-assert.strictEqual((page.match(/<video\s+id=/g) || []).length, 1,
-  "UN solo <video>: un plano por vez, nunca dos sonando");
+assert.strictEqual((page.match(/<video\s+id=/g) || []).length, 2,
+  "dos <video>: el del plano y el de su efecto con alfa (H-28), nada mas");
+assert(page.indexOf('<video id="video" muted playsinline></video>') >= 0);
+assert(page.indexOf('<video id="efecto" muted playsinline></video>') >= 0);
+assert(/#efecto\s*\{[^}]*display:\s*none/.test(page),
+  "el efecto arranca escondido: solo lo prende un plano que lo trae");
+assert.strictEqual(/#efecto\s*\{[^}]*background/.test(page), false,
+  "el efecto no lleva fondo: lo transparente deja ver el plano");
 assert(page.indexOf('<script src="keypad.js"></script>') >= 0,
   "el mando se comparte via keypad.js, no se copia en la pagina");
 assert.strictEqual(/setInterval\([^)]*\)/.test(inline[1]) &&
@@ -45,7 +52,14 @@ function makeNode(name) {
   var node = {
     nodeName: name, childNodes: [], style: {}, className: "", value: "",
     firstChild: null, onclick: null, currentTime: 0, src: "", loop: false,
-    paused: true, ended: false
+    paused: true, ended: false, attrs: {}
+  };
+  node.getAttribute = function (name) {
+    return name === "src" ? (node.src || null) : (node.attrs[name] || null);
+  };
+  node.removeAttribute = function (name) {
+    if (name === "src") { node.src = ""; }
+    delete node.attrs[name];
   };
   node.appendChild = function (child) {
     node.childNodes.push(child);
@@ -146,10 +160,10 @@ var api = correr();
 assert.strictEqual(requested.length, 1, "pide UN archivo: PLANES.tsv");
 assert(/PLANES\.tsv$/.test(requested[0]));
 var planes = api.planes();
-assert.strictEqual(planes.length, 7,
-  "siete planos: el 0, la repetida, la corta y el comentario no entran");
+assert.strictEqual(planes.length, 9,
+  "nueve planos: el 0, la repetida, la corta y el comentario no entran");
 assert.deepStrictEqual(planes.map(function (p) { return p.tecla; }),
-  ["1", "2", "3", "4", "5", "6", "7"]);
+  ["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 assert.strictEqual(planes[0].file, "../v0/v1-vp9.webm",
   "el de referencia es el v1 ya publicado, por ruta relativa");
 assert.strictEqual(planes[1].id, "v2-crf18");
@@ -158,12 +172,28 @@ assert.strictEqual(planes[6].file, "../v0/v2-h264.mp4");
 assert.strictEqual(api.parsePlanes("# solo comentario\n").length, 0);
 assert.strictEqual(api.parsePlanes("8\tid\tnombre\tarchivo.webm\n")[0].bytes, "",
   "bytes y sha256 son opcionales: se completan cuando la pieza existe");
+assert.strictEqual(api.parsePlanes("8\tid\tnombre\tarchivo.webm\n")[0].encima, "",
+  "sin columnas de efecto, el plano no trae efecto");
+/* H-28: el efecto y su rectangulo. */
+assert.strictEqual(planes[7].encima, "alfa-sintetico-vp9.webm");
+assert.strictEqual(planes[8].encima, "alfa-sintetico-vp8.webm");
+assert.deepStrictEqual(planes[7].rect, { x: 258, y: 180, w: 898, h: 360, lw: 1280, lh: 720 });
+assert.strictEqual(planes[7].file, "../v0/v1-vp9.webm", "el efecto va encima del v1 fluido");
+assert.strictEqual(planes[7].bytesEncima, "470532");
+assert.strictEqual(planes[0].encima, "");
+var raro = api.parsePlanes("8\ti\tn\ta.webm\t1\t-\tnota\te.webm\tbasura\n")[0];
+assert.deepStrictEqual(raro.rect, { x: 0, y: 0, w: 1, h: 1, lw: 1, lh: 1 },
+  "un rect ilegible pone el efecto sobre todo el plano, no lo pierde");
+assert.strictEqual(api.parsePlanes("8\ti\tn\ta.webm\t1\t-\tnota\t-\n")[0].encima, "",
+  "un guion en `encima` es sin efecto");
 
 /* La lista dibuja una fila por plano, con su tecla, mas la del 0. */
 var filas = byId("planos");
-assert.strictEqual(filas.childNodes.length, 8, "siete planos y la fila del 0");
+assert.strictEqual(filas.childNodes.length, 10, "nueve planos y la fila del 0");
 assert.strictEqual(textoDe(filas.childNodes[0].childNodes[0]), "1");
-assert.strictEqual(textoDe(filas.childNodes[7].childNodes[0]), "0");
+assert.strictEqual(textoDe(filas.childNodes[9].childNodes[0]), "0");
+assert(/\(2\.9 MB \+ 0\.5 MB\)/.test(textoDe(filas.childNodes[7].childNodes[1])),
+  "la fila de un plano con efecto suma los dos pesos: " + textoDe(filas.childNodes[7].childNodes[1]));
 assert(/2\.9 MB/.test(textoDe(filas.childNodes[0].childNodes[1])),
   "la fila dice los megas cuando los sabe: " + textoDe(filas.childNodes[0].childNodes[1]));
 assert(/\(6 MB\)/.test(textoDe(filas.childNodes[2].childNodes[1])),
@@ -173,7 +203,7 @@ assert(/\(6 MB\)/.test(textoDe(filas.childNodes[2].childNodes[1])),
 
 assert(registered, "la pagina registra el mando");
 var codigos = registered.actions.map(function (a) { return a.code; });
-assert.deepStrictEqual(codigos, ["0", "1", "2", "3", "4", "5", "6", "7"]);
+assert.deepStrictEqual(codigos, ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 codigos.forEach(function (code) {
   assert.strictEqual(code.length, 1, "todas de una cifra: ninguna tecla espera");
 });
@@ -182,7 +212,7 @@ assert(intervals.length === 1, "un solo reloj para el zocalo");
 /* --- Una tecla, un plano, en bucle, en el unico <video> --- */
 
 var video = byId("video");
-assert(/elegi un plano: 1 2 3 4 5 6 7/.test(textoDe(byId("estado"))),
+assert(/elegi un plano: 1 2 3 4 5 6 7 8 9/.test(textoDe(byId("estado"))),
   "antes de elegir, el zocalo dice que teclas hay: " + textoDe(byId("estado")));
 action("3").run();
 assert.strictEqual(video.src, "crf18-15fps.webm");
@@ -216,6 +246,43 @@ action("1").run();
 assert.strictEqual(video.src, "../v0/v1-vp9.webm");
 assert(/\(2\.9 MB\)/.test(textoDe(byId("estado"))));
 
+/* --- H-28: el plano con efecto prende el segundo <video> encima --- */
+
+var efecto = byId("efecto");
+assert.strictEqual(efecto.style.display, undefined, "sin plano con efecto, nadie lo toco");
+action("8").run();
+assert.strictEqual(video.src, "../v0/v1-vp9.webm", "abajo, el plano");
+assert.strictEqual(efecto.src, "alfa-sintetico-vp9.webm", "encima, el efecto");
+assert.strictEqual(efecto.loop, true);
+assert.strictEqual(efecto.paused, false);
+assert.strictEqual(efecto.style.display, "block",
+  "el efecto se ve: \"\" le devolveria el control al CSS, que lo esconde");
+function n(v) { return parseInt(v, 10); }
+var cx = n(video.style.left), cy = n(video.style.top);
+var cw = n(video.style.width), ch = n(video.style.height);
+assert.strictEqual(n(efecto.style.left), cx + Math.round(258 * cw / 1280),
+  "el efecto va en su x del lienzo, escalada con el plano");
+assert.strictEqual(n(efecto.style.top), cy + Math.round(180 * ch / 720));
+assert.strictEqual(n(efecto.style.width), Math.round(898 * cw / 1280));
+assert.strictEqual(n(efecto.style.height), Math.round(360 * ch / 720));
+assert(/plano 8: v1 \+ efecto VP9 con alfa \(sintetico\) \(2\.9 MB \+ 0\.5 MB\) - 0 s - caidos .* - efecto /.test(textoDe(byId("estado"))),
+  "el zocalo cuenta los caidos de los dos: " + textoDe(byId("estado")));
+/* La misma tecla pausa y sigue a los dos. */
+action("8").run();
+assert.strictEqual(video.paused, true);
+assert.strictEqual(efecto.paused, true, "el efecto se pausa con su plano");
+action("8").run();
+assert.strictEqual(efecto.paused, false);
+/* Otro plano con efecto: cambia el efecto, el plano de abajo es el mismo archivo. */
+action("9").run();
+assert.strictEqual(efecto.src, "alfa-sintetico-vp8.webm");
+/* Un plano sin efecto lo apaga: sin src, no decodifica nada. */
+action("1").run();
+assert.strictEqual(efecto.style.display, "none");
+assert.strictEqual(efecto.src, "", "el efecto suelta su archivo");
+assert.strictEqual(efecto.paused, true);
+assert.strictEqual(/efecto/.test(textoDe(byId("estado"))), false);
+
 /* --- El 0: pone y saca la pantalla entera sin tocar lo que suena --- */
 
 assert.strictEqual(api.enteraOn(), false);
@@ -226,6 +293,11 @@ assert.strictEqual(api.enteraOn(), true);
 assert.strictEqual(byId("lista").style.display, "none", "la lista se esconde");
 assert.strictEqual(byId("head").style.display, "none");
 assert.strictEqual(video.style.width, "3840px", "el video ocupa la superficie entera");
+action("8").run();
+assert.strictEqual(efecto.style.left, Math.round(258 * 3840 / 1280) + "px",
+  "a pantalla entera el efecto se re-ubica con el plano");
+assert.strictEqual(efecto.style.width, Math.round(898 * 3840 / 1280) + "px");
+action("1").run();
 assert.strictEqual(video.style.height, "2160px");
 assert.strictEqual(video.style.left, "0px");
 assert.strictEqual(video.paused, false, "lo que sonaba sigue sonando");
@@ -265,12 +337,12 @@ assert.deepStrictEqual(registered.actions.map(function (a) { return a.code; }), 
 action("0").run();
 assert.strictEqual(api.enteraOn(), true);
 
-/* --- El archivo real de planos, sin trampas, tiene las siete teclas --- */
+/* --- El archivo real de planos, sin trampas, tiene las nueve teclas --- */
 
 responder = function () { return { status: 200, body: PLANES_REAL }; };
 api = correr();
-assert.strictEqual(api.planes().length, 7);
-assert(/^# tecla\tid\tnombre\tarchivo\tbytes\tsha256\tnota$/m.test(PLANES_REAL),
+assert.strictEqual(api.planes().length, 9);
+assert(/^# tecla\tid\tnombre\tarchivo\tbytes\tsha256\tnota\tencima\trect\tbytes_encima\tsha256_encima$/m.test(PLANES_REAL),
   "el archivo declara sus columnas");
 
-console.log("v1 page tests (H-27): OK");
+console.log("v1 page tests (H-27 + H-28): OK");

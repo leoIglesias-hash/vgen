@@ -2,7 +2,10 @@
 # Se sirve como v1/PLANES.tsv al lado de la pagina. Texto tabulado, nunca JSON.
 # Una tecla (1..9), un video. Los archivos de v0/ se referencian por ruta relativa.
 # bytes y sha256 de las piezas nuevas: emitidas el 2026-09-08 (noche) con vgen-portable en la PC del operador (Intel), por esta sesion a pedido suyo.
-# tecla	id	nombre	archivo	bytes	sha256	nota
+# H-28 (2026-10-19): las teclas 8 y 9 traen un EFECTO con alfa encima (tools/emit_alfa.py, el sintetico
+# de docs/EMISION-ALFA.md, emitido en la PC del operador): columnas opcionales encima, rect (x y ancho alto
+# sobre el lienzo AxB, de MANIFEST-alfa.tsv), bytes y sha256 del efecto.
+# tecla	id	nombre	archivo	bytes	sha256	nota	encima	rect	bytes_encima	sha256_encima
 1	v1-256	v1: 256 colores, 15 fps, VP9 crf 38	../v0/v1-vp9.webm	2941178	-	el de referencia: en la caja es fluido
 2	v2-crf18	v2 crf 18: la fuente, 20 fps	../v0/v2-vp9-crf18.webm	6986728	0f4683bcca016f14c392122da95275958a3196cc928ca881a063b40ffed9679b	el que se ve mejor y se traba
 3	v2-crf18-15	v2 crf 18 a 15 fps	crf18-15fps.webm	6011270	1c9b383c93e529318d48e671803ad4fb10a0d3031a22566984f691872d97b779	la cadencia de v1
@@ -10,3 +13,5 @@
 5	v2-crf18-15-512	v2 crf 18, 512 colores, 15 fps	crf18-15fps-512.webm	8931539	28e67cc0833286a2718c65ce5c7e0e916ea971fec8af1023faa809b74e822967	las dos cosas juntas
 6	v2-crf18-sinaltref	v2 crf 18, 20 fps, sin alt-ref	crf18-20fps-sinaltref.webm	6775111	50da5f6f45808e9856956f6efd9a5f838426ad9645a3fb8f72d2b4d4bb05b417	VP9 sin cuadros ocultos, como v1
 7	v2-h264	v2 H.264 crf 14, 20 fps	../v0/v2-h264.mp4	15017319	b5242feb7dc87bb87a446217135767505baea4a4b7bbffe077be212ac657d136	el otro decodificador
+8	alfa-vp9	v1 + efecto VP9 con alfa (sintetico)	../v0/v1-vp9.webm	2941178	-	el alfa por software encima del v1 fluido	alfa-sintetico-vp9.webm	258 180 898 360 1280x720	470532	3bafca752333587681b0151ae2534f826faeddc07e43c2ae0d314711fcf8b8a0
+9	alfa-vp8	v1 + efecto VP8 con alfa (sintetico)	../v0/v1-vp9.webm	2941178	-	la misma imagen en VP8 (+59 %)	alfa-sintetico-vp8.webm	258 180 898 360 1280x720	749433	558aeb163e06aa863f105aaaa0d0006bfe1f16ecc05c5b3cfc337115ebaf007e
