@@ -249,7 +249,8 @@ assert(/\(2\.9 MB\)/.test(textoDe(byId("estado"))));
 /* --- H-28: el plano con efecto prende el segundo <video> encima --- */
 
 var efecto = byId("efecto");
-assert.strictEqual(efecto.style.display, undefined, "sin plano con efecto, nadie lo toco");
+assert.strictEqual(efecto.style.display, "none",
+  "los planos sin efecto lo dejaron escondido");
 action("8").run();
 assert.strictEqual(video.src, "../v0/v1-vp9.webm", "abajo, el plano");
 assert.strictEqual(efecto.src, "alfa-sintetico-vp9.webm", "encima, el efecto");
